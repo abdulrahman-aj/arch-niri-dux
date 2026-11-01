@@ -1,0 +1,16 @@
+#!/usr/bin/env bash
+set -euo pipefail
+version=2026.10.01
+sha256=684ded26c63240ff4a41e8c25ee84ea6da233f557364821f13d12c2b0a9059a5
+base=https://geo.mirror.pkgbuild.com/iso/$version/archlinux-$version-x86_64.iso
+dest=${1:?Usage: build-fetch-bootstrap DESTINATION-DIRECTORY}
+root=$(cd "$(dirname "$0")/.." && pwd)
+keyring=$root/keys/trusted-packagers.gpg
+[[ -r "$keyring" ]] || { echo "Arch Linux keyring not readable: $keyring" >&2; exit 1; }
+mkdir -p "$dest"
+if ! printf '%s  %s\n' "$sha256" "$dest/archlinux.iso" | sha256sum --check --status 2>/dev/null; then
+    curl --fail --location --retry 5 --continue-at - "$base" -o "$dest/archlinux.iso"
+fi
+curl --fail --location --retry 3 "$base.sig" -o "$dest/archlinux.iso.sig"
+printf '%s  %s\n' "$sha256" "$dest/archlinux.iso" | sha256sum --check --status
+gpgv --keyring "$keyring" "$dest/archlinux.iso.sig" "$dest/archlinux.iso"

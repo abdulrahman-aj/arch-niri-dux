@@ -1,0 +1,13 @@
+base
+linux
+linux-firmware
+archiso
+mkinitcpio-archiso
+arch-install-scripts
+python
+cryptsetup
+btrfs-progs
+dosfstools
+gptfdisk
+networkmanager
+curl
