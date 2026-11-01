@@ -72,7 +72,7 @@ fish -c 'type -q fisher'
 for app in fish stow gh delta starship zoxide eza fzf fd bat lazygit jq zeditor mise node npm yay wt google-chrome-stable zen-browser t3code; do
     command -v "$app" >/dev/null || { echo "Missing command: $app" >&2; exit 1; }
 done
-fish -c 'type -q zed'
+fish -c 'functions -q zw'
 mise exec herdr -- herdr --version
 mise exec codex -- codex --version
 mise exec npm:hunkdiff -- hunk --version
