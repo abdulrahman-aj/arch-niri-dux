@@ -3,3 +3,4 @@
 - [ ] Replace the typed ERASE phrase with a clear data-loss warning and a Yes/No confirmation accepted with Enter.
 - [ ] Measure installation time from final confirmation and show the elapsed time in the completion message.
 - [ ] Replace the basic terminal login screen with a graphical greeter that fits Dux; investigate the supported Dux greeter options and verify login and session startup.
+- [ ] Investigate why Chromium stays light when Dux looks dark; verify system color-scheme propagation and make Chromium follow the desktop's light/dark preference.
