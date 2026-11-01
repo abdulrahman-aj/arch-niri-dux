@@ -69,10 +69,16 @@ for mime in text/html x-scheme-handler/http x-scheme-handler/https; do
     test "$(xdg-mime query default "$mime")" = zen.desktop
 done
 fish -c 'type -q fisher'
-for app in fish stow gh delta starship zoxide eza fzf fd bat lazygit jq zeditor mise node npm yay wt google-chrome-stable zen-browser t3code; do
+for app in fish stow gh delta starship zoxide eza fzf fd bat lazygit jq zeditor mise node npm nix yay wt google-chrome-stable zen-browser t3code; do
     command -v "$app" >/dev/null || { echo "Missing command: $app" >&2; exit 1; }
 done
 fish -c 'functions -q zw'
+systemctl is-active --quiet nix-daemon.socket
+nix --version
+mkdir -p /tmp/nix-bootstrap-check
+printf 'Nix store works\n' > /tmp/nix-bootstrap-check/input
+nix store add-file /tmp/nix-bootstrap-check/input > /tmp/nix-bootstrap-check/store-path
+cmp /tmp/nix-bootstrap-check/input "$(cat /tmp/nix-bootstrap-check/store-path)"
 mise exec herdr -- herdr --version
 mise exec codex -- codex --version
 mise exec npm:hunkdiff -- hunk --version

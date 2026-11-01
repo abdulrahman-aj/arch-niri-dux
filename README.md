@@ -1,7 +1,8 @@
 # Arch + Niri + Dux
 
 An offline Arch installer for x86_64 UEFI machines. Installs Niri, Dux 2.0,
-Alacritty, Neovim, Chromium and Yay, with encrypted Btrfs and snapshot recovery.
+Alacritty, Neovim, Chromium, Git, GitHub CLI and Yay, with encrypted Btrfs and
+snapshot recovery.
 
 ## Build and test
 
