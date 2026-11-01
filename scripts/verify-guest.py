@@ -2,9 +2,12 @@
 """Guest-only acceptance probes, executed exclusively on the disposable VM disk."""
 
 import json
+import os
 from pathlib import Path
 import pwd
 import re
+import selectors
+import signal
 import stat
 import subprocess
 import sys
@@ -15,6 +18,44 @@ import urllib.request
 
 def run(*args, **kwargs):
     return subprocess.run(args, check=True, text=True, **kwargs)
+
+
+def run_interactive(command, replies, timeout=180):
+    pending = list(replies)
+    process = subprocess.Popen(command, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
+                               stderr=subprocess.STDOUT, bufsize=0, start_new_session=True)
+    deadline = time.monotonic() + timeout
+    buffered = b''
+    try:
+        with selectors.DefaultSelector() as selector:
+            selector.register(process.stdout, selectors.EVENT_READ)
+            while True:
+                remaining = deadline - time.monotonic()
+                if remaining <= 0:
+                    raise TimeoutError(f'Interactive command stalled: {command}')
+                if not selector.select(min(remaining, 0.25)):
+                    continue
+                chunk = process.stdout.read(65536)
+                if not chunk:
+                    break
+                print(chunk.decode(errors='replace'), end='', flush=True)
+                buffered += chunk
+                if pending and pending[0][0] in buffered:
+                    prompt, answer = pending.pop(0)
+                    buffered = buffered.split(prompt, 1)[1]
+                    # A fresh upstream BufferedReader per prompt can discard
+                    # prefetched answers. Send only the current answer.
+                    process.stdin.write(answer)
+                    process.stdin.flush()
+            code = process.wait(timeout=max(0.1, deadline - time.monotonic()))
+            if code or pending:
+                raise RuntimeError(f'Interactive command failed ({code}); unanswered prompts: {pending}')
+    finally:
+        if process.poll() is None:
+            os.killpg(process.pid, signal.SIGKILL)
+        process.wait()
+        process.stdin.close()
+        process.stdout.close()
 
 
 def prepare(root):
@@ -28,17 +69,25 @@ def prepare(root):
 
 
 def user_command(*args, capture=False):
-    uid = pwd.getpwnam('tester').pw_uid
-    runtime = Path(f'/run/user/{uid}')
+    user = pwd.getpwnam('tester')
+    runtime = Path(f'/run/user/{user.pw_uid}')
     wayland = next((path for path in runtime.glob('wayland-*') if stat.S_ISSOCK(path.stat().st_mode)), None)
     if wayland is None:
         raise RuntimeError('No Wayland socket found for the graphical test user.')
-    return run('runuser', '-u', 'tester', '--', 'env', f'XDG_RUNTIME_DIR={runtime}',
+    niri = next(runtime.glob('niri.*.sock'))
+    return run('runuser', '-u', 'tester', '--', 'env', f'HOME={user.pw_dir}',
+               f'XDG_CONFIG_HOME={user.pw_dir}/.config', f'XDG_CACHE_HOME={user.pw_dir}/.cache',
+               f'XDG_DATA_HOME={user.pw_dir}/.local/share', 'XDG_SESSION_TYPE=wayland',
+               'XDG_CURRENT_DESKTOP=niri', f'NIRI_SOCKET={niri}', f'XDG_RUNTIME_DIR={runtime}',
                f'DBUS_SESSION_BUS_ADDRESS=unix:path={runtime}/bus', f'WAYLAND_DISPLAY={wayland.name}',
                *args, stdout=subprocess.PIPE if capture else None)
 
 
 def desktop():
+    user_command('test', '-w', '/home/tester/.config')
+    user_command('yay', '--version')
+    outputs = json.loads(user_command('niri', 'msg', '--json', 'outputs', capture=True).stdout)
+    assert any(output.get('current_mode') is not None for output in outputs.values())
     user_command('dms', 'ipc', 'call', 'lock', 'isLocked')
     user_command('nvim', '--headless', '-u', 'NONE', '-c', 'call writefile(["editor works"], "/tmp/nvim-verified")', '-c', 'qall!')
     assert Path('/tmp/nvim-verified').read_text().strip() == 'editor works'
@@ -49,14 +98,24 @@ def desktop():
     user_command('sh', '-c',
                  'chromium --no-first-run --no-default-browser-check '
                  '--user-data-dir=/tmp/chromium-verification --remote-debugging-port=9222 '
-                 'file:///tmp/chromium-smoke.html >/tmp/chromium-verify.log 2>&1 &')
+                 'file:///tmp/chromium-smoke.html >/run/verify/chromium.log 2>&1 &')
     # The actual Wayland window must load our offline page, not just start a PID.
     for attempt in range(60):
         try:
             with urllib.request.urlopen('http://127.0.0.1:9222/json/list', timeout=2) as response:
                 pages = json.load(response)
             if any(page.get('title') == 'Offline Chromium verification' for page in pages):
-                return
+                user_command('wpctl', 'status')
+                screenshot = Path('/run/verify/02-desktop-apps.png')
+                screenshot.unlink(missing_ok=True)
+                user_command('niri', 'msg', 'action', 'screenshot-screen',
+                             '--path', str(screenshot))
+                # Niri acknowledges the action before its PNG writer finishes.
+                for wait in range(100):
+                    if screenshot.is_file() and screenshot.read_bytes().endswith(b'\x00\x00\x00\x00IEND\xaeB\x60\x82'):
+                        return
+                    time.sleep(0.1)
+                raise RuntimeError('Niri did not finish saving the desktop screenshot.')
         except (OSError, urllib.error.URLError):
             pass
         time.sleep(1)
@@ -128,7 +187,11 @@ def recovery():
     assert Path('/home/tester/keep-this-file').read_text().strip() == 'home-created-after-snapshot'
     assert not Path('/etc/systemd/system/greetd.service').is_symlink()
     # Restore through the same upstream terminal interface the laptop will use.
-    run('limine-snapper-restore', input='r\nn\nn\n')
+    run_interactive(['limine-snapper-restore'], [
+        (b'Choice [r/l/c]: ', b'r\n'),
+        (b'Description for backup subvolume @: ', b'VM pre-restore backup\n'),
+        (b'Restore complete. Reboot now? [Y/n]:', b'n\n'),
+    ])
     select_boot_entry(boot_entry_path(Path('/boot/limine.conf').read_text()))
     run('limine-snapper-info')
     run('sync')

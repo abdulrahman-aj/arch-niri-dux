@@ -46,6 +46,17 @@ class VMCommandTests(unittest.TestCase):
         with self.assertRaisesRegex(RuntimeError, r'Guest command failed \(1\)'):
             self.run_command('false; true')
 
+    def test_abnormal_vm_exit_is_a_verification_failure(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            vm = verify.VM(Path(temporary), None, Path('unused.qcow2'))
+            vm.process = subprocess.Popen(['bash', '-c', 'exit 7'])
+            vm.process.wait()
+            try:
+                with self.assertRaisesRegex(RuntimeError, 'QEMU exited abnormally: 7'):
+                    vm.stop()
+            finally:
+                vm.log.close()
+
 
 if __name__ == '__main__':
     unittest.main()

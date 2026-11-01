@@ -50,6 +50,10 @@ place the disposable disk elsewhere. It refuses to overwrite an existing disk.
 /path/to/dotfiles --agent-config /path/to/agent-config'` separately tests the
 online personal setup from Git HEAD archives. It rewinds that disposable disk
 to the `pristine` snapshot created by the offline test.
+Desktop verification uses a VirGL 3D GPU and requires read/write access to
+`/dev/dri/renderD128`; set `QEMU_RENDER_NODE` to another render node if needed.
+The Nix shell supplies matching Mesa libraries. When testing the installation
+in another VM manager, enable virtio graphics with 3D acceleration.
 
 The ISO exposes its complete local repository at `/run/archiso/bootmnt/repo`,
 including `SHA256SUMS` for pre-wipe validation. Installation needs no network.

@@ -28,9 +28,11 @@ cat > /usr/local/lib/verify-personal/chsh <<'EOF'
 exec sudo /usr/bin/chsh "$@"
 EOF
 chmod 755 /usr/local/lib/verify-personal/{yay,chsh}
-printf 'tester ALL=(ALL:ALL) NOPASSWD: ALL\n' > /etc/sudoers.d/verify-personal
-chmod 440 /etc/sudoers.d/verify-personal
-visudo -cf /etc/sudoers.d/verify-personal
+# Sudo's last matching rule wins; this must sort after the production wheel rule.
+printf 'tester ALL=(ALL:ALL) NOPASSWD: ALL\n' > /etc/sudoers.d/zz-verify-personal
+chmod 440 /etc/sudoers.d/zz-verify-personal
+visudo -cf /etc/sudoers.d/zz-verify-personal
+runuser -u tester -- sudo -n true
 runuser -u tester -- env HOME=/home/tester USER=tester LOGNAME=tester \
     PATH=/usr/local/lib/verify-personal:/usr/local/bin:/usr/bin:/bin \
     bash /run/verify/personal-user.sh > /run/verify/bootstrap.log 2>&1
@@ -89,13 +91,18 @@ def main():
     parser.add_argument('--disk', type=Path, required=True, help='Disposable qcow2 with pristine snapshot')
     parser.add_argument('--dotfiles', type=Path, required=True, help='Dotfiles Git repository')
     parser.add_argument('--agent-config', type=Path, required=True, help='Agent config Git repository')
+    parser.add_argument('--directory', type=Path, help='Fresh evidence directory; default under /tmp')
     args = parser.parse_args()
     disk = args.disk.resolve(strict=True)
     if not disk.is_file():
         parser.error('--disk must be an existing qcow2 file')
+    if args.directory:
+        directory = args.directory
+        directory.mkdir(mode=0o700, parents=True, exist_ok=False)
+    else:
+        directory = Path(tempfile.mkdtemp(prefix='dux-personal-', dir='/tmp'))
     # qemu-img acquires the image lock; never bypass a running QA VM's lock.
     subprocess.run(['qemu-img', 'snapshot', '-a', 'pristine', str(disk)], check=True)
-    directory = Path(tempfile.mkdtemp(prefix='dux-personal-', dir='/tmp'))
     print(f'VM evidence: {directory}', flush=True)
     vm = None
     try:
@@ -109,6 +116,8 @@ def main():
         installed_login(vm)
         vm.command('mkdir -p /run/verify; mount -t 9p -o trans=virtio,version=9p2000.L verify /run/verify')
         vm.command('bash /run/verify/personal-setup.sh', timeout=7200)
+        vm.command('sync')
+        vm.stop()
         (directory / 'PERSONAL-PASSED').write_text('Personal bootstrap and assertions passed.\n')
         print(f'Personal bootstrap passed. Evidence: {directory}', flush=True)
         return 0

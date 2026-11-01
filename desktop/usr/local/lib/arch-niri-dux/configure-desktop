@@ -3,7 +3,7 @@ set -euo pipefail
 user=${1:?Usage: configure-desktop USERNAME}
 home=$(getent passwd "$user" | cut -d: -f6)
 [[ -d "$home" && "$home" != / ]] || exit 1
-install -d -o "$user" -g "$(id -gn "$user")" "$home/.config/niri"
+install -d -o "$user" -g "$(id -gn "$user")" "$home/.config" "$home/.config/niri"
 # The Dux 2.0 upstream Niri integration is vendored verbatim with source hashes.
 cp -a /usr/share/arch-niri-dux/niri/. "$home/.config/niri/"
 sed -i 's/{{TERMINAL_COMMAND}}/alacritty/g' "$home/.config/niri/dms/binds.kdl"

@@ -61,8 +61,12 @@ class VM:
         variables = self.directory / 'OVMF_VARS.fd'
         if not variables.exists():
             shutil.copyfile(template, variables)
+        render_node = Path(os.environ.get('QEMU_RENDER_NODE', '/dev/dri/renderD128'))
+        if not os.access(render_node, os.R_OK | os.W_OK):
+            raise RuntimeError(f'Niri VM verification needs an accessible GPU render node: {render_node}')
         command = ['qemu-system-x86_64', '-machine', 'q35,accel=kvm', '-cpu', 'host',
-                   '-m', '4096', '-smp', '4', '-display', 'none', '-vga', 'virtio',
+                   '-m', '4096', '-smp', '4', '-display', f'egl-headless,rendernode={render_node}',
+                   '-vga', 'none', '-device', 'virtio-vga-gl',
                    '-drive', f'if=pflash,format=raw,readonly=on,file={code}',
                    '-drive', f'if=pflash,format=raw,file={variables}',
                    '-drive', f'if=virtio,format=qcow2,file={self.disk}',
@@ -127,7 +131,16 @@ class VM:
 
     def screenshot(self, name):
         path = self.directory / (name + '.png')
-        self.qmp_command('screendump', {'filename': str(path), 'format': 'png'})
+        try:
+            self.qmp_command('screendump', {'filename': str(path), 'format': 'png'})
+        except RuntimeError as error:
+            detail = error.args[0]
+            if not isinstance(detail, dict) or detail.get('desc') != 'no surface':
+                raise
+            # VirGL scanout can remain in a GPU texture with no QMP surface.
+            # The desktop probe separately requires a real Niri screenshot.
+            path.with_suffix('.unavailable.txt').write_text('QEMU GL backend has no CPU-readable surface.\n')
+            return None
         return path
 
     def key(self, name):
@@ -143,6 +156,26 @@ class VM:
                 raise ValueError('Unsupported verification keyboard character.')
             time.sleep(0.08)
 
+    def poweroff(self, timeout=180):
+        self.send('systemctl poweroff\n')
+        deadline = time.monotonic() + timeout
+        # Drain the console while waiting: shutdown can otherwise block when
+        # the Unix socket's receive buffer fills with service/terminal output.
+        while self.process.poll() is None:
+            if time.monotonic() >= deadline:
+                raise TimeoutError('VM did not shut down; inspect serial.log.')
+            try:
+                data = self.serial.recv(65536)
+                if data:
+                    self.log.write(data.decode(errors='replace'))
+                    self.log.flush()
+                else:
+                    self.process.wait(timeout=15)
+            except socket.timeout:
+                pass
+        if self.process.returncode != 0:
+            raise RuntimeError(f'QEMU exited abnormally during shutdown: {self.process.returncode}')
+
     def stop(self):
         if self.process is not None and self.process.poll() is None:
             self.process.terminate()
@@ -155,6 +188,8 @@ class VM:
             self.serial.close()
         if self.qmp:
             self.qmp.close()
+        if self.process is not None and self.process.returncode not in (None, 0):
+            raise RuntimeError(f'QEMU exited abnormally: {self.process.returncode}')
 
 
 def installed_login(vm):
@@ -248,7 +283,6 @@ def main():
         vm.command('for attempt in $(seq 1 60); do pgrep -u tester -x niri >/dev/null && exit 0; sleep 1; done; exit 1', timeout=90)
         vm.command('mkdir -p /run/verify; mount -t 9p -o trans=virtio,version=9p2000.L verify /run/verify || mountpoint -q /run/verify')
         vm.command('python /run/verify/verify-guest.py desktop', timeout=180)
-        vm.screenshot('02-desktop-apps')
         passed('Niri, Dux, terminal, Neovim and Chromium smoke checks')
         vm.command('python /run/verify/verify-guest.py lock')
         vm.command('python /run/verify/verify-guest.py locked')
@@ -260,8 +294,7 @@ def main():
         vm.command('python /run/verify/verify-guest.py snapshots', timeout=300)
         passed('Automatic package snapshots created; recovery fixture prepared')
         vm.command('sync')
-        vm.send('systemctl poweroff\n')
-        vm.process.wait(timeout=60)
+        vm.poweroff()
         vm.stop()
         vm.start(cdrom=False)
         installed_login(vm)
@@ -270,8 +303,7 @@ def main():
         vm.screenshot('04-recovery')
         passed('Limine snapshot boot and restoration')
         vm.command('sync')
-        vm.send('systemctl poweroff\n')
-        vm.process.wait(timeout=60)
+        vm.poweroff()
         vm.stop()
         vm.start(cdrom=False)
         installed_login(vm)
@@ -279,6 +311,7 @@ def main():
         vm.command('python /run/verify/verify-guest.py restored')
         vm.screenshot('05-restored')
         passed('Restored system rebooted normally and home was preserved')
+        vm.stop()
         (directory / 'ACCEPTANCE-PASSED').write_text('All acceptance stages passed.\n')
         print(f'Acceptance passed. Evidence: {directory}', flush=True)
         return 0
