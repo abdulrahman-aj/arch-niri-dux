@@ -69,9 +69,10 @@ for mime in text/html x-scheme-handler/http x-scheme-handler/https; do
     test "$(xdg-mime query default "$mime")" = zen.desktop
 done
 fish -c 'type -q fisher'
-for app in fish stow gh delta starship zoxide eza fzf fd bat lazygit jq zed mise node npm yay wt google-chrome-stable zen-browser t3code; do
+for app in fish stow gh delta starship zoxide eza fzf fd bat lazygit jq zeditor mise node npm yay wt google-chrome-stable zen-browser t3code; do
     command -v "$app" >/dev/null || { echo "Missing command: $app" >&2; exit 1; }
 done
+fish -c 'type -q zed'
 mise exec herdr -- herdr --version
 mise exec codex -- codex --version
 mise exec npm:hunkdiff -- hunk --version

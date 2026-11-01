@@ -66,6 +66,8 @@ from packaged upstream defaults offline.
 
 Do not install on a laptop until `make verify` has passed the actual ISO's
 UEFI boot, offline installation, desktop startup and snapshot recovery checks.
+The tested artifact hash, evidence and hardware limits are in
+[VERIFICATION.md](VERIFICATION.md).
 
 Boot the USB in UEFI mode with Secure Boot disabled. The terminal wizard asks
 for the disk, user, timezone, keyboard layout and passwords, then requires the

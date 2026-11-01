@@ -41,7 +41,26 @@ Local evidence is under `out/verify-final/`: `ACCEPTANCE-PASSED`,
 capture this GL backend's GPU texture; unavailable QMP screenshots are recorded
 explicitly, and the desktop PNG is captured by Niri and required for acceptance.
 
-The separate online personal bootstrap test is in progress. It does not alter
-the offline ISO. Physical Zenbook audio, Wi-Fi, display behavior and lid suspend
-remain hardware checks; the VM does not qualify those devices. Secure Boot and
-hibernation are outside v1. Screen-sharing integration is tracked in TODO.md.
+The separate online personal bootstrap also passed, using dotfiles commit
+`1995e61` from its PR and an archive of the local agent-config Git HEAD:
+
+```sh
+make verify-personal ARGS='--disk /dev/shm/dux-acceptance-final.qcow2 --dotfiles out/dotfiles-pr --agent-config /home/abdulrahman/agent-config --directory out/personal-3'
+```
+
+This rewound the stopped test disk to its pristine installation, added a network
+device, and ran the real dotfiles `make` as the test user. Official/AUR package
+downloads, Mise tools, portable stow deployment, agent-config deployment and
+Fisher completed. Assertions verified Fish as the login shell, Zen MIME defaults,
+required commands and tool versions, unchanged Niri configuration, and excluded
+Omarchy/Hyprland/Alacritty/OpenCode dotfiles links. Arch's native `zeditor` and
+the portable Fish `zed` alias are both checked. Source deployment and editor
+compatibility tests also passed in the dotfiles Nix shell.
+
+Evidence is under `out/personal-3/`: `PERSONAL-PASSED`, `sources.json`,
+`bootstrap.log` and `serial.log`. This online step does not alter the offline
+ISO. Personal application GUI workflows were not exhaustively tested.
+
+Physical Zenbook audio, Wi-Fi, display behavior and lid suspend remain hardware
+checks; the VM does not qualify those devices. Secure Boot and hibernation are
+outside v1. Screen-sharing integration is tracked in TODO.md.
