@@ -1,0 +1,1 @@
+- [ ] Add Niri screen-sharing support with `xdg-desktop-portal-gnome`; account for Arch's Nautilus dependency and verify screen selection/capture in Chromium. Keep the GTK file-picker fallback working.

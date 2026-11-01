@@ -41,6 +41,7 @@
     "python",
     "snap-pac",
     "snapper",
+    "sof-firmware",
     "vulkan-intel",
     "vulkan-radeon",
     "wireplumber",
@@ -3605,6 +3606,15 @@
       "url": "https://geo.mirror.pkgbuild.com/extra/os/x86_64/snapper-0.13.2-1-x86_64.pkg.tar.zst",
       "repository": "extra",
       "signature": "iHUEABYKAB0WIQQMrarPcPZMZU4TGzERZ1x0NCnd7wUCaqpengAKCRARZ1x0NCnd72WJAP43EcfCR+1MsiqzJ00rpBBoBA1yGYQVSlZ2Kc0Uxrq4aQD+NVpxUIHP8JhyShxOZ2akgYNcDTtmKGCjEgoXTuHBbAE="
+    },
+    {
+      "name": "sof-firmware",
+      "version": "2026.09.2-1",
+      "filename": "sof-firmware-2026.09.2-1-x86_64.pkg.tar.zst",
+      "sha256": "8e8f6658a983a657f483cf354988e19ed55609aa7a4ba0b2794c9c223b2cd3d1",
+      "url": "https://geo.mirror.pkgbuild.com/extra/os/x86_64/sof-firmware-2026.09.2-1-x86_64.pkg.tar.zst",
+      "repository": "extra",
+      "signature": "iHUEABYKAB0WIQSDvIiJNRtd67toQW64rAhgDxCM3wUCasaUYQAKCRC4rAhgDxCM3/orAP9fztMBxQD7/GiTi7io6gahMsWHCGpKplG0E7x+gffbvQEAka37nybayfLi1nI1NLaNRL4i+4VyL8NUCc5+nz+TpQ8="
     },
     {
       "name": "sord",

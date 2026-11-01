@@ -1,13 +1,16 @@
 #!/usr/bin/env python3
 """Guest-only acceptance probes, executed exclusively on the disposable VM disk."""
 
-import os
+import json
 from pathlib import Path
 import pwd
 import re
 import stat
 import subprocess
 import sys
+import time
+import urllib.error
+import urllib.request
 
 
 def run(*args, **kwargs):
@@ -43,9 +46,21 @@ def desktop():
     run('bash', '-c', 'for attempt in $(seq 1 30); do test -s /tmp/alacritty-verified && exit 0; sleep 1; done; exit 1')
     html = Path('/tmp/chromium-smoke.html')
     html.write_text('<!doctype html><title>Offline Chromium verification</title><p>offline-browser-works</p>')
-    result = user_command('chromium', '--headless', '--disable-gpu', '--no-first-run',
-                          '--user-data-dir=/tmp/chromium-verification', '--dump-dom', 'file://' + str(html), capture=True)
-    assert 'offline-browser-works' in result.stdout
+    user_command('sh', '-c',
+                 'chromium --no-first-run --no-default-browser-check '
+                 '--user-data-dir=/tmp/chromium-verification --remote-debugging-port=9222 '
+                 'file:///tmp/chromium-smoke.html >/tmp/chromium-verify.log 2>&1 &')
+    # The actual Wayland window must load our offline page, not just start a PID.
+    for attempt in range(60):
+        try:
+            with urllib.request.urlopen('http://127.0.0.1:9222/json/list', timeout=2) as response:
+                pages = json.load(response)
+            if any(page.get('title') == 'Offline Chromium verification' for page in pages):
+                return
+        except (OSError, urllib.error.URLError):
+            pass
+        time.sleep(1)
+    raise RuntimeError('Graphical Chromium did not load the local verification page.')
 
 
 def boot_entry_path(text, snapshot=None):

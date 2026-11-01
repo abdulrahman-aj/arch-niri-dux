@@ -9,7 +9,7 @@ The live ISO must provide:
 - `/run/archiso/bootmnt/repo`: a local pacman repository with the complete target closure;
 - `/usr/local/share/arch-niri-dux/packages.target`: one package name per line;
 - `/usr/local/share/arch-niri-dux/desktop`: a target-root overlay containing upstream
-  Niri/Dux defaults and greeter configuration. An optional executable
+  Niri/Dux defaults and greeter configuration. The required Bash script
   `/usr/local/lib/arch-niri-dux/configure-desktop USERNAME` runs inside the installed
   system after the overlay is copied, to create user configuration and enable
   the appropriate greeter. It must not download anything.

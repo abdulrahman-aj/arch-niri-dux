@@ -38,6 +38,15 @@ def validate_entry(entry):
         raise ValueError('Unsigned package')
 
 
+def prune_payload(dest, entries):
+    # repo-add must see only this lock's versions after an intentional refresh.
+    expected = {entry['filename'] for entry in entries}
+    for path in dest.glob('*.pkg.tar.zst'):
+        if path.name not in expected:
+            path.unlink()
+            path.with_name(path.name + '.sig').unlink(missing_ok=True)
+
+
 def main():
     root, dest = map(pathlib.Path, sys.argv[1:3])
     for source in json.loads((root / 'packages/desktop-sources.json').read_text()):
@@ -122,6 +131,10 @@ def main():
         signature = package.with_name(package.name + '.sig')
         signature.write_bytes(base64.b64decode(entry['signature'], validate=True))
         subprocess.run(['gpgv', '--keyring', '/state/trusted-packagers.gpg', str(signature), str(package)], check=True)
+    prune_payload(dest, payload['packages'])
+    # A changed lock also needs a fresh database, not repo-add's merged history.
+    for path in dest.glob('offline.*'):
+        path.unlink()
     # Installer consumes this before opening any disk; include database hashes later.
     (dest.parent / 'packages.manifest.json').write_text(json.dumps(payload, indent=2) + '\n')
 

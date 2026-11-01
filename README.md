@@ -43,6 +43,13 @@ Outputs are `out/arch-niri-dux-*.iso`, `out/SHA256SUMS`,
 `out/packages.manifest.json` and `out/trusted-packagers.gpg`. Logs and the
 reusable builder disk remain under `BUILD_STATE`. `make build-test` runs build
 failure-case tests; `make verify` runs the parent-owned acceptance runner.
+The runner prints its evidence directory. Use `make verify ARGS='--directory
+out/verification --disk /path/to/new-test.qcow2'` to keep logs under `out/` and
+place the disposable disk elsewhere. It refuses to overwrite an existing disk.
+`make verify-personal ARGS='--disk /path/to/ended-test.qcow2 --dotfiles
+/path/to/dotfiles --agent-config /path/to/agent-config'` separately tests the
+online personal setup from Git HEAD archives. It rewinds that disposable disk
+to the `pristine` snapshot created by the offline test.
 
 The ISO exposes its complete local repository at `/run/archiso/bootmnt/repo`,
 including `SHA256SUMS` for pre-wipe validation. Installation needs no network.
@@ -55,3 +62,24 @@ from packaged upstream defaults offline.
 
 Do not install on a laptop until `make verify` has passed the actual ISO's
 UEFI boot, offline installation, desktop startup and snapshot recovery checks.
+
+Boot the USB in UEFI mode with Secure Boot disabled. The terminal wizard asks
+for the disk, user, timezone, keyboard layout and passwords, then requires the
+exact displayed erase confirmation. Remove the USB after installation and
+reboot. Unlock the disk with its passphrase, then log into the greeter.
+Super+Return opens Alacritty, Super+Space opens the application launcher and
+Super+Alt+L locks the desktop. Connect Wi-Fi through Dux's network controls.
+
+For recovery, select a known-good snapshot in Limine's boot menu, unlock and
+log in, then run `sudo limine-snapper-restore` in a terminal. Choose restoration
+and reboot into the normal system entry. Root is restored; `/home`, including
+personal configuration, stays untouched. This also means system recovery does
+not undo a broken personal configuration file.
+
+Personal applications and dotfiles are a separate online step in
+[dotfiles](https://github.com/abdulrahman-aj/dotfiles/pull/1). The base installation
+does not clone or apply them. Laptop audio, Wi-Fi and lid suspend still require
+physical hardware testing; a VM cannot qualify those devices.
+
+The minimal profile uses the GTK portal. Screen-sharing integration is deferred
+in [TODO.md](TODO.md), including the Nautilus dependency of Arch's GNOME portal.

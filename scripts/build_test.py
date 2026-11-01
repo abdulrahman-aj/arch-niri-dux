@@ -45,3 +45,16 @@ class PayloadTests(unittest.TestCase):
     def test_unreadable_cache_falls_back_to_download(self):
         with patch.object(module, 'digest', side_effect=PermissionError):
             self.assertFalse(module.cache_matches(Path('/cache/package'), 'a' * 64))
+
+    def test_lock_refresh_removes_old_package_and_signature(self):
+        with tempfile.TemporaryDirectory() as directory:
+            dest = Path(directory)
+            old = dest / 'base-0-any.pkg.tar.zst'
+            signature = old.with_name(old.name + '.sig')
+            current = dest / self.entry['filename']
+            for path in (old, signature, current):
+                path.touch()
+            module.prune_payload(dest, [self.entry])
+            self.assertTrue(current.exists())
+            self.assertFalse(old.exists())
+            self.assertFalse(signature.exists())

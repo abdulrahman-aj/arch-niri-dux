@@ -1,6 +1,7 @@
 base
 linux
 linux-firmware
+sof-firmware
 intel-ucode
 amd-ucode
 btrfs-progs

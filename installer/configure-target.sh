@@ -63,10 +63,8 @@ systemctl disable snapper-timeline.timer 2>/dev/null || true
 systemctl enable power-profiles-daemon.service
 systemctl enable getty@tty2.service
 
-# The desktop payload owns the compositor/greeter choice and session wiring.
-if [[ -x /usr/local/lib/arch-niri-dux/configure-desktop ]]; then
-    /usr/local/lib/arch-niri-dux/configure-desktop "$dux_user"
-fi
+# The overlay is ISO data; setup must not depend on preserved executable bits.
+bash /usr/local/lib/arch-niri-dux/configure-desktop "$dux_user"
 
 # Restore online Arch repositories only on the installed system.
 cat >/etc/pacman.conf <<'EOF'

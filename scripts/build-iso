@@ -7,7 +7,9 @@ state=$(realpath "$state")
 exec 9>"$state/build.lock"
 flock -n 9 || { echo 'Another ISO build is using this state directory' >&2; exit 1; }
 [[ -r /dev/kvm && -w /dev/kvm ]] || { echo 'KVM is required' >&2; exit 1; }
-for tool in qemu-system-x86_64 qemu-img bsdtar curl gpgv python3; do command -v "$tool" >/dev/null; done
+for tool in qemu-system-x86_64 qemu-img bsdtar curl gpgv python3; do
+    command -v "$tool" >/dev/null || { echo "Missing required tool: $tool" >&2; exit 1; }
+done
 ./scripts/build-fetch-bootstrap "$state"
 bsdtar -xf "$state/archlinux.iso" -C "$state" arch/boot/x86_64/vmlinuz-linux arch/boot/x86_64/initramfs-linux.img
 # The guest runs only the checked-in builder; no root access on the host.

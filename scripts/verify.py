@@ -48,7 +48,7 @@ class VM:
                 time.sleep(0.1)
         raise TimeoutError(f'QEMU socket did not appear: {path}')
 
-    def start(self, cdrom=True):
+    def start(self, cdrom=True, network=False):
         for name in ('serial.sock', 'qmp.sock'):
             (self.directory / name).unlink(missing_ok=True)
         firmware = Path(os.environ.get('OVMF_DIR', '/usr/share/edk2/x64'))
@@ -66,7 +66,7 @@ class VM:
                    '-drive', f'if=pflash,format=raw,readonly=on,file={code}',
                    '-drive', f'if=pflash,format=raw,file={variables}',
                    '-drive', f'if=virtio,format=qcow2,file={self.disk}',
-                   '-nic', 'none', '-no-reboot',
+                   '-nic', 'user,model=virtio-net-pci' if network else 'none', '-no-reboot',
                    '-virtfs', f'local,path={self.directory},mount_tag=verify,security_model=none,id=verify',
                    '-serial', f'unix:{self.directory}/serial.sock,server=on,wait=off',
                    '-qmp', f'unix:{self.directory}/qmp.sock,server=on,wait=off']
@@ -118,7 +118,7 @@ class VM:
 
     def command(self, command, timeout=120):
         marker = '__VERIFY_' + secrets.token_hex(8) + '__'
-        payload = f"{command}\nverify_status=$?; printf '\\n{marker}:%s\\n' \"$verify_status\""
+        payload = f"(\nset -e\n{command}\n)\nverify_status=$?; printf '\\n{marker}:%s\\n' \"$verify_status\""
         self.send('bash -c ' + shlex.quote(payload) + '\n')
         match, output = self.expect(r'\r?\n' + marker + r':([0-9]+)\r?\n', timeout)
         if match.group(1) != '0':
@@ -164,10 +164,12 @@ def installed_login(vm):
     vm.send('tester\n')
     vm.expect(r'Password:')
     vm.send(PASSWORD + '\n')
+    vm.expect(r'\[tester@dux-verify[^\n]*\]\$', timeout=60)
     vm.command('test "$(id -u)" = 1000')
     vm.send('sudo -s\n')
     vm.expect(r'(?i)password.*:')
     vm.send(PASSWORD + '\n')
+    vm.expect(r'\[root@dux-verify[^\n]*\]#', timeout=60)
     vm.command('test "$(id -u)" = 0')
 
 
@@ -175,6 +177,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--iso', type=Path)
     parser.add_argument('--directory', type=Path, help='Fresh verification workspace; default under /tmp')
+    parser.add_argument('--disk', type=Path, help='New disposable qcow2 path; default inside the workspace')
     parser.add_argument('--install-only', action='store_true', help='Debug only; does not produce acceptance success')
     args = parser.parse_args()
     images = sorted((ROOT / 'out').glob('*.iso'))
@@ -185,15 +188,22 @@ def main():
         parser.error('The VM verification requires access to /dev/kvm.')
     directory = args.directory or Path(tempfile.mkdtemp(prefix='dux-verify-', dir='/tmp'))
     directory.mkdir(mode=0o700, parents=True, exist_ok=True)
-    if (directory / 'disk.qcow2').exists():
+    disk = args.disk or directory / 'disk.qcow2'
+    if disk.exists():
         parser.error('Use a fresh verification directory; refusing to overwrite an existing VM disk.')
-    disk = directory / 'disk.qcow2'
     subprocess.run(['qemu-img', 'create', '-f', 'qcow2', str(disk), '48G'], check=True)
     configuration = dict(disk='/dev/vda', username='tester', hostname='dux-verify',
                          timezone='UTC', keymap='us', passphrase=PASSWORD, password=PASSWORD)
     config_file = directory / 'install.json'
     config_file.write_text(json.dumps(configuration))
     config_file.chmod(0o600)
+    with iso.open('rb') as stream:
+        iso_digest = hashlib.file_digest(stream, 'sha256').hexdigest()
+    package_digest = hashlib.sha256((ROOT / 'packages/closure.lock.json').read_bytes()).hexdigest()
+    (directory / 'inputs.json').write_text(json.dumps({
+        'iso': str(iso.resolve()), 'iso_sha256': iso_digest,
+        'package_lock_sha256': package_digest,
+    }, indent=2) + '\n')
     (directory / 'key').write_text(PASSWORD)
     (directory / 'key').chmod(0o600)
     shutil.copyfile(Path(__file__).with_name('verify-guest.py'), directory / 'verify-guest.py')
@@ -209,6 +219,7 @@ def main():
         vm.expect(r'root@archiso[^\n]*#', timeout=180)
         vm.command('mkdir -p /run/verify; mount -t 9p -o trans=virtio,version=9p2000.L verify /run/verify')
         vm.command('test "$(ls /sys/class/net | tr "\\n" " ")" = "lo "')
+        vm.command(f'test "$(sha256sum /run/archiso/bootmnt/packages.manifest.json | cut -d " " -f 1)" = {package_digest}')
         for filename in ('install.py', 'configure-target.sh'):
             expected = hashlib.sha256((ROOT / 'installer' / filename).read_bytes()).hexdigest()
             vm.command(f'test "$(sha256sum /usr/local/lib/arch-niri-dux/installer/{filename} | cut -d " " -f 1)" = {expected}')
@@ -226,7 +237,8 @@ def main():
         installed_login(vm)
         passed('UEFI boot from encrypted disk without installation ISO')
         vm.command('test -e /dev/mapper/dux-root; findmnt -n -o FSTYPE / | grep -x btrfs; test "$(ls /sys/class/net | tr "\\n" " ")" = "lo "')
-        vm.command('systemctl is-active NetworkManager bluetooth; command -v nvim chromium alacritty yay niri dms')
+        vm.command('cat /proc/cmdline; ! grep -q /@snapshots/ /proc/cmdline; systemctl is-enabled greetd; systemctl is-active greetd; test -f /home/tester/.config/niri/config.kdl')
+        vm.command('systemctl is-active NetworkManager; systemctl is-enabled bluetooth; command -v nvim chromium alacritty yay niri dms')
         vm.screenshot('01-greeter')
         vm.type_graphical('tester')
         vm.key('ret')
