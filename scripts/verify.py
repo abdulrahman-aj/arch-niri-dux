@@ -2,6 +2,7 @@
 """Run the ISO in a UEFI VM without a network device; retain evidence locally."""
 
 import argparse
+import hashlib
 import json
 import os
 from pathlib import Path
@@ -51,10 +52,15 @@ class VM:
         for name in ('serial.sock', 'qmp.sock'):
             (self.directory / name).unlink(missing_ok=True)
         firmware = Path(os.environ.get('OVMF_DIR', '/usr/share/edk2/x64'))
-        code = firmware / 'OVMF_CODE.4m.fd'
+        pairs = [('OVMF_CODE.4m.fd', 'OVMF_VARS.4m.fd'), ('OVMF_CODE.fd', 'OVMF_VARS.fd')]
+        pair = next(((firmware / code, firmware / variables) for code, variables in pairs
+                     if (firmware / code).is_file() and (firmware / variables).is_file()), None)
+        if pair is None:
+            raise RuntimeError(f'OVMF code and variable-store firmware missing under {firmware}')
+        code, template = pair
         variables = self.directory / 'OVMF_VARS.fd'
         if not variables.exists():
-            shutil.copyfile(firmware / 'OVMF_VARS.4m.fd', variables)
+            shutil.copyfile(template, variables)
         command = ['qemu-system-x86_64', '-machine', 'q35,accel=kvm', '-cpu', 'host',
                    '-m', '4096', '-smp', '4', '-display', 'none', '-vga', 'virtio',
                    '-drive', f'if=pflash,format=raw,readonly=on,file={code}',
@@ -200,17 +206,19 @@ def main():
     try:
         print(f'VM evidence: {directory}', flush=True)
         vm.start()
-        match, _ = vm.expect(r'(root@|login:)', timeout=180)
-        if match.group(1) == 'login:':
-            vm.send('root\n')
+        vm.expect(r'root@archiso[^\n]*#', timeout=180)
         vm.command('mkdir -p /run/verify; mount -t 9p -o trans=virtio,version=9p2000.L verify /run/verify')
         vm.command('test "$(ls /sys/class/net | tr "\\n" " ")" = "lo "')
+        for filename in ('install.py', 'configure-target.sh'):
+            expected = hashlib.sha256((ROOT / 'installer' / filename).read_bytes()).hexdigest()
+            vm.command(f'test "$(sha256sum /usr/local/lib/arch-niri-dux/installer/{filename} | cut -d " " -f 1)" = {expected}')
         vm.command('arch-niri-install --config /run/verify/install.json --confirm-disk /dev/vda', timeout=2400)
         passed('Offline encrypted installation completed')
         vm.command("cryptsetup open --key-file /run/verify/key /dev/vda2 dux-root; mkdir -p /mnt/verify; mount -o subvol=@ /dev/mapper/dux-root /mnt/verify; mount /dev/vda1 /mnt/verify/boot")
         vm.command('python /run/verify/verify-guest.py prepare /mnt/verify', timeout=300)
         vm.command('umount -R /mnt/verify; cryptsetup close dux-root; sync')
         vm.stop()
+        subprocess.run(['qemu-img', 'snapshot', '-c', 'pristine', str(disk)], check=True)
         if args.install_only:
             print('Install-only debug run complete. Full acceptance has NOT passed.', flush=True)
             return 0
@@ -239,7 +247,8 @@ def main():
         passed('Screen lock and password unlock')
         vm.command('python /run/verify/verify-guest.py snapshots', timeout=300)
         passed('Automatic package snapshots created; recovery fixture prepared')
-        vm.command('sync; systemctl poweroff')
+        vm.command('sync')
+        vm.send('systemctl poweroff\n')
         vm.process.wait(timeout=60)
         vm.stop()
         vm.start(cdrom=False)
@@ -248,7 +257,8 @@ def main():
         vm.command('python /run/verify/verify-guest.py recovery', timeout=300)
         vm.screenshot('04-recovery')
         passed('Limine snapshot boot and restoration')
-        vm.command('sync; systemctl poweroff')
+        vm.command('sync')
+        vm.send('systemctl poweroff\n')
         vm.process.wait(timeout=60)
         vm.stop()
         vm.start(cdrom=False)

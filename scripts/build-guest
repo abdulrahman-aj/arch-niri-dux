@@ -1,0 +1,120 @@
+#!/usr/bin/env bash
+set -euxo pipefail
+trap 'echo "FAILED at line $LINENO"; echo failed > /state/result; poweroff -f' ERR
+# Refuse direct execution on the host before touching the virtual disk.
+mountpoint -q /source
+mountpoint -q /state
+grep -qw 'archisolabel=ARCH_202610' /proc/cmdline
+# Only the explicitly supplied disposable virtual disk is formatted.
+if ! blkid /dev/vda; then mkfs.ext4 -F /dev/vda; fi
+mkdir -p /build
+mount /dev/vda /build
+fstrim /build || true
+mkdir -p /build/cache
+cat > /etc/pacman.conf <<'CONF'
+[options]
+Architecture = auto
+SigLevel = Required DatabaseOptional
+ParallelDownloads = 5
+CacheDir = /build/cache
+[core]
+Server = https://geo.mirror.pkgbuild.com/core/os/x86_64
+[extra]
+Server = https://geo.mirror.pkgbuild.com/extra/os/x86_64
+[omarchy]
+Server = https://pkgs.omarchy.org/stable/x86_64
+Usage = Sync Search Install
+CONF
+pacman-key --init
+pacman-key --populate archlinux
+# Import the existing host trust anchors only in the isolated build VM.
+gpg --homedir /etc/pacman.d/gnupg --import /state/trusted-packagers.gpg
+if [[ ! -f /source/packages/closure.lock.json ]]; then
+    pacman -Sy --noconfirm --needed archiso python
+fi
+python /source/scripts/build-lock.py /source /build/payload/repo
+repo-add /build/payload/repo/offline.db.tar.gz /build/payload/repo/*.pkg.tar.zst
+(cd /build/payload/repo && sha256sum *.pkg.tar.zst *.db > SHA256SUMS)
+cat >/build/pacman-pinned.conf <<'CONF'
+[options]
+Architecture = auto
+SigLevel = Never
+CacheDir = /build/cache
+[offline]
+Server = file:///build/payload/repo
+CONF
+# Rebuilds install the build tools from the same verified closure as the ISO.
+pacman -Sy --config /build/pacman-pinned.conf --noconfirm --needed archiso python
+cp /source/packages/closure.lock.json /source/out/packages.manifest.json
+cp /state/trusted-packagers.gpg /source/out/trusted-packagers.gpg
+cp -a /usr/share/archiso/configs/releng /build/profile-new
+rm -rf /build/profile
+mv /build/profile-new /build/profile
+profile=/build/profile
+cp /source/archiso/packages.live "$profile/packages.x86_64"
+cat > "$profile/airootfs/etc/mkinitcpio.conf.d/archiso.conf" <<'INIT'
+HOOKS=(base udev microcode modconf archiso block filesystems keyboard)
+COMPRESSION="zstd"
+COMPRESSION_OPTIONS=(-3)
+INIT
+cat > "$profile/pacman.conf" <<'CONF'
+[options]
+Architecture = auto
+SigLevel = Never
+[offline]
+Server = file:///build/payload/repo
+CONF
+# Installer runtime is deliberately text-only. Standard releng supplies UEFI
+# boot, serial recovery and archiso's tested initramfs setup.
+mkdir -p "$profile/airootfs/usr/local/lib/arch-niri-dux" "$profile/airootfs/usr/local/bin" "$profile/airootfs/usr/local/share/arch-niri-dux"
+cp -a /source/installer "$profile/airootfs/usr/local/lib/arch-niri-dux/installer"
+find "$profile/airootfs/usr/local/lib/arch-niri-dux/installer" -type d -name __pycache__ -exec rm -rf {} +
+cp -a /source/desktop "$profile/airootfs/usr/local/share/arch-niri-dux/desktop"
+cp /source/packages/packages.target "$profile/airootfs/usr/local/share/arch-niri-dux/packages.target"
+cat > "$profile/airootfs/usr/local/bin/arch-niri-install" <<'WRAPPER'
+#!/bin/sh
+exec python /usr/local/lib/arch-niri-dux/installer/install.py "$@"
+WRAPPER
+chmod +x "$profile/airootfs/usr/local/bin/arch-niri-install"
+# Both interactive gettys remain available after cancellation or errors.
+cat > "$profile/airootfs/root/.bash_profile" <<'PROFILE'
+if [[ $(tty) == /dev/tty1 ]]; then
+    arch-niri-install
+fi
+PROFILE
+rm -f "$profile/airootfs/root/.zlogin"
+mkdir -p "$profile/airootfs/etc/systemd/system/serial-getty@ttyS0.service.d"
+cat > "$profile/airootfs/etc/systemd/system/serial-getty@ttyS0.service.d/autologin.conf" <<'SERIAL'
+[Service]
+ExecStart=
+ExecStart=-/sbin/agetty --autologin root --noclear --keep-baud 115200,38400,9600 - $TERM
+SERIAL
+# Expose the serial console automatically when booting normally in OVMF.
+sed -i '/^options /s/$/ console=tty0 console=ttyS0,115200/' "$profile"/efiboot/loader/entries/*.conf
+# Releng logs root into zsh; use bash so tty1's wizard hook is explicit.
+sed -i 's#root:x:0:0:root:/root:/usr/bin/zsh#root:x:0:0:root:/root:/bin/bash#' "$profile/airootfs/etc/passwd"
+# The local repository is staged beside arch/ on the boot media.
+cat >> "$profile/profiledef.sh" <<'PROFILE'
+iso_name="arch-niri-dux"
+iso_label="ARCH_NIRI_DUX"
+iso_publisher="arch-niri-dux"
+iso_application="Offline Arch Niri Dux Installer"
+bootmodes=('uefi.systemd-boot')
+airootfs_image_type="squashfs"
+airootfs_image_tool_options=('-comp' 'zstd' '-Xcompression-level' '3')
+file_permissions+=(
+ ["/usr/local/bin/arch-niri-install"]="0:0:755"
+)
+PROFILE
+# A separate bind mount places payload beside arch/ in the staging tree.
+rm -rf /build/work /build/output
+fstrim /build || true
+mkdir -p /build/work/iso/repo
+cp -al /build/payload/repo/. /build/work/iso/repo/
+cp /source/out/packages.manifest.json /build/work/iso/packages.manifest.json
+mkarchiso -v -w /build/work -o /build/output "$profile"
+lsinitcpio /build/work/iso/arch/boot/x86_64/initramfs-linux.img | grep -qx 'hooks/archiso'
+cp /build/output/*.iso /source/out/
+(cd /source/out && sha256sum *.iso > SHA256SUMS)
+rm -rf /build/work /build/output
+fstrim /build || true

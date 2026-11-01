@@ -1,0 +1,32 @@
+[
+  {
+    "path": "desktop/usr/share/arch-niri-dux/niri/config.kdl",
+    "url": "https://raw.githubusercontent.com/duxlabs-dev/dux-shell/v2.0.0/core/internal/config/embedded/niri.kdl",
+    "sha256": "f4317cdef939cd1971c9a22bc54c95a2ba9b026b768e4360d5c382ef99ac2089"
+  },
+  {
+    "path": "desktop/usr/share/arch-niri-dux/niri/dms/binds.kdl",
+    "url": "https://raw.githubusercontent.com/duxlabs-dev/dux-shell/v2.0.0/core/internal/config/embedded/niri-binds.kdl",
+    "sha256": "478c827441361bd2f281c184392c468e9072dcf0f96074f0f0a6b92311008c37"
+  },
+  {
+    "path": "desktop/usr/share/arch-niri-dux/niri/dms/colors.kdl",
+    "url": "https://raw.githubusercontent.com/duxlabs-dev/dux-shell/v2.0.0/core/internal/config/embedded/niri-colors.kdl",
+    "sha256": "c7c47fb7baffe685d84db3f42ad498b68d4a592efa4ceff38b1c18c29a9796ba"
+  },
+  {
+    "path": "desktop/usr/share/arch-niri-dux/niri/dms/layout.kdl",
+    "url": "https://raw.githubusercontent.com/duxlabs-dev/dux-shell/v2.0.0/core/internal/config/embedded/niri-layout.kdl",
+    "sha256": "2763377736dd59229ef0d563688cf4c50fabf87daf6a7117ab6990051afafbfd"
+  },
+  {
+    "path": "desktop/usr/share/arch-niri-dux/niri/dms/alttab.kdl",
+    "url": "https://raw.githubusercontent.com/duxlabs-dev/dux-shell/v2.0.0/core/internal/config/embedded/niri-alttab.kdl",
+    "sha256": "220cbc69932f20e7c53f3f747078980e2a3381d1f844a43e73c5f0c2471bdc27"
+  },
+  {
+    "path": "desktop/usr/share/arch-niri-dux/niri/dms/input.kdl",
+    "url": "https://raw.githubusercontent.com/duxlabs-dev/dux-shell/v2.0.0/core/internal/config/embedded/niri-input.kdl",
+    "sha256": "eac60a08f0cbfcf40221e7630778c11ace87650025526a4ab7f139cc0850420f"
+  }
+]

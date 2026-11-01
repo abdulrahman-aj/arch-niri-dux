@@ -150,6 +150,20 @@ def partition_name(disk, number):
     return disk + ('p' if disk[-1].isdigit() else '') + str(number)
 
 
+def recovery_fstab(text):
+    lines = []
+    for line in text.splitlines():
+        fields = line.split()
+        if not line.lstrip().startswith('#') and len(fields) >= 4:
+            options = fields[3].split(',')
+            if any(option.startswith('subvol=') for option in options):
+                # Replacing the root from a snapshot changes its numeric subvolume ID.
+                fields[3] = ','.join(option for option in options if not option.startswith('subvolid='))
+                line = '\t'.join(fields)
+        lines.append(line)
+    return '\n'.join(lines) + '\n'
+
+
 def verify_repository(repository):
     manifest = repository / 'SHA256SUMS'
     if not manifest.is_file():
@@ -251,14 +265,11 @@ def install(settings):
                 run('mount', '-o', f'subvol={volume},compress=zstd:1,noatime', mapped, str(mountpoint))
             (TARGET / 'boot').mkdir(exist_ok=True)
             run('mount', '-o', 'umask=0077', esp, str(TARGET / 'boot'))
-            # Disable snapshot creation until the complete, bootable baseline exists.
-            hook_dir = TARGET / 'etc/pacman.d/hooks'
-            hook_dir.mkdir(parents=True, exist_ok=True)
-            for hook in ('05-snap-pac-pre.hook', 'zz-snap-pac-post.hook'):
-                (hook_dir / hook).symlink_to('/dev/null')
-            run('pacstrap', '-C', str(offline_conf), '-K', str(TARGET), *packages)
+            # Install transaction hooks only after Snapper and boot are configured.
+            base_packages = [package for package in packages if package != 'snap-pac']
+            run('pacstrap', '-C', str(offline_conf), '-K', str(TARGET), *base_packages)
             fstab = run('genfstab', '-U', str(TARGET), capture=True)
-            write('/etc/fstab', fstab + '\n')
+            write('/etc/fstab', recovery_fstab(fstab))
             write('/etc/hostname', settings.hostname + '\n')
             write('/etc/hosts', '127.0.0.1 localhost\n::1 localhost\n'
                   f'127.0.1.1 {settings.hostname}.localdomain {settings.hostname}\n')
@@ -270,18 +281,18 @@ def install(settings):
                   'application/xhtml+xml=chromium.desktop\nx-scheme-handler/http=chromium.desktop\n'
                   'x-scheme-handler/https=chromium.desktop\n')
             shutil.copytree(SHARE / 'desktop', TARGET, dirs_exist_ok=True)
-            for script in Path(__file__).parent.glob('*.sh'):
-                destination = TARGET / 'run' / script.name
-                destination.parent.mkdir(exist_ok=True)
-                shutil.copy2(script, destination)
+            # arch-chroot mounts a fresh /run, so stage outside that mountpoint.
+            target_script = TARGET / 'root/configure-target.sh'
+            shutil.copy2(Path(__file__).with_name('configure-target.sh'), target_script)
             luks_uuid = run('blkid', '-s', 'UUID', '-o', 'value', encrypted, capture=True)
             filesystem_uuid = run('blkid', '-s', 'UUID', '-o', 'value', mapped, capture=True)
-            run('arch-chroot', str(TARGET), 'bash', '/run/configure-target.sh',
+            run('arch-chroot', str(TARGET), 'bash', '/root/configure-target.sh',
                 settings.username, settings.timezone, luks_uuid, filesystem_uuid)
+            target_script.unlink()
             run('arch-chroot', str(TARGET), 'chpasswd',
                 data=f'{settings.username}:{settings.password}\n')
-            for hook in ('05-snap-pac-pre.hook', 'zz-snap-pac-post.hook'):
-                (hook_dir / hook).unlink(missing_ok=True)
+            if 'snap-pac' in packages:
+                run('pacstrap', '-C', str(offline_conf), '-G', '-M', str(TARGET), 'snap-pac')
             run('arch-chroot', str(TARGET), 'snapper', '--no-dbus', '-c', 'root',
                 'create', '--cleanup-algorithm', 'number', '--description', 'Fresh installation')
             run('arch-chroot', str(TARGET), 'limine-snapper-sync')
@@ -318,7 +329,7 @@ def main():
         else:
             settings = wizard()
         install(settings)
-    except (ValueError, OSError, subprocess.CalledProcessError, KeyboardInterrupt) as error:
+    except (ValueError, TypeError, OSError, subprocess.CalledProcessError, KeyboardInterrupt) as error:
         print(f'\nInstallation stopped: {error}\nThe disk may be incomplete if installation had begun.', file=sys.stderr)
         return 1
     return 0

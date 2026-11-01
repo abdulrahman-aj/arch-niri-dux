@@ -1,0 +1,9 @@
+#!/usr/bin/env bash
+set -euo pipefail
+cd "$(dirname "$0")/.."
+# Copy only the flake inputs: a path flake over the whole checkout would copy
+# multi-gigabyte ISO outputs into /nix/store while files are still untracked.
+dev=${BUILD_STATE:-/tmp/arch-niri-dux-build}/dev-shell
+mkdir -p "$dev"
+cp flake.nix flake.lock "$dev/"
+exec nix --extra-experimental-features 'nix-command flakes' develop "path:$(realpath "$dev")" --command "$@"

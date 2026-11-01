@@ -1,5 +1,6 @@
 import importlib.util
 import hashlib
+import json
 from pathlib import Path
 import sys
 import tempfile
@@ -29,6 +30,19 @@ def disk(**changes):
 
 
 class InstallerSafetyTests(unittest.TestCase):
+    def test_malformed_automation_config_stops_cleanly_without_installing(self):
+        with tempfile.TemporaryDirectory() as directory:
+            config = Path(directory) / 'invalid.json'
+            config.write_text(json.dumps({'unexpected': 'field'}))
+            config.chmod(0o600)
+            with patch.object(sys, 'argv', ['install', '--config', str(config), '--confirm-disk', '/dev/vda']), \
+                    patch.object(installer.os, 'geteuid', return_value=0), \
+                    patch.object(Path, 'exists', return_value=True), \
+                    patch.object(Path, 'glob', return_value=[]), \
+                    patch.object(installer, 'install') as install:
+                self.assertEqual(installer.main(), 1)
+                install.assert_not_called()
+
     def test_accepts_unused_disk(self):
         self.assertIsNone(installer.disk_rejection(disk(), set()))
 
@@ -65,6 +79,14 @@ class InstallerSafetyTests(unittest.TestCase):
                                 ('/dev/mmcblk0', '/dev/mmcblk0p2'),
                                 ('/dev/sda', '/dev/sda2'), ('/dev/vda', '/dev/vda2')):
             self.assertEqual(installer.partition_name(drive, 2), expected)
+
+    def test_fstab_uses_subvolume_paths_so_root_can_be_replaced(self):
+        original = '# root\nUUID=abc / btrfs rw,subvolid=256,subvol=/@ 0 0\nUUID=abc /home btrfs rw,subvolid=257,subvol=/@home 0 0\n'
+        result = installer.recovery_fstab(original)
+        self.assertNotIn('subvolid=', result)
+        self.assertIn('subvol=/@\t0\t0', result)
+        self.assertIn('subvol=/@home', result)
+        self.assertTrue(result.startswith('# root\n'))
 
     def test_disk_swap_between_confirmation_and_install_prevents_all_commands(self):
         with tempfile.TemporaryDirectory() as directory:
