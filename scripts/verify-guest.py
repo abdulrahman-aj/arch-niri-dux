@@ -83,7 +83,20 @@ def user_command(*args, capture=False):
                *args, stdout=subprocess.PIPE if capture else None)
 
 
+def fonts():
+    for pattern, expected in (
+        ('sans-serif:lang=ar', 'Noto Naskh Arabic'),
+        ('Arial:charset=0627', 'Noto Naskh Arabic'),
+        ('sans-serif:lang=ur:charset=0679', 'Noto Nastaliq Urdu'),
+        ('Arial:charset=0041', 'Liberation Sans'),
+        ('sans-serif:charset=0041', 'Noto Sans'),
+    ):
+        actual = run('fc-match', '-f', '%{family}', pattern, stdout=subprocess.PIPE).stdout
+        assert actual == expected, (pattern, actual, expected)
+
+
 def desktop():
+    fonts()
     user_command('gh', '--version')
     user_command('git', '--version')
     user_command('test', '-w', '/home/tester/.config')
@@ -212,6 +225,8 @@ if __name__ == '__main__':
         prepare(Path(sys.argv[2]))
     elif action == 'desktop':
         desktop()
+    elif action == 'fonts':
+        fonts()
     elif action == 'snapshots':
         snapshots()
     elif action == 'recovery':
