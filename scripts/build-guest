@@ -89,8 +89,9 @@ cat > "$profile/airootfs/etc/systemd/system/serial-getty@ttyS0.service.d/autolog
 ExecStart=
 ExecStart=-/sbin/agetty --autologin root --noclear --keep-baud 115200,38400,9600 - $TERM
 SERIAL
-# Expose the serial console automatically when booting normally in OVMF.
-sed -i '/^options /s/$/ console=tty0 console=ttyS0,115200/' "$profile"/efiboot/loader/entries/*.conf
+# Keep the USB mounted: archiso's automatic RAM copy contains only airootfs,
+# while our offline repository lives beside it on the installation medium.
+sed -i '/^options /s/$/ copytoram=n console=tty0 console=ttyS0,115200/' "$profile"/efiboot/loader/entries/*.conf
 # Releng logs root into zsh; use bash so tty1's wizard hook is explicit.
 sed -i 's#root:x:0:0:root:/root:/usr/bin/zsh#root:x:0:0:root:/root:/bin/bash#' "$profile/airootfs/etc/passwd"
 # The local repository is staged beside arch/ on the boot media.
