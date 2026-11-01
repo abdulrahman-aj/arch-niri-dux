@@ -39,15 +39,13 @@ runuser -u tester -- env HOME=/home/tester USER=tester LOGNAME=tester \
 '''
 
 CHECK_PORTABLE = r'''
-for dir in hypr omarchy alacritty opencode; do
-    while IFS= read -r -d '' link; do
-        case "$(readlink -f "$link")" in
-            "$HOME/dotfiles/"*)
-                echo "Unexpected dotfiles link: $link" >&2
-                exit 1 ;;
-        esac
-    done < <(find "$HOME/.config/$dir" -type l -print0 2>/dev/null)
-done
+while IFS= read -r -d '' link; do
+    case "$(readlink -f "$link")" in
+        "$HOME/dotfiles/"*)
+            echo "Unexpected dotfiles link: $link" >&2
+            exit 1 ;;
+    esac
+done < <(find "$HOME/.config/opencode" -type l -print0 2>/dev/null)
 '''
 
 GUEST_USER = r'''#!/bin/bash

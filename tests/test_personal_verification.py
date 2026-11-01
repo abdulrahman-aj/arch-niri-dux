@@ -11,16 +11,16 @@ check = runpy.run_path(str(Path(__file__).resolve().parents[1] / 'scripts/verify
 
 
 class PortableVerificationTests(unittest.TestCase):
-    def run_check(self, target=None):
+    def run_check(self, target=None, directory='opencode'):
         with tempfile.TemporaryDirectory() as temporary:
             home = Path(temporary)
-            source = home / 'dotfiles/home/.config/alacritty/alacritty.toml'
+            source = home / f'dotfiles/home/.config/{directory}/config'
             source.parent.mkdir(parents=True)
             source.touch()
-            config = home / '.config/alacritty'
+            config = home / f'.config/{directory}'
             config.mkdir(parents=True)
             if target == 'relative':
-                (config / source.name).symlink_to('../../dotfiles/home/.config/alacritty/alacritty.toml')
+                (config / source.name).symlink_to(f'../../dotfiles/home/.config/{directory}/config')
             elif target == 'absolute':
                 (config / source.name).symlink_to(source)
             else:
@@ -36,3 +36,8 @@ class PortableVerificationTests(unittest.TestCase):
 
     def test_base_configuration_is_preserved(self):
         self.assertEqual(self.run_check(), 0)
+
+    def test_desktop_config_links_are_allowed(self):
+        for directory in ('hypr', 'omarchy', 'alacritty'):
+            with self.subTest(directory=directory):
+                self.assertEqual(self.run_check('relative', directory), 0)
