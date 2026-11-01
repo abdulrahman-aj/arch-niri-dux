@@ -75,5 +75,5 @@ Evidence is under `out/personal-nix/`: `PERSONAL-PASSED`, `sources.json`,
 ISO. Personal application GUI workflows were not exhaustively tested.
 
 Physical Zenbook audio, Wi-Fi, display behavior and lid suspend remain hardware
-checks; the VM does not qualify those devices. Secure Boot and hibernation are
-outside v1. Screen-sharing integration is tracked in TODO.md.
+checks; the VM does not qualify those devices. Secure Boot is outside v1.
+Planned features are tracked in TODO.md.

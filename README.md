@@ -46,4 +46,4 @@ stays untouched.
 
 [VM verification](VERIFICATION.md) covers installation, desktop, locking and
 recovery. Laptop Wi-Fi, audio and suspend still need physical testing.
-Hibernation and Secure Boot are outside v1; screen sharing is in [TODO.md](TODO.md).
+Secure Boot is outside v1; planned features are in [TODO.md](TODO.md).
