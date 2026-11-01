@@ -1,8 +1,12 @@
 - [ ] Add Niri screen-sharing support with `xdg-desktop-portal-gnome`; account for Arch's Nautilus dependency and verify screen selection/capture in Chromium. Keep the GTK file-picker fallback working.
-- [ ] Improve the guided installer UX, including a disk picker instead of typing device paths and clearer prompts and progress feedback.
-- [ ] Replace the typed ERASE phrase with a clear data-loss warning and a Yes/No confirmation accepted with Enter.
+- [ ] Polish the guided installer with searchable disk, timezone and keyboard pickers, sensible defaults, inline retries, a final summary and clear progress feedback.
+- [ ] Replace the typed ERASE phrase with a clear data-loss warning, defaulting to Cancel; selecting "Erase and install" and pressing Enter confirms erasure.
 - [ ] Measure installation time from final confirmation and show the elapsed time in the completion message.
-- [ ] Replace the basic terminal login screen with a graphical greeter that fits Dux; investigate the supported Dux greeter options and verify login and session startup.
-- [ ] Investigate why Chromium, Zen and T3 Code open in light mode when Dux looks dark; verify system color-scheme propagation across GTK/Qt, portals and apps, and make apps follow the desktop's light/dark preference.
+- [ ] Replace the terminal login screen with Dux Greeter using the reviewed `dux-greeter-bin` AUR package. Keep it updated through Yay and Dux's normal system updater; verify update handling, login and session startup.
+- [ ] Fix system color-scheme propagation so apps follow Dux's light/dark preference; enable upstream GTK/Qt theming integration and verify Chromium, Zen and T3 Code without app-specific dark-mode overrides.
 - [ ] Add Omarchy's signed package repository after Arch's official repositories, keeping the normal Arch mirrors; VM-test installation and updates, including the existing Yay/Limine packages. One-time cross-repo reminder: switch dotfiles' Chrome, Zen and T3 Code setup to these binary packages and remove its automatic AUR installation path.
-- [ ] Add hibernation support and verify hibernate/resume on the laptop, keeping lid-close suspend as the default.
+- [ ] Remove AUR usage entirely once suitable package sources are available, including replacing the AUR packages for Dux Greeter, Search, Calendar and Files, and removing Yay. For now, keep Yay for their updates.
+- [ ] Add hibernation with encrypted swap; offer an automatically sized default, a custom size, or no swap/hibernation during installation. Verify hibernate/resume on the laptop; lid-close remains suspend when undocked.
+- [ ] Include Dux GOP, Search, Calendar and Files with their upstream desktop integrations. Make Dux Files the default for folders and portal open/save dialogs, keeping GTK dialogs as fallback. Review the AUR recipes for Search, Calendar and Files before including them; verify startup, core functionality and update handling.
+- [ ] Investigate the laptop's intermittently lit lock screen on opening the lid using suspend/wake logs. Verify undocked lid-close suspend and docked use with the built-in panel off.
+- [ ] Deferred: decouple this repository from personal dotfiles, including bootstrap verification, tests and documentation. Preserve the current personal-setup VM coverage until the setup is in good shape. Dotfiles may depend on this installer; this repository must eventually build and verify independently.
