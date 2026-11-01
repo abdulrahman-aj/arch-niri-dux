@@ -5,3 +5,4 @@
 - [ ] Replace the basic terminal login screen with a graphical greeter that fits Dux; investigate the supported Dux greeter options and verify login and session startup.
 - [ ] Investigate why Chromium, Zen and T3 Code open in light mode when Dux looks dark; verify system color-scheme propagation across GTK/Qt, portals and apps, and make apps follow the desktop's light/dark preference.
 - [ ] Add Omarchy's signed package repository after Arch's official repositories, keeping the normal Arch mirrors; VM-test installation and updates, including the existing Yay/Limine packages. One-time cross-repo reminder: switch dotfiles' Chrome, Zen and T3 Code setup to these binary packages and remove its automatic AUR installation path.
+- [ ] Add hibernation support and verify hibernate/resume on the laptop, keeping lid-close suspend as the default.
