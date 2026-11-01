@@ -1,6 +1,14 @@
 # Verification — 2026-11-01
 
-The local ISO passed the complete automated offline acceptance run.
+The current local ISO has SHA-256
+`8edc59324a524ffb211182374f071d9e597c25825b3e13b158879e492d8db899`.
+This font-only rebuild adds Omarchy's Arabic fallback rules. A fresh offline
+installation passed encrypted UEFI boot, five Arabic/Urdu/Latin font-selection
+checks, and the Niri/Dux, terminal, Neovim and Chromium desktop probes.
+Evidence is in `out/verify-arabic/`; all 39 source/build tests also pass.
+The complete snapshot/restore sequence was not repeated for this font change.
+
+The previous ISO passed the complete automated offline acceptance run:
 
 ```
 arch-niri-dux-2026.11.01-x86_64.iso
