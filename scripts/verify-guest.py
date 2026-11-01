@@ -84,6 +84,8 @@ def user_command(*args, capture=False):
 
 
 def desktop():
+    user_command('gh', '--version')
+    user_command('git', '--version')
     user_command('test', '-w', '/home/tester/.config')
     user_command('yay', '--version')
     outputs = json.loads(user_command('niri', 'msg', '--json', 'outputs', capture=True).stdout)

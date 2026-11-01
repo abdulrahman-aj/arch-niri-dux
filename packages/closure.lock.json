@@ -17,6 +17,7 @@
     "dux-shell",
     "e2fsprogs",
     "git",
+    "github-cli",
     "gptfdisk",
     "greetd",
     "greetd-tuigreet",
@@ -861,6 +862,15 @@
       "url": "https://geo.mirror.pkgbuild.com/extra/os/x86_64/git-2.56.0-1-x86_64.pkg.tar.zst",
       "repository": "extra",
       "signature": "iQIzBAABCgAdFiEE8AuW0VIoAT/8nJ0Dk7EdqkwZfj0FAmq6rcgACgkQk7EdqkwZfj0z4w//dIeP3OS9nU70sm4i+2X7cke3+teMxidHao7fRhpcIc/V22WPL7LS1BSXOWF1U2RDKSBtmWuss4GcO6L1Iagt+KM5DXzK6sd3A3PxhmTOsJQu8YzA5hMLH/iGwMAPTR5f0ly4AkGQ0TYjab47twhkBbEBMerNMaKBxcVS1CqrecfoAVHKAKpneXd5yZz3Ono8IxxcnZItUgqieajpA5Ueig4cPHaGd5lchYQKfY52CqjRzu0ztA2zu2ldb8E643flfLWD7bbdhKgtK91eQZHfXGn/MXfkN3R9H+jR8ZLJGAD2vOYbvDBWrb7sXvHMEj5ZXxWcD84eihnZu3yW2yhB9x1g59WyGichCBlgDq36uZbht7CuOgfA1GpwQ60FDzo/fOtZ98SsAGSXmz/cPxlN7JbNbEPudmucbwGBUgd1I5wVi0kE0rcn4uNJa9ZzltT+3bMKLz66lxWgGr6+LWb+DOm0h2MnDsyfiJAhjOiFwyLiiGHEz+Ml5LlDYK2O/Pd7ow6cHdTNLUFk5dVM5CxKaWTpoZGS8T+Cls4/3fHIwM3lawHyYBcimHP4dHJSluP9+5xeTT1R4FLAjL2iE5/0xJoD+sdQaliCEfJG1CU1bDCfOkI8LrSnNbSaMOxT74hzCQHVKeSrNLgwHB54KBtG7BA/a5cmxXJ0HjdId5XgRdc="
+    },
+    {
+      "name": "github-cli",
+      "version": "2.102.1-1",
+      "filename": "github-cli-2.102.1-1-x86_64.pkg.tar.zst",
+      "sha256": "720950e1349ad07851de0b6c5ae2620294cfaeffbead2eb74fe1e050ce3e0f14",
+      "url": "https://geo.mirror.pkgbuild.com/extra/os/x86_64/github-cli-2.102.1-1-x86_64.pkg.tar.zst",
+      "repository": "extra",
+      "signature": "iQIzBAABCgAdFiEEsNZSlUdmBrcfDG+CqF6BHrTKLggFAmrYbnQACgkQqF6BHrTKLgiSfA//e933PwmjXWWOdRl+LRqiB0O18dyxMo/zUDQqKx5D6TFMZP9LhphTt0e1VCOgwIqFLjuDoQnAg8DJY2wTihhXHnT+Z9Ni6NDvpEQ91+9mHP1tyTgM/rpvSG9f3G1NnphSG24rXvD/pWXYQEuznvaBaqIs+XbUMX+hnvfPQQq6HEh6NS6XSjER14UdUaRo6YEX/83+MM/1+gpAOFnpe+/9cgI4xsTs3brSN7cCV84uW0kdEfsRYSAOqsr7vhtn/v2JEPqIH5JUez3v2GELCBPN/oPgtMi/cy1XKnA8Sx7l9Po4LohzmQ+RcqRbsUuw+/hCosM2FWgH8D2s7tb1ROx6ny2bheC6o8AbbtMK9VoUd9R/HaBVasUKXUfSaQd/1YrGTF1tmewCPim63bw8y3vIJvTK9GZwaQUf6E6KTGZO7vDJ58d9qfBBAjKmEecwQgAwcPyBHQyMxyPXzRwI0OODCgDtzaBxHH6PidP3mc9+Fpwwqedsn4cz3OiJarsBAXiR0RbZa08Yeett3LQlEa4A9do0VGvDbn/P1ZfO9bdMmMn+cprkgGGAtm5gvADdqyUIGOXggm1JPy8KALk8LwE5VeWvWlpuN0YFBQ1R1vm+29XSwyCKMBFKWPOeGMTbkopkwXlaDlPSQM+XempOrRXDSXIAs4EhL/G7FXvtEY8rR74="
     },
     {
       "name": "glib-networking",
@@ -2931,6 +2941,15 @@
       "url": "https://geo.mirror.pkgbuild.com/core/os/x86_64/m4-1.4.21-2-x86_64.pkg.tar.zst",
       "repository": "core",
       "signature": "iQIzBAABCgAdFiEELjbYYgIhSC/EXLfyqRdkdZMmtEAFAmm8svcACgkQqRdkdZMmtEBm3Q/9FoX3TD0jiFRTIAc2Hd5wEUFauQii+NQcTCKLbDwZJm/qlptaYLLUq/EtU/2uh3W0/e7e2wYttl2IlBf9ZOhuFJx9W2WpnP1nwgHOXzHjtqrI9gJR5JzM6Ybk2VxJTyTUx7F0fJvuTPRm5bC5S3QA9JxK1jDKJQUw+8wBQ5Z+eq3z3krACGebqHBQXt3Gn5pg76pY/rRxzC4X35q5YYbuHL5Wn4n8N1GUWZVB5IButwVgj69xY3jNDpcAzLKaIZPQ07yNBdml8p5CwCN4rOTjM4Qm1j4qgS4lzXNEbE4MvhmnW/3nK3arq8MTon9OZg6jysJvX3ILPH6jaeTZ82eeLHSItF9b44ucVxB3MSmxqTe+GWsTFWcR3Ptci8o/YPd6vWzWjXsyftUl3R5PH/iGeocysBuHilhj5tg8vkToq1SLIkMAX+4as/PAZ4cJFNaGVabRhoT0k91Ta00kY+VdP5MQpv2qBUzTUgojIjrqvLeJKdu41gQX3FziLhDFr8toBQPc6U9N+rKfcdNtEzU5XcFM/XxqDzv1zRbtXf8yPsnySlM8J6T/a++oEXt+fPrk6Lfw462NPEhvWiPT+Qq10dkgx4ZOhrfLcWPKSpiBVVl0NBYMlLrQb9ycoel0PGMZX6luIJ2bBUzMcSk5gSbSbdN7mFx7UIn0HwWLhs/ww9w="
+    },
+    {
+      "name": "mailcap",
+      "version": "2.1.54-3",
+      "filename": "mailcap-2.1.54-3-any.pkg.tar.zst",
+      "sha256": "91d5c7a0583514f6398a1fff3abf71abd3d116f310c8a2ec81594c1ddc8bcbcf",
+      "url": "https://geo.mirror.pkgbuild.com/extra/os/x86_64/mailcap-2.1.54-3-any.pkg.tar.zst",
+      "repository": "extra",
+      "signature": "iHUEABYKAB0WIQSDvIiJNRtd67toQW64rAhgDxCM3wUCaovHBgAKCRC4rAhgDxCM35eUAQDqr3QRWCTUTC+TMq63W8ublIPXuMvSWsH91sborPhbOgD/S5LNBjFDphV0Kf5r89lK4Nn/qjYBksfHceuScMigSQA="
     },
     {
       "name": "make",
