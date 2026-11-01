@@ -65,7 +65,7 @@ class VM:
         if not os.access(render_node, os.R_OK | os.W_OK):
             raise RuntimeError(f'Niri VM verification needs an accessible GPU render node: {render_node}')
         command = ['qemu-system-x86_64', '-machine', 'q35,accel=kvm', '-cpu', 'host',
-                   '-m', '4096', '-smp', '4', '-display', f'egl-headless,rendernode={render_node}',
+                   '-m', '8192', '-smp', '4', '-display', f'egl-headless,rendernode={render_node}',
                    '-vga', 'none', '-device', 'virtio-vga-gl',
                    '-drive', f'if=pflash,format=raw,readonly=on,file={code}',
                    '-drive', f'if=pflash,format=raw,file={variables}',
@@ -75,7 +75,9 @@ class VM:
                    '-serial', f'unix:{self.directory}/serial.sock,server=on,wait=off',
                    '-qmp', f'unix:{self.directory}/qmp.sock,server=on,wait=off']
         if cdrom:
-            command += ['-cdrom', str(self.iso), '-boot', 'order=d']
+            command += ['-device', 'qemu-xhci',
+                        '-drive', f'if=none,id=install-media,format=raw,readonly=on,file={self.iso}',
+                        '-device', 'usb-storage,drive=install-media,bootindex=1']
         (self.directory / ('qemu-install.json' if cdrom else 'qemu-boot.json')).write_text(json.dumps(command, indent=2))
         self.process = subprocess.Popen(command, stdout=(self.directory / 'qemu.log').open('a'), stderr=subprocess.STDOUT)
         self.serial = self.connect('serial.sock')
@@ -252,6 +254,9 @@ def main():
         print(f'VM evidence: {directory}', flush=True)
         vm.start()
         vm.expect(r'root@archiso[^\n]*#', timeout=180)
+        # USB boot with enough RAM reproduces archiso's automatic-copy path.
+        # The payload must stay on mounted media instead of disappearing.
+        vm.command('grep -qw copytoram=n /proc/cmdline; mountpoint -q /run/archiso/bootmnt; test ! -e /run/archiso/copytoram/airootfs.sfs')
         vm.command('mkdir -p /run/verify; mount -t 9p -o trans=virtio,version=9p2000.L verify /run/verify')
         vm.command('test "$(ls /sys/class/net | tr "\\n" " ")" = "lo "')
         vm.command(f'test "$(sha256sum /run/archiso/bootmnt/packages.manifest.json | cut -d " " -f 1)" = {package_digest}')
