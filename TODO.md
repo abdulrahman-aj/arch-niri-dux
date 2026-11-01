@@ -1,1 +1,5 @@
 - [ ] Add Niri screen-sharing support with `xdg-desktop-portal-gnome`; account for Arch's Nautilus dependency and verify screen selection/capture in Chromium. Keep the GTK file-picker fallback working.
+- [ ] Improve the guided installer UX, including a disk picker instead of typing device paths and clearer prompts and progress feedback.
+- [ ] Replace the typed ERASE phrase with a clear data-loss warning and a Yes/No confirmation accepted with Enter.
+- [ ] Measure installation time from final confirmation and show the elapsed time in the completion message.
+- [ ] Replace the basic terminal login screen with a graphical greeter that fits Dux; investigate the supported Dux greeter options and verify login and session startup.
