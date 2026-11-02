@@ -4,6 +4,7 @@
 import json
 import html
 import os
+import struct
 from pathlib import Path
 import pwd
 import re
@@ -538,6 +539,15 @@ def sample_pdf_bytes():
     return pdf
 
 
+def png_dimensions(path):
+    data = path.read_bytes()
+    assert data[:8] == b'\x89PNG\r\n\x1a\n', 'Not a PNG screenshot.'
+    assert data[12:16] == b'IHDR', 'Screenshot PNG has no IHDR.'
+    width, height = struct.unpack('>II', data[16:24])
+    assert width > 0 and height > 0, 'Rendered screenshot has no dimensions.'
+    return width, height
+
+
 def wallpaper():
     session = Path('/home/tester/.local/state/dms/session.json')
     assert session.is_file(), 'Dux first-session state is missing.'
@@ -548,10 +558,40 @@ def wallpaper():
     assert not data.get('monitorWallpapers'), 'Fresh user must not have per-monitor overrides.'
     screenshot('02-wallpaper-bloom.png')
     evidence = Path('/run/verify/02-wallpaper-bloom.png')
-    assert evidence.is_file() and evidence.stat().st_size > 0, 'Rendered wallpaper screenshot missing.'
+    width, height = png_dimensions(evidence)
     Path('/run/verify/wallpaper.json').write_text(json.dumps({
         'preset': preset, 'wallpaperPath': data.get('wallpaperPath', ''),
+        'width': width, 'height': height,
+        'note': 'Parent visually confirms bloom vs dank in 02-wallpaper-bloom.png; '
+                'settings plus a dimensioned render do not assert the visual match in code.',
     }, indent=2) + '\n')
+
+
+def wallpaper_preserved():
+    # Invoke the real script for a disposable existing-state user and verify
+    # the wallpaper choice is unchanged. No source-string checks.
+    user = 'dux-preserve-check'
+    run('sh', '-c', f'userdel -r {user} 2>/dev/null || true')
+    run('useradd', '-m', '-s', '/bin/bash', user)
+    try:
+        session = Path(f'/home/{user}/.local/state/dms/session.json')
+        session.parent.mkdir(parents=True, exist_ok=True)
+        custom = {'configVersion': 7,
+                  'materialWallpapers': {'': {'shared': {'preset': 'orbit', 'seed': '#ff0000'}}}}
+        session.write_text(json.dumps(custom))
+        before = session.read_text()
+        pam = Path('/etc/pam.d/greetd')
+        pam_backup = pam.read_bytes()
+        try:
+            run('bash', '/usr/local/lib/arch-niri-dux/configure-desktop', user)
+        finally:
+            pam.write_bytes(pam_backup)
+        assert session.read_text() == before, 'Real configure-desktop overwrote the existing wallpaper choice.'
+        Path('/run/verify/wallpaper-preserved.json').write_text(json.dumps({
+            'user': user, 'preset': 'orbit', 'preserved': True,
+        }, indent=2) + '\n')
+    finally:
+        run('sh', '-c', f'userdel -r {user} 2>/dev/null || true')
 
 
 def pdf():
@@ -561,44 +601,95 @@ def pdf():
     sample = Path('/tmp/dux-verification.pdf')
     sample.write_bytes(sample_pdf_bytes())
     assert sample.stat().st_size > 0
-    user_command('sh', '-c', f'rm -f /tmp/papers-verified; papers {sample} >/tmp/papers.log 2>&1 &')
-    wait_until('Papers graphical window', lambda: any(
-        'papers' in (window.get('app_id') or '').lower() for window in windows()), timeout=60)
-    screenshot('02-papers.png')
-    rendered = Path('/run/verify/02-papers.png')
-    assert rendered.is_file() and rendered.stat().st_size > 0
-    Path('/run/verify/pdf.json').write_text(json.dumps({
-        'default': 'org.gnome.Papers.desktop', 'sample': str(sample),
-        'sample_size': sample.stat().st_size,
-    }, indent=2) + '\n')
+    # Qualify the default association through the real opener, not a direct
+    # papers launch: this is what proves xdg-open routes PDFs to Papers.
+    user_command('sh', '-c', 'rm -f /tmp/xdg-open-pdf.log; xdg-open /tmp/dux-verification.pdf >/tmp/xdg-open-pdf.log 2>&1 &')
+    try:
+        wait_until('Papers graphical window via xdg-open default', lambda: any(
+            'papers' in (window.get('app_id') or '').lower() for window in windows()), timeout=90)
+        screenshot('02-papers.png')
+        rendered = Path('/run/verify/02-papers.png')
+        width, height = png_dimensions(rendered)
+        Path('/run/verify/pdf.json').write_text(json.dumps({
+            'default': 'org.gnome.Papers.desktop', 'method': 'xdg-open',
+            'sample': str(sample), 'sample_size': sample.stat().st_size,
+            'width': width, 'height': height,
+            'note': 'Parent reviews 02-papers.png for document content vs an error page.',
+        }, indent=2) + '\n')
+    finally:
+        user_command('sh', '-c', 'pkill -x papers || pkill -f papers || true')
+
+
+def pipewire_video_sources():
+    try:
+        output = user_command('pw-dump', capture=True).stdout
+    except (OSError, subprocess.CalledProcessError):
+        return []
+    try:
+        objects = json.loads(output)
+    except ValueError:
+        return ['Video/Source'] if 'Video/Source' in output else []
+    sources = []
+    for obj in objects:
+        if not isinstance(obj, dict) or obj.get('type') != 'PipeWire:Interface:Node':
+            continue
+        info = obj.get('info', {})
+        props = obj.get('props', {}) or (info.get('props', {}) if isinstance(info, dict) else {})
+        if props.get('media.class') == 'Video/Source':
+            sources.append(props.get('node.name') or props.get('node.description') or 'video-source')
+    return sources
 
 
 def camera():
     assert Path('/usr/share/applications/org.gnome.Snapshot.desktop').is_file(), 'Snapshot desktop file missing.'
     user_command('test', '-x', '/usr/bin/snapshot')
+    user_command('pacman', '-Q', 'papers', 'snapshot')
     videos = sorted(str(path) for path in Path('/dev').glob('video*'))
-    has_camera = bool(videos)
-    user_command('sh', '-c', 'snapshot >/tmp/snapshot.log 2>&1 &')
+    # Deterministic synthetic camera: test pattern into PipeWire as a
+    # Video/Source Camera node through the installed GStreamer stack.
+    # Video-only; no physical camera or microphone is touched.
+    user_command('sh', '-c',
+                 'rm -f /tmp/dux-synthetic-camera.log /tmp/dux-synthetic-camera.pid; '
+                 'gst-launch-1.0 videotestsrc pattern=ball is-live=true ! '
+                 'video/x-raw,width=640,height=480,framerate=30/1 ! pipewiresink mode=provide '
+                 'stream-properties="properties,media.class=Video/Source,media.role=Camera" '
+                 'client-name="DUX verification camera" '
+                 '>/tmp/dux-synthetic-camera.log 2>&1 & echo $! > /tmp/dux-synthetic-camera.pid')
     try:
-        wait_until('Snapshot graphical window', lambda: any(
-            'snapshot' in (window.get('app_id') or '').lower() for window in windows()), timeout=60)
-    except TimeoutError:
-        # No camera portal grant in the headless VM still proves installation;
-        # do not claim preview without a visible window.
+        sources = wait_until('Synthetic PipeWire Video/Source camera',
+                             lambda: pipewire_video_sources() or False, timeout=90)
+        user_command('sh', '-c', 'rm -f /tmp/snapshot.log; snapshot >/tmp/snapshot.log 2>&1 &')
+        # Required: a missing Snapshot window fails the probe. No fallback
+        # path reports launch as verified without it.
+        wait_until('Snapshot graphical window on synthetic camera', lambda: any(
+            'snapshot' in (window.get('app_id') or '').lower() for window in windows()), timeout=90)
+        screenshot('02-snapshot.png')
+        width, height = png_dimensions(Path('/run/verify/02-snapshot.png'))
+        user_command('sh', '-c',
+                     'rm -f /tmp/dux-synthetic-photo.jpg; gst-launch-1.0 videotestsrc num-buffers=1 pattern=ball ! '
+                     'videoconvert ! jpegenc ! filesink location=/tmp/dux-synthetic-photo.jpg '
+                     '>/tmp/dux-synthetic-photo.log 2>&1', timeout=120)
+        photo = Path('/tmp/dux-synthetic-photo.jpg')
+        assert photo.is_file() and photo.stat().st_size > 0, 'Synthetic photo fixture missing.'
+        user_command('sh', '-c',
+                     'rm -f /tmp/dux-synthetic-video.webm; gst-launch-1.0 videotestsrc num-buffers=90 pattern=ball ! '
+                     'videoconvert ! vp8enc ! webmmux ! filesink location=/tmp/dux-synthetic-video.webm '
+                     '>/tmp/dux-synthetic-video.log 2>&1', timeout=180)
+        video = Path('/tmp/dux-synthetic-video.webm')
+        assert video.is_file() and video.stat().st_size > 0, 'Synthetic video fixture missing.'
         Path('/run/verify/camera.json').write_text(json.dumps({
-            'installed': True, 'has_camera': has_camera, 'videos': videos,
-            'window': False,
-            'note': 'Snapshot installed; no graphical window observed without a camera device.',
+            'installed': True, 'synthetic': True, 'video_sources': sources,
+            'videos': videos, 'window': True, 'width': width, 'height': height,
+            'photo': str(photo), 'photo_size': photo.stat().st_size,
+            'video': str(video), 'video_size': video.stat().st_size,
+            'note': 'Snapshot preview on a synthetic videotestsrc->pipewiresink Video/Source camera; '
+                    'photo/video files are deterministic GStreamer fixtures from the same synthetic source, '
+                    'not Snapshot shutter output; no physical camera/mic used; '
+                    'parent reviews 02-snapshot.png for the live preview.',
         }, indent=2) + '\n')
-        return
-    screenshot('02-snapshot.png')
-    # Honest boundary: a visible window proves launch, not optical capture.
-    # Photo/video capture is only claimed when a real camera device exists and
-    # a capture file is produced; the headless VM has no camera.
-    Path('/run/verify/camera.json').write_text(json.dumps({
-        'installed': True, 'has_camera': has_camera, 'videos': videos, 'window': True,
-        'note': 'Snapshot launched; preview/capture not claimed without a camera device.',
-    }, indent=2) + '\n')
+    finally:
+        user_command('sh', '-c', 'pkill -f "DUX verification camera" || true; '
+                                 'pkill -x snapshot || pkill -f "/usr/bin/snapshot" || true')
 
 
 if __name__ == '__main__':
@@ -647,6 +738,8 @@ if __name__ == '__main__':
         assert 'false' in user_command('dms', 'ipc', 'call', 'lock', 'isLocked', capture=True).stdout.lower()
     elif action == 'wallpaper':
         wallpaper()
+    elif action == 'wallpaper-preserved':
+        wallpaper_preserved()
     elif action == 'pdf':
         pdf()
     elif action == 'camera':
