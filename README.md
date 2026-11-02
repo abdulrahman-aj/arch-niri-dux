@@ -51,6 +51,6 @@ stays untouched.
 ## Status
 
 [VM verification](VERIFICATION.md) covers installation, desktop, updates, recovery
-and hibernation. Laptop resume and the intermittent lid symptom remain hardware
-checks.
+and hibernation. Laptop hibernate/resume also passed; the intermittent lid symptom
+and docked display behavior remain hardware checks.
 Secure Boot is outside v1; planned features are in [TODO.md](TODO.md).

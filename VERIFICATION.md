@@ -58,5 +58,46 @@ hibernation. Install-only runs do not receive a full acceptance marker.
 
 Collected Zenbook logs show successful lid-close suspend cycles, with wakeups
 coinciding with lid opening. The intermittent reported symptom has not yet been
-captured. The VM does not qualify the laptop's wake sources, display or hardware
-hibernate/resume. Those checks remain open; Secure Boot remains outside scope.
+captured. The VM does not qualify the laptop's wake sources or display behavior;
+those checks remain open. Secure Boot remains outside scope.
+
+On 2026-11-02, an SSH audit of the ASUS Zenbook 14 UX3405MA running
+`7.2.14-arch1-1` found an existing hardware hibernate/resume cycle in the current
+boot's journal: systemd started hibernation at 10:52:44 and returned at 10:53:53
+(Asia/Amman). The kernel recorded S4 entry, waking from S4 and hibernation exit.
+The active 17 GiB swapfile resides in the encrypted Btrfs `@swap` subvolume;
+the running kernel's resume device and offset match its boot arguments.
+However, the kernel also reported a `cs35l41` speaker-amplifier resume timeout
+(`-110`), followed by firmware-initialization errors. The user confirmed that
+sound works through the built-in speakers after resume. This closes the laptop
+hibernate/resume TODO; the driver warning remains recorded here in case audio
+problems recur. This does not establish that every device resumed correctly.
+
+The live audit also confirmed active greetd, Dux Shell/Search/Files and GNOME/GTK
+portals; installed Dux GOP, Greeter and Calendar; Dux Files as the folder default;
+`dfiles;gtk` file-picker preference; and repository order `core`, `extra`,
+`omarchy`. Only the internal display was connected. No sleep or hibernate action
+was triggered by this audit.
+
+## TODO audit (2026-11-02)
+
+Removed eight completed TODOs based on the implementation merged in PR #12,
+its automated source tests and the verification recorded above: GNOME screen
+sharing; guided installer polish;
+Cancel-first erase confirmation; elapsed installation time; graphical Dux
+Greeter; system light/dark propagation; the signed Omarchy repository; and Dux
+GOP, Search, Calendar and Files integration.
+
+The repository reminder's separate dotfiles change is also merged: commit
+`4c56ac8` (dotfiles PR #3) installs Chrome, Zen and T3 Code from configured binary
+repositories on plain Arch, without the automatic AUR installation path.
+
+This audit reran `make test` in the Nix dev shell: 42 source tests and nine build
+tests passed. The earlier VM evidence directories are absent from this checkout;
+the VM results above are the committed release record, not new runs from this
+audit. The subsequent SSH hardware evidence is recorded under Laptop checks.
+The hibernation TODO was subsequently removed after the hardware journal checks
+and the user's confirmation of working speaker audio. Nine completed items have
+now been removed in total; lid/display behavior remains open separately.
+The VM installer uses unattended configuration; interactive wizard behavior and
+custom swap sizing are covered by source tests rather than an interactive VM run.
