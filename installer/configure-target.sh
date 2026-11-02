@@ -6,6 +6,7 @@ dux_timezone=$2
 dux_luks_uuid=$3
 dux_btrfs_uuid=$4
 dux_resume_offset=${5:-}
+dux_defer_efi=${6:-}
 
 ln -sf "/usr/share/zoneinfo/$dux_timezone" /etc/localtime
 locale-gen
@@ -50,6 +51,11 @@ RESTORE_METHOD=replace
 TERMINAL=alacritty
 TERMINAL_ARG="-e"
 EOF
+# Keep package/kernel hooks from registering boot entries before the installer
+# has verified that the original firmware entries survived configuration.
+if [[ "$dux_defer_efi" == defer-efi ]]; then
+    printf '\nSKIP_UEFI=yes\n' >>/etc/default/limine
+fi
 
 # Recovery must never resume a normal-root memory image over an older snapshot.
 printf '\nSNAPSHOT_KERNEL_PARAMETERS+=noresume\n' >>/etc/limine-snapper-sync.conf

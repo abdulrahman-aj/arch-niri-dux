@@ -600,8 +600,6 @@ def install(settings):
             raise ValueError('Confirmed partition table or firmware entries changed.')
         plan = alongside_plan(settings, snapshot)
         reject_unsupported_existing_storage(settings, snapshot)
-        if Path(__file__).with_name('configure-target.sh').read_text().count('limine-install --fallback') != 1:
-            raise ValueError('Target boot setup changed; alongside override needs review.')
         validate_existing_loader(snapshot['boots'][settings.existing_boot.upper()])
         available_bytes = (settings.free_region[1] - settings.free_region[0] + 1) * snapshot['table']['sectorsize']
         print('Create partitions (inclusive logical sectors):', plan, flush=True)
@@ -685,11 +683,9 @@ def install(settings):
             # Install transaction hooks only after Snapper and boot are configured.
             base_packages = [package for package in packages if package != 'snap-pac']
             if snapshot:
-                # pacstrap runs package deployment hooks before configure-target.
-                # Shadow only EFI registration until our preservation check.
-                hook = TARGET / 'etc/pacman.d/hooks/80-limine-efi-deploy.hook'
-                hook.parent.mkdir(parents=True, exist_ok=True)
-                hook.symlink_to('/dev/null')
+                # Both EFI deployment and kernel hooks may invoke limine-install.
+                # Its documented skip setting covers every initial transaction.
+                write('/etc/default/limine', 'ESP_PATH="/boot"\nSKIP_UEFI=yes\n')
             run('pacstrap', '-C', str(offline_conf), '-K', str(TARGET), *base_packages)
             fstab = run('genfstab', '-U', str(TARGET), capture=True)
             if size:
@@ -710,19 +706,12 @@ def install(settings):
             # arch-chroot mounts a fresh /run, so stage outside that mountpoint.
             target_script = TARGET / 'root/configure-target.sh'
             shutil.copy2(Path(__file__).with_name('configure-target.sh'), target_script)
-            if snapshot:
-                # Scope the override to this staged copy; the shared target
-                # configurator and erase installation retain their existing path.
-                script = target_script.read_text()
-                if script.count('limine-install --fallback') != 1:
-                    raise ValueError('Target boot setup changed; alongside override needs review.')
-                script = script.replace('limine-install --fallback',
-                                        'limine-install --fallback --no-efi-register')
-                target_script.write_text(script)
             luks_uuid = run('blkid', '-s', 'UUID', '-o', 'value', encrypted, capture=True)
             filesystem_uuid = run('blkid', '-s', 'UUID', '-o', 'value', mapped, capture=True)
-            run('arch-chroot', str(TARGET), 'bash', '/root/configure-target.sh',
-                settings.username, settings.timezone, luks_uuid, filesystem_uuid, resume_offset)
+            configure_arguments = [settings.username, settings.timezone, luks_uuid, filesystem_uuid, resume_offset]
+            if snapshot:
+                configure_arguments.append('defer-efi')
+            run('arch-chroot', str(TARGET), 'bash', '/root/configure-target.sh', *configure_arguments)
             target_script.unlink()
             run('arch-chroot', str(TARGET), 'chpasswd',
                 data=f'{settings.username}:{settings.password}\n')
@@ -735,7 +724,8 @@ def install(settings):
             print('\n[6/6] Saving changes and unmounting the installation…', flush=True)
             if snapshot:
                 finish_alongside_boot(settings, snapshot, plan[0][0])
-                hook.unlink()
+                defaults = TARGET / 'etc/default/limine'
+                defaults.write_text(defaults.read_text().replace('SKIP_UEFI=yes\n', ''))
             run('sync')
         finally:
             if mounted:

@@ -242,3 +242,56 @@ class AlongsideBootTests(unittest.TestCase):
 
 if __name__ == '__main__':
     unittest.main()
+
+class AlongsideRegistrationTests(unittest.TestCase):
+    def test_every_initial_package_transaction_defers_firmware_registration(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            target = root / 'target'
+            (target / 'root').mkdir(parents=True)
+            (root / 'desktop').mkdir()
+            (root / 'packages.target').write_text('base\nsnap-pac\n')
+            (root / 'offline.db').touch()
+            region = [2097152, 134215679]
+            value = settings(mode='alongside', free_region=region, existing_boot='0001', swap_gib=0)
+            snapshot = dict(regions=[region], boots={'0001': {}},
+                            table=dict(sectorsize=512, partitions=[dict(node='/dev/vda1')]))
+            transactions = []
+            configured = []
+
+            def command(*args, **kwargs):
+                if args[0] == 'pacstrap':
+                    self.assertIn('SKIP_UEFI=yes', (target / 'etc/default/limine').read_text())
+                    transactions.append(args)
+                if '/root/configure-target.sh' in args:
+                    configured.append(args)
+                if args[0] == 'genfstab':
+                    return 'UUID=test / btrfs subvol=/@ 0 0\n'
+                if args[0] == 'blkid':
+                    return 'test-uuid'
+                return '' if kwargs.get('capture') else None
+
+            def final_registration(*args):
+                self.assertIn('SKIP_UEFI=yes', (target / 'etc/default/limine').read_text())
+
+            temporary_directory = tempfile.TemporaryDirectory
+            with patch.object(installer, 'SHARE', root), patch.object(installer, 'REPO', root), \
+                    patch.object(installer, 'TARGET', target), \
+                    patch.object(installer, 'require_disk', return_value=(1, 2, 64 * installer.GIB)), \
+                    patch.object(installer, 'alongside_snapshot', return_value=snapshot), \
+                    patch.object(installer, 'reject_unsupported_existing_storage'), \
+                    patch.object(installer, 'validate_existing_loader'), \
+                    patch.object(installer, 'verify_repository'), \
+                    patch.object(installer, 'create_alongside_partitions', return_value=('/dev/vda2', '/dev/vda3')), \
+                    patch.object(installer, 'verify_partition_nodes'), \
+                    patch.object(installer, 'finish_alongside_boot', side_effect=final_registration), \
+                    patch.object(installer.shutil, 'which', return_value='/usr/bin/tool'), \
+                    patch.object(installer.os.path, 'ismount', return_value=False), \
+                    patch.object(installer, 'run', side_effect=command), \
+                    patch.object(installer.tempfile, 'TemporaryDirectory',
+                                 side_effect=lambda **kwargs: temporary_directory(dir=root)), \
+                    patch.object(installer.subprocess, 'run'):
+                installer.install(value)
+            self.assertEqual(len(transactions), 2)
+            self.assertEqual(configured[0][-1], 'defer-efi')
+            self.assertNotIn('SKIP_UEFI', (target / 'etc/default/limine').read_text())

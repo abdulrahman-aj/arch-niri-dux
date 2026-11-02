@@ -20,8 +20,8 @@ GUID, retaining adjacent GRUB/shim/BCD resources on the original ESP.
 The installer compares disk identity, both GPT copies (including unused slots),
 protective MBR, free extents and firmware entries/order immediately before
 partition creation. It verifies the saved partition entries afterward and the
-kernel's new partition geometry before formatting. It suppresses the pinned
-Limine package's initial EFI deployment hook until configuration completes,
+kernel's new partition geometry before formatting. It uses Limine's documented `SKIP_UEFI` setting for every initial package and
+kernel hook until configuration completes,
 registers with `efibootmgr --create-only`, and prepends the new entry while
 retaining existing entries and order. Erase mode retains its prior wipe path.
 
@@ -73,11 +73,14 @@ boots its real kernel and userspace; no EFI stub substitutes for an installed OS
 
 Windows provisioning uses Windows 11 Enterprise LTSC evaluation 24H2, a sparse
 64 GiB virtual SATA disk, a 100 MiB FAT ESP, 16 MiB MSR and 24 GiB NTFS system
-partition, leaving the rest unallocated. The standard Microsoft installer reads
-an unattended answer file from a seed USB, with an emulated TPM2. Device
+partition, leaving the rest unallocated. Microsoft WinPE reads
+an unattended answer file from a seed DVD and deploys the official image using
+DISM `/Apply-Image /Compact` and BCDBoot, with an emulated TPM2. The standard
+Setup hardware eligibility screen rejected this VM; WinPE deployment changes
+no Secure Boot state or firmware keys. Device
 encryption and hibernation are disabled inside this disposable fixture. A local
 test account and boot task report the running Windows product, build and sentinel
-over QEMU's host-only user network to a random-token route on localhost:18769;
+over QEMU user networking to a random-token route on localhost:18769;
 no host listener is exposed on external interfaces. Windows then shuts down.
 The reporter rejects old builds, missing sentinels and invalid routes.
 
@@ -96,10 +99,13 @@ list. Only a full run writes `SUCCESS`. Never treat a screenshot or a loader
 stub as proof of a successful old-OS boot. Real-OS acceptance results are still
 pending and must be recorded before this draft is considered ready.
 
-Keep at least 8 GiB host headroom. Guest waits and Windows report waits abort
-below that threshold; media downloads reserve it before writing. Monitor
+Keep at least 8 GiB host headroom. Guest waits and Windows report waits stop at a 9 GiB threshold to protect
+that reserve; media downloads reserve it before writing. Monitor
 `df -h .` as concurrent root work can consume space. After preserving evidence,
 remove only this task's disposable failed/finished VM overlays or downloaded
 Windows ISO when no longer needed. Retain input hashes, logs and reports. Do not
 run broad Nix GC or delete unrelated user/cache files. Keep TODO.md listed until
 independent review and both real OS scenarios pass.
+
+Interrupted Windows provisioning can resume without recreating its disk using
+`make provision-alongside ARGS="--os windows --finish-windows --iso /absolute/new.iso --directory /absolute/windows-fixture"`. This requires the saved successful Windows OS report and verifies the qcow2 before firmware registration. The TPM emulator restarts for each QEMU run with its original state preserved.
