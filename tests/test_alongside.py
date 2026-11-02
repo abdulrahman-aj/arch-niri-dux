@@ -6,6 +6,7 @@ from pathlib import Path
 import shutil
 import struct
 import uuid
+import zlib
 import subprocess
 import tempfile
 import unittest
@@ -138,6 +139,84 @@ class AlongsideDiskTests(unittest.TestCase):
         self.assertEqual(digest_range(self.disk, 0, 1024 * 1024), before)
         self.assert_old_data()
 
+    def test_on_disk_crc_is_checked_even_when_the_tool_reports_an_in_memory_recovery(self):
+        with self.disk.open('r+b') as stream:
+            stream.seek(-512 + 16, 2)
+            value = stream.read(1)
+            stream.seek(-1, 1)
+            stream.write(bytes([value[0] ^ 1]))
+        before = digest_range(self.disk, self.disk.stat().st_size - 512, 512)
+        with patch.object(installer, 'verify_gpt'):
+            with self.assertRaisesRegex(ValueError, 'checksum mismatch'):
+                installer.alongside_snapshot(self.value)
+        self.assertEqual(digest_range(self.disk, self.disk.stat().st_size - 512, 512), before)
+        self.assert_old_data()
+
+    def test_post_creation_gpt_corruption_is_rejected(self):
+        def command(*args, **kwargs):
+            self.commands.append(args)
+            if args[0] == 'efibootmgr':
+                return self.firmware
+            result = self.real_run(*args, **kwargs)
+            if args[0] == 'sgdisk' and any(arg.startswith('--new=') for arg in args):
+                with self.disk.open('r+b') as stream:
+                    stream.seek(-512 + 16, 2)
+                    value = stream.read(1)
+                    stream.seek(-1, 1)
+                    stream.write(bytes([value[0] ^ 1]))
+            return result
+        with patch.object(installer, 'run', side_effect=command):
+            with self.assertRaises((ValueError, subprocess.CalledProcessError)):
+                installer.create_alongside_partitions(self.value, self.snapshot, self.identity)
+        self.assert_old_data()
+
+    def test_post_creation_bootstrap_change_is_rejected(self):
+        def command(*args, **kwargs):
+            if args[0] == 'efibootmgr':
+                return self.firmware
+            result = self.real_run(*args, **kwargs)
+            if args[0] == 'sgdisk' and any(arg.startswith('--new=') for arg in args):
+                with self.disk.open('r+b') as stream:
+                    stream.write(b'X')
+            return result
+        with patch.object(installer, 'run', side_effect=command):
+            with self.assertRaisesRegex(ValueError, 'MBR bootstrap changed'):
+                installer.create_alongside_partitions(self.value, self.snapshot, self.identity)
+        self.assert_old_data_except_name()
+
+    def test_old_raw_gpt_entry_padding_is_preserved_even_when_json_would_hide_a_change(self):
+        def command(*args, **kwargs):
+            if args[0] == 'efibootmgr':
+                return self.firmware
+            result = self.real_run(*args, **kwargs)
+            if args[0] == 'sgdisk' and any(arg.startswith('--new=') for arg in args):
+                with self.disk.open('r+b') as stream:
+                    stream.seek(512)
+                    primary_header = stream.read(512)
+                    backup_lba = struct.unpack_from('<Q', primary_header, 32)[0]
+                    for lba in (1, backup_lba):
+                        stream.seek(lba * 512)
+                        header = bytearray(stream.read(512))
+                        array_lba = struct.unpack_from('<Q', header, 72)[0]
+                        stream.seek(array_lba * 512)
+                        entries = bytearray(stream.read(128 * 128))
+                        entries[127] = 0x42  # beyond the first NUL of an old partition name
+                        struct.pack_into('<I', header, 88, zlib.crc32(entries))
+                        struct.pack_into('<I', header, 16, 0)
+                        size = struct.unpack_from('<I', header, 12)[0]
+                        struct.pack_into('<I', header, 16, zlib.crc32(header[:size]))
+                        stream.seek(array_lba * 512)
+                        stream.write(entries)
+                        stream.seek(lba * 512)
+                        stream.write(header)
+            return result
+        with patch.object(installer, 'run', side_effect=command):
+            with self.assertRaisesRegex(ValueError, 'Original GPT entries'):
+                installer.create_alongside_partitions(self.value, self.snapshot, self.identity)
+        for part in self.original:
+            self.assertIn(part, table(self.disk)['partitions'])
+        self.assert_old_data()
+
     def test_selected_extent_must_match_exactly(self):
         self.value.free_region[0] += 2048
         with self.assertRaisesRegex(ValueError, 'no longer available'):
@@ -206,28 +285,6 @@ class AlongsideBootTests(unittest.TestCase):
                 with self.assertRaisesRegex(ValueError, 'Kernel partition geometry'):
                     installer.verify_partition_nodes(settings(), [(2, 513, 1536, 'ef00', 'ESP')], 4096)
 
-    def test_firmware_registration_retains_old_entries_and_uses_original_esp_guid(self):
-        before = 'BootOrder: 0001,0000\nBoot0000* USB\tPciRoot(0x0)\nBoot0001* Windows\tHD(1,GPT,old,0x800,0x10000)/File(\\EFI\\Microsoft\\Boot\\bootmgfw.efi)'
-        after = before + '\nBoot0002* Arch Niri Dux\tHD(2,GPT,new,0x10000,0x800000)/File(\\EFI\\limine\\limine_x64.efi)'
-        final = after.replace('BootOrder: 0001,0000', 'BootOrder: 0002,0001,0000')
-        snapshot = dict(entries=installer.firmware_entries(before), order='0001,0000',
-                        boots={'0001': dict(guid='original-esp-guid', path='/EFI/Microsoft/Boot/bootmgfw.efi')})
-        with tempfile.TemporaryDirectory() as directory:
-            target = Path(directory)
-            (target / 'boot').mkdir()
-            config = target / 'boot/limine.conf'
-            config.write_text('/Arch Niri Dux\n protocol: linux\n')
-            responses = iter([before, None, after, None, final])
-            with patch.object(installer, 'TARGET', target), \
-                    patch.object(installer, 'run', side_effect=lambda *a, **k: next(responses)) as run:
-                installer.finish_alongside_boot(settings(existing_boot='0001', mode='alongside'), snapshot, 2)
-            self.assertIn('guid(original-esp-guid):/EFI/Microsoft/Boot/bootmgfw.efi', config.read_text())
-            commands = [call.args for call in run.call_args_list]
-            create = next(command for command in commands if '--create-only' in command)
-            self.assertEqual(create[-1], '\\EFI\\limine\\limine_x64.efi')
-            self.assertIn(('efibootmgr', '--bootorder', '0002,0001,0000'), commands)
-            self.assertFalse(any('--delete-bootnum' in command for command in commands))
-
     def test_loader_inspection_unmounts_and_never_requests_writable_mount(self):
         temporary_directory = tempfile.TemporaryDirectory
         with patch.object(installer.tempfile, 'TemporaryDirectory',
@@ -239,12 +296,8 @@ class AlongsideBootTests(unittest.TestCase):
             self.assertEqual(commands[1][:5], ('mount', '-t', 'vfat', '-o', 'ro,nosuid,nodev,noexec'))
             self.assertEqual(commands[-1][0], 'umount')
 
-
-if __name__ == '__main__':
-    unittest.main()
-
 class AlongsideRegistrationTests(unittest.TestCase):
-    def test_every_initial_package_transaction_defers_firmware_registration(self):
+    def test_hooks_defer_registration_and_failure_does_not_enable_it(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             target = root / 'target'
@@ -284,7 +337,7 @@ class AlongsideRegistrationTests(unittest.TestCase):
                     patch.object(installer, 'verify_repository'), \
                     patch.object(installer, 'create_alongside_partitions', return_value=('/dev/vda2', '/dev/vda3')), \
                     patch.object(installer, 'verify_partition_nodes'), \
-                    patch.object(installer, 'finish_alongside_boot', side_effect=final_registration), \
+                    patch.object(installer, 'finish_alongside_boot', side_effect=final_registration) as finish, \
                     patch.object(installer.shutil, 'which', return_value='/usr/bin/tool'), \
                     patch.object(installer.os.path, 'ismount', return_value=False), \
                     patch.object(installer, 'run', side_effect=command), \
@@ -292,6 +345,87 @@ class AlongsideRegistrationTests(unittest.TestCase):
                                  side_effect=lambda **kwargs: temporary_directory(dir=root)), \
                     patch.object(installer.subprocess, 'run'):
                 installer.install(value)
-            self.assertEqual(len(transactions), 2)
-            self.assertEqual(configured[0][-1], 'defer-efi')
-            self.assertNotIn('SKIP_UEFI', (target / 'etc/default/limine').read_text())
+                self.assertEqual(len(transactions), 2)
+                self.assertNotIn('SKIP_UEFI', (target / 'etc/default/limine').read_text())
+                finish.side_effect = ValueError('unexpected firmware entries')
+                with self.assertRaisesRegex(ValueError, 'unexpected firmware entries'):
+                    installer.install(value)
+            self.assertEqual(len(transactions), 4)
+            self.assertTrue(all(call[-1] == 'defer-efi' for call in configured))
+            self.assertIn('SKIP_UEFI=yes', (target / 'etc/default/limine').read_text())
+
+
+class FirmwareRegistrationTests(unittest.TestCase):
+    def setUp(self):
+        self.directory = tempfile.TemporaryDirectory()
+        self.addCleanup(self.directory.cleanup)
+        self.target = Path(self.directory.name)
+        self.binary = self.target / 'boot/EFI/limine/limine_x64.efi'
+        self.binary.parent.mkdir(parents=True)
+        self.binary.write_bytes(b'new EFI binary')
+        self.config = self.target / 'boot/limine.conf'
+        self.original_config = '/Arch Niri Dux\n protocol: linux\n'
+        self.config.write_text(self.original_config)
+        self.guid = '11111111-2222-3333-4444-555555555555'
+        self.before = 'BootOrder: 0001,0000\nBoot0000* USB\tPciRoot(0x0)\nBoot0001* Windows\tHD(1,GPT,old,0x800,0x10000)/File(\\EFI\\Microsoft\\Boot\\bootmgfw.efi)'
+        self.after = self.before + '\nBoot0002* Arch Niri Dux\tHD(2,GPT,new,0x10000,0x800000)/File(\\EFI\\limine\\limine_x64.efi)'
+        self.final = self.after.replace('BootOrder: 0001,0000', 'BootOrder: 0002,0001,0000')
+        self.snapshot = dict(entries=installer.firmware_entries(self.before), order='0001,0000',
+                             boots={'0001': dict(guid='original-esp-guid', path='/EFI/Microsoft/Boot/bootmgfw.efi')})
+        self.settings = settings(existing_boot='0001', mode='alongside')
+        self.commands = []
+
+    def finish(self, outputs, path=None):
+        outputs = iter(outputs)
+        def command(*args, **kwargs):
+            self.commands.append(args)
+            if args[0] == 'blkid':
+                return self.guid
+            if args == ('efibootmgr', '--verbose'):
+                return next(outputs)
+        if path is None:
+            path = (2, self.guid, r'\EFI\limine\limine_x64.efi')
+        with patch.object(installer, 'TARGET', self.target), \
+                patch.object(installer, 'run', side_effect=command), \
+                patch.object(installer, 'firmware_boot_path', return_value=path):
+            installer.finish_alongside_boot(self.settings, self.snapshot, 2)
+
+    def test_retains_original_entries_and_chainloads_the_original_esp(self):
+        self.finish([self.before, self.after, self.final])
+        self.assertIn('guid(original-esp-guid):/EFI/Microsoft/Boot/bootmgfw.efi', self.config.read_text())
+        create = next(command for command in self.commands if '--create-only' in command)
+        self.assertEqual(create[-1], r'\EFI\limine\limine_x64.efi')
+        self.assertIn(('efibootmgr', '--bootorder', '0002,0001,0000'), self.commands)
+        self.assertFalse(any('--delete-bootnum' in command for command in self.commands))
+
+    def test_missing_new_binary_never_changes_firmware_or_menu(self):
+        self.binary.unlink()
+        with self.assertRaisesRegex(ValueError, 'missing its Limine EFI binary'):
+            self.finish([])
+        self.assertEqual(self.commands, [])
+        self.assertEqual(self.config.read_text(), self.original_config)
+
+    def test_inactive_new_entry_is_never_made_default(self):
+        with self.assertRaisesRegex(ValueError, 'inactive'):
+            self.finish([self.before, self.after.replace('Boot0002*', 'Boot0002 ')])
+        self.assertFalse(any('--bootorder' in command for command in self.commands))
+
+    def test_wrong_new_partition_guid_or_path_is_never_made_default(self):
+        for path in ((3, self.guid, r'\EFI\limine\limine_x64.efi'),
+                     (2, 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee', r'\EFI\limine\limine_x64.efi'),
+                     (2, self.guid, r'\EFI\other\wrong.efi')):
+            with self.subTest(path=path), self.assertRaisesRegex(ValueError, 'wrong ESP identity or loader path'):
+                self.finish([self.before, self.after], path=path)
+        self.assertFalse(any('--bootorder' in command for command in self.commands))
+
+    def test_changed_firmware_stops_before_appending_chainload_config(self):
+        for changed in (self.before.replace('Windows', 'Changed'),
+                        self.before.replace('BootOrder: 0001,0000', 'BootOrder: 0001,0000,0009')):
+            with self.subTest(changed=changed), self.assertRaisesRegex(ValueError, 'Firmware entries changed'):
+                self.finish([changed])
+            self.assertEqual(self.config.read_text(), self.original_config)
+        self.assertFalse(any('--create-only' in command for command in self.commands))
+
+
+if __name__ == '__main__':
+    unittest.main()

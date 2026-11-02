@@ -20,9 +20,12 @@ GUID, retaining adjacent GRUB/shim/BCD resources on the original ESP.
 The installer compares disk identity, both GPT copies (including unused slots),
 protective MBR, free extents and firmware entries/order immediately before
 partition creation. It verifies the saved partition entries afterward and the
-kernel's new partition geometry before formatting. It uses Limine's documented `SKIP_UEFI` setting for every initial package and
+kernel's new partition geometry before formatting. It also runs `sgdisk --verify`
+after creation and checks both on-disk GPT CRCs, every occupied original GPT
+entry byte, and the original protective-MBR bootstrap/disk-signature bytes. It uses Limine's documented `SKIP_UEFI` setting for every initial package and
 kernel hook until configuration completes,
-registers with `efibootmgr --create-only`, and prepends the new entry while
+checks the new EFI binary exists, registers with `efibootmgr --create-only`,
+checks that its entry is active and resolves to the new ESP GUID/path, and prepends the new entry while
 retaining existing entries and order. Erase mode retains its prior wipe path.
 
 Unsupported: BIOS/MBR, hybrid MBR, damaged/relocated GPT metadata, nonstandard
@@ -109,3 +112,11 @@ independent review and both real OS scenarios pass.
 
 Interrupted Windows provisioning can resume without recreating its disk using
 `make provision-alongside ARGS="--os windows --finish-windows --iso /absolute/new.iso --directory /absolute/windows-fixture"`. This requires the saved successful Windows OS report and verifies the qcow2 before firmware registration. The TPM emulator restarts for each QEMU run with its original state preserved.
+
+The earlier EBUSY failure came from forcing a second full kernel table reread
+after sgdisk had already updated the partition nodes. The installer now waits
+for udev and checks exact kernel starts/sizes before any formatter. Missing or
+mismatching nodes still abort with the new partitions left in place. There is
+no automatic table recovery. The successful Debian qualification exercised this
+path. Unexpected firmware changes abort before appending the chainload entry;
+registration deferral remains enabled on a failed installation.

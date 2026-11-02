@@ -12,6 +12,7 @@ import re
 import shutil
 import struct
 import uuid
+import zlib
 import subprocess
 import sys
 import tempfile
@@ -231,19 +232,17 @@ def firmware_boot_path(number):
         return None
 
 
-def alongside_snapshot(settings):
-    require_disk(settings)
-    table = json.loads(run('sfdisk', '--json', settings.disk, capture=True))['partitiontable']
-    regions = free_regions(table)
-    # sgdisk verifies both GPT copies, their CRCs, overlaps and protective MBR.
-    verification = run('sgdisk', '--verify', settings.disk, capture=True)
+def verify_gpt(device):
+    verification = run('sgdisk', '--verify', device, capture=True)
     if 'No problems found.' not in verification:
         raise ValueError('GPT verification failed; repair the disk separately.')
-    with open(settings.disk, 'rb', buffering=0) as disk:
+
+
+def read_gpt_metadata(device, sector):
+    with open(device, 'rb', buffering=0) as disk:
         mbr = disk.read(512)
         if mbr[510:512] != b'\x55\xaa' or [mbr[450 + n * 16] for n in range(4)] != [0xee, 0, 0, 0]:
             raise ValueError('Hybrid or unsupported protective MBR.')
-        sector = table['sectorsize']
         disk.seek(sector)
         header = disk.read(sector)
         # Restrict support to the standard GPT table size. Capture both copies,
@@ -259,6 +258,39 @@ def alongside_snapshot(settings):
         backup_array = struct.unpack_from('<Q', backup_header, 72)[0]
         disk.seek(backup_array * sector)
         secondary = disk.read(128 * 128)
+    if len(primary) != 128 * 128 or len(secondary) != 128 * 128:
+        raise ValueError('Truncated GPT partition array.')
+    # sgdisk may recover a bad header in memory while printing its report.
+    # Verify the bytes on disk too, without accepting an implicit repair.
+    for copy, entries in ((header, primary), (backup_header, secondary)):
+        if copy[:8] != b'EFI PART' or struct.unpack_from('<II', copy, 80) != (128, 128):
+            raise ValueError('Unsupported GPT header.')
+        size = struct.unpack_from('<I', copy, 12)[0]
+        if not 92 <= size <= sector:
+            raise ValueError('Invalid GPT header size.')
+        checked = bytearray(copy[:size])
+        struct.pack_into('<I', checked, 16, 0)
+        if (zlib.crc32(checked) != struct.unpack_from('<I', copy, 16)[0]
+                or zlib.crc32(entries) != struct.unpack_from('<I', copy, 88)[0]):
+            raise ValueError('GPT checksum mismatch; refusing an implicit repair.')
+    if primary != secondary:
+        raise ValueError('GPT partition arrays disagree.')
+    return mbr, header, primary, backup_header, secondary
+
+
+def firmware_order(text):
+    order = re.search(r'^BootOrder: ([0-9A-Fa-f,]+)$', text, re.M)
+    if not order:
+        raise ValueError('Firmware BootOrder is unavailable.')
+    return order[1].upper()
+
+
+def alongside_snapshot(settings):
+    require_disk(settings)
+    table = json.loads(run('sfdisk', '--json', settings.disk, capture=True))['partitiontable']
+    regions = free_regions(table)
+    verify_gpt(settings.disk)
+    mbr, header, primary, backup_header, secondary = read_gpt_metadata(settings.disk, table['sectorsize'])
     firmware = run('efibootmgr', '--verbose', capture=True)
     entries = firmware_entries(firmware)
     boots = {}
@@ -277,11 +309,11 @@ def alongside_snapshot(settings):
         boots[number] = dict(partition=part['node'], guid=str(uuid.UUID(guid)), path=path)
     if not regions or not boots or len(table['partitions']) > 126:
         raise ValueError('Need a free region of at least 32 GiB, two GPT slots and an existing ESP firmware entry.')
-    order = re.search(r'^BootOrder: ([0-9A-Fa-f,]+)$', firmware, re.M)
-    if not order:
-        raise ValueError('Firmware BootOrder is unavailable.')
-    return dict(table=table, regions=regions, boots=boots, entries=entries, order=order[1].upper(),
-                metadata=hashlib.sha256(mbr + header + primary + backup_header + secondary).hexdigest())
+    occupied = {index: primary[index*128:(index+1)*128].hex() for index in range(128)
+                if primary[index*128:index*128+16] != bytes(16)}
+    return dict(table=table, regions=regions, boots=boots, entries=entries, order=firmware_order(firmware),
+                metadata=hashlib.sha256(mbr + header + primary + backup_header + secondary).hexdigest(),
+                bootstrap=hashlib.sha256(mbr[:446]).hexdigest(), occupied=occupied)
 
 
 def alongside_plan(settings, snapshot):
@@ -337,6 +369,13 @@ def create_alongside_partitions(settings, snapshot, identity):
                           f'--change-name={number}:{label}'])
     settings.installation_started = True
     run('sgdisk', *arguments, settings.disk)
+    verify_gpt(settings.disk)
+    mbr, _, primary, _, secondary = read_gpt_metadata(settings.disk, snapshot['table']['sectorsize'])
+    if (hashlib.sha256(mbr[:446]).hexdigest() != snapshot['bootstrap']
+            or any(primary[index*128:(index+1)*128].hex() != original
+                   or secondary[index*128:(index+1)*128].hex() != original
+                   for index, original in snapshot['occupied'].items())):
+        raise ValueError('Original GPT entries or MBR bootstrap changed; refusing to format.')
     current = json.loads(run('sfdisk', '--json', settings.disk, capture=True))['partitiontable']
     if (current['id'] != snapshot['table']['id']
             or len(current['partitions']) != len(snapshot['table']['partitions']) + 2
@@ -360,33 +399,49 @@ def verify_partition_nodes(settings, plan, sector_size):
             raise ValueError('Kernel partition geometry differs from the plan; refusing to format.')
 
 
+def require_new_boot_entry(entries, number, esp_number, guid):
+    if entries.get(number, '')[8:9] != '*':
+        raise ValueError('New firmware boot entry is missing or inactive.')
+    path = firmware_boot_path(number)
+    if (path is None or path[0] != esp_number or path[1].lower() != guid
+            or path[2].replace('\\', '/').lower() != '/efi/limine/limine_x64.efi'):
+        raise ValueError('New firmware boot entry has the wrong ESP identity or loader path.')
+
+
 def finish_alongside_boot(settings, snapshot, esp_number):
+    binary = TARGET / 'boot/EFI/limine/limine_x64.efi'
+    if not binary.is_file():
+        raise ValueError('The new ESP is missing its Limine EFI binary; refusing firmware registration.')
+    guid = str(uuid.UUID(run('blkid', '-s', 'PARTUUID', '-o', 'value',
+                             partition_name(settings.disk, esp_number), capture=True)))
+    before_text = run('efibootmgr', '--verbose', capture=True)
+    before = firmware_entries(before_text)
+    if before != snapshot['entries'] or firmware_order(before_text) != snapshot['order']:
+        raise ValueError('Firmware entries changed during installation; refusing to change BootOrder.')
     boot = snapshot['boots'][settings.existing_boot.upper()]
     config = TARGET / 'boot/limine.conf'
     text = config.read_text()
-    # Explicit GUID uses the old ESP, not the new Limine ESP. Keep this outside
-    # generated entry markers so kernel/snapshot updates retain it.
+    # Resolve the old ESP by its original GUID, retaining adjacent GRUB/BCD files.
+    # Keep the entry outside generated markers so package/snapshot hooks retain it.
     text += (f"\n/Existing OS (firmware {settings.existing_boot.upper()})\n"
              f"    protocol: efi\n    path: guid({boot['guid']}):{boot['path']}\n")
     config.write_text(text)
-    before_text = run('efibootmgr', '--verbose', capture=True)
-    before = firmware_entries(before_text)
-    if before != snapshot['entries'] or f"BootOrder: {snapshot['order']}" not in before_text:
-        raise ValueError('Firmware entries changed during installation; refusing to change BootOrder.')
-    # create-only preserves the old order and all entries, including duplicate
-    # labels. Registration is separate from package deployment.
     run('efibootmgr', '--create-only', '--disk', settings.disk, '--part', str(esp_number),
         '--label', 'Arch Niri Dux', '--loader', '\\EFI\\limine\\limine_x64.efi')
     after = firmware_entries(run('efibootmgr', '--verbose', capture=True))
     added = after.keys() - before.keys()
     if len(added) != 1 or any(after.get(key) != value for key, value in before.items()):
         raise ValueError('Firmware did not preserve existing boot entries.')
-    expected_order = next(iter(added)) + ',' + snapshot['order']
+    number = next(iter(added))
+    require_new_boot_entry(after, number, esp_number, guid)
+    expected_order = number + ',' + snapshot['order']
     run('efibootmgr', '--bootorder', expected_order)
     final = run('efibootmgr', '--verbose', capture=True)
-    if (f'BootOrder: {expected_order}' not in final
-            or any(firmware_entries(final).get(key) != value for key, value in before.items())):
+    final_entries = firmware_entries(final)
+    if (firmware_order(final) != expected_order
+            or any(final_entries.get(key) != value for key, value in before.items())):
         raise ValueError('Firmware failed to retain entries or make Limine the default.')
+    require_new_boot_entry(final_entries, number, esp_number, guid)
 
 
 def prompt(label, default='', validate=None):

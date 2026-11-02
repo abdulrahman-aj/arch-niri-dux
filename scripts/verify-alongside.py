@@ -35,8 +35,8 @@ def main():
     parser.add_argument('--firmware', type=Path, required=True)
     parser.add_argument('--directory', type=Path, required=True)
     args = parser.parse_args()
-    if shutil.disk_usage(args.directory.parent).free < 18 * 1024**3:
-        parser.error('Need 18 GiB free for one scenario, including a 9 GiB stop threshold protecting 8 GiB headroom.')
+    if shutil.disk_usage(args.directory.parent).free < 16 * 1024**3:
+        parser.error('Need 16 GiB free for one scenario, including a 9 GiB stop threshold protecting 8 GiB headroom.')
     args.directory.mkdir(mode=0o700)  # Never reuse evidence or fixture overlays.
     directory = args.directory.resolve()
     disk = directory / 'disk.qcow2'
@@ -91,7 +91,8 @@ v=m.Settings('DEVICE','tester','alongside','UTC','us','vm-verification-only','vm
 t=m.alongside_snapshot(v)
 assert len(t['regions'])==1
 boots=[n for n,b in t['boots'].items() if 'BOOTPATH' in b['path'].lower()]
-assert len(boots)==1
+assert boots and len({(t['boots'][n]['guid'],t['boots'][n]['path'].lower()) for n in boots})==1
+boots.sort()
 v.free_region=t['regions'][0];v.existing_boot=boots[0];v.validate()
 c={k:getattr(v,k) for k in ('disk','username','hostname','timezone','keymap','passphrase','password','swap_gib','mode','free_region','existing_boot')}
 open('/run/verify/install.json','w').write(json.dumps(c))

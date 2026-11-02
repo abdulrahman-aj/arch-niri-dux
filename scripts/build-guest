@@ -32,6 +32,9 @@ Server = https://geo.mirror.pkgbuild.com/extra/os/x86_64
 Server = https://pkgs.omarchy.org/stable/x86_64
 Usage = Sync Search Install
 CONF
+# Serialize keyring preparation with archiso's background initializer.
+# Concurrent trustdb writers can corrupt the live VM keyring.
+systemctl start pacman-init.service
 pacman-key --init
 pacman-key --populate archlinux
 # Import the existing host trust anchors only in the isolated build VM.

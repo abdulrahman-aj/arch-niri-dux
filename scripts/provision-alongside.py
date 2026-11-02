@@ -97,8 +97,9 @@ def main():
     parser.add_argument('--iso', type=Path, required=True)
     parser.add_argument('--directory', type=Path, required=True)
     args = parser.parse_args()
-    if shutil.disk_usage(args.directory.parent).free < 12 * 1024**3:
-        parser.error('Need at least 12 GiB free before fixture provisioning.')
+    required_gib = 18 if args.os == 'windows' and not args.finish_windows else 12
+    if shutil.disk_usage(args.directory.parent).free < required_gib * 1024**3:
+        parser.error(f'Need at least {required_gib} GiB free before fixture provisioning.')
     if args.finish_windows:
         if args.os != 'windows':
             parser.error('--finish-windows requires --os windows')
