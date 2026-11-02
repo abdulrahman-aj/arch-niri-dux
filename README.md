@@ -31,8 +31,7 @@ Dux. Rebuilds use the same inputs, but are not byte-identical.
    graphics), then log in.
 
 Super+Return opens a terminal, Super+Space opens the launcher, and Super+Alt+L
-locks the screen. Personal apps and [dotfiles](https://github.com/abdulrahman-aj/dotfiles/pull/1)
-are a separate online step.
+locks the screen.
 
 Update through Dux's system updater or run `yay`; both cover repository and AUR
 packages. The installer offers automatic/custom encrypted swap or no hibernation.

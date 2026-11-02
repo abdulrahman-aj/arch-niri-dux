@@ -4,5 +4,4 @@
 - [ ] Set "bloom" from Dux settings as the first-session wallpaper default for new users; preserve existing users' wallpaper choices. Verify the default on a fresh installation.
 - [ ] Show the boot-time disk password prompt in a graphical box with a working text fallback, instead of an inline field mixed with boot logs. Verify encrypted boot appearance, wrong-password retries, text fallback and recovery access.
 - [ ] Include Papers as the default PDF viewer and Snapshot as the camera app, using Arch's official packages. Verify default PDF opening and camera preview, photo capture and video recording.
-- [ ] Remove optional personal-setup verification entirely, including its dedicated scripts, tests, Make targets and documentation. Retain standalone installer, desktop, update, recovery and hibernation verification.
 - [ ] Deferred: hold a separate Secure Boot grilling/design session before implementation. Cover installer USB support and Windows/Linux switching with Secure Boot enabled, factory trust preservation, enrollment risks, automatic signing on updates, snapshot boot and recovery; choose the boot-chain design in that session.

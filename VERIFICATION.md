@@ -23,8 +23,7 @@ independent Muse review approved the package and probe changes.
 
 Local evidence: `out/verify-fastfetch/ACCEPTANCE-PASSED`, `milestones.json`,
 `inputs.json`, `serial.log`, `out/packages.manifest.json` and `out/SHA256SUMS`.
-The earlier hibernation and personal-setup runs below were not repeated for this
-package-only change.
+The earlier hibernation run below was not repeated for this package-only change.
 
 ## Original release image (before Fastfetch)
 
@@ -62,21 +61,7 @@ Evidence: `out/verify-release/ACCEPTANCE-PASSED`, `milestones.json`, `inputs.jso
 `screen-sharing.json`, `HIBERNATE-RESUME-PASSED`, `hibernate-resume.json` and PNGs.
 These local outputs are not committed or uploaded.
 
-## Online setup
-
-The separate online run completed the real personal bootstrap, including binary
-Chrome/Zen/T3 packages, Nix, agent configuration and Fish. Yay system updates and
-an explicit greeter rebuild/reinstall completed. Live Zen/T3 appearance and the
-post-setup reboot passed, including T3's rendered dark class, Fish login,
-graphical greeter login and Dux service startup. The test completes Zen's normal
-first-run wizard without changing its default Auto appearance choice.
-
-Evidence is under `out/personal-binaries/`: `PERSONAL-PASSED`, `sources.json`,
-`bootstrap.log`, `personal-appearance.json` and a screenshot. The run used
-dotfiles commit `78d029a` and agent-config `d9dadbb`. Its base image has the same
-package manifest as the release; the subsequent rebuild changed build storage
-and timestamps. `--resume-desktop` resumed the completed bootstrap's GUI checks;
-`BOOTSTRAP-RECOVERY.txt` records its original successful console completion.
+## Disabled swap
 
 The disabled-swap branch also passed an actual offline installation with
 `--swap-gib 0 --install-only`, verifying no swapfile/resume arguments and disabled
