@@ -1,5 +1,6 @@
 - [ ] Add Niri screen-sharing support with `xdg-desktop-portal-gnome`; account for Arch's Nautilus dependency and verify screen selection/capture in Chromium. Keep the GTK file-picker fallback working.
 - [ ] Polish the guided installer with searchable disk, timezone and keyboard pickers, sensible defaults, inline retries, a final summary and clear progress feedback.
+- [ ] Support installation into unallocated disk space alongside existing operating systems, preserving their partitions, data, EFI files and boot entries; VM-test that both the existing OS and the new installation still boot.
 - [ ] Replace the typed ERASE phrase with a clear data-loss warning, defaulting to Cancel; selecting "Erase and install" and pressing Enter confirms erasure.
 - [ ] Measure installation time from final confirmation and show the elapsed time in the completion message.
 - [ ] Replace the terminal login screen with Dux Greeter using the reviewed `dux-greeter-bin` AUR package. Keep it updated through Yay and Dux's normal system updater; verify update handling, login and session startup.
