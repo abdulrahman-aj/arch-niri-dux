@@ -2,27 +2,16 @@
 
 ## Session PATH regression (2026-11-02)
 
-Issue #23 was reproduced on the previously accepted desktop image: the systemd
-user PATH omitted `/home/tester/.local/bin`. A disposable qcow2 overlay retained
-the original disk, then received the shipped profile, fish, and user-environment
-files. After reboot and graphical authentication through the unchanged Niri
-greeter command, the user manager and Niri process both included the local bin
-directory. `bash -lc` resolved the test wrapper, and a real
-`niri msg action spawn -- dux-path-probe` wrote its expected marker.
+Issue #23 was reproduced on the accepted desktop image. After applying the
+login-profile and user-service PATH defaults to a disposable VM overlay and
+rebooting, Bash and an actual Niri spawn resolved the local test executable.
+Evidence is in the issue worktree's `out/verify-session-path/`: `before-fix.txt`,
+`session-path.json`, `SESSION-PATH-PASSED` and `serial.log`. This tested the overlay
+on an existing installation; no physical laptop configuration was changed.
 
-`make test` passed 48 source tests and nine build tests. The shell tests preserve
-existing system/Nix PATH entries and execute the real systemd environment
-generator; fish is tested when installed. This VM has no fish package.
-Independent review covers the final simplified changes. The initial proposed
-greeter wrapper was removed after VM testing showed that `--command` is a
-compositor selector, not an arbitrary command. Greetd's existing profile sourcing
-already reaches the authenticated Niri session.
-
-Local evidence: `out/verify-session-path/before-fix.txt`, `session-path.json`,
-`SESSION-PATH-PASSED` and `serial.log` in the issue worktree. This was qualification
-of the actual overlay files on an existing installation, not a rebuilt ISO.
-The committed `session-path` stage of `make verify` also checks every future
-fresh image. No physical laptop configuration was changed.
+The follow-up removes optional fish configuration and keeps two focused PATH
+preservation tests plus the normal acceptance suite's Niri launch check.
+`make test` passed 43 source tests and nine build tests.
 
 ## Bloom, PDF and camera defaults (2026-11-02)
 
