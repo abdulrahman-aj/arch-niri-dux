@@ -43,6 +43,9 @@ class AlongsideDiskTests(unittest.TestCase):
         subprocess.run(['sgdisk', '--clear', '--new=1:2048:+64M', '--typecode=1:ef00',
                         '--new=4:0:+8M', '--typecode=4:0700', str(self.disk)],
                        check=True, stdout=subprocess.DEVNULL)
+        with self.disk.open('r+b') as stream:
+            stream.write(b'preserve-protective-MBR-bootstrap-and-disk-signature'.ljust(446, b'!'))
+        self.mbr_hash = digest_range(self.disk, 0, 446)
         self.original = copy.deepcopy(table(self.disk)['partitions'])
         # Arbitrary existing filesystem bytes, including beginning/end sentinels.
         with self.disk.open('r+b') as stream:
@@ -81,6 +84,7 @@ class AlongsideDiskTests(unittest.TestCase):
         self.commands.clear()
 
     def assert_old_data(self):
+        self.assertEqual(digest_range(self.disk, 0, 446), self.mbr_hash)
         current = table(self.disk)['partitions']
         for original, expected in zip(self.original, self.hashes):
             self.assertIn(original, current)
