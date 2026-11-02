@@ -20,6 +20,7 @@
     "dux-gop",
     "dux-shell",
     "e2fsprogs",
+    "fastfetch",
     "fzf",
     "git",
     "github-cli",
@@ -720,6 +721,15 @@
       "url": "https://geo.mirror.pkgbuild.com/core/os/x86_64/fakeroot-1:1.37.2-3-x86_64.pkg.tar.zst",
       "repository": "core",
       "signature": "iHUEABYKAB0WIQQEKYl95fO9rFN6MGltQr3RFuAGjwUCamYBrwAKCRBtQr3RFuAGj0/6AP4xDuhGA+RKD69EqkF9ihLOOKIXltvlo78SM44ij32sNAEAuor0V7Z3XHCo38IFE/uvrYrySF5s0wD7vfAXchsqPAA="
+    },
+    {
+      "name": "fastfetch",
+      "version": "2.70.0-1",
+      "filename": "fastfetch-2.70.0-1-x86_64.pkg.tar.zst",
+      "sha256": "c9ccc974ca37000615fdb1deb9f451c854d1bce27396888129eae129ba274446",
+      "url": "https://geo.mirror.pkgbuild.com/extra/os/x86_64/fastfetch-2.70.0-1-x86_64.pkg.tar.zst",
+      "repository": "extra",
+      "signature": "iQIzBAABCgAdFiEEJipY7GxR9+o5Wy4t/cMEC5Ksp0gFAmrPQ3UACgkQ/cMEC5Ksp0jIzxAAvP0Rcjcvpndyxx5HCD0JMvPqdlur0MIUSYjKouxfnp5VQve45mplP+M0+M2rB3/d05CbeIagRnT9fn/MtLstpkDaotIc1Hd/tVvI4WG5MzTJ5DPl3SSATWPYw1e+LrLY3HS7nMvDT8Sx7Ew6d35CkxGPGNXF+1i4crV0RLir14fUkh1+L67u9nJCM7akib5R+Sosi3rQm1YdCPJstgEht/bowH+WVaPdwxjRBIG1AuGiXhxJLuQFIyB2kPMsYrzcT7NtEETqKLbnvuBcNRXfpI7qwm5E5jaM8Q9J3Rdopa/qS721oH1wIm9Rr/WyOlIVTpMH6Yu4rn37v0A8MxI7C21tvH8yXmQ8HW5/WhWMBFmJ9y40YI3kAwRSpwBdjmEWA5vng2j2iRcGKTxuER5KGraHSR3pUWPOcu42SALjadSHFLduchdzv3s8/2WMl5fV49rdF9YfSsH20JkD+b/wAHsyhMIgKlpbn1pnCXkaM28Dvm9qAj77iDGyCNGB5TUcGV8Y5LWij075Fw2Mqi13FEpLWMcumQqseZQNNKCXol2KA1uFr4mrbh9HaoaIhSDmjhwVt198bgsnTvrByxHXMB1vIm5C2r8XWk7AIdyl4s+dJavue5IcNUDEZYVIiBAxPRUMMNL+YCUv0to0FJ/r9RJNQgPjD8Iwe8Q/MMcq90s="
     },
     {
       "name": "ffmpeg",
@@ -5427,6 +5437,15 @@
       "url": "https://pkgs.omarchy.org/stable/x86_64/yay-13.0.1-1-x86_64.pkg.tar.zst",
       "repository": "omarchy",
       "signature": "iHUEABYKAB0WIQRA37Yw/0K8/7BHBGzwE07mgMrFcQUCamaq3QAKCRDwE07mgMrFcaJDAQC2F/ZLov1+oaGaH8Zet/ijX8aqLW+6VZzxPRL0b0H11QEApg8GlUNa9sVHHOgdkBzzYmNhk3gAqruvoyraA1mknwY="
+    },
+    {
+      "name": "yyjson",
+      "version": "0.13.0-1",
+      "filename": "yyjson-0.13.0-1-x86_64.pkg.tar.zst",
+      "sha256": "9d23b8c5ea00af3722e2239f2c27ed498eeb8e0bed9086bfa8d5519f89de1757",
+      "url": "https://geo.mirror.pkgbuild.com/extra/os/x86_64/yyjson-0.13.0-1-x86_64.pkg.tar.zst",
+      "repository": "extra",
+      "signature": "iQIzBAABCgAdFiEEJipY7GxR9+o5Wy4t/cMEC5Ksp0gFAmqg/p0ACgkQ/cMEC5Ksp0ijvg//ZWmZoBVE6jHl4ysYkPLn8WzVlpLWecBcFBtZ8juvvdZ34I3XqloZB7FGLv0DYJjfLLxvhi2nyvy7WYvqiCVRybcVDGjy5RVqPG0jo92K65Ood+NVBn6wf+8OgMIWhLHvwi3hjqt25obhd8Xg6d74fCZ7Ew+ZF2WQNPqFYP2lmIX5frWNDm1S+8LOqyPNK8MxrXA3KP5hZDaUHScpBX2VInDPFPVTxZmUttn5wdB6eBpI8LdeHlrbDLta1Pbd6ZfvIafAT5bYwkQXeWDjneeqX9bGXusqbx7iwkLQye2a3Wi+zmOH0ejJq3X6VaCO9/BsjFhM3tecjnkKXGdqdmP7DP7jv7V/iYym/3LACV6OgYu2DMeMdp9lgwOt1B/kdXnugrWFMouD9dWC06SclqDLFJj55eHigyMlW1z3701U2OWFIcqKTX3izSm8baSr74peMl5j65qzr87hfqM+dATQfMNtuVzCAq9jIdlptPqbCCbHC/SponofHTNXLRpN+zQA8iYHgpT0pS7oQY7GyZz9kxR2SUza1IBjp49mtmNluVUU7NIjwnND4Rl7WQeExT3VX251se+EDncdCVbvbvBUSKJnSNXaNklvzobgqs91gN+2KI6Ul8Ur3JuJgkxNWDxduIjGrKzn+jqVa9RULiPnBfmZuC78ukqlxIC8Am0GLKI="
     },
     {
       "name": "zeromq",

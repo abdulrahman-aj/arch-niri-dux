@@ -25,6 +25,7 @@ neovim
 chromium
 git
 github-cli
+fastfetch
 curl
 base-devel
 yay

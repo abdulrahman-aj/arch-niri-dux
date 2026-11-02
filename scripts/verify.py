@@ -293,6 +293,7 @@ def main():
         # The payload must stay on mounted media instead of disappearing.
         vm.command('grep -qw copytoram=n /proc/cmdline; mountpoint -q /run/archiso/bootmnt; test ! -e /run/archiso/copytoram/airootfs.sfs')
         vm.command('mkdir -p /run/verify; mount -t 9p -o trans=virtio,version=9p2000.L verify /run/verify')
+        vm.command('fastfetch --logo none --structure OS:Kernel')
         vm.command('test "$(ls /sys/class/net | tr "\\n" " ")" = "lo "')
         vm.command(f'test "$(sha256sum /run/archiso/bootmnt/packages.manifest.json | cut -d " " -f 1)" = {package_digest}')
         for filename in ('install.py', 'configure-target.sh'):

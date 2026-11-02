@@ -269,6 +269,7 @@ def desktop():
     fonts()
     user_command('gh', '--version')
     user_command('git', '--version')
+    user_command('fastfetch', '--logo', 'none', '--structure', 'OS:Kernel')
     user_command('test', '-w', '/home/tester/.config')
     user_command('yay', '--version')
     outputs = json.loads(user_command('niri', 'msg', '--json', 'outputs', capture=True).stdout)
