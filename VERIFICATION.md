@@ -275,8 +275,10 @@ The builder also waits for Archiso's keyring initializer before its own key
 operations, with a regression for the initialization barrier and failure path.
 Independent Muse review of `8fb640d` found no code blockers and all six earlier
 findings resolved. Main's subsequent fish cleanup was merged normally. Root
-owns the final combined 21-stage standalone acceptance and merge; alongside's
-TODO remains listed until that decision.
+ran the combined standalone acceptance on the same ISO: all 21 stages passed,
+including the shared PATH fix, apps, graphical/text unlock, screen sharing and
+snapshot restoration. Evidence is in `out/verify-combined-final/` and the committed
+JSON record. The completed alongside TODO is removed.
 
 To repeat only these alongside runs using the retained fixtures, run from this
 worktree with fresh output directories:
@@ -287,8 +289,8 @@ make verify-alongside ARGS="--os windows --iso out/arch-niri-dux-2026.11.02-x86_
 make verify-alongside ARGS="--os linux --iso out/arch-niri-dux-2026.11.02-x86_64.iso --fixture out/alongside/linux-fixture/disk.qcow2 --firmware out/alongside/linux-fixture/OVMF_VARS.fd --directory out/alongside/debian-repeat"
 ```
 
-Root's combined acceptance should also run from this worktree so the source
-hash checks use the alongside implementation:
+The combined acceptance passed from this worktree, with matching installer
+source hashes; repeat it using a fresh evidence directory:
 
 ```sh
 make verify ARGS="--iso out/arch-niri-dux-2026.11.02-x86_64.iso --directory out/verify-combined-final"

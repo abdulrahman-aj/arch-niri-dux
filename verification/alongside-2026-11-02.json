@@ -216,5 +216,37 @@
       "size": 5112850432,
       "sha256": "67cec5865eaa037a72ddc633a717a10a2bed50778862267223ddb9c60ef5da68"
     }
+  },
+  "combined_acceptance": {
+    "evidence": "out/verify-combined-final",
+    "inputs": {
+      "iso": "/home/abdulrahman/.t3/worktrees/arch-niri-dux/t3-b4e43629/out/arch-niri-dux-2026.11.02-x86_64.iso",
+      "iso_sha256": "591fc771dadeaaf5306cf1db00127dc422ff033b325873667eafdf6f2fb27bd9",
+      "package_manifest_sha256": "7fa1f7c8441038ea05e9eec918a532ebaaf42be8d08d8b31bb1dde84de9529da"
+    },
+    "milestones": [
+      "Offline encrypted installation completed",
+      "Graphical disk unlock accepts keyboard input and retries an incorrect password",
+      "UEFI boot from encrypted disk without installation ISO",
+      "Plymouth configuration and boot services are active",
+      "Encrypted swap outside root snapshots; physical resume offset matches the kernel",
+      "Niri, Dux, terminal, Neovim and Chromium smoke checks",
+      "Login shells, user services and Niri spawns resolve local user executables",
+      "GOP metrics, live file indexing, Calendar event create/read and Dux Files integration",
+      "Live Dux light/dark changes reach Chromium, GTK settings, portals and Dux apps",
+      "Bloom material wallpaper is the fresh-user default and rendered",
+      "Real configure-desktop preserved an existing wallpaper choice",
+      "Papers is the default PDF viewer and rendered a sample document",
+      "Snapshot preview, shutter photo and video recording work with a synthetic camera",
+      "Chromium open-file request uses Dux Files and responds to cancellation",
+      "Chromium screen sharing produced nonblank captured desktop content",
+      "Screen lock and password unlock",
+      "Automatic package snapshots created; recovery fixture prepared",
+      "Limine snapshot boot and restoration",
+      "Restored system rebooted normally and home was preserved",
+      "Text fallback unlocks the disk with the splash disabled",
+      "Graphical password screen works again after text fallback"
+    ],
+    "passed": true
   }
 }
