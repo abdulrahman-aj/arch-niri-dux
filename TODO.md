@@ -1,6 +1,5 @@
 - [ ] Support installation into unallocated disk space alongside existing operating systems, preserving their partitions, data, EFI files and boot entries; VM-test that both the existing OS and the new installation still boot.
 - [ ] Remove AUR usage entirely once suitable package sources are available, including replacing the AUR packages for Dux Greeter, Search, Calendar and Files, and removing Yay. For now, keep Yay for their updates.
-- [ ] Verify encrypted hibernate/resume on the physical laptop. Installer swap choices and VM hibernate/resume already pass; lid-close must remain suspend when undocked.
 - [ ] Investigate the laptop's intermittently lit lock screen on opening the lid. Collected logs show successful suspend cycles waking when the lid opens; the intermittent failure has not been captured. Verify undocked lid-close suspend and docked use with the built-in panel off.
 - [ ] Set the default wallpaper to "bloom" from Dux settings; verify a fresh installation boots with bloom as the default.
 - [ ] Show the boot-time disk password prompt in a clean graphical box instead of an inline field mixed with boot logs; verify encrypted boot passphrase entry appearance.

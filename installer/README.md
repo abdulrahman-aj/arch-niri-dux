@@ -23,7 +23,8 @@ Swap choices are Auto (RAM rounded up to GiB plus 2 GiB), a custom size, or none
 An enabled swapfile lives in its own `@swap` subvolume inside the encrypted
 filesystem. Btrfs computes its physical resume offset. Recovery entries use
 `noresume` and block hibernation so an old snapshot cannot resume a different
-system's memory image. Hardware hibernate/resume still needs a laptop check.
+system's memory image. Hibernate/resume passed on the Zenbook; see
+[verification](../VERIFICATION.md) for the evidence and remaining hardware checks.
 
 Automation uses a private mode-0600 JSON file containing Settings fields and
 `--confirm-disk /dev/vda`. It exercises the same validation and installation
