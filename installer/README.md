@@ -31,16 +31,17 @@ passphrase appears in a graphical box instead of inline boot logs, with an
 automatic text fallback when KMS is unavailable. `sd-encrypt` retries a
 mistyped passphrase. Press Esc during boot to show messages; boot failures
 stay visible because only `quiet splash` quiets the console. To force the
-plain console prompt, append `plymouth.enable=0` (and
-`disablehooks=plymouth` for the initramfs hook) to the kernel cmdline.
+plain console prompt, append `plymouth.enable=0` to the kernel cmdline.
+`disablehooks=plymouth` optionally bypasses the initramfs hook as well.
 
 Acceptance after rebuilding with `make iso`:
 
 - `make test` — source and build tests, including fallback-setting preservation.
 - `make verify ARGS='--directory out/verify-plymouth'` — full VM run:
-  wrong-passphrase retry with `02-boot-plymouth-prompt/retry` screenshots,
+  keyboard unlock and wrong-passphrase retry with `02-graphical-unlock-*` screenshots,
   `plymouth-config`/`plymouth-status` probes, snapshot recovery, and a
-  `plymouth.enable=0` text-fallback roundtrip that restores the splash.
+  a serial-free, screenshot-qualified `plymouth.enable=0` text-fallback roundtrip
+  that restores the graphical password screen afterward.
 - `make verify-hibernate ARGS='--directory out/verify-plymouth'` — encrypted
   swap resume still works through the splash.
 

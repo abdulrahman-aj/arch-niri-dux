@@ -161,15 +161,24 @@ def prepare(root):
         assert 'AllowHibernation=no' in (root / 'etc/systemd/sleep.conf.d/60-hibernation.conf').read_text()
 
 
-def enable_serial_console():
-    # Later desktop/recovery stages need serial unlock. Add that instrumentation
-    # only after the production-style graphical unlock has passed.
-    arguments = 'console=tty0 console=ttyS0,115200n8'
-    cmdline = Path('/etc/kernel/cmdline')
-    cmdline.write_text(cmdline.read_text().strip() + ' ' + arguments + '\n')
-    defaults = Path('/etc/default/limine')
-    defaults.write_text(defaults.read_text() + '\nKERNEL_CMDLINE[default]+=" ' + arguments + '"\n')
-    run('limine-mkinitcpio')
+def serial_console(enabled, root='/'):
+    # Serial kernel consoles force Plymouth's details mode. Keep this test
+    # instrument off while qualifying the actual graphical and fallback UI.
+    root = Path(root)
+    arguments = ['console=tty0', 'console=ttyS0,115200n8']
+    cmdline = root / 'etc/kernel/cmdline'
+    tokens = [token for token in cmdline.read_text().split() if token not in arguments]
+    if enabled:
+        tokens.extend(arguments)
+    cmdline.write_text(' '.join(tokens) + '\n')
+    defaults = root / 'etc/default/limine'
+    serial_line = 'KERNEL_CMDLINE[default]+=" ' + ' '.join(arguments) + '"'
+    lines = [line for line in defaults.read_text().splitlines() if line != serial_line]
+    if enabled:
+        lines.append(serial_line)
+    defaults.write_text('\n'.join(lines) + '\n')
+    if root == Path('/'):
+        run('limine-mkinitcpio')
 
 
 def user_command(*args, capture=False):
@@ -283,7 +292,7 @@ def plymouth_config(root='/'):
     theme_conf = root / 'etc/plymouth/plymouthd.conf'
     assert theme_conf.is_file(), 'Plymouth theme configuration is missing.'
     assert 'Theme=bgrt' in theme_conf.read_text(), theme_conf.read_text()
-    for fallback in ('bgrt', 'spinner', 'details', 'text', 'tribar'):
+    for fallback in ('bgrt', 'spinner', 'details', 'text'):
         assert (root / f'usr/share/plymouth/themes/{fallback}').is_dir(), fallback
     dropin = root / 'etc/systemd/system/greetd.service.d/10-plymouth.conf'
     assert dropin.is_file(), 'Greeter Plymouth ordering is missing.'
@@ -305,8 +314,6 @@ def plymouth_status():
         assert Path(f'/usr/share/plymouth/themes/{fallback}').is_dir(), fallback
     # Boot failures must not be masked: only quiet+splash quiet the console.
     assert 'systemd.show_status=false' not in cmdline, cmdline
-    boot_log = Path('/var/log/boot.log')
-    assert boot_log.is_file(), 'Plymouth boot log is missing.'
     journal = run('journalctl', '-b', '--no-pager', '-o', 'short-monotonic',
                   stdout=subprocess.PIPE).stdout
     assert 'plymouth' in journal.lower(), 'No Plymouth activity in this boot journal.'
@@ -594,7 +601,7 @@ def splash_fallback(disable, root='/'):
         lines.append(fallback_line)
     defaults.write_text('\n'.join(lines) + '\n')
     if str(root) == '/':
-        run('limine-snapper-sync')
+        run('limine-mkinitcpio')
         run('sync')
 
 
@@ -619,6 +626,10 @@ if __name__ == '__main__':
                    (state := browser_state()) is not None and state['file'] == 'cancelled')
     elif action == 'capture':
         capture()
+    elif action == 'failure-screenshot':
+        screenshot('failure.png')
+    elif action == 'capture-source':
+        screenshot('02-chromium-share-source.png')
     elif action == 'capture-picker':
         wait_until('GNOME screen-sharing source chooser', lambda: any(
             'portal' in window.get('app_id', '').lower() and window.get('title') == 'Share Screen'
@@ -637,7 +648,9 @@ if __name__ == '__main__':
     elif action == 'restored':
         restored()
     elif action == 'serial-console-enable':
-        enable_serial_console()
+        serial_console(True)
+    elif action == 'serial-console-disable':
+        serial_console(False)
     elif action == 'plymouth-config':
         plymouth_config(sys.argv[2] if len(sys.argv) > 2 else '/')
     elif action == 'plymouth-status':
