@@ -60,3 +60,24 @@ Collected Zenbook logs show successful lid-close suspend cycles, with wakeups
 coinciding with lid opening. The intermittent reported symptom has not yet been
 captured. The VM does not qualify the laptop's wake sources, display or hardware
 hibernate/resume. Those checks remain open; Secure Boot remains outside scope.
+
+## TODO audit (2026-11-02)
+
+Removed eight completed TODOs based on the implementation merged in PR #12,
+its automated source tests and the verification recorded above: GNOME screen
+sharing; guided installer polish;
+Cancel-first erase confirmation; elapsed installation time; graphical Dux
+Greeter; system light/dark propagation; the signed Omarchy repository; and Dux
+GOP, Search, Calendar and Files integration.
+
+The repository reminder's separate dotfiles change is also merged: commit
+`4c56ac8` (dotfiles PR #3) installs Chrome, Zen and T3 Code from configured binary
+repositories on plain Arch, without the automatic AUR installation path.
+
+This audit reran `make test` in the Nix dev shell: 42 source tests and nine build
+tests passed. The earlier VM evidence directories are absent from this checkout;
+the VM results above are the committed release record, not new runs from this
+audit. Laptop hibernate/resume and lid/display behavior remain unverified here.
+The hibernation TODO now describes only that remaining hardware check.
+The VM installer uses unattended configuration; interactive wizard behavior and
+custom swap sizing are covered by source tests rather than an interactive VM run.
