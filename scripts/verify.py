@@ -412,6 +412,8 @@ def main():
                'Encrypted swap outside root snapshots; physical resume offset matches the kernel')
         vm.command('python /run/verify/verify-guest.py desktop', timeout=180)
         passed('Niri, Dux, terminal, Neovim and Chromium smoke checks')
+        vm.command('python /run/verify/verify-guest.py session-path', timeout=90)
+        passed('Login shells, user services and Niri spawns resolve local user executables')
         vm.command('python /run/verify/verify-guest.py dux-components', timeout=300)
         passed('GOP metrics, live file indexing, Calendar event create/read and Dux Files integration')
         vm.command('python /run/verify/verify-guest.py themes', timeout=300)
