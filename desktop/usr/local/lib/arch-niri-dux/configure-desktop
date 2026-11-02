@@ -1,12 +1,31 @@
 #!/usr/bin/env bash
 set -euo pipefail
 user=${1:?Usage: configure-desktop USERNAME}
-home=$(getent passwd "$user" | cut -d: -f6)
-[[ -d "$home" && "$home" != / ]] || exit 1
-install -d -o "$user" -g "$(id -gn "$user")" "$home/.config" "$home/.config/niri"
+user_home=$(getent passwd "$user" | cut -d: -f6)
+[[ -d "$user_home" && "$user_home" != / ]] || exit 1
+user_group=$(id -gn "$user")
+install -d -o "$user" -g "$user_group" "$user_home/.config/niri" \
+    "$user_home/.config/environment.d" "$user_home/.local/share/dbus-1/services"
 # The Dux 2.0 upstream Niri integration is vendored verbatim with source hashes.
-cp -a /usr/share/arch-niri-dux/niri/. "$home/.config/niri/"
-sed -i 's/{{TERMINAL_COMMAND}}/alacritty/g' "$home/.config/niri/dms/binds.kdl"
-printf '\nspawn-at-startup "dms" "run"\n' >> "$home/.config/niri/config.kdl"
-chown -R "$user:$(id -gn "$user")" "$home/.config/niri"
+cp -a /usr/share/arch-niri-dux/niri/. "$user_home/.config/niri/"
+sed -i 's/{{TERMINAL_COMMAND}}/alacritty/g' "$user_home/.config/niri/dms/binds.kdl"
+printf '\ninclude "/usr/share/arch-niri-dux/session.kdl"\n' >> "$user_home/.config/niri/config.kdl"
+# Use upstream's GTK passthrough for Qt, without another AUR platform plugin.
+install -m 0644 /usr/share/arch-niri-dux/environment.conf "$user_home/.config/environment.d/90-dux.conf"
+cat >"$user_home/.config/mimeapps.list" <<'EOF'
+[Default Applications]
+inode/directory=dev.duxlabs.files.desktop
+EOF
+# A user service directory has precedence over Nautilus's system activation file.
+ln -sf /usr/share/dbus-1/services/dev.duxlabs.files.FileManager1.service \
+    "$user_home/.local/share/dbus-1/services/dev.duxlabs.files.FileManager1.service"
+chown -R "$user:$user_group" "$user_home/.config" "$user_home/.local"
+systemctl --global enable dms.service dsearch.service dcal.service dfiles.service dux-application-themes.service
+systemd-tmpfiles --create /usr/lib/tmpfiles.d/dms-greeter.conf
+# Calendar credentials use the Secret portal; unlock its keyring at login.
+cat >>/etc/pam.d/greetd <<'EOF'
+
+auth optional pam_gnome_keyring.so
+session optional pam_gnome_keyring.so auto_start
+EOF
 systemctl enable greetd NetworkManager bluetooth power-profiles-daemon

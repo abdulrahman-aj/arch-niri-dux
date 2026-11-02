@@ -8,6 +8,10 @@ spec = importlib.util.spec_from_file_location('build_lock', Path(__file__).with_
 module = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(module)
 
+aur_spec = importlib.util.spec_from_file_location('build_aur', Path(__file__).with_name('build-aur.py'))
+aur = importlib.util.module_from_spec(aur_spec)
+aur_spec.loader.exec_module(aur)
+
 
 class PayloadTests(unittest.TestCase):
     def setUp(self):
@@ -58,3 +62,34 @@ class PayloadTests(unittest.TestCase):
             self.assertTrue(current.exists())
             self.assertFalse(old.exists())
             self.assertFalse(signature.exists())
+
+
+class ReviewedRecipeTests(unittest.TestCase):
+    def test_modified_recipe_is_rejected_before_execution(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            source = root / 'packages/aur/example-bin'
+            source.mkdir(parents=True)
+            for name in ('PKGBUILD', '.SRCINFO'):
+                (source / name).write_text('reviewed contents')
+            recipe = dict(name='example-bin', commit='a' * 40,
+                          files={name: aur.digest(source / name) for name in ('PKGBUILD', '.SRCINFO')})
+            self.assertEqual(aur.validate_recipe(root, recipe), source)
+            (source / 'PKGBUILD').write_text('changed contents')
+            with self.assertRaisesRegex(ValueError, 'recipe changed'):
+                aur.validate_recipe(root, recipe)
+
+    def test_recipe_cannot_read_outside_reviewed_directory(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            source = root / 'packages/aur/example-bin'
+            source.mkdir(parents=True)
+            for name in ('PKGBUILD', '.SRCINFO'):
+                (source / name).touch()
+            outside = root / 'packages/aur/outside'
+            outside.write_text('outside')
+            recipe = dict(name='example-bin', commit='a' * 40,
+                          files={name: aur.digest(source / name) for name in ('PKGBUILD', '.SRCINFO')})
+            recipe['files']['../outside'] = aur.digest(outside)
+            with self.assertRaisesRegex(ValueError, 'recipe changed'):
+                aur.validate_recipe(root, recipe)

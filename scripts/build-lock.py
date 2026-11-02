@@ -49,6 +49,9 @@ def prune_payload(dest, entries):
 
 def main():
     root, dest = map(pathlib.Path, sys.argv[1:3])
+    # Reviewed local builds have recipe/source hashes, not distribution signatures.
+    # Keep them outside the signed binary closure and add them after verification.
+    aur_names = {entry['name'] for entry in json.loads((root / 'packages/aur-recipes.json').read_text())}
     for source in json.loads((root / 'packages/desktop-sources.json').read_text()):
         if digest(root / source['path']) != source['sha256']:
             raise ValueError(f"Upstream desktop asset changed: {source['path']}")
@@ -70,6 +73,7 @@ def main():
         for file in ('packages/packages.target', 'archiso/packages.live'):
             names.update(line.split('#')[0].strip() for line in (root / file).read_text().splitlines())
         names.discard('')
+        names.difference_update(aur_names)
         subprocess.run(['mkdir', '-p', '/build/resolve/local', '/build/resolve/sync'], check=True)
         subprocess.run(['cp', '-a', '/var/lib/pacman/sync/.', '/build/resolve/sync/'], check=True)
         result = subprocess.check_output(['pacman', '-Sp', '--noconfirm', '--dbpath', '/build/resolve', '--print-format', '%n|%v|%f|%h|%l|%r', *sorted(names)], text=True)
@@ -96,6 +100,7 @@ def main():
     for file in ('packages/packages.target', 'archiso/packages.live'):
         requested.update(line.split('#')[0].strip() for line in (root / file).read_text().splitlines())
     requested.discard('')
+    requested.difference_update(aur_names)
     if sorted(requested) != payload['requested']:
         raise ValueError('Package lists changed; explicitly refresh the closure lock')
     dest.mkdir(parents=True, exist_ok=True)
@@ -135,8 +140,6 @@ def main():
     # A changed lock also needs a fresh database, not repo-add's merged history.
     for path in dest.glob('offline.*'):
         path.unlink()
-    # Installer consumes this before opening any disk; include database hashes later.
-    (dest.parent / 'packages.manifest.json').write_text(json.dumps(payload, indent=2) + '\n')
 
 
 if __name__ == '__main__':

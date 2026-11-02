@@ -148,6 +148,15 @@ class VM:
     def key(self, name):
         self.qmp_command('send-key', {'keys': [{'type': 'qcode', 'data': name}], 'hold-time': 50})
 
+    def click(self, x, y):
+        self.qmp_command('input-send-event', {'events': [
+            {'type': 'abs', 'data': {'axis': 'x', 'value': round(x * 32767)}},
+            {'type': 'abs', 'data': {'axis': 'y', 'value': round(y * 32767)}},
+        ]})
+        self.qmp_command('input-send-event', {'events': [{'type': 'btn', 'data': {'down': True, 'button': 'left'}}]})
+        time.sleep(0.15)
+        self.qmp_command('input-send-event', {'events': [{'type': 'btn', 'data': {'down': False, 'button': 'left'}}]})
+
     def type_graphical(self, value):
         for character in value:
             if character.islower() or character.isdigit():
@@ -210,13 +219,28 @@ def installed_login(vm):
     vm.command('test "$(id -u)" = 0')
 
 
+def graphical_login(vm):
+    vm.command('python /run/verify/verify-guest.py greeter')
+    # Pinned upstream's first-login user picker, on the VM's single display.
+    vm.click(0.5, 0.5)
+    time.sleep(0.3)
+    vm.click(0.5, 0.443)
+    time.sleep(0.3)
+    vm.type_graphical(PASSWORD)
+    vm.key('ret')
+    vm.command('for attempt in $(seq 1 60); do pgrep -u tester -x niri >/dev/null && exit 0; sleep 1; done; exit 1', timeout=90)
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--iso', type=Path)
     parser.add_argument('--directory', type=Path, help='Fresh verification workspace; default under /tmp')
     parser.add_argument('--disk', type=Path, help='New disposable qcow2 path; default inside the workspace')
     parser.add_argument('--install-only', action='store_true', help='Debug only; does not produce acceptance success')
+    parser.add_argument('--swap-gib', type=int, help='Override Auto swap sizing; 0 disables swap and hibernation')
     args = parser.parse_args()
+    if args.swap_gib is not None and args.swap_gib < 0:
+        parser.error('--swap-gib must be zero or a positive number of GiB.')
     images = sorted((ROOT / 'out').glob('*.iso'))
     iso = args.iso or (images[-1] if images else None)
     if iso is None or not iso.is_file():
@@ -231,12 +255,14 @@ def main():
     subprocess.run(['qemu-img', 'create', '-f', 'qcow2', str(disk), '48G'], check=True)
     configuration = dict(disk='/dev/vda', username='tester', hostname='dux-verify',
                          timezone='UTC', keymap='us', passphrase=PASSWORD, password=PASSWORD)
+    if args.swap_gib is not None:
+        configuration['swap_gib'] = args.swap_gib
     config_file = directory / 'install.json'
     config_file.write_text(json.dumps(configuration))
     config_file.chmod(0o600)
     with iso.open('rb') as stream:
         iso_digest = hashlib.file_digest(stream, 'sha256').hexdigest()
-    package_digest = hashlib.sha256((ROOT / 'packages/closure.lock.json').read_bytes()).hexdigest()
+    package_digest = hashlib.sha256((ROOT / 'out/packages.manifest.json').read_bytes()).hexdigest()
     (directory / 'inputs.json').write_text(json.dumps({
         'iso': str(iso.resolve()), 'iso_sha256': iso_digest,
         'package_lock_sha256': package_digest,
@@ -263,7 +289,11 @@ def main():
         for filename in ('install.py', 'configure-target.sh'):
             expected = hashlib.sha256((ROOT / 'installer' / filename).read_bytes()).hexdigest()
             vm.command(f'test "$(sha256sum /usr/local/lib/arch-niri-dux/installer/{filename} | cut -d " " -f 1)" = {expected}')
-        vm.command('arch-niri-install --config /run/verify/install.json --confirm-disk /dev/vda', timeout=2400)
+        installation_output = vm.command('arch-niri-install --config /run/verify/install.json --confirm-disk /dev/vda', timeout=2400)
+        elapsed = re.search(r'INSTALLATION COMPLETE[^\n]*took ([0-9]+) seconds', installation_output)
+        if elapsed is None:
+            raise RuntimeError('Installer did not report its elapsed completion time.')
+        (directory / 'install-time-seconds').write_text(elapsed.group(1) + '\n')
         passed('Offline encrypted installation completed')
         vm.command("cryptsetup open --key-file /run/verify/key /dev/vda2 dux-root; mkdir -p /mnt/verify; mount -o subvol=@ /dev/mapper/dux-root /mnt/verify; mount /dev/vda1 /mnt/verify/boot")
         vm.command('python /run/verify/verify-guest.py prepare /mnt/verify', timeout=300)
@@ -279,16 +309,30 @@ def main():
         vm.command('test -e /dev/mapper/dux-root; findmnt -n -o FSTYPE / | grep -x btrfs; test "$(ls /sys/class/net | tr "\\n" " ")" = "lo "')
         vm.command('cat /proc/cmdline; ! grep -q /@snapshots/ /proc/cmdline; systemctl is-enabled greetd; systemctl is-active greetd; test -f /home/tester/.config/niri/config.kdl')
         vm.command('systemctl is-active NetworkManager; systemctl is-enabled bluetooth; command -v nvim chromium alacritty yay niri dms')
-        vm.screenshot('01-greeter')
-        vm.type_graphical('tester')
-        vm.key('ret')
-        time.sleep(0.5)
-        vm.type_graphical(PASSWORD)
-        vm.key('ret')
-        vm.command('for attempt in $(seq 1 60); do pgrep -u tester -x niri >/dev/null && exit 0; sleep 1; done; exit 1', timeout=90)
         vm.command('mkdir -p /run/verify; mount -t 9p -o trans=virtio,version=9p2000.L verify /run/verify || mountpoint -q /run/verify')
+        graphical_login(vm)
+        vm.command('python /run/verify/verify-guest.py storage')
+        passed('No-swap installation disables hibernation' if args.swap_gib == 0 else
+               'Encrypted swap outside root snapshots; physical resume offset matches the kernel')
         vm.command('python /run/verify/verify-guest.py desktop', timeout=180)
         passed('Niri, Dux, terminal, Neovim and Chromium smoke checks')
+        vm.command('python /run/verify/verify-guest.py dux-components', timeout=300)
+        passed('GOP metrics, live file indexing, Calendar event create/read and Dux Files integration')
+        vm.command('python /run/verify/verify-guest.py themes', timeout=300)
+        passed('Live Dux light/dark changes reach Chromium, GTK settings, portals and Dux apps')
+        vm.command('python /run/verify/verify-guest.py focus-browser')
+        vm.key('o')
+        vm.command('python /run/verify/verify-guest.py file-chooser', timeout=90)
+        vm.key('esc')
+        vm.command('python /run/verify/verify-guest.py file-chooser-cancelled', timeout=90)
+        passed('Chromium open-file request uses Dux Files and responds to cancellation')
+        vm.command('python /run/verify/verify-guest.py focus-browser')
+        vm.key('c')
+        time.sleep(1)
+        vm.screenshot('02-screen-share-picker')
+        vm.key('ret')
+        vm.command('python /run/verify/verify-guest.py capture', timeout=90)
+        passed('Chromium screen sharing produced a real video frame')
         vm.command('python /run/verify/verify-guest.py lock')
         vm.command('python /run/verify/verify-guest.py locked')
         vm.screenshot('03-locked')

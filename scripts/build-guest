@@ -33,8 +33,6 @@ if [[ ! -f /source/packages/closure.lock.json ]]; then
     pacman -Sy --noconfirm --needed archiso python
 fi
 python /source/scripts/build-lock.py /source /build/payload/repo
-repo-add /build/payload/repo/offline.db.tar.gz /build/payload/repo/*.pkg.tar.zst
-(cd /build/payload/repo && sha256sum *.pkg.tar.zst *.db > SHA256SUMS)
 cat >/build/pacman-pinned.conf <<'CONF'
 [options]
 Architecture = auto
@@ -43,9 +41,12 @@ CacheDir = /build/cache
 [offline]
 Server = file:///build/payload/repo
 CONF
+repo-add /build/payload/repo/offline.db.tar.gz /build/payload/repo/*.pkg.tar.zst
 # Rebuilds install the build tools from the same verified closure as the ISO.
-pacman -Sy --config /build/pacman-pinned.conf --noconfirm --needed archiso python
-cp /source/packages/closure.lock.json /source/out/packages.manifest.json
+pacman -Sy --config /build/pacman-pinned.conf --noconfirm --needed archiso python base-devel git
+python /source/scripts/build-aur.py /source /build/payload/repo
+repo-add /build/payload/repo/offline.db.tar.gz /build/payload/repo/*.pkg.tar.zst
+(cd /build/payload/repo && sha256sum *.pkg.tar.zst *.db > SHA256SUMS)
 cp /state/trusted-packagers.gpg /source/out/trusted-packagers.gpg
 cp -a /usr/share/archiso/configs/releng /build/profile-new
 rm -rf /build/profile

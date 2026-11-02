@@ -8,7 +8,7 @@ import subprocess
 import sys
 import tempfile
 
-from verify import VM, PASSWORD, installed_login
+from verify import VM, PASSWORD, installed_login, graphical_login
 
 
 GUEST_SETUP = r'''#!/bin/bash
@@ -19,15 +19,11 @@ tar -xf /run/verify/dotfiles.tar -C /home/tester/dotfiles
 tar -xf /run/verify/agent-config.tar -C /home/tester/agent-config
 chown -R tester:tester /home/tester/dotfiles /home/tester/agent-config
 install -d -m 755 /usr/local/lib/verify-personal
-cat > /usr/local/lib/verify-personal/yay <<'EOF'
-#!/bin/sh
-exec /usr/bin/yay --noconfirm --answerdiff None --answerclean None "$@"
-EOF
 cat > /usr/local/lib/verify-personal/chsh <<'EOF'
 #!/bin/sh
 exec sudo /usr/bin/chsh "$@"
 EOF
-chmod 755 /usr/local/lib/verify-personal/{yay,chsh}
+chmod 755 /usr/local/lib/verify-personal/chsh
 # Sudo's last matching rule wins; this must sort after the production wheel rule.
 printf 'tester ALL=(ALL:ALL) NOPASSWD: ALL\n' > /etc/sudoers.d/zz-verify-personal
 chmod 440 /etc/sudoers.d/zz-verify-personal
@@ -51,6 +47,10 @@ done < <(find "$HOME/.config/opencode" -type l -print0 2>/dev/null)
 GUEST_USER = r'''#!/bin/bash
 set -euo pipefail
 cd "$HOME/dotfiles"
+dms system update --check --json > /run/verify/updater.json
+yay -Syu --noconfirm --answerdiff None --answerclean None
+# Exercise the AUR update/reinstall path even when the ISO already has latest.
+yay -S --rebuild --noconfirm --answerdiff None --answerclean None dux-greeter-bin
 niri_before=$(sha256sum "$HOME/.config/niri/config.kdl")
 # Some tools expect a repository, but archives intentionally omit git internals.
 git init -q
@@ -116,12 +116,21 @@ def main():
         (directory / 'sources.json').write_text(json.dumps(shas, indent=2) + '\n')
         (directory / 'personal-setup.sh').write_text(GUEST_SETUP)
         (directory / 'personal-user.sh').write_text(GUEST_USER)
+        for name in ('verify-guest.py', 'verify-personal-appearance.py', 'verify-personal-cdp.mjs'):
+            (directory / name).write_bytes(Path(__file__).with_name(name).read_bytes())
         vm = VM(directory, None, disk)
         vm.start(cdrom=False, network=True)
         installed_login(vm)
         vm.command('mkdir -p /run/verify; mount -t 9p -o trans=virtio,version=9p2000.L verify /run/verify')
         vm.command('bash /run/verify/personal-setup.sh', timeout=7200)
+        graphical_login(vm)
+        vm.command('python /run/verify/verify-personal-appearance.py', timeout=300)
         vm.command('sync')
+        vm.poweroff()
+        vm.stop()
+        vm.start(cdrom=False, network=True)
+        installed_login(vm)
+        vm.command('systemctl is-active greetd; command -v dms-greeter yay google-chrome-stable zen-browser t3code; pacman -Q dux-greeter-bin yay limine-mkinitcpio-hook limine-snapper-sync')
         vm.stop()
         (directory / 'PERSONAL-PASSED').write_text('Personal bootstrap and assertions passed.\n')
         print(f'Personal bootstrap passed. Evidence: {directory}', flush=True)
