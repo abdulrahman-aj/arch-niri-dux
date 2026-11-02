@@ -2,6 +2,7 @@
 """Run the ISO in a UEFI VM without a network device; retain evidence locally."""
 
 import argparse
+import csv
 import hashlib
 import json
 import os
@@ -12,6 +13,7 @@ import shlex
 import shutil
 import socket
 import subprocess
+import struct
 import sys
 import tempfile
 import time
@@ -48,7 +50,7 @@ class VM:
                 time.sleep(0.1)
         raise TimeoutError(f'QEMU socket did not appear: {path}')
 
-    def start(self, cdrom=True, network=False):
+    def start(self, cdrom=True, network=False, software_display=False):
         for name in ('serial.sock', 'qmp.sock'):
             (self.directory / name).unlink(missing_ok=True)
         firmware = Path(os.environ.get('OVMF_DIR', '/usr/share/edk2/x64'))
@@ -62,11 +64,12 @@ class VM:
         if not variables.exists():
             shutil.copyfile(template, variables)
         render_node = Path(os.environ.get('QEMU_RENDER_NODE', '/dev/dri/renderD128'))
-        if not os.access(render_node, os.R_OK | os.W_OK):
+        if not software_display and not os.access(render_node, os.R_OK | os.W_OK):
             raise RuntimeError(f'Niri VM verification needs an accessible GPU render node: {render_node}')
         command = ['qemu-system-x86_64', '-machine', 'q35,accel=kvm', '-cpu', 'host',
-                   '-m', '8192', '-smp', '4', '-display', f'egl-headless,rendernode={render_node}',
-                   '-vga', 'none', '-device', 'virtio-vga-gl',
+                   '-m', '8192', '-smp', '4', '-display',
+                   'none' if software_display else f'egl-headless,rendernode={render_node}',
+                   '-vga', 'none', '-device', 'VGA' if software_display else 'virtio-vga-gl',
                    '-drive', f'if=pflash,format=raw,readonly=on,file={code}',
                    '-drive', f'if=pflash,format=raw,file={variables}',
                    '-drive', f'if=virtio,format=qcow2,file={self.disk}',
@@ -206,9 +209,62 @@ class VM:
             raise RuntimeError(f'QEMU exited abnormally: {self.process.returncode}')
 
 
-def installed_login(vm):
-    vm.expect(r'(?i)(passphrase|password).*?:', timeout=180)
-    vm.send(PASSWORD + '\n')
+def wait_for_password_screen(vm, name):
+    deadline = time.monotonic() + 180
+    while time.monotonic() < deadline:
+        path = vm.screenshot(name)
+        if path is not None:
+            text = subprocess.check_output(
+                ['tesseract', str(path), 'stdout', '--psm', '11'],
+                text=True, stderr=subprocess.DEVNULL)
+            if 'passphrase' in text.lower():
+                path.with_suffix('.txt').write_text(text)
+                return
+        time.sleep(1)
+    raise TimeoutError('The disk-password prompt did not appear on screen.')
+
+
+def click_screen_text(vm, path, phrase):
+    # Chromium's share chooser can appear later or move with window geometry.
+    # Locate its visible label instead of clicking a guessed screen coordinate.
+    output = subprocess.check_output(
+        ['tesseract', str(path), 'stdout', '--psm', '11', 'tsv'],
+        text=True, stderr=subprocess.DEVNULL)
+    words = [row for row in csv.DictReader(output.splitlines(), delimiter='\t')
+             if row.get('text', '').strip()]
+    target = phrase.casefold().split()
+    width, height = struct.unpack('>II', path.read_bytes()[16:24])
+    for index in range(len(words) - len(target) + 1):
+        match = words[index:index + len(target)]
+        if [word['text'].casefold() for word in match] != target:
+            continue
+        if len({(word['block_num'], word['par_num'], word['line_num']) for word in match}) != 1:
+            continue
+        left = min(int(word['left']) for word in match)
+        right = max(int(word['left']) + int(word['width']) for word in match)
+        top = min(int(word['top']) for word in match)
+        bottom = max(int(word['top']) + int(word['height']) for word in match)
+        vm.click((left + right) / 2 / width, (top + bottom) / 2 / height)
+        return True
+    return False
+
+
+def installed_login(vm, keyboard_unlock=False, screenshot_tag=None):
+    if keyboard_unlock:
+        wait_for_password_screen(vm, screenshot_tag + '-prompt')
+        vm.type_graphical('wrong-passphrase-retry')
+        vm.key('ret')
+        # Let LUKS finish its intentionally expensive password check, then
+        # require the password screen again before attempting the correct key.
+        time.sleep(3)
+        wait_for_password_screen(vm, screenshot_tag + '-retry')
+        vm.type_graphical(PASSWORD)
+        vm.key('ret')
+    else:
+        vm.expect(r'(?i)(passphrase|password).*?:', timeout=180)
+        if screenshot_tag is not None:
+            wait_for_password_screen(vm, screenshot_tag)
+        vm.send(PASSWORD + '\n')
     vm.expect(r'login:', timeout=180)
     vm.send('tester\n')
     vm.expect(r'Password:')
@@ -313,6 +369,16 @@ def main():
         if args.install_only:
             print('Install-only debug run complete. Full acceptance has NOT passed.', flush=True)
             return 0
+        # A CPU-readable framebuffer qualifies the real pre-login UI. A serial
+        # kernel console would force Plymouth into its details/text mode.
+        vm.start(cdrom=False, software_display=True)
+        installed_login(vm, keyboard_unlock=True, screenshot_tag='02-graphical-unlock')
+        vm.command('mkdir -p /run/verify; mount -t 9p -o trans=virtio,version=9p2000.L verify /run/verify')
+        vm.command('python /run/verify/verify-guest.py plymouth-status')
+        passed('Graphical disk unlock accepts keyboard input and retries an incorrect password')
+        vm.command('python /run/verify/verify-guest.py serial-console-enable', timeout=300)
+        vm.poweroff()
+        vm.stop()
         vm.start(cdrom=False)
         installed_login(vm)
         passed('UEFI boot from encrypted disk without installation ISO')
@@ -320,6 +386,9 @@ def main():
         vm.command('cat /proc/cmdline; ! grep -q /@snapshots/ /proc/cmdline; systemctl is-enabled greetd; systemctl is-active greetd; test -f /home/tester/.config/niri/config.kdl')
         vm.command('systemctl is-active NetworkManager; systemctl is-enabled bluetooth; command -v nvim chromium alacritty yay niri dms papers snapshot')
         vm.command('mkdir -p /run/verify; mount -t 9p -o trans=virtio,version=9p2000.L verify /run/verify || mountpoint -q /run/verify')
+        vm.command('python /run/verify/verify-guest.py plymouth-config')
+        vm.command('python /run/verify/verify-guest.py plymouth-status')
+        passed('Plymouth configuration and boot services are active')
         graphical_login(vm)
         vm.command('python /run/verify/verify-guest.py storage')
         passed('No-swap installation disables hibernation' if args.swap_gib == 0 else
@@ -358,7 +427,14 @@ def main():
         time.sleep(1)
         # Chromium first asks for the source type, then GNOME selects the
         # actual screen; Chromium finally confirms that selected source.
-        vm.click(0.89, 0.284)
+        source_deadline = time.monotonic() + 60
+        while time.monotonic() < source_deadline:
+            vm.command('python /run/verify/verify-guest.py capture-source')
+            if click_screen_text(vm, directory / '02-chromium-share-source.png', 'Entire screen'):
+                break
+            time.sleep(1)
+        else:
+            raise TimeoutError('Chromium did not display its Entire screen source choice.')
         vm.command('python /run/verify/verify-guest.py capture-picker', timeout=90)
         vm.click(0.725, 0.245)
         time.sleep(1)
@@ -392,6 +468,30 @@ def main():
         vm.command('python /run/verify/verify-guest.py restored')
         vm.screenshot('05-restored')
         passed('Restored system rebooted normally and home was preserved')
+        # Real text-fallback path: same serial automation unlocks the disk with
+        # the splash disabled, then the graphical prompt is restored.
+        vm.command('python /run/verify/verify-guest.py serial-console-disable', timeout=300)
+        vm.command('python /run/verify/verify-guest.py splash-fallback-disable')
+        vm.command('sync')
+        vm.poweroff()
+        vm.stop()
+        vm.start(cdrom=False, software_display=True)
+        installed_login(vm, keyboard_unlock=True, screenshot_tag='06-text-fallback')
+        vm.command('mkdir -p /run/verify; mount -t 9p -o trans=virtio,version=9p2000.L verify /run/verify')
+        vm.command('grep -qw plymouth.enable=0 /proc/cmdline; python /run/verify/verify-guest.py storage')
+        passed('Text fallback unlocks the disk with the splash disabled')
+        vm.command('python /run/verify/verify-guest.py splash-fallback-enable')
+        vm.command('sync')
+        vm.poweroff()
+        vm.stop()
+        vm.start(cdrom=False, software_display=True)
+        installed_login(vm, keyboard_unlock=True, screenshot_tag='07-restored-splash')
+        vm.command('mkdir -p /run/verify; mount -t 9p -o trans=virtio,version=9p2000.L verify /run/verify')
+        vm.command('! grep -qw plymouth.enable=0 /proc/cmdline; python /run/verify/verify-guest.py plymouth-status')
+        vm.command('python /run/verify/verify-guest.py restored')
+        passed('Graphical password screen works again after text fallback')
+        vm.command('python /run/verify/verify-guest.py serial-console-enable', timeout=300)
+        vm.poweroff()
         vm.stop()
         (directory / 'ACCEPTANCE-PASSED').write_text('All acceptance stages passed.\n')
         print(f'Acceptance passed. Evidence: {directory}', flush=True)
@@ -399,7 +499,8 @@ def main():
     except Exception as error:
         try:
             if vm.process and vm.process.poll() is None:
-                vm.screenshot('failure')
+                if vm.screenshot('failure') is None:
+                    vm.command('python /run/verify/verify-guest.py failure-screenshot', timeout=15)
         except Exception:
             pass
         (directory / 'FAILURE.txt').write_text(str(error) + '\n')

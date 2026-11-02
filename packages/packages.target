@@ -6,6 +6,7 @@ intel-ucode
 amd-ucode
 btrfs-progs
 cryptsetup
+plymouth
 dosfstools
 e2fsprogs
 limine

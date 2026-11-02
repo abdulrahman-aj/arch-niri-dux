@@ -26,6 +26,29 @@ filesystem. Btrfs computes its physical resume offset. Recovery entries use
 system's memory image. Hibernate/resume passed on the Zenbook; see
 [verification](../VERIFICATION.md) for the evidence and remaining hardware checks.
 
+Boot uses Plymouth's stock `bgrt` theme with `quiet splash`: the disk
+passphrase appears in a graphical box instead of inline boot logs, with an
+automatic text fallback when KMS is unavailable. `sd-encrypt` retries a
+mistyped passphrase. Press Esc during boot to show messages; boot failures
+stay visible because only `quiet splash` quiets the console. To force the
+plain console prompt, append `plymouth.enable=0` to the kernel cmdline.
+`disablehooks=plymouth` optionally bypasses the initramfs hook as well.
+
+Acceptance after rebuilding with `make iso`:
+
+- `make test` — source and build tests, including fallback-setting preservation.
+- `make verify ARGS='--directory out/verify-plymouth'` — full VM run:
+  keyboard unlock and wrong-passphrase retry with `02-graphical-unlock-*` screenshots,
+  `plymouth-config`/`plymouth-status` probes, snapshot recovery, and a
+  a serial-free, screenshot-qualified `plymouth.enable=0` text-fallback roundtrip
+  that restores the graphical password screen afterward.
+- `make verify-hibernate ARGS='--directory out/verify-plymouth'` — encrypted
+  swap resume still works through the splash.
+
+Laptop backlight/BGRT logo behavior is hardware-specific. The graphical unlock
+check requires screenshots and keyboard input; serial unlock alone does not
+qualify its appearance. Secure Boot remains deferred.
+
 Automation uses a private mode-0600 JSON file containing Settings fields and
 `--confirm-disk /dev/vda`. It exercises the same validation and installation
 engine as the wizard. Never include real personal passwords in fixtures or logs.

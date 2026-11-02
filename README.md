@@ -27,7 +27,9 @@ Dux. Rebuilds use the same inputs, but are not byte-identical.
 
 1. Write the ISO to a USB drive and boot it in UEFI mode with Secure Boot off.
 2. Follow the terminal wizard. **It erases the selected disk.**
-3. Remove the USB and reboot. Unlock the disk, then log in.
+3. Remove the USB and reboot. Unlock the disk in the graphical prompt
+   (Esc shows boot messages; a text prompt appears automatically without
+   graphics), then log in.
 
 Super+Return opens a terminal, Super+Space opens the launcher, and Super+Alt+L
 locks the screen.
