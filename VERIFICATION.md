@@ -1,5 +1,43 @@
 # Verification
 
+## Bloom, PDF and camera defaults (2026-11-02)
+
+Image: `arch-niri-dux-2026.11.02-x86_64.iso`
+
+```
+SHA-256 72c08107c4e45fc02238487c5053b24c3b0e6714aa9686f8ba8cfe8456b1eb57
+```
+
+The image contains 626 signature-checked distribution packages and the same
+four reviewed Dux builds. Papers and Snapshot add 21 packages to the verified
+Plymouth image without changing its pins or signing keys.
+
+`make test` passed 41 source tests and nine build tests. `make iso` and
+`make verify ARGS='--directory out/verify-desktop-qualified'` passed all 20
+acceptance stages on a fresh offline installation. Independent Muse review
+approved the code with real VM qualification required before merging.
+
+The real first-session state selects bloom; screenshot review confirms its
+render. Running the real desktop configuration for a disposable user with an
+existing orbit choice preserved the state byte for byte. `xdg-open` routed the
+sample PDF to Papers, whose screenshot shows the expected document text.
+
+Snapshot received a synthetic PipeWire video source, requested camera permission,
+and captured a photo and a three-second video through its own shutter shortcut.
+The screenshot shows the live moving-ball preview; the JPEG contains the ball.
+The WebM decoded successfully with FFmpeg as VP8, 640x480, three seconds. No
+physical camera or microphone was accessed. Physical camera compatibility remains
+unqualified. The full run also passed Dux integration, themes, file dialogs,
+screen sharing, lock, package snapshots, recovery, normal reboot, text unlock
+fallback and restored graphical unlock.
+
+Local evidence: `out/verify-desktop-qualified/ACCEPTANCE-PASSED`, `inputs.json`,
+`milestones.json`, `wallpaper.json`, `wallpaper-preserved.json`, `pdf.json`,
+`camera.json`, `camera-photo.jpeg`, `camera-video.webm`, `02-wallpaper-bloom.png`,
+`02-papers.png`, `02-snapshot-captured.png` and serial logs. The earlier failed
+camera run exposed a missing permission-dialog interaction; the fresh run
+includes the visible Grant Access step and all capture checks.
+
 ## Graphical disk unlock (2026-11-02)
 
 Image: `arch-niri-dux-2026.11.02-x86_64.iso`

@@ -882,6 +882,8 @@ if __name__ == '__main__':
         camera()
     elif action == 'camera-photo':
         camera_media()
+    elif action == 'camera-screen':
+        screenshot('02-snapshot.png')
     elif action == 'camera-video':
         camera_media(video=True)
     elif action == 'camera-cleanup':

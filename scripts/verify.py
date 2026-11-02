@@ -409,6 +409,17 @@ def main():
         vm.command('python /run/verify/verify-guest.py pdf', timeout=180)
         passed('Papers is the default PDF viewer and rendered a sample document')
         vm.command('python /run/verify/verify-guest.py camera', timeout=300)
+        permission_deadline = time.monotonic() + 60
+        while time.monotonic() < permission_deadline:
+            vm.command('python /run/verify/verify-guest.py camera-screen')
+            if (click_screen_text(vm, directory / '02-snapshot.png', 'Grant Access')
+                    or click_screen_text(vm, directory / '02-snapshot.png', 'GrantAccess')):
+                break
+            time.sleep(1)
+        else:
+            raise TimeoutError('Snapshot did not request camera permission on the fresh installation.')
+        time.sleep(3)
+        vm.command('python /run/verify/verify-guest.py camera-screen')
         # Use Snapshot 51's upstream shutter shortcut to exercise its own
         # capture path in both modes, rather than generating files separately.
         # https://github.com/GNOME/snapshot/blob/51.0/src/application.rs
