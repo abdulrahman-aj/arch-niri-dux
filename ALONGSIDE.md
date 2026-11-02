@@ -10,8 +10,12 @@ and `existing_boot: "0001"` in addition to the normal private JSON settings;
 `--confirm-disk` must still match exactly. Sector numbers use the disk's logical
 sector size. Never use these examples on a physical disk for verification.
 
-The installer creates a dedicated 4 GiB ESP and encrypted Btrfs partition using
-unused GPT slots. Existing partitions are never shrunk, moved or formatted.
+The installer appends a dedicated 4 GiB ESP and encrypted Btrfs partition using
+unused GPT slots with `sfdisk --append --wipe never --wipe-partitions never`
+and a nonblocking device lock. `sgdisk --verify` remains a read-only check.
+On a real virtual SATA block device, the previous sgdisk writer zeroed Windows
+disk-ID bytes 440–443; sfdisk preserved them. No write-after-the-fact restoration
+is used. Existing partitions are never shrunk, moved or formatted.
 Existing ESPs are mounted read-only only to validate the selected x86-64 PE EFI
 application. Their size does not matter and their fallback files stay intact.
 The old OS entry chainloads the original EFI path by its original GPT partition

@@ -42,7 +42,8 @@ class AlongsideDiskTests(unittest.TestCase):
         with self.disk.open('wb') as stream:
             stream.truncate(48 * installer.GIB)
         subprocess.run(['sgdisk', '--clear', '--new=1:2048:+64M', '--typecode=1:ef00',
-                        '--new=4:0:+8M', '--typecode=4:0700', str(self.disk)],
+                        '--new=4:0:+8M', '--typecode=4:0700', '--attributes=1:set:63',
+                        '--attributes=4:set:60', str(self.disk)],
                        check=True, stdout=subprocess.DEVNULL)
         with self.disk.open('r+b') as stream:
             stream.write(b'preserve-protective-MBR-bootstrap-and-disk-signature'.ljust(446, b'!'))
@@ -104,6 +105,18 @@ class AlongsideDiskTests(unittest.TestCase):
         self.assert_old_data()
         self.assertFalse(any('--zap-all' in c or c[0] == 'wipefs' for c in self.commands))
 
+    def test_windows_disk_signature_with_zero_bootstrap_is_preserved(self):
+        with self.disk.open('r+b') as stream:
+            stream.write(bytes(440) + struct.pack('<I', 0x6086b967) + bytes(2))
+        self.mbr_hash = digest_range(self.disk, 0, 446)
+        snapshot = installer.alongside_snapshot(self.value)
+        installer.create_alongside_partitions(self.value, snapshot, self.identity)
+        with self.disk.open('rb') as stream:
+            stream.seek(440)
+            self.assertEqual(stream.read(4), struct.pack('<I', 0x6086b967))
+        self.assertTrue(all(part.get('attrs') for part in self.original))
+        self.assert_old_data()
+
     def test_table_or_free_extent_change_aborts_without_any_further_disk_writes(self):
         for change in ('--change-name=4:changed', '--new=7:0:+1M'):
             with self.subTest(change=change):
@@ -158,7 +171,7 @@ class AlongsideDiskTests(unittest.TestCase):
             if args[0] == 'efibootmgr':
                 return self.firmware
             result = self.real_run(*args, **kwargs)
-            if args[0] == 'sgdisk' and any(arg.startswith('--new=') for arg in args):
+            if args[:2] == ('sfdisk', '--append'):
                 with self.disk.open('r+b') as stream:
                     stream.seek(-512 + 16, 2)
                     value = stream.read(1)
@@ -175,7 +188,7 @@ class AlongsideDiskTests(unittest.TestCase):
             if args[0] == 'efibootmgr':
                 return self.firmware
             result = self.real_run(*args, **kwargs)
-            if args[0] == 'sgdisk' and any(arg.startswith('--new=') for arg in args):
+            if args[:2] == ('sfdisk', '--append'):
                 with self.disk.open('r+b') as stream:
                     stream.write(b'X')
             return result
@@ -189,7 +202,7 @@ class AlongsideDiskTests(unittest.TestCase):
             if args[0] == 'efibootmgr':
                 return self.firmware
             result = self.real_run(*args, **kwargs)
-            if args[0] == 'sgdisk' and any(arg.startswith('--new=') for arg in args):
+            if args[:2] == ('sfdisk', '--append'):
                 with self.disk.open('r+b') as stream:
                     stream.seek(512)
                     primary_header = stream.read(512)

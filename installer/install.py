@@ -161,6 +161,7 @@ def require_disk(settings):
 
 
 ESP_TYPE = 'c12a7328-f81f-11d2-ba4b-00a0c93ec93b'
+LUKS_TYPE = 'ca7d7ccb-63ed-4c53-861c-1742536059cc'
 
 
 def free_regions(table):
@@ -363,12 +364,16 @@ def create_alongside_partitions(settings, snapshot, identity):
     # Last read before mutation, after payload and dependency preflight.
     if require_disk(settings) != identity or alongside_snapshot(settings) != snapshot:
         raise ValueError('Disk identity, GPT, free extents or firmware entries changed; no partitions created.')
-    arguments = []
+    lines = []
     for number, first, last, kind, label in plan:
-        arguments.extend([f'--new={number}:{first}:{last}', f'--typecode={number}:{kind}',
-                          f'--change-name={number}:{label}'])
+        partition_type = ESP_TYPE if kind == 'ef00' else LUKS_TYPE
+        lines.append(f'{partition_name(settings.disk, number)} : start={first}, size={last-first+1}, '
+                     f'type={partition_type}, name="{label}"')
     settings.installation_started = True
-    run('sgdisk', *arguments, settings.disk)
+    # Appending with wiping disabled preserves Windows' protective-MBR disk
+    # signature. sgdisk clears that field on block devices when adding entries.
+    run('sfdisk', '--append', '--quiet', '--lock=nonblock', '--wipe', 'never',
+        '--wipe-partitions', 'never', settings.disk, data='\n'.join(lines) + '\n')
     verify_gpt(settings.disk)
     mbr, _, primary, _, secondary = read_gpt_metadata(settings.disk, snapshot['table']['sectorsize'])
     if (hashlib.sha256(mbr[:446]).hexdigest() != snapshot['bootstrap']
@@ -383,7 +388,7 @@ def create_alongside_partitions(settings, snapshot, identity):
         raise ValueError('Partition creation did not preserve the original GPT entries; refusing to format.')
     for number, first, last, kind, label in plan:
         part = next((p for p in current['partitions'] if p['node'] == partition_name(settings.disk, number)), None)
-        expected_type = ESP_TYPE if kind == 'ef00' else 'ca7d7ccb-63ed-4c53-861c-1742536059cc'
+        expected_type = ESP_TYPE if kind == 'ef00' else LUKS_TYPE
         if (part is None or part['start'] != first or part['size'] != last-first+1
                 or part['type'].lower() != expected_type):
             raise ValueError('Created partition geometry/type differs from the plan; refusing to format.')
@@ -696,7 +701,7 @@ def install(settings):
                 run('sgdisk', '--zap-all', '--new=1:0:+4G', '--typecode=1:ef00',
                     '--change-name=1:EFI', '--new=2:0:0', '--typecode=2:8309',
                     '--change-name=2:Linux encrypted', settings.disk)
-            # sgdisk updates kernel partition nodes. Let filesystem probes finish
+            # The table writer updates kernel partition nodes. Let filesystem probes finish
             # before inspecting them: forcing another full reread races those
             # probes and can fail EBUSY even though the new nodes are correct.
             run('udevadm', 'settle')
