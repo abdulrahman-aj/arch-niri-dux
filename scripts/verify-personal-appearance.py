@@ -5,6 +5,7 @@ import importlib.util
 import json
 from pathlib import Path
 import subprocess
+import sys
 
 
 DIRECTORY = Path(__file__).resolve().parent
@@ -50,17 +51,28 @@ def start(unit, *command):
                        '--unit=' + unit, '--property=TimeoutStopSec=10', *command)
 
 
-def main():
+def prepare():
     page = Path('/tmp/zen-appearance.html')
     page.write_text(ZEN_PAGE)
-    guest.user_command('mkdir', '-p', '/tmp/zen-appearance-profile', '/tmp/t3-appearance-profile')
+    guest.user_command('mkdir', '-p', '/tmp/zen-appearance-profile')
+    # Isolate the browser profile; debugging exposes inspection, not appearance.
+    start('verify-zen-appearance', 'zen-browser', '--no-remote', '--profile',
+          '/tmp/zen-appearance-profile', '--no-default-browser-check', page.as_uri())
+    start('verify-t3-appearance', 't3code', '--remote-debugging-address=127.0.0.1',
+          '--remote-debugging-port=9223')
+    guest.wait_until('T3 renderer', t3_state, timeout=90)
+    window = guest.wait_until('Zen welcome', lambda: next(
+        (window for window in guest.windows() if window.get('app_id') == 'zen'
+         and (window.get('title') or '').startswith('Welcome!')), None), timeout=90)
+    guest.user_command('niri', 'msg', 'action', 'focus-window', '--id', str(window['id']))
+    # The host completes Zen's normal welcome flow with its defaults, then uses
+    # ordinary Ctrl+L / paste / Enter to select the test page.
+    guest.user_command('bash', '-c', "printf '%s' 'file:///tmp/zen-appearance.html' | wl-copy")
+
+
+def main():
     evidence = []
     try:
-        # These flags isolate test profiles and expose inspection, not appearance.
-        start('verify-zen-appearance', 'zen-browser', '--no-remote', '--profile',
-              '/tmp/zen-appearance-profile', '--no-default-browser-check', page.as_uri())
-        start('verify-t3-appearance', 't3code', '--user-data-dir=/tmp/t3-appearance-profile',
-              '--remote-debugging-address=127.0.0.1', '--remote-debugging-port=9223')
         guest.wait_until('Zen page', zen_state, timeout=90)
         guest.wait_until('T3 renderer', t3_state, timeout=90)
         for mode in ('dark', 'light', 'dark'):
@@ -83,6 +95,11 @@ def main():
         guest.screenshot('personal-appearance.png')
         Path('/run/verify/personal-appearance.json').write_text(json.dumps(evidence, indent=2) + '\n')
         print('Zen and T3 followed live Dux dark/light/dark transitions.')
+    except Exception:
+        guest.screenshot('personal-appearance-failure.png')
+        Path('/run/verify/personal-appearance-windows.json').write_text(
+            json.dumps(guest.windows(), indent=2) + '\n')
+        raise
     finally:
         for unit in ('verify-zen-appearance', 'verify-t3-appearance'):
             try:
@@ -92,4 +109,9 @@ def main():
 
 
 if __name__ == '__main__':
-    main()
+    if sys.argv[1:] == ['start']:
+        prepare()
+    elif sys.argv[1:] == ['check']:
+        main()
+    else:
+        raise SystemExit('Usage: verify-personal-appearance.py start|check')

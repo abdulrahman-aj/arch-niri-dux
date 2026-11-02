@@ -2,6 +2,7 @@
 """Guest-only acceptance probes, executed exclusively on the disposable VM disk."""
 
 import json
+import html
 import os
 from pathlib import Path
 import pwd
@@ -22,10 +23,11 @@ BROWSER_PAGE = '''<!doctype html>
 <meta charset="utf-8"><meta name="color-scheme" content="light dark">
 <title>Dux verification loading</title>
 <style>body { font: 24px sans-serif; color-scheme: light dark; padding: 40px; }
-button { font: inherit; padding: 16px; } video { width: 500px; display: block; }</style>
+button { font: inherit; padding: 16px; } video, canvas { width: 500px; display: block; }
+[hidden] { display: none !important; }</style>
 <h1>Offline Dux verification</h1><p id="status"></p>
 <button id="share" autofocus>Share a screen or window (C)</button>
-<input id="picker" type="file" hidden><video muted autoplay></video>
+<input id="picker" type="file" hidden><video muted autoplay></video><canvas hidden></canvas>
 <script>
 const media = matchMedia('(prefers-color-scheme: dark)');
 const state = {scheme: '', changes: 0, capture: 'idle', frames: 0, width: 0, height: 0, file: 'idle'};
@@ -48,12 +50,40 @@ document.getElementById('share').onclick = async () => {
     const stream = await navigator.mediaDevices.getDisplayMedia({video: true, audio: false});
     const video = document.querySelector('video');
     video.srcObject = stream;
-    video.requestVideoFrameCallback(() => {
-      state.frames++;
-      state.width = video.videoWidth; state.height = video.videoHeight;
-      state.capture = 'passed'; publish();
-      stream.getTracks().forEach(track => track.stop());
-    });
+    const canvas = document.querySelector('canvas');
+    canvas.width = 320; canvas.height = 200;
+    const context = canvas.getContext('2d', {willReadFrequently: true});
+    function sampleFrame() {
+      try {
+        state.frames++;
+        state.width = video.videoWidth; state.height = video.videoHeight;
+        context.drawImage(video, 0, 0, canvas.width, canvas.height);
+        const pixels = context.getImageData(0, 0, canvas.width, canvas.height).data;
+        let nonBlack = 0, minimum = 765, maximum = 0;
+        const colors = new Set();
+        for (let y = 8; y < canvas.height; y += 16) {
+          for (let x = 8; x < canvas.width; x += 16) {
+            const i = (y * canvas.width + x) * 4;
+            const sum = pixels[i] + pixels[i+1] + pixels[i+2];
+            if (sum > 60) nonBlack++;
+            minimum = Math.min(minimum, sum); maximum = Math.max(maximum, sum);
+            colors.add([pixels[i] >> 3, pixels[i+1] >> 3, pixels[i+2] >> 3].join(','));
+          }
+        }
+        state.pixels = {nonBlack, minimum, maximum, colors: colors.size};
+        if (state.frames >= 3 && nonBlack >= 10 && maximum - minimum > 60 && colors.size >= 8) {
+          state.capture = 'passed'; canvas.hidden = false; video.hidden = true;
+          stream.getTracks().forEach(track => track.stop());
+        } else {
+          video.requestVideoFrameCallback(sampleFrame);
+        }
+        publish();
+      } catch (error) {
+        state.capture = 'error: ' + error.name + ': ' + error.message; publish();
+        stream.getTracks().forEach(track => track.stop());
+      }
+    }
+    video.requestVideoFrameCallback(sampleFrame);
     await video.play();
   } catch (error) { state.capture = 'error: ' + error.name + ': ' + error.message; publish(); }
 };
@@ -184,7 +214,8 @@ def browser_state():
         pages = json.load(response)
     for page in pages:
         if page.get('url') == 'file:///tmp/chromium-smoke.html' and page.get('title', '').startswith('DUX-VERIFY '):
-            return json.loads(page['title'].removeprefix('DUX-VERIFY '))
+            # Chromium's HTTP discovery endpoint HTML-escapes target titles.
+            return json.loads(html.unescape(page['title'].removeprefix('DUX-VERIFY ')))
     return None
 
 
@@ -291,7 +322,7 @@ def dux_components():
                 'start=2030-01-01T10:00:00Z', 'end=2030-01-01T11:00:00Z')
     listed = ipc('dcal', 'events.list', 'query=VM offline event', 'from=2030-01-01T00:00:00Z',
                  'to=2030-01-02T00:00:00Z')
-    assert any(item['id'] == event['id'] for item in listed), listed
+    assert any(item['id'] == event['id'] for item in listed['events']), listed
     for application, app_id in (('dcal', 'dev.duxlabs.calendar'), ('dfiles', 'dev.duxlabs.files')):
         ipc(application, 'ui.show')
         wait_until(f'{application} graphical window', lambda: any(window.get('app_id') == app_id for window in windows()))
@@ -345,22 +376,27 @@ def focus_browser():
 
 
 def file_chooser():
-    assert browser_state()['file'] == 'pending'
+    wait_until('Chromium file-picker request', lambda:
+               (state := browser_state()) is not None and state['file'] == 'pending')
     wait_until('Dux Files handling Chromium open-file dialog', lambda: any(
         window.get('app_id') == 'dev.duxlabs.files' and re.match(r'(?i)(open|select)', window.get('title', ''))
         for window in windows()))
     screenshot('02-file-chooser.png')
 
 
-def capture():
-    def captured_frame():
-        state = browser_state()
-        if state and state['capture'].startswith('error:'):
-            raise RuntimeError(state['capture'])
-        if state and state['capture'] == 'passed' and state['frames'] > 0 and state['width'] > 0 and state['height'] > 0:
+def captured_frame():
+    state = browser_state()
+    if state and state['capture'].startswith('error:'):
+        raise RuntimeError(state['capture'])
+    if state and state['capture'] == 'passed' and state['frames'] >= 3 and state['width'] > 0 and state['height'] > 0:
+        pixels = state.get('pixels', {})
+        if pixels.get('nonBlack', 0) >= 10 and pixels.get('maximum', 0) - pixels.get('minimum', 0) > 60 and pixels.get('colors', 0) >= 8:
             return state
-        return False
-    state = wait_until('Chromium screen sharing producing a video frame', captured_frame)
+    return False
+
+
+def capture():
+    state = wait_until('Chromium screen sharing producing nonblank video content', captured_frame)
     Path('/run/verify/screen-sharing.json').write_text(json.dumps(state, indent=2) + '\n')
     screenshot('02-screen-sharing.png')
 
@@ -381,17 +417,10 @@ def prepare_hibernate():
     dropin.parent.mkdir(parents=True, exist_ok=True)
     # ExecStartPost runs only after systemd-sleep's hibernation call returns.
     # /run is intentionally RAM-backed: a cold boot cannot satisfy this proof.
-    dropin.write_text('[Service]\nExecStartPost=/usr/bin/touch /run/dux-hibernate-resumed\n')
+    dropin.write_text('[Service]\nExecStartPost=/usr/bin/touch /run/dux-hibernate-resumed\n'
+                      "ExecStartPost=/usr/bin/sh -c 'echo DUX_HIBERNATION_RESUMED >/dev/ttyS0'\n")
     run('systemctl', 'daemon-reload')
     run('sync')
-
-
-def verify_resume():
-    expected = json.loads(Path('/run/verify/hibernate-expected.json').read_text())
-    assert Path('/proc/sys/kernel/random/boot_id').read_text().strip() == expected['boot_id'], 'Cold boot instead of hibernation resume.'
-    assert Path('/run/dux-hibernate-memory-marker').read_text() == expected['memory_token']
-    assert Path('/run/dux-hibernate-resumed').exists(), 'The hibernation service did not return from sleep.'
-    Path('/run/verify/HIBERNATE-RESUME-PASSED').write_text('Same kernel boot ID and RAM-backed state survived hibernation.\n')
 
 
 def boot_entry_path(text, snapshot=None):
@@ -499,13 +528,17 @@ if __name__ == '__main__':
     elif action == 'file-chooser':
         file_chooser()
     elif action == 'file-chooser-cancelled':
-        wait_until('Chromium file chooser cancellation', lambda: browser_state()['file'] == 'cancelled')
+        wait_until('Chromium file chooser cancellation', lambda:
+                   (state := browser_state()) is not None and state['file'] == 'cancelled')
     elif action == 'capture':
         capture()
+    elif action == 'capture-picker':
+        wait_until('GNOME screen-sharing source chooser', lambda: any(
+            'portal' in window.get('app_id', '').lower() and window.get('title') == 'Share Screen'
+            for window in windows()))
+        screenshot('02-screen-share-picker.png')
     elif action == 'prepare-hibernate':
         prepare_hibernate()
-    elif action == 'verify-resume':
-        verify_resume()
     elif action == 'fonts':
         fonts()
     elif action == 'greeter':

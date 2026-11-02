@@ -7,6 +7,7 @@ from pathlib import Path
 import subprocess
 import sys
 import tempfile
+import time
 
 from verify import VM, PASSWORD, installed_login, graphical_login
 
@@ -94,44 +95,83 @@ def archive(repo, destination):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--disk', type=Path, required=True, help='Disposable qcow2 with pristine snapshot')
-    parser.add_argument('--dotfiles', type=Path, required=True, help='Dotfiles Git repository')
-    parser.add_argument('--agent-config', type=Path, required=True, help='Agent config Git repository')
+    parser.add_argument('--dotfiles', type=Path, help='Dotfiles Git repository')
+    parser.add_argument('--agent-config', type=Path, help='Agent config Git repository')
     parser.add_argument('--directory', type=Path, help='Fresh evidence directory; default under /tmp')
+    parser.add_argument('--resume-desktop', action='store_true',
+                        help='Retry desktop checks after a recorded successful bootstrap; preserve the disk and original sources')
     args = parser.parse_args()
     disk = args.disk.resolve(strict=True)
     if not disk.is_file():
         parser.error('--disk must be an existing qcow2 file')
-    if args.directory:
-        directory = args.directory
-        directory.mkdir(mode=0o700, parents=True, exist_ok=False)
+    if args.resume_desktop:
+        if args.directory is None:
+            parser.error('--resume-desktop requires the original --directory')
+        directory = args.directory.resolve(strict=True)
+        marker = directory / 'BOOTSTRAP-PASSED'
+        if not marker.is_file() or marker.read_text().strip() != str(disk):
+            parser.error('No successful bootstrap was recorded for this disk in --directory')
+        shas = json.loads((directory / 'sources.json').read_text())
     else:
-        directory = Path(tempfile.mkdtemp(prefix='dux-personal-', dir='/tmp'))
-    # qemu-img acquires the image lock; never bypass a running QA VM's lock.
-    subprocess.run(['qemu-img', 'snapshot', '-a', 'pristine', str(disk)], check=True)
+        if args.dotfiles is None or args.agent_config is None:
+            parser.error('--dotfiles and --agent-config are required for a new bootstrap')
+        if args.directory:
+            directory = args.directory
+            directory.mkdir(mode=0o700, parents=True, exist_ok=False)
+        else:
+            directory = Path(tempfile.mkdtemp(prefix='dux-personal-', dir='/tmp'))
+        # qemu-img acquires the image lock; never bypass a running QA VM's lock.
+        subprocess.run(['qemu-img', 'snapshot', '-a', 'pristine', str(disk)], check=True)
     print(f'VM evidence: {directory}', flush=True)
+    (directory / 'PERSONAL-PASSED').unlink(missing_ok=True)
     vm = None
     try:
-        shas = {'dotfiles': archive(args.dotfiles, directory / 'dotfiles.tar'),
-                'agent-config': archive(args.agent_config, directory / 'agent-config.tar')}
-        (directory / 'sources.json').write_text(json.dumps(shas, indent=2) + '\n')
-        (directory / 'personal-setup.sh').write_text(GUEST_SETUP)
-        (directory / 'personal-user.sh').write_text(GUEST_USER)
+        if not args.resume_desktop:
+            shas = {'dotfiles': archive(args.dotfiles, directory / 'dotfiles.tar'),
+                    'agent-config': archive(args.agent_config, directory / 'agent-config.tar')}
+            (directory / 'sources.json').write_text(json.dumps(shas, indent=2) + '\n')
+            (directory / 'personal-setup.sh').write_text(GUEST_SETUP)
+            (directory / 'personal-user.sh').write_text(GUEST_USER)
         for name in ('verify-guest.py', 'verify-personal-appearance.py', 'verify-personal-cdp.mjs'):
             (directory / name).write_bytes(Path(__file__).with_name(name).read_bytes())
         vm = VM(directory, None, disk)
         vm.start(cdrom=False, network=True)
         installed_login(vm)
         vm.command('mkdir -p /run/verify; mount -t 9p -o trans=virtio,version=9p2000.L verify /run/verify')
-        vm.command('bash /run/verify/personal-setup.sh', timeout=7200)
+        if not args.resume_desktop:
+            vm.command('bash /run/verify/personal-setup.sh', timeout=7200)
+            (directory / 'BOOTSTRAP-PASSED').write_text(str(disk) + '\n')
         graphical_login(vm)
-        vm.command('python /run/verify/verify-personal-appearance.py', timeout=300)
+        vm.command('python /run/verify/verify-personal-appearance.py start', timeout=180)
+        # Pinned Zen first-run flow, keeping its choices (including Auto colors).
+        # Its window title appears before the intro animation enables Start.
+        time.sleep(3)
+        vm.click(0.475, 0.675)
+        time.sleep(1.5)
+        for _ in range(7):
+            vm.click(0.222, 0.778)
+            time.sleep(1.5)
+        for key in ('l', 'v'):
+            vm.qmp_command('send-key', {'keys': [
+                {'type': 'qcode', 'data': 'ctrl'}, {'type': 'qcode', 'data': key}],
+                'hold-time': 50})
+            time.sleep(0.3)
+        vm.key('ret')
+        time.sleep(0.3)
+        vm.command('python /run/verify/verify-personal-appearance.py check', timeout=300)
         vm.command('sync')
         vm.poweroff()
         vm.stop()
         vm.start(cdrom=False, network=True)
         installed_login(vm)
         vm.command('systemctl is-active greetd; command -v dms-greeter yay google-chrome-stable zen-browser t3code; pacman -Q dux-greeter-bin yay limine-mkinitcpio-hook limine-snapper-sync')
+        vm.command('mkdir -p /run/verify; mount -t 9p -o trans=virtio,version=9p2000.L verify /run/verify')
+        graphical_login(vm)
+        vm.command('runuser -u tester -- env XDG_RUNTIME_DIR=/run/user/1000 DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/1000/bus systemctl --user is-active dms.service dsearch.service dcal.service dfiles.service')
+        vm.command('sync')
+        vm.poweroff()
         vm.stop()
+        (directory / 'FAILURE.txt').unlink(missing_ok=True)
         (directory / 'PERSONAL-PASSED').write_text('Personal bootstrap and assertions passed.\n')
         print(f'Personal bootstrap passed. Evidence: {directory}', flush=True)
         return 0

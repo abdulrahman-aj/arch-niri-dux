@@ -6,8 +6,9 @@ Btrfs and snapshot recovery.
 
 ## Build and test
 
-Requires Linux, Nix, Make and KVM access. Allow 16 GiB of build space, 8 GiB of
-RAM and 2.2 GiB for the ISO.
+Requires Linux, Nix, Make and KVM access. Allow 24 GiB of build space, 8 GiB of
+RAM and about 2.5 GiB for the ISO. Build cache goes in
+`~/.cache/arch-niri-dux-build`; `BUILD_STATE=/path/with/space make iso` overrides it.
 
 ```sh
 make iso
@@ -49,6 +50,7 @@ stays untouched.
 
 ## Status
 
-[VM verification](VERIFICATION.md) covers installation, desktop, locking and
-recovery. Laptop Wi-Fi, audio and suspend still need physical testing.
+[VM verification](VERIFICATION.md) covers installation, desktop, updates, recovery
+and hibernation. Laptop resume and the intermittent lid symptom remain hardware
+checks.
 Secure Boot is outside v1; planned features are in [TODO.md](TODO.md).

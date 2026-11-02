@@ -7,7 +7,7 @@ const response = await fetch(`http://127.0.0.1:${port}/json/list`, {
 if (!response.ok) throw new Error(`Debugging endpoint returned ${response.status}`);
 const pages = await response.json();
 const page = pages.find((entry) => entry.type === "page" &&
-  /^(https?:|file:)/.test(entry.url) && entry.webSocketDebuggerUrl);
+  /^(t3code:|https?:|file:)/.test(entry.url) && entry.webSocketDebuggerUrl);
 if (!page) throw new Error("No T3 application renderer found");
 
 const socket = new WebSocket(page.webSocketDebuggerUrl);

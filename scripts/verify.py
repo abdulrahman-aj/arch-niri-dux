@@ -169,12 +169,15 @@ class VM:
 
     def poweroff(self, timeout=180):
         self.send('systemctl poweroff\n')
+        self.wait_exit(timeout)
+
+    def wait_exit(self, timeout=180):
         deadline = time.monotonic() + timeout
         # Drain the console while waiting: shutdown can otherwise block when
         # the Unix socket's receive buffer fills with service/terminal output.
         while self.process.poll() is None:
             if time.monotonic() >= deadline:
-                raise TimeoutError('VM did not shut down; inspect serial.log.')
+                raise TimeoutError('VM did not exit; inspect serial.log.')
             try:
                 data = self.serial.recv(65536)
                 if data:
@@ -210,12 +213,18 @@ def installed_login(vm):
     vm.send('tester\n')
     vm.expect(r'Password:')
     vm.send(PASSWORD + '\n')
-    vm.expect(r'\[tester@dux-verify[^\n]*\]\$', timeout=60)
+    # Login/PAM can flush queued input while restoring the terminal. Both
+    # Bash and Fish enable bracketed paste when their interactive reader starts.
+    input_ready = r'\x1b\[\?2004h'
+    vm.expect(input_ready, timeout=60)
     vm.command('test "$(id -u)" = 1000')
-    vm.send('sudo -s\n')
-    vm.expect(r'(?i)password.*:')
-    vm.send(PASSWORD + '\n')
-    vm.expect(r'\[root@dux-verify[^\n]*\]#', timeout=60)
+    vm.expect(input_ready, timeout=60)
+    # Personal setup may change the login shell or grant passwordless sudo.
+    # Completion markers establish readiness without depending on either prompt.
+    vm.command('printf "%s\\n" ' + shlex.quote(PASSWORD) + ' | sudo -S -p "" -v')
+    vm.expect(input_ready, timeout=60)
+    vm.send('sudo -n bash --noprofile --norc\n')
+    vm.expect(input_ready, timeout=60)
     vm.command('test "$(id -u)" = 0')
 
 
@@ -265,7 +274,7 @@ def main():
     package_digest = hashlib.sha256((ROOT / 'out/packages.manifest.json').read_bytes()).hexdigest()
     (directory / 'inputs.json').write_text(json.dumps({
         'iso': str(iso.resolve()), 'iso_sha256': iso_digest,
-        'package_lock_sha256': package_digest,
+        'package_manifest_sha256': package_digest,
     }, indent=2) + '\n')
     (directory / 'key').write_text(PASSWORD)
     (directory / 'key').chmod(0o600)
@@ -320,6 +329,9 @@ def main():
         passed('GOP metrics, live file indexing, Calendar event create/read and Dux Files integration')
         vm.command('python /run/verify/verify-guest.py themes', timeout=300)
         passed('Live Dux light/dark changes reach Chromium, GTK settings, portals and Dux apps')
+        # Dismiss upstream's first-login What's New through its normal button.
+        vm.click(0.57, 0.92)
+        time.sleep(0.5)
         vm.command('python /run/verify/verify-guest.py focus-browser')
         vm.key('o')
         vm.command('python /run/verify/verify-guest.py file-chooser', timeout=90)
@@ -329,10 +341,15 @@ def main():
         vm.command('python /run/verify/verify-guest.py focus-browser')
         vm.key('c')
         time.sleep(1)
-        vm.screenshot('02-screen-share-picker')
-        vm.key('ret')
+        # Chromium first asks for the source type, then GNOME selects the
+        # actual screen; Chromium finally confirms that selected source.
+        vm.click(0.89, 0.284)
+        vm.command('python /run/verify/verify-guest.py capture-picker', timeout=90)
+        vm.click(0.725, 0.245)
+        time.sleep(1)
+        vm.click(0.935, 0.8)
         vm.command('python /run/verify/verify-guest.py capture', timeout=90)
-        passed('Chromium screen sharing produced a real video frame')
+        passed('Chromium screen sharing produced nonblank captured desktop content')
         vm.command('python /run/verify/verify-guest.py lock')
         vm.command('python /run/verify/verify-guest.py locked')
         vm.screenshot('03-locked')
