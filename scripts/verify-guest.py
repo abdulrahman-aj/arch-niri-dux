@@ -886,9 +886,9 @@ if __name__ == '__main__':
     elif action == 'restored':
         restored()
     elif action == 'serial-console-enable':
-        serial_console(True)
+        serial_console(True, sys.argv[2] if len(sys.argv) > 2 else '/')
     elif action == 'serial-console-disable':
-        serial_console(False)
+        serial_console(False, sys.argv[2] if len(sys.argv) > 2 else '/')
     elif action == 'plymouth-config':
         plymouth_config(sys.argv[2] if len(sys.argv) > 2 else '/')
     elif action == 'plymouth-status':

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Guided whole-disk installation. All package inputs come from the booted ISO."""
+"""Guided erase or existing-free-space installation. All package inputs come from the booted ISO."""
 
 import argparse
 from dataclasses import dataclass, field
@@ -10,6 +10,9 @@ import os
 from pathlib import Path
 import re
 import shutil
+import struct
+import uuid
+import zlib
 import subprocess
 import sys
 import tempfile
@@ -35,6 +38,10 @@ class Settings:
     passphrase: str
     password: str
     swap_gib: int | None = None
+    mode: str = 'erase'
+    free_region: list[int] | None = None
+    existing_boot: str | None = None
+    confirmed_layout: dict | None = field(default=None, init=False)
     confirmed_device: tuple | None = field(default=None, init=False)
     confirmed_at: float | None = field(default=None, init=False)
     installation_started: bool = field(default=False, init=False)
@@ -42,6 +49,16 @@ class Settings:
     def validate(self):
         if not re.fullmatch(r'/dev/(?:sd[a-z]+|vd[a-z]+|nvme[0-9]+n[0-9]+|mmcblk[0-9]+)', self.disk):
             raise ValueError('Select a whole physical disk, not a partition or loop device.')
+        if self.mode not in ('erase', 'alongside'):
+            raise ValueError('Unknown installation mode.')
+        if self.mode == 'alongside':
+            if (not isinstance(self.free_region, list) or len(self.free_region) != 2
+                    or any(type(value) is not int or value < 1 for value in self.free_region)):
+                raise ValueError('Select an exact free region [first sector, last sector].')
+            if not isinstance(self.existing_boot, str) or not re.fullmatch(r'[0-9A-Fa-f]{4}', self.existing_boot):
+                raise ValueError('Select an existing firmware boot entry.')
+        elif self.free_region is not None or self.existing_boot is not None:
+            raise ValueError('Alongside settings cannot be used for disk erasure.')
         validate_username(self.username)
         validate_hostname(self.hostname)
         zone = (Path('/usr/share/zoneinfo') / self.timezone).resolve()
@@ -100,7 +117,7 @@ def run(*args, data=None, capture=False):
 
 def disk_inventory():
     return json.loads(run('lsblk', '--json', '--bytes', '--paths', '--output',
-                          'NAME,TYPE,SIZE,MODEL,RO,MOUNTPOINTS', capture=True))['blockdevices']
+                          'NAME,TYPE,SIZE,MODEL,SERIAL,WWN,FSTYPE,RO,MOUNTPOINTS', capture=True))['blockdevices']
 
 
 def descendants(disk):
@@ -137,7 +154,299 @@ def require_disk(settings):
     if len(matches) != 1:
         raise ValueError('Target disk is unavailable, mounted, in use, read-only or too small.')
     device_stat = os.stat(settings.disk)
-    return device_stat.st_rdev, device_stat.st_ino, matches[0]['size']
+    return (device_stat.st_rdev, device_stat.st_ino, matches[0]['size'],
+            matches[0].get('serial'), matches[0].get('wwn'),
+            str(Path('/sys/class/block', Path(settings.disk).name).resolve()))
+
+
+
+ESP_TYPE = 'c12a7328-f81f-11d2-ba4b-00a0c93ec93b'
+LUKS_TYPE = 'ca7d7ccb-63ed-4c53-861c-1742536059cc'
+
+
+def free_regions(table):
+    """Only return complete aligned extents; never infer space inside a partition."""
+    if table.get('label') != 'gpt' or table.get('unit') != 'sectors':
+        raise ValueError('Alongside requires an existing GPT partition table.')
+    sector = table.get('sectorsize')
+    if sector not in (512, 4096):
+        raise ValueError('Unsupported logical sector size.')
+    first, last = table['firstlba'], table['lastlba']
+    alignment = 1024 * 1024 // sector
+    cursor = first
+    regions = []
+    for part in sorted(table['partitions'], key=lambda part: part['start']):
+        start, end = part['start'], part['start'] + part['size'] - 1
+        if start < cursor or end > last or part['size'] <= 0:
+            raise ValueError('Overlapping or invalid GPT partitions.')
+        aligned = (cursor + alignment - 1) // alignment * alignment
+        if (start - aligned) * sector >= MIN_DISK_BYTES:
+            regions.append([aligned, start - 1])
+        cursor = end + 1
+    aligned = (cursor + alignment - 1) // alignment * alignment
+    if (last - aligned + 1) * sector >= MIN_DISK_BYTES:
+        regions.append([aligned, last])
+    return regions
+
+
+def firmware_entries(text):
+    return {line[4:8].upper(): line for line in text.splitlines()
+            if re.match(r'^Boot[0-9A-Fa-f]{4}[* ]', line)}
+
+
+def decode_efi_boot_path(data):
+    """Read the EFI_LOAD_OPTION device path, independent of efibootmgr formatting."""
+    length = struct.unpack_from('<H', data, 4)[0]
+    cursor = 6
+    while data[cursor:cursor+2] != b'\0\0':
+        cursor += 2
+        if cursor + 2 > len(data):
+            raise ValueError('Invalid EFI boot description.')
+    cursor += 2
+    end = cursor + length
+    if end > len(data):
+        raise ValueError('Truncated EFI device path.')
+    partition = None
+    paths = []
+    while cursor < end:
+        kind, subtype, size = struct.unpack_from('<BBH', data, cursor)
+        if size < 4 or cursor + size > end:
+            raise ValueError('Invalid EFI device path node.')
+        node = data[cursor:cursor+size]
+        if (kind, subtype) == (4, 1):
+            if partition is not None or size != 42 or node[40:42] != b'\2\2':
+                raise ValueError('Unsupported EFI hard drive path.')
+            partition = (struct.unpack_from('<I', node, 4)[0], str(uuid.UUID(bytes_le=node[24:40])))
+        if (kind, subtype) == (4, 4):
+            paths.append(node[4:].decode('utf-16-le').rstrip('\0'))
+        cursor += size
+    if partition is None or not paths:
+        return None
+    return (*partition, ''.join(paths))
+
+
+def firmware_boot_path(number):
+    variable = Path('/sys/firmware/efi/efivars') / f'Boot{number}-8be4df61-93ca-11d2-aa0d-00e098032b8c'
+    try:
+        return decode_efi_boot_path(variable.read_bytes()[4:])
+    except (OSError, ValueError, struct.error, UnicodeError):
+        return None
+
+
+def verify_gpt(device):
+    verification = run('sgdisk', '--verify', device, capture=True)
+    if 'No problems found.' not in verification:
+        raise ValueError('GPT verification failed; repair the disk separately.')
+
+
+def read_gpt_metadata(device, sector):
+    with open(device, 'rb', buffering=0) as disk:
+        mbr = disk.read(512)
+        if mbr[510:512] != b'\x55\xaa' or [mbr[450 + n * 16] for n in range(4)] != [0xee, 0, 0, 0]:
+            raise ValueError('Hybrid or unsupported protective MBR.')
+        disk.seek(sector)
+        header = disk.read(sector)
+        # Restrict support to the standard GPT table size. Capture both copies,
+        # including unused slots, so a new partition cannot escape revalidation.
+        if header[:8] != b'EFI PART' or struct.unpack_from('<II', header, 80) != (128, 128):
+            raise ValueError('Unsupported GPT entry array.')
+        backup = struct.unpack_from('<Q', header, 32)[0]
+        array = struct.unpack_from('<Q', header, 72)[0]
+        disk.seek(array * sector)
+        primary = disk.read(128 * 128)
+        disk.seek(backup * sector)
+        backup_header = disk.read(sector)
+        backup_array = struct.unpack_from('<Q', backup_header, 72)[0]
+        disk.seek(backup_array * sector)
+        secondary = disk.read(128 * 128)
+    if len(primary) != 128 * 128 or len(secondary) != 128 * 128:
+        raise ValueError('Truncated GPT partition array.')
+    # sgdisk may recover a bad header in memory while printing its report.
+    # Verify the bytes on disk too, without accepting an implicit repair.
+    for copy, entries in ((header, primary), (backup_header, secondary)):
+        if copy[:8] != b'EFI PART' or struct.unpack_from('<II', copy, 80) != (128, 128):
+            raise ValueError('Unsupported GPT header.')
+        size = struct.unpack_from('<I', copy, 12)[0]
+        if not 92 <= size <= sector:
+            raise ValueError('Invalid GPT header size.')
+        checked = bytearray(copy[:size])
+        struct.pack_into('<I', checked, 16, 0)
+        if (zlib.crc32(checked) != struct.unpack_from('<I', copy, 16)[0]
+                or zlib.crc32(entries) != struct.unpack_from('<I', copy, 88)[0]):
+            raise ValueError('GPT checksum mismatch; refusing an implicit repair.')
+    if primary != secondary:
+        raise ValueError('GPT partition arrays disagree.')
+    return mbr, header, primary, backup_header, secondary
+
+
+def firmware_order(text):
+    order = re.search(r'^BootOrder: ([0-9A-Fa-f,]+)$', text, re.M)
+    if not order:
+        raise ValueError('Firmware BootOrder is unavailable.')
+    return order[1].upper()
+
+
+def alongside_snapshot(settings):
+    require_disk(settings)
+    table = json.loads(run('sfdisk', '--json', settings.disk, capture=True))['partitiontable']
+    regions = free_regions(table)
+    verify_gpt(settings.disk)
+    mbr, header, primary, backup_header, secondary = read_gpt_metadata(settings.disk, table['sectorsize'])
+    firmware = run('efibootmgr', '--verbose', capture=True)
+    entries = firmware_entries(firmware)
+    boots = {}
+    for number, entry in entries.items():
+        boot_path = firmware_boot_path(number)
+        if boot_path is None:
+            continue
+        part_number, guid, path = boot_path
+        part = next((part for part in table['partitions'] if part.get('uuid', '').lower() == guid.lower()
+                     and part.get('type', '').lower() == ESP_TYPE), None)
+        if part is None or partition_name(settings.disk, int(part_number)) != part['node']:
+            continue
+        path = path.replace('\\', '/')
+        if not re.fullmatch(r'/[A-Za-z0-9_./-]+\.efi', path, re.I) or '..' in path.split('/'):
+            continue
+        boots[number] = dict(partition=part['node'], guid=str(uuid.UUID(guid)), path=path)
+    if not regions or not boots or len(table['partitions']) > 126:
+        raise ValueError('Need a free region of at least 32 GiB, two GPT slots and an existing ESP firmware entry.')
+    occupied = {index: primary[index*128:(index+1)*128].hex() for index in range(128)
+                if primary[index*128:index*128+16] != bytes(16)}
+    return dict(table=table, regions=regions, boots=boots, entries=entries, order=firmware_order(firmware),
+                metadata=hashlib.sha256(mbr + header + primary + backup_header + secondary).hexdigest(),
+                bootstrap=hashlib.sha256(mbr[:446]).hexdigest(), occupied=occupied)
+
+
+def alongside_plan(settings, snapshot):
+    if settings.free_region not in snapshot['regions'] or settings.existing_boot.upper() not in snapshot['boots']:
+        raise ValueError('Selected free region or existing boot entry is no longer available.')
+    table = snapshot['table']
+    used = {int(part['node'].removeprefix(settings.disk).removeprefix('p')) for part in table['partitions']}
+    slots = [number for number in range(1, 129) if number not in used][:2]
+    first, last = settings.free_region
+    esp_end = first + 4 * GIB // table['sectorsize'] - 1
+    return [(slots[0], first, esp_end, 'ef00', 'DUX EFI'),
+            (slots[1], esp_end + 1, last, '8309', 'DUX encrypted')]
+
+
+def reject_unsupported_existing_storage(settings, snapshot):
+    # A different boot chain can trigger TPM-bound recovery. Without recovery
+    # credentials, refusing this layout is safer than stranding the old OS.
+    disk = next(disk for disk in disk_inventory() if disk['name'] == settings.disk)
+    if any((part.get('fstype') or '').lower() == 'bitlocker' for part in descendants(disk)):
+        raise ValueError('BitLocker/device encryption is unsupported; decrypt Windows before alongside installation.')
+    dynamic_types = {'5808c8aa-7e8f-42e0-85d2-e1e90434cfb3', 'af9b60a0-1431-4f62-bc68-3311714a69ad'}
+    if any(part['type'].lower() in dynamic_types for part in snapshot['table']['partitions']):
+        raise ValueError('Windows dynamic disks are unsupported.')
+
+
+def validate_existing_loader(boot):
+    # Never mount an old filesystem read-write, even during inspection.
+    if run('blkid', '-s', 'TYPE', '-o', 'value', boot['partition'], capture=True) != 'vfat':
+        raise ValueError('Existing boot entry must point to a FAT ESP.')
+    with tempfile.TemporaryDirectory(prefix='dux-old-esp-', dir='/run') as directory:
+        run('mount', '-t', 'vfat', '-o', 'ro,nosuid,nodev,noexec', boot['partition'], directory)
+        try:
+            loader = Path(directory) / boot['path'].lstrip('/')
+            with loader.open('rb') as stream:
+                header = stream.read(64)
+                if len(header) != 64 or header[:2] != b'MZ':
+                    raise ValueError('Existing loader is not a PE EFI application.')
+                stream.seek(struct.unpack_from('<I', header, 60)[0])
+                if stream.read(6) != b'PE\0\0\x64\x86':
+                    raise ValueError('Existing loader must be an x86-64 EFI application.')
+        finally:
+            run('umount', directory)
+
+
+def create_alongside_partitions(settings, snapshot, identity):
+    plan = alongside_plan(settings, snapshot)
+    # Last read before mutation, after payload and dependency preflight.
+    if require_disk(settings) != identity or alongside_snapshot(settings) != snapshot:
+        raise ValueError('Disk identity, GPT, free extents or firmware entries changed; no partitions created.')
+    lines = []
+    for number, first, last, kind, label in plan:
+        partition_type = ESP_TYPE if kind == 'ef00' else LUKS_TYPE
+        lines.append(f'{partition_name(settings.disk, number)} : start={first}, size={last-first+1}, '
+                     f'type={partition_type}, name="{label}"')
+    settings.installation_started = True
+    # Appending with wiping disabled preserves Windows' protective-MBR disk
+    # signature. sgdisk clears that field on block devices when adding entries.
+    run('sfdisk', '--append', '--quiet', '--lock=nonblock', '--wipe', 'never',
+        '--wipe-partitions', 'never', settings.disk, data='\n'.join(lines) + '\n')
+    verify_gpt(settings.disk)
+    mbr, _, primary, _, secondary = read_gpt_metadata(settings.disk, snapshot['table']['sectorsize'])
+    if (hashlib.sha256(mbr[:446]).hexdigest() != snapshot['bootstrap']
+            or any(primary[index*128:(index+1)*128].hex() != original
+                   or secondary[index*128:(index+1)*128].hex() != original
+                   for index, original in snapshot['occupied'].items())):
+        raise ValueError('Original GPT entries or MBR bootstrap changed; refusing to format.')
+    current = json.loads(run('sfdisk', '--json', settings.disk, capture=True))['partitiontable']
+    if (current['id'] != snapshot['table']['id']
+            or len(current['partitions']) != len(snapshot['table']['partitions']) + 2
+            or any(part not in current['partitions'] for part in snapshot['table']['partitions'])):
+        raise ValueError('Partition creation did not preserve the original GPT entries; refusing to format.')
+    for number, first, last, kind, label in plan:
+        part = next((p for p in current['partitions'] if p['node'] == partition_name(settings.disk, number)), None)
+        expected_type = ESP_TYPE if kind == 'ef00' else LUKS_TYPE
+        if (part is None or part['start'] != first or part['size'] != last-first+1
+                or part['type'].lower() != expected_type):
+            raise ValueError('Created partition geometry/type differs from the plan; refusing to format.')
+    return tuple(partition_name(settings.disk, part[0]) for part in plan)
+
+
+def verify_partition_nodes(settings, plan, sector_size):
+    for number, first, last, kind, label in plan:
+        node = partition_name(settings.disk, number)
+        sysfs = Path('/sys/class/block') / Path(node).name
+        if (int((sysfs / 'start').read_text()) * 512 != first * sector_size
+                or int((sysfs / 'size').read_text()) * 512 != (last-first+1) * sector_size):
+            raise ValueError('Kernel partition geometry differs from the plan; refusing to format.')
+
+
+def require_new_boot_entry(entries, number, esp_number, guid):
+    if entries.get(number, '')[8:9] != '*':
+        raise ValueError('New firmware boot entry is missing or inactive.')
+    path = firmware_boot_path(number)
+    if (path is None or path[0] != esp_number or path[1].lower() != guid
+            or path[2].replace('\\', '/').lower() != '/efi/limine/limine_x64.efi'):
+        raise ValueError('New firmware boot entry has the wrong ESP identity or loader path.')
+
+
+def finish_alongside_boot(settings, snapshot, esp_number):
+    binary = TARGET / 'boot/EFI/limine/limine_x64.efi'
+    if not binary.is_file():
+        raise ValueError('The new ESP is missing its Limine EFI binary; refusing firmware registration.')
+    guid = str(uuid.UUID(run('blkid', '-s', 'PARTUUID', '-o', 'value',
+                             partition_name(settings.disk, esp_number), capture=True)))
+    before_text = run('efibootmgr', '--verbose', capture=True)
+    before = firmware_entries(before_text)
+    if before != snapshot['entries'] or firmware_order(before_text) != snapshot['order']:
+        raise ValueError('Firmware entries changed during installation; refusing to change BootOrder.')
+    boot = snapshot['boots'][settings.existing_boot.upper()]
+    config = TARGET / 'boot/limine.conf'
+    text = config.read_text()
+    # Resolve the old ESP by its original GUID, retaining adjacent GRUB/BCD files.
+    # Keep the entry outside generated markers so package/snapshot hooks retain it.
+    text += (f"\n/Existing OS (firmware {settings.existing_boot.upper()})\n"
+             f"    protocol: efi\n    path: guid({boot['guid']}):{boot['path']}\n")
+    config.write_text(text)
+    run('efibootmgr', '--create-only', '--disk', settings.disk, '--part', str(esp_number),
+        '--label', 'Arch Niri Dux', '--loader', '\\EFI\\limine\\limine_x64.efi')
+    after = firmware_entries(run('efibootmgr', '--verbose', capture=True))
+    added = after.keys() - before.keys()
+    if len(added) != 1 or any(after.get(key) != value for key, value in before.items()):
+        raise ValueError('Firmware did not preserve existing boot entries.')
+    number = next(iter(added))
+    require_new_boot_entry(after, number, esp_number, guid)
+    expected_order = number + ',' + snapshot['order']
+    run('efibootmgr', '--bootorder', expected_order)
+    final = run('efibootmgr', '--verbose', capture=True)
+    final_entries = firmware_entries(final)
+    if (firmware_order(final) != expected_order
+            or any(final_entries.get(key) != value for key, value in before.items())):
+        raise ValueError('Firmware failed to retain entries or make Limine the default.')
+    require_new_boot_entry(final_entries, number, esp_number, guid)
 
 
 def prompt(label, default='', validate=None):
@@ -184,7 +493,7 @@ def secret(label):
 
 def wizard():
     print('\nArch + Niri + Dux — offline installation\n')
-    print('This erases ONE selected disk. Secure Boot must be disabled.\n')
+    print('Choose erasure or existing unallocated space. Secure Boot must be disabled.\n')
     disks = eligible_disks()
     if not disks:
         raise ValueError('No unused writable disk of at least 32 GiB found. TTY2 is available for recovery.')
@@ -192,7 +501,19 @@ def wizard():
         raise ValueError('The live installer is missing fzf, required for its selection menus.')
     labels = {f"{disk['name']}  {int(disk['size']) / GIB:.1f} GiB  {(disk.get('model') or '').strip()}".rstrip(): disk
               for disk in disks}
-    disk = labels[choose('Disk to erase', list(labels))]
+    disk = labels[choose('Installation disk', list(labels))]
+    mode = choose('Storage mode', ['Erase disk', 'Alongside in existing free space'])
+    snapshot = None
+    region = None
+    boot_number = None
+    if mode.startswith('Alongside'):
+        snapshot = alongside_snapshot(Settings(disk['name'], '', '', '', '', '', ''))
+        regions = {f'Sectors {first}–{last} ({(last-first+1)*snapshot["table"]["sectorsize"]/GIB:.2f} GiB)': [first, last]
+                   for first, last in snapshot['regions']}
+        region = regions[choose('Unallocated region', list(regions))]
+        boots = {snapshot['entries'][number]: number for number in snapshot['boots']}
+        boot_number = boots[choose('Existing OS to keep in Limine', list(boots))]
+        validate_existing_loader(snapshot['boots'][boot_number])
     keymaps = run('localectl', 'list-keymaps', capture=True).splitlines()
     keymap = choose('Keyboard layout', keymaps, default='us')
     run('loadkeys', keymap)
@@ -200,7 +521,11 @@ def wizard():
     timezone = choose('Timezone', timezones, default='Asia/Amman')
     settings = Settings(disk['name'], prompt('Username', validate=validate_username),
                         prompt('Hostname', 'dux', validate=validate_hostname), timezone,
-                        keymap, 'validate-inputs', 'validate-inputs')
+                        keymap, 'validate-inputs', 'validate-inputs',
+                        mode='alongside' if snapshot else 'erase', free_region=region, existing_boot=boot_number)
+    settings.confirmed_layout = snapshot
+    available_bytes = ((region[1] - region[0] + 1) * snapshot['table']['sectorsize']
+                       if snapshot else int(disk['size']))
     swap_error = ''
     while True:
         automatic = f'Auto — {memory_gib() + 2} GiB encrypted swap and hibernation'
@@ -216,7 +541,7 @@ def wizard():
         else:
             settings.swap_gib = 0
         try:
-            size = swap_size(settings, int(disk['size']))
+            size = swap_size(settings, available_bytes)
             break
         except ValueError as error:
             swap_error = str(error)
@@ -232,10 +557,19 @@ def wizard():
                f'Timezone: {settings.timezone}    Keyboard: {settings.keymap}\n'
                'Storage: 4 GiB EFI + encrypted Btrfs, with separate /home\n'
                f'Swap: {str(size) + " GiB encrypted; hibernation enabled" if size else "disabled; hibernation disabled"}')
+    if snapshot:
+        plan = alongside_plan(settings, snapshot)
+        summary = (f'ALONGSIDE on {settings.disk}; preserve every existing partition.\n'
+                   + '\n'.join(f'Create {partition_name(settings.disk, n)}: sectors {a}–{b}, '
+                               f'{(b-a+1)*snapshot["table"]["sectorsize"]} bytes, {label} ({kind})'
+                               for n, a, b, kind, label in plan)
+                   + f'\nExisting OS: {snapshot["entries"][boot_number]}\n'
+                   + f'Swap: {size} GiB; Limine becomes firmware default.')
     if size and size < memory_gib():
         summary += '\nWarning: swap is smaller than RAM; hibernation may fail under heavy memory use.'
     print('\n' + summary + '\n')
-    if choose('Confirm installation', ['Cancel', 'Erase and install'], header=summary) != 'Erase and install':
+    action = 'Create partitions and install' if snapshot else 'Erase and install'
+    if choose('Confirm installation', ['Cancel', action], header=summary) != action:
         raise Cancelled()
     settings.swap_gib = size
     settings.confirmed_at = time.monotonic()
@@ -312,13 +646,24 @@ def install(settings):
         raise ValueError('The ISO offline package repository is missing.')
     print('\n[1/6] Checking the offline package payload…', flush=True)
     verify_repository(REPO)
-    for name in ('sgdisk', 'wipefs', 'cryptsetup', 'mkfs.btrfs', 'mkfs.fat', 'pacstrap', 'arch-chroot'):
+    for name in (('sfdisk', 'efibootmgr') if settings.mode == 'alongside' else ()) + ('sgdisk', 'wipefs', 'cryptsetup', 'mkfs.btrfs', 'mkfs.fat', 'pacstrap', 'arch-chroot'):
         if not shutil.which(name):
             raise ValueError(f'Required installer tool missing: {name}')
     # Recheck immediately before the first destructive operation.
     if require_disk(settings) != original_device:
         raise ValueError('Disk identity changed; refusing to erase it.')
-    size = swap_size(settings, int(original_device[2]))
+    snapshot = None
+    available_bytes = int(original_device[2])
+    if settings.mode == 'alongside':
+        snapshot = alongside_snapshot(settings)
+        if settings.confirmed_layout is not None and settings.confirmed_layout != snapshot:
+            raise ValueError('Confirmed partition table or firmware entries changed.')
+        plan = alongside_plan(settings, snapshot)
+        reject_unsupported_existing_storage(settings, snapshot)
+        validate_existing_loader(snapshot['boots'][settings.existing_boot.upper()])
+        available_bytes = (settings.free_region[1] - settings.free_region[0] + 1) * snapshot['table']['sectorsize']
+        print('Create partitions (inclusive logical sectors):', plan, flush=True)
+    size = swap_size(settings, available_bytes)
     subvolumes = dict(SUBVOLUMES)
     if size:
         subvolumes['@swap'] = '/swap'
@@ -348,12 +693,20 @@ def install(settings):
             raise ValueError('Disk identity changed during package preflight; refusing to erase it.')
         try:
             print('\n[2/6] Partitioning and encrypting the selected disk…', flush=True)
-            settings.installation_started = True
-            run('wipefs', '--all', settings.disk)
-            run('sgdisk', '--zap-all', '--new=1:0:+4G', '--typecode=1:ef00',
-                '--change-name=1:EFI', '--new=2:0:0', '--typecode=2:8309',
-                '--change-name=2:Linux encrypted', settings.disk)
+            if snapshot:
+                esp, encrypted = create_alongside_partitions(settings, snapshot, original_device)
+            else:
+                settings.installation_started = True
+                run('wipefs', '--all', settings.disk)
+                run('sgdisk', '--zap-all', '--new=1:0:+4G', '--typecode=1:ef00',
+                    '--change-name=1:EFI', '--new=2:0:0', '--typecode=2:8309',
+                    '--change-name=2:Linux encrypted', settings.disk)
+            # The table writer updates kernel partition nodes. Let filesystem probes finish
+            # before inspecting them: forcing another full reread races those
+            # probes and can fail EBUSY even though the new nodes are correct.
             run('udevadm', 'settle')
+            if snapshot:
+                verify_partition_nodes(settings, plan, snapshot['table']['sectorsize'])
             run('mkfs.fat', '-F', '32', '-n', 'DUX_EFI', esp)
             run('cryptsetup', 'luksFormat', '--batch-mode', '--type', 'luks2',
                 '--pbkdf-memory', '262144', '--key-file', '-', encrypted, data=settings.passphrase)
@@ -389,6 +742,10 @@ def install(settings):
             print('\n[3/6] Installing packages from the USB…', flush=True)
             # Install transaction hooks only after Snapper and boot are configured.
             base_packages = [package for package in packages if package != 'snap-pac']
+            if snapshot:
+                # Both EFI deployment and kernel hooks may invoke limine-install.
+                # Its documented skip setting covers every initial transaction.
+                write('/etc/default/limine', 'ESP_PATH="/boot"\nSKIP_UEFI=yes\n')
             run('pacstrap', '-C', str(offline_conf), '-K', str(TARGET), *base_packages)
             fstab = run('genfstab', '-U', str(TARGET), capture=True)
             if size:
@@ -411,8 +768,10 @@ def install(settings):
             shutil.copy2(Path(__file__).with_name('configure-target.sh'), target_script)
             luks_uuid = run('blkid', '-s', 'UUID', '-o', 'value', encrypted, capture=True)
             filesystem_uuid = run('blkid', '-s', 'UUID', '-o', 'value', mapped, capture=True)
-            run('arch-chroot', str(TARGET), 'bash', '/root/configure-target.sh',
-                settings.username, settings.timezone, luks_uuid, filesystem_uuid, resume_offset)
+            configure_arguments = [settings.username, settings.timezone, luks_uuid, filesystem_uuid, resume_offset]
+            if snapshot:
+                configure_arguments.append('defer-efi')
+            run('arch-chroot', str(TARGET), 'bash', '/root/configure-target.sh', *configure_arguments)
             target_script.unlink()
             run('arch-chroot', str(TARGET), 'chpasswd',
                 data=f'{settings.username}:{settings.password}\n')
@@ -423,6 +782,10 @@ def install(settings):
                 'create', '--cleanup-algorithm', 'number', '--description', 'Fresh installation')
             run('arch-chroot', str(TARGET), 'limine-snapper-sync')
             print('\n[6/6] Saving changes and unmounting the installation…', flush=True)
+            if snapshot:
+                finish_alongside_boot(settings, snapshot, plan[0][0])
+                defaults = TARGET / 'etc/default/limine'
+                defaults.write_text(defaults.read_text().replace('SKIP_UEFI=yes\n', ''))
             run('sync')
         finally:
             if mounted:

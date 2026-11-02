@@ -132,7 +132,7 @@ class InstallerSafetyTests(unittest.TestCase):
                 patch.object(installer.shutil, 'which', return_value='/usr/bin/fzf'), \
                 patch.object(installer, 'memory_gib', return_value=16), \
                 patch.object(installer, 'choose', side_effect=[
-                    '/dev/vda  64.0 GiB', 'us', 'UTC', 'No swap / no hibernation', 'Cancel']), \
+                    '/dev/vda  64.0 GiB', 'Erase disk', 'us', 'UTC', 'No swap / no hibernation', 'Cancel']), \
                 patch('builtins.input', side_effect=answers), \
                 patch.object(installer, 'run', side_effect=['us\nuk', None, 'UTC\nAsia/Amman']) as run:
             with self.assertRaises(installer.Cancelled):

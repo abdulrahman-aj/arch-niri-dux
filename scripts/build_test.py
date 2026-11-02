@@ -93,3 +93,33 @@ class ReviewedRecipeTests(unittest.TestCase):
             recipe['files']['../outside'] = aur.digest(outside)
             with self.assertRaisesRegex(ValueError, 'recipe changed'):
                 aur.validate_recipe(root, recipe)
+
+class LiveKeyringTests(unittest.TestCase):
+    def test_key_operations_wait_for_live_initializer_and_stop_if_it_fails(self):
+        import os
+        import subprocess
+        source = Path(__file__).with_name('build-guest').read_text()
+        preparation = source.split('# Serialize keyring preparation', 1)[1].split('# Import the existing', 1)[0]
+        preparation = '# Serialize keyring preparation' + preparation
+        for status in (0, 9):
+            with self.subTest(initializer_status=status), tempfile.TemporaryDirectory() as directory:
+                root = Path(directory)
+                systemctl = root / 'systemctl'
+                systemctl.write_text('#!/bin/bash\nsleep 0.02\n'
+                                     f'if [ {status} != 0 ]; then exit {status}; fi\n'
+                                     'touch "$KEYRING_TEST_STATE/ready"\n')
+                pacman_key = root / 'pacman-key'
+                pacman_key.write_text('#!/bin/bash\n'
+                                      'test -f "$KEYRING_TEST_STATE/ready" || exit 29\n'
+                                      'printf "%s\\n" "$*" >> "$KEYRING_TEST_STATE/operations"\n')
+                systemctl.chmod(0o755)
+                pacman_key.chmod(0o755)
+                environment = os.environ | {'PATH': str(root) + ':' + os.environ['PATH'],
+                                            'KEYRING_TEST_STATE': str(root)}
+                result = subprocess.run(['bash', '-e', '-c', preparation], env=environment)
+                self.assertEqual(result.returncode, status)
+                operations = root / 'operations'
+                if status == 0:
+                    self.assertEqual(operations.read_text().splitlines(), ['--init', '--populate archlinux'])
+                else:
+                    self.assertFalse(operations.exists())

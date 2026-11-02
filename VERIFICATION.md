@@ -194,3 +194,104 @@ and the user's confirmation of working speaker audio. Nine completed items have
 now been removed in total; lid/display behavior remains open separately.
 The VM installer uses unattended configuration; interactive wizard behavior and
 custom swap sizing are covered by source tests rather than an interactive VM run.
+
+## Verified alongside installation (2026-11-02)
+
+The implementation at `73139365d6c8ce44dd0dcfd27f77b624447b6935` includes main `0320799` (Plymouth, app/defaults,
+session PATH and fish-scope cleanup). Both fresh scenarios used
+`out/arch-niri-dux-2026.11.02-x86_64.iso`, SHA256:
+
+```
+591fc771dadeaaf5306cf1db00127dc422ff033b325873667eafdf6f2fb27bd9
+```
+
+`make test` passed **70 source tests and 10 build tests**. The final ISO was built
+with the normal shared cache and flock. Both real-OS scenarios passed all six
+acceptance milestones:
+
+- Original OS boots and its sentinel is intact.
+- Every original partition's whole-device SHA256 is unchanged by installation.
+- Firmware defaults to Limine and boots the new encrypted Arch installation.
+- Reinstalling the pinned kernel exercises package/snapshot hooks and retains
+  the original OS menu entry.
+- Updated encrypted Arch boots again.
+- Limine chainloads the original OS after the update and its sentinel remains.
+
+The original installations were official Debian 13 amd64 (124 MiB ESP) and
+Windows 11 Enterprise LTSC Evaluation 24H2, build 26100 (100 MiB ESP). Windows
+was deployed using official WinPE/DISM and BCDBoot and reported its real running
+OS through CIM before and after installation; no EFI stub qualifies the run.
+Windows' disk-ID bytes 440–443 remain `67b98660` (little-endian `0x6086b967`).
+An additional post-boot audit found the original 446 MBR-prefix bytes and every
+occupied original GPT entry unchanged in both scenarios, including attributes.
+The original firmware entries were retained and the new entry was active.
+
+Machine-readable results, exact media/fixture/OVMF/ISO hashes, implementation
+file hashes and original-partition hashes are committed in
+[verification/alongside-2026-11-02.json](verification/alongside-2026-11-02.json).
+The runner checked the in-ISO `install.py` and `configure-target.sh` hashes
+against this implementation before installation. The final documentation commit
+does not change those tested implementation bytes.
+
+Full local evidence remains in:
+
+- `out/alongside/windows-final2/`: SUCCESS, six milestones, before/after Windows
+  CIM reports, screenshots, original-partition hashes, firmware listings,
+  menu after the kernel update, raw GPT prefixes and serial/QEMU logs.
+- `out/alongside/debian-final2/`: SUCCESS and the equivalent Linux evidence.
+- `out/alongside/final-unit-tests.log`: final source/build results.
+- `out/alongside/writer-check/writer-results.json`: real SATA-block comparison
+  showing sgdisk clearing the Windows signature and sfdisk retaining it.
+
+Only obsolete overlays explicitly approved for reclamation were removed; their
+logs, reports, hashes and SUCCESS markers remain. The VMs used a 9 GiB stop
+threshold to protect the required 8 GiB host reserve. No physical laptop writes,
+reboots, key changes or Secure Boot changes were performed. The VM layouts used
+512-byte logical sectors; no additional 4K-sector VM claim is made.
+
+### Review findings and disposition
+
+1. Real-OS evidence gap: closed by the two fresh six-stage runs above.
+2. Initial hook registration: all initial package/kernel transactions use
+   `SKIP_UEFI=yes`; it is removed only after successful final registration.
+   A failed/unexpected-firmware path retains deferral.
+3. EFI registration safety: require the new binary before registration; verify
+   the new BootXXXX active flag, partition number, ESP GUID and loader path
+   before setting BootOrder and verify again afterward. Missing/inactive/wrong
+   identity cases have regression tests.
+4. GPT/MBR preservation: append with util-linux sfdisk and both wiping modes
+   disabled; verify with sgdisk, both raw GPT CRCs, occupied original entries,
+   original MBR prefix and kernel geometry before formatting. Tests include
+   nonzero Windows bytes 440–443, GPT attributes, arbitrary partition data,
+   changed extents/tables, raw-entry padding and corruption.
+5. Firmware precondition: check original entries/order before appending the
+   chainload configuration. An unexpected change aborts without enabling
+   registration or making an inactive new entry default.
+6. EBUSY disposition: remove the redundant full kernel reread; wait for udev
+   and require exact kernel partition starts/sizes. No blind recovery or table
+   restoration is attempted. Both final runs exercise this path successfully.
+
+The builder also waits for Archiso's keyring initializer before its own key
+operations, with a regression for the initialization barrier and failure path.
+Independent Muse review of `8fb640d` found no code blockers and all six earlier
+findings resolved. Main's subsequent fish cleanup was merged normally. Root
+ran the combined standalone acceptance on the same ISO: all 21 stages passed,
+including the shared PATH fix, apps, graphical/text unlock, screen sharing and
+snapshot restoration. Evidence is in `out/verify-combined-final/` and the committed
+JSON record. The completed alongside TODO is removed.
+
+To repeat only these alongside runs using the retained fixtures, run from this
+worktree with fresh output directories:
+
+```sh
+make test
+make verify-alongside ARGS="--os windows --iso out/arch-niri-dux-2026.11.02-x86_64.iso --fixture out/alongside/windows4/disk.qcow2 --firmware out/alongside/windows4/OVMF_VARS.fd --windows-token out/alongside/windows4/report-token --directory out/alongside/windows-repeat"
+make verify-alongside ARGS="--os linux --iso out/arch-niri-dux-2026.11.02-x86_64.iso --fixture out/alongside/linux-fixture/disk.qcow2 --firmware out/alongside/linux-fixture/OVMF_VARS.fd --directory out/alongside/debian-repeat"
+```
+
+The combined acceptance passed from this worktree, with matching installer
+source hashes; repeat it using a fresh evidence directory:
+
+```sh
+make verify ARGS="--iso out/arch-niri-dux-2026.11.02-x86_64.iso --directory out/verify-combined-final"
+```

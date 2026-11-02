@@ -13,3 +13,4 @@ dosfstools
 gptfdisk
 networkmanager
 curl
+efibootmgr
