@@ -664,11 +664,7 @@ def wallpaper_preserved():
 
 
 def session_path():
-    # Behavioral qualification for the ~/.local/bin session PATH: an innocuous
-    # wrapper must resolve in a fresh graphical session, the systemd user
-    # environment, login shells, and a Niri-spawned process. Creates its own
-    # disposable wrapper, so no personal dotfiles are required. Run after
-    # graphical_login, while Niri runs as tester.
+    # Exercise compositor command lookup with a disposable local executable.
     account = pwd.getpwnam('tester')
     home = Path(account.pw_dir)
     bindir = home / '.local/bin'
@@ -686,22 +682,11 @@ def session_path():
                             if line.startswith('PATH='))
         assert str(bindir) in service_path.split(':'), f'systemd user PATH lacks {bindir}: {service_path}'
         user_command('bash', '-lc', 'command -v dux-path-probe')
-        if Path('/usr/bin/fish').is_file():
-            user_command('fish', '--login', '-c', 'command -v dux-path-probe')
-        niri_pid = run('pgrep', '-u', account.pw_name, '-x', 'niri',
-                       stdout=subprocess.PIPE).stdout.strip()
-        assert niri_pid.isdecimal(), 'No running Niri session for the test user.'
-        environ = Path(f'/proc/{niri_pid}/environ').read_bytes().split(b'\0')
-        niri_path = next(entry.decode().removeprefix('PATH=') for entry in environ
-                         if entry.startswith(b'PATH='))
-        assert str(bindir) in niri_path.split(':'), f'Niri PATH lacks {bindir}: {niri_path}'
         user_command('niri', 'msg', 'action', 'spawn', '--', 'dux-path-probe')
         wait_until('Niri-spawned ~/.local/bin wrapper', lambda:
                    marker.is_file() and marker.read_text() == 'probe-ok', timeout=30)
         Path('/run/verify/session-path.json').write_text(json.dumps({
             'wrapper': str(probe), 'systemd_user_path': service_path,
-            'niri_path': niri_path, 'niri_pid': int(niri_pid),
-            'login_shells': ['bash-lc'] + (['fish-login'] if Path('/usr/bin/fish').is_file() else []),
             'niri_spawn_marker': marker.read_text(),
         }, indent=2) + '\n')
     finally:

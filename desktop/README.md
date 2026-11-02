@@ -31,8 +31,8 @@ still need physical laptop evidence: `journalctl -b -u systemd-logind -u
 systemd-suspend` and `systemd-inhibit --list` show sleep events and inhibitors.
 
 Session PATH: `~/.local/bin` resolves in POSIX login shells
-(`/etc/profile.d/dux-localbin.sh`), fish (`/usr/share/fish/vendor_conf.d`),
-systemd user services (`~/.config/environment.d/90-dux.conf`) and Niri spawns.
+(`/etc/profile.d/dux-localbin.sh`), systemd user services
+(`~/.config/environment.d/90-dux.conf`) and Niri spawns.
 Greetd's default profile sourcing passes the login PATH to the user session.
 The greeter still uses its supported `--command niri` compositor selector.
 Each context preserves system and Nix PATH entries; no mise shims are added.
