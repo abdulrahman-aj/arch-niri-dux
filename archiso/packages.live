@@ -6,6 +6,7 @@ mkinitcpio-archiso
 arch-install-scripts
 python
 fzf
+fastfetch
 cryptsetup
 btrfs-progs
 dosfstools

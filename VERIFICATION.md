@@ -1,5 +1,33 @@
 # Verification
 
+## Fastfetch rebuild (2026-11-02)
+
+Image: `arch-niri-dux-2026.11.02-x86_64.iso`
+
+```
+SHA-256 ccaa911077c6d5214a2743b3dfdd7d175b6e3ecf99ced2f8f8451e2043a9aa32
+```
+
+This rebuild adds Fastfetch 2.70.0-1 to the live ISO and installed system, plus
+its required yyjson 0.13.0-1 library. All previous package pins are unchanged.
+The manifest contains 604 signature-checked distribution packages and the same
+four reviewed, locally built Dux packages; both additions verify with the
+existing trusted keyring.
+
+`make iso` and `make verify ARGS='--directory out/verify-fastfetch'` passed.
+The VM executed `fastfetch --logo none --structure OS:Kernel` successfully on
+the live USB image and as the installed desktop user, without a network device.
+All 12 acceptance stages passed, including snapshot restoration and the normal
+reboot afterward. `make test` passed 42 source tests and nine build tests;
+independent Muse review approved the package and probe changes.
+
+Local evidence: `out/verify-fastfetch/ACCEPTANCE-PASSED`, `milestones.json`,
+`inputs.json`, `serial.log`, `out/packages.manifest.json` and `out/SHA256SUMS`.
+The earlier hibernation and personal-setup runs below were not repeated for this
+package-only change.
+
+## Original release image (before Fastfetch)
+
 Release: `arch-niri-dux-2026.11.02-x86_64.iso`
 
 ```

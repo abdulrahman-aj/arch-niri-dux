@@ -1,8 +1,8 @@
 # Arch + Niri + Dux
 
 An offline Arch installer for x86_64 UEFI machines. Includes Niri, the Dux 2.0
-desktop and apps, Alacritty, Neovim, Chromium, Git and GitHub CLI, with encrypted
-Btrfs and snapshot recovery.
+desktop and apps, Alacritty, Neovim, Chromium, Git, GitHub CLI and Fastfetch, with
+encrypted Btrfs and snapshot recovery. Fastfetch is also available on the live ISO.
 
 ## Build and test
 
