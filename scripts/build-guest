@@ -6,9 +6,16 @@ mountpoint -q /source
 mountpoint -q /state
 grep -qw 'archisolabel=ARCH_202610' /proc/cmdline
 # Only the explicitly supplied disposable virtual disk is formatted.
-if ! blkid /dev/vda; then mkfs.ext4 -F /dev/vda; fi
+if ! blkid /dev/vda; then
+    mkfs.ext4 -F /dev/vda
+else
+    e2fsck -p /dev/vda || [[ $? == 1 ]]
+fi
 mkdir -p /build
 mount /dev/vda /build
+# Failed runs can leave a full unpacked live filesystem. Reclaim it before
+# preparing packages, so retries do not exceed temporary-storage quotas.
+rm -rf /build/work /build/output
 fstrim /build || true
 mkdir -p /build/cache
 cat > /etc/pacman.conf <<'CONF'
@@ -33,8 +40,6 @@ if [[ ! -f /source/packages/closure.lock.json ]]; then
     pacman -Sy --noconfirm --needed archiso python
 fi
 python /source/scripts/build-lock.py /source /build/payload/repo
-repo-add /build/payload/repo/offline.db.tar.gz /build/payload/repo/*.pkg.tar.zst
-(cd /build/payload/repo && sha256sum *.pkg.tar.zst *.db > SHA256SUMS)
 cat >/build/pacman-pinned.conf <<'CONF'
 [options]
 Architecture = auto
@@ -43,9 +48,15 @@ CacheDir = /build/cache
 [offline]
 Server = file:///build/payload/repo
 CONF
+repo-add /build/payload/repo/offline.db.tar.gz /build/payload/repo/*.pkg.tar.zst
 # Rebuilds install the build tools from the same verified closure as the ISO.
-pacman -Sy --config /build/pacman-pinned.conf --noconfirm --needed archiso python
-cp /source/packages/closure.lock.json /source/out/packages.manifest.json
+pacman -Sy --config /build/pacman-pinned.conf --noconfirm --needed archiso python base-devel git
+python /source/scripts/build-aur.py /source /build/payload/repo
+# The verified payload is authoritative; the builder's download cache is redundant.
+rm -f /build/cache/*.pkg.tar.*
+fstrim /build || true
+repo-add /build/payload/repo/offline.db.tar.gz /build/payload/repo/*.pkg.tar.zst
+(cd /build/payload/repo && sha256sum *.pkg.tar.zst *.db > SHA256SUMS)
 cp /state/trusted-packagers.gpg /source/out/trusted-packagers.gpg
 cp -a /usr/share/archiso/configs/releng /build/profile-new
 rm -rf /build/profile
@@ -108,7 +119,6 @@ file_permissions+=(
 )
 PROFILE
 # A separate bind mount places payload beside arch/ in the staging tree.
-rm -rf /build/work /build/output
 fstrim /build || true
 mkdir -p /build/work/iso/repo
 cp -al /build/payload/repo/. /build/work/iso/repo/

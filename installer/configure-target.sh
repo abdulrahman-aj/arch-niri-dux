@@ -5,6 +5,7 @@ dux_user=$1
 dux_timezone=$2
 dux_luks_uuid=$3
 dux_btrfs_uuid=$4
+dux_resume_offset=${5:-}
 
 ln -sf "/usr/share/zoneinfo/$dux_timezone" /etc/localtime
 locale-gen
@@ -25,13 +26,21 @@ COMPRESSION="zstd"
 EOF
 
 install -d /etc/kernel /etc/default /etc/conf.d /etc/snapper/configs
-printf 'rd.luks.name=%s=dux-root root=/dev/mapper/dux-root rootflags=subvol=@ rw\n' "$dux_luks_uuid" >/etc/kernel/cmdline
+dux_cmdline="rd.luks.name=$dux_luks_uuid=dux-root root=/dev/mapper/dux-root rootflags=subvol=@ rw"
+if [[ -n "$dux_resume_offset" ]]; then
+    [[ "$dux_resume_offset" =~ ^[0-9]+$ ]]
+    dux_cmdline+=" resume=/dev/mapper/dux-root resume_offset=$dux_resume_offset"
+else
+    install -d /etc/systemd/sleep.conf.d
+    printf '[Sleep]\nAllowHibernation=no\n' >/etc/systemd/sleep.conf.d/60-hibernation.conf
+fi
+printf '%s\n' "$dux_cmdline" >/etc/kernel/cmdline
 cat >/etc/default/limine <<EOF
 ESP_PATH="/boot"
 TARGET_OS_NAME="Arch Niri Dux"
 ENABLE_UKI=no
 ENABLE_LIMINE_FALLBACK=yes
-KERNEL_CMDLINE[default]="rd.luks.name=$dux_luks_uuid=dux-root root=/dev/mapper/dux-root rootflags=subvol=@ rw"
+KERNEL_CMDLINE[default]="$dux_cmdline"
 MAX_SNAPSHOT_ENTRIES=12
 SNAPPER_CONFIG_NAME="root"
 ROOT_SUBVOLUME_PATH="/@"
@@ -41,6 +50,14 @@ RESTORE_METHOD=replace
 TERMINAL=alacritty
 TERMINAL_ARG="-e"
 EOF
+
+# Recovery must never resume a normal-root memory image over an older snapshot.
+printf '\nSNAPSHOT_KERNEL_PARAMETERS+=noresume\n' >>/etc/limine-snapper-sync.conf
+for dux_sleep_unit in systemd-hibernate systemd-hybrid-sleep systemd-suspend-then-hibernate; do
+    install -d "/etc/systemd/system/$dux_sleep_unit.service.d"
+    printf '[Unit]\nConditionKernelCommandLine=!noresume\n' \
+        >"/etc/systemd/system/$dux_sleep_unit.service.d/60-recovery.conf"
+done
 
 cat >/etc/snapper/configs/root <<'EOF'
 SUBVOLUME="/"
@@ -66,7 +83,8 @@ systemctl enable getty@tty2.service
 # The overlay is ISO data; setup must not depend on preserved executable bits.
 bash /usr/local/lib/arch-niri-dux/configure-desktop "$dux_user"
 
-# Restore online Arch repositories only on the installed system.
+# The installer stays offline; enable online repositories only on the target.
+pacman-key --populate omarchy
 cat >/etc/pacman.conf <<'EOF'
 [options]
 HoldPkg = pacman glibc
@@ -82,5 +100,8 @@ Include = /etc/pacman.d/mirrorlist
 
 [extra]
 Include = /etc/pacman.d/mirrorlist
+
+[omarchy]
+Server = https://pkgs.omarchy.org/stable/$arch
 EOF
 printf 'Server = https://geo.mirror.pkgbuild.com/$repo/os/$arch\n' >/etc/pacman.d/mirrorlist

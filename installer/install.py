@@ -13,12 +13,14 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import time
 
 SHARE = Path('/usr/local/share/arch-niri-dux')
 REPO = Path('/run/archiso/bootmnt/repo')
 TARGET = Path('/mnt/arch-niri-dux')
 MAPPER = 'dux-root'
 MIN_DISK_BYTES = 32 * 1024**3
+GIB = 1024**3
 SUBVOLUMES = {'@': '/', '@home': '/home', '@log': '/var/log',
               '@cache': '/var/cache/pacman/pkg', '@snapshots': '/.snapshots'}
 
@@ -32,15 +34,16 @@ class Settings:
     keymap: str
     passphrase: str
     password: str
+    swap_gib: int | None = None
     confirmed_device: tuple | None = field(default=None, init=False)
+    confirmed_at: float | None = field(default=None, init=False)
+    installation_started: bool = field(default=False, init=False)
 
     def validate(self):
         if not re.fullmatch(r'/dev/(?:sd[a-z]+|vd[a-z]+|nvme[0-9]+n[0-9]+|mmcblk[0-9]+)', self.disk):
             raise ValueError('Select a whole physical disk, not a partition or loop device.')
-        if not re.fullmatch(r'[a-z_][a-z0-9_-]{0,30}', self.username) or self.username in {'root', 'nobody', 'alpm'}:
-            raise ValueError('Use a non-system lowercase username (letters, digits, underscore, dash).')
-        if not re.fullmatch(r'[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?', self.hostname):
-            raise ValueError('Use a hostname of 1–63 lowercase letters, digits or dashes.')
+        validate_username(self.username)
+        validate_hostname(self.hostname)
         zone = (Path('/usr/share/zoneinfo') / self.timezone).resolve()
         if not zone.is_relative_to('/usr/share/zoneinfo') or not zone.is_file():
             raise ValueError('Unknown timezone.')
@@ -48,9 +51,44 @@ class Settings:
             raise ValueError('Invalid console keymap name.')
         if self.keymap != 'us' and not any(Path('/usr/share/kbd/keymaps').rglob(self.keymap + '.map.gz')):
             raise ValueError('Unknown console keymap.')
-        for name, secret in [('Disk passphrase', self.passphrase), ('Login password', self.password)]:
-            if len(secret) < 8 or any(char in secret for char in '\n\r\0'):
-                raise ValueError(f'{name} must have at least 8 characters and no line breaks.')
+        for name, value in [('Disk passphrase', self.passphrase), ('Login password', self.password)]:
+            validate_secret(value, name)
+        if self.swap_gib is not None and (type(self.swap_gib) is not int or self.swap_gib < 0):
+            raise ValueError('Swap size must be a nonnegative whole number of GiB, or null for Auto.')
+
+
+class Cancelled(Exception):
+    pass
+
+
+def validate_username(value):
+    if not re.fullmatch(r'[a-z_][a-z0-9_-]{0,30}', value) or value in {'root', 'nobody', 'alpm'}:
+        raise ValueError('Use a non-system lowercase username (letters, digits, underscore, dash).')
+
+
+def validate_hostname(value):
+    if not re.fullmatch(r'[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?', value):
+        raise ValueError('Use a hostname of 1–63 lowercase letters, digits or dashes.')
+
+
+def validate_secret(value, name):
+    if len(value) < 8 or any(char in value for char in '\n\r\0'):
+        raise ValueError(f'{name} must have at least 8 characters and no line breaks.')
+
+
+def memory_gib():
+    total = next(line for line in Path('/proc/meminfo').read_text().splitlines() if line.startswith('MemTotal:'))
+    return (int(total.split()[1]) * 1024 + GIB - 1) // GIB
+
+
+def swap_size(settings, disk_bytes):
+    size = memory_gib() + 2 if settings.swap_gib is None else settings.swap_gib
+    # Leave room for the ESP, LUKS metadata and a usable desktop installation.
+    maximum = disk_bytes // GIB - 4 - 24 - 1
+    if size and size > maximum:
+        raise ValueError(f'{size} GiB swap will not fit while leaving 24 GiB for the system. '
+                         f'Choose at most {max(0, maximum)} GiB, no swap, or a larger disk.')
+    return size
 
 
 def run(*args, data=None, capture=False):
@@ -102,16 +140,46 @@ def require_disk(settings):
     return device_stat.st_rdev, device_stat.st_ino, matches[0]['size']
 
 
-def prompt(label, default=''):
-    answer = input(f'{label}' + (f' [{default}]' if default else '') + ': ').strip()
-    return answer or default
+def prompt(label, default='', validate=None):
+    while True:
+        answer = input(f'{label}' + (f' [{default}]' if default else '') + ': ').strip() or default
+        try:
+            if validate:
+                validate(answer)
+            return answer
+        except ValueError as error:
+            print(error)
+
+
+def choose(label, choices, default=None, header=''):
+    if not choices:
+        raise ValueError(f'No choices available for {label.lower()}.')
+    if default in choices:
+        choices = [default] + [choice for choice in choices if choice != default]
+    result = subprocess.run(['fzf', '--layout=reverse', '--border', '--no-sort', '--no-multi',
+                             '--prompt', label + '> ',
+                             '--header', header + ('\n\n' if header else '') +
+                             'Type to search · ↑/↓ to choose · Enter to select · Esc to cancel'],
+                            input='\n'.join(choices) + '\n', text=True, stdout=subprocess.PIPE)
+    if result.returncode in (1, 130):
+        raise Cancelled()
+    result.check_returncode()
+    selected = result.stdout.strip()
+    if selected not in choices:
+        raise ValueError('The picker returned an invalid selection.')
+    return selected
 
 
 def secret(label):
-    first = getpass.getpass(label + ': ')
-    if first != getpass.getpass('Repeat ' + label.lower() + ': '):
-        raise ValueError('Passwords did not match.')
-    return first
+    while True:
+        first = getpass.getpass(label + ': ')
+        try:
+            validate_secret(first, label)
+            if first != getpass.getpass('Repeat ' + label.lower() + ': '):
+                raise ValueError('Passwords did not match. Try again.')
+            return first
+        except ValueError as error:
+            print(error)
 
 
 def wizard():
@@ -120,22 +188,57 @@ def wizard():
     disks = eligible_disks()
     if not disks:
         raise ValueError('No unused writable disk of at least 32 GiB found. TTY2 is available for recovery.')
-    for disk in disks:
-        print(f"  {disk['name']}  {int(disk['size']) / 1024**3:.1f} GiB  {(disk.get('model') or '').strip()}")
-    settings = Settings(prompt('Target disk (full path)'), prompt('Username'),
-                        prompt('Hostname', 'dux'), prompt('Timezone', 'Asia/Amman'),
-                        prompt('Console keyboard layout', 'us'), 'validate-inputs', 'validate-inputs')
-    settings.validate()
+    if not shutil.which('fzf'):
+        raise ValueError('The live installer is missing fzf, required for its selection menus.')
+    labels = {f"{disk['name']}  {int(disk['size']) / GIB:.1f} GiB  {(disk.get('model') or '').strip()}".rstrip(): disk
+              for disk in disks}
+    disk = labels[choose('Disk to erase', list(labels))]
+    keymaps = run('localectl', 'list-keymaps', capture=True).splitlines()
+    keymap = choose('Keyboard layout', keymaps, default='us')
+    run('loadkeys', keymap)
+    timezones = run('timedatectl', 'list-timezones', capture=True).splitlines()
+    timezone = choose('Timezone', timezones, default='Asia/Amman')
+    settings = Settings(disk['name'], prompt('Username', validate=validate_username),
+                        prompt('Hostname', 'dux', validate=validate_hostname), timezone,
+                        keymap, 'validate-inputs', 'validate-inputs')
+    swap_error = ''
+    while True:
+        automatic = f'Auto — {memory_gib() + 2} GiB encrypted swap and hibernation'
+        choice = choose('Swap / hibernation', [automatic, 'Custom size', 'No swap / no hibernation'],
+                        header=swap_error)
+        if choice == automatic:
+            settings.swap_gib = None
+        elif choice == 'Custom size':
+            def validate_size(value):
+                if not value.isdecimal() or int(value) < 1:
+                    raise ValueError('Enter a whole number of GiB greater than zero.')
+            settings.swap_gib = int(prompt('Swap size in GiB', str(memory_gib() + 2), validate_size))
+        else:
+            settings.swap_gib = 0
+        try:
+            size = swap_size(settings, int(disk['size']))
+            break
+        except ValueError as error:
+            swap_error = str(error)
     settings.confirmed_device = require_disk(settings)
-    run('loadkeys', settings.keymap)
     settings.passphrase = secret('Disk passphrase')
     settings.password = secret('Login password')
     settings.validate()
     if require_disk(settings) != settings.confirmed_device:
         raise ValueError('Disk identity changed while entering installation settings.')
-    print(f'\nERASE ALL DATA on {settings.disk}; create a 4 GiB EFI partition and encrypted Btrfs.')
-    if input(f'Type ERASE {settings.disk} to continue: ') != f'ERASE {settings.disk}':
-        raise ValueError('Cancelled. No disk was changed.')
+    summary = (f'ERASE ALL DATA on {settings.disk} ({int(disk["size"]) / GIB:.1f} GiB, '
+               f'{(disk.get("model") or "unknown model").strip()})\n'
+               f'User: {settings.username}    Host: {settings.hostname}\n'
+               f'Timezone: {settings.timezone}    Keyboard: {settings.keymap}\n'
+               'Storage: 4 GiB EFI + encrypted Btrfs, with separate /home\n'
+               f'Swap: {str(size) + " GiB encrypted; hibernation enabled" if size else "disabled; hibernation disabled"}')
+    if size and size < memory_gib():
+        summary += '\nWarning: swap is smaller than RAM; hibernation may fail under heavy memory use.'
+    print('\n' + summary + '\n')
+    if choose('Confirm installation', ['Cancel', 'Erase and install'], header=summary) != 'Erase and install':
+        raise Cancelled()
+    settings.swap_gib = size
+    settings.confirmed_at = time.monotonic()
     return settings
 
 
@@ -191,6 +294,7 @@ def verify_repository(repository):
 
 
 def install(settings):
+    started_at = settings.confirmed_at if settings.confirmed_at is not None else time.monotonic()
     settings.validate()
     original_device = require_disk(settings)
     if settings.confirmed_device is not None and original_device != settings.confirmed_device:
@@ -206,6 +310,7 @@ def install(settings):
         raise ValueError('Invalid or missing target package list.')
     if not list(REPO.glob('*.db')):
         raise ValueError('The ISO offline package repository is missing.')
+    print('\n[1/6] Checking the offline package payload…', flush=True)
     verify_repository(REPO)
     for name in ('sgdisk', 'wipefs', 'cryptsetup', 'mkfs.btrfs', 'mkfs.fat', 'pacstrap', 'arch-chroot'):
         if not shutil.which(name):
@@ -213,6 +318,10 @@ def install(settings):
     # Recheck immediately before the first destructive operation.
     if require_disk(settings) != original_device:
         raise ValueError('Disk identity changed; refusing to erase it.')
+    size = swap_size(settings, int(original_device[2]))
+    subvolumes = dict(SUBVOLUMES)
+    if size:
+        subvolumes['@swap'] = '/swap'
 
     esp = partition_name(settings.disk, 1)
     encrypted = partition_name(settings.disk, 2)
@@ -238,6 +347,8 @@ def install(settings):
         if require_disk(settings) != original_device:
             raise ValueError('Disk identity changed during package preflight; refusing to erase it.')
         try:
+            print('\n[2/6] Partitioning and encrypting the selected disk…', flush=True)
+            settings.installation_started = True
             run('wipefs', '--all', settings.disk)
             run('sgdisk', '--zap-all', '--new=1:0:+4G', '--typecode=1:ef00',
                 '--change-name=1:EFI', '--new=2:0:0', '--typecode=2:8309',
@@ -251,13 +362,13 @@ def install(settings):
             run('mkfs.btrfs', '--force', '--label', 'DUX_ROOT', mapped)
             run('mount', mapped, str(TARGET))
             mounted = True
-            for volume in SUBVOLUMES:
+            for volume in subvolumes:
                 run('btrfs', 'subvolume', 'create', str(TARGET / volume))
             run('umount', str(TARGET))
             mounted = False
             run('mount', '-o', 'subvol=@,compress=zstd:1,noatime', mapped, str(TARGET))
             mounted = True
-            for volume, location in SUBVOLUMES.items():
+            for volume, location in subvolumes.items():
                 if location == '/':
                     continue
                 mountpoint = TARGET / location.lstrip('/')
@@ -265,11 +376,25 @@ def install(settings):
                 run('mount', '-o', f'subvol={volume},compress=zstd:1,noatime', mapped, str(mountpoint))
             (TARGET / 'boot').mkdir(exist_ok=True)
             run('mount', '-o', 'umask=0077', esp, str(TARGET / 'boot'))
+            resume_offset = ''
+            if size:
+                # mkswapfile sets NODATACOW and disables compression for this file.
+                # A separate subvolume keeps it outside every root snapshot.
+                (TARGET / 'swap').chmod(0o700)
+                run('btrfs', 'filesystem', 'mkswapfile', '--size', f'{size}G', str(TARGET / 'swap/swapfile'))
+                resume_offset = run('btrfs', 'inspect-internal', 'map-swapfile', '-r',
+                                    str(TARGET / 'swap/swapfile'), capture=True)
+                if not re.fullmatch(r'[0-9]+', resume_offset):
+                    raise ValueError('Btrfs returned an invalid swap resume offset.')
+            print('\n[3/6] Installing packages from the USB…', flush=True)
             # Install transaction hooks only after Snapper and boot are configured.
             base_packages = [package for package in packages if package != 'snap-pac']
             run('pacstrap', '-C', str(offline_conf), '-K', str(TARGET), *base_packages)
             fstab = run('genfstab', '-U', str(TARGET), capture=True)
+            if size:
+                fstab += '\n/swap/swapfile none swap defaults 0 0\n'
             write('/etc/fstab', recovery_fstab(fstab))
+            print('\n[4/6] Configuring the desktop, user and bootloader…', flush=True)
             write('/etc/hostname', settings.hostname + '\n')
             write('/etc/hosts', '127.0.0.1 localhost\n::1 localhost\n'
                   f'127.0.1.1 {settings.hostname}.localdomain {settings.hostname}\n')
@@ -287,24 +412,27 @@ def install(settings):
             luks_uuid = run('blkid', '-s', 'UUID', '-o', 'value', encrypted, capture=True)
             filesystem_uuid = run('blkid', '-s', 'UUID', '-o', 'value', mapped, capture=True)
             run('arch-chroot', str(TARGET), 'bash', '/root/configure-target.sh',
-                settings.username, settings.timezone, luks_uuid, filesystem_uuid)
+                settings.username, settings.timezone, luks_uuid, filesystem_uuid, resume_offset)
             target_script.unlink()
             run('arch-chroot', str(TARGET), 'chpasswd',
                 data=f'{settings.username}:{settings.password}\n')
+            print('\n[5/6] Preparing automatic snapshots and recovery…', flush=True)
             if 'snap-pac' in packages:
                 run('pacstrap', '-C', str(offline_conf), '-G', '-M', str(TARGET), 'snap-pac')
             run('arch-chroot', str(TARGET), 'snapper', '--no-dbus', '-c', 'root',
                 'create', '--cleanup-algorithm', 'number', '--description', 'Fresh installation')
             run('arch-chroot', str(TARGET), 'limine-snapper-sync')
+            print('\n[6/6] Saving changes and unmounting the installation…', flush=True)
             run('sync')
-            print('\nINSTALLATION COMPLETE. Remove the USB and reboot.\n'
-                  'Use the disk passphrase at boot, then your username and login password.\n'
-                  'Snapshot recovery is available in the Limine boot menu.')
         finally:
             if mounted:
                 subprocess.run(['umount', '--recursive', str(TARGET)], check=False)
             if opened:
                 subprocess.run(['cryptsetup', 'close', MAPPER], check=False)
+    elapsed = round(time.monotonic() - started_at)
+    print(f'\nINSTALLATION COMPLETE — took {elapsed} seconds. Remove the USB and reboot.\n'
+          'Use the disk passphrase at boot, then your username and login password.\n'
+          'Snapshot recovery is available in the Limine boot menu.')
 
 
 def main():
@@ -319,6 +447,7 @@ def main():
     secure_boot_files = list(Path('/sys/firmware/efi/efivars').glob('SecureBoot-*'))
     if secure_boot_files and secure_boot_files[0].read_bytes()[-1] == 1:
         parser.error('Disable Secure Boot before installation.')
+    settings = None
     try:
         if args.config:
             if args.config.stat().st_mode & 0o077:
@@ -326,11 +455,17 @@ def main():
             settings = Settings(**json.loads(args.config.read_text()))
             if args.confirm_disk != settings.disk:
                 parser.error('--config requires --confirm-disk with the exact target disk path.')
+            settings.confirmed_at = time.monotonic()
         else:
             settings = wizard()
         install(settings)
+    except (Cancelled, EOFError):
+        print('\nInstallation cancelled. No disk was changed.')
+        return 130
     except (ValueError, TypeError, OSError, subprocess.CalledProcessError, KeyboardInterrupt) as error:
-        print(f'\nInstallation stopped: {error}\nThe disk may be incomplete if installation had begun.', file=sys.stderr)
+        consequence = ('The selected disk may be incomplete.' if settings and settings.installation_started
+                       else 'No disk was changed.')
+        print(f'\nInstallation stopped: {error}\n{consequence}', file=sys.stderr)
         return 1
     return 0
 

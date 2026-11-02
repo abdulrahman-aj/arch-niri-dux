@@ -1,6 +1,7 @@
 import importlib.util
 import hashlib
 import json
+import io
 from pathlib import Path
 import sys
 import tempfile
@@ -123,16 +124,116 @@ class InstallerSafetyTests(unittest.TestCase):
                 installer.install(value)
             run.assert_not_called()
 
-    def test_typing_only_yes_does_not_confirm_erase(self):
-        answers = ['/dev/vda', 'tester', 'dux', 'UTC', 'us', 'yes']
+    def test_cancel_at_final_summary_never_starts_installation(self):
+        answers = ['tester', 'dux']
         with patch.object(installer, 'eligible_disks', return_value=[disk()]), \
                 patch.object(installer, 'require_disk', return_value=1), \
                 patch.object(installer, 'secret', return_value='test-password'), \
+                patch.object(installer.shutil, 'which', return_value='/usr/bin/fzf'), \
+                patch.object(installer, 'memory_gib', return_value=16), \
+                patch.object(installer, 'choose', side_effect=[
+                    '/dev/vda  64.0 GiB', 'us', 'UTC', 'No swap / no hibernation', 'Cancel']), \
                 patch('builtins.input', side_effect=answers), \
-                patch.object(installer, 'run') as run:
-            with self.assertRaisesRegex(ValueError, 'Cancelled'):
+                patch.object(installer, 'run', side_effect=['us\nuk', None, 'UTC\nAsia/Amman']) as run:
+            with self.assertRaises(installer.Cancelled):
                 installer.wizard()
-            run.assert_called_once_with('loadkeys', 'us')
+            self.assertEqual(run.call_args_list[1].args, ('loadkeys', 'us'))
+            self.assertFalse(any(call.args[0] in ('wipefs', 'sgdisk', 'cryptsetup') for call in run.call_args_list))
+
+    def test_picker_starts_with_cancel_and_escape_cancels(self):
+        result = installer.subprocess.CompletedProcess([], 130, stdout='')
+        with patch.object(installer.subprocess, 'run', return_value=result) as run:
+            with self.assertRaises(installer.Cancelled):
+                installer.choose('Confirm installation', ['Erase and install', 'Cancel'], default='Cancel')
+            self.assertEqual(run.call_args.kwargs['input'], 'Cancel\nErase and install\n')
+
+    def test_errors_distinguish_preflight_from_a_started_installation(self):
+        for started in (False, True):
+            value = settings(swap_gib=0)
+
+            def fail_install(_settings):
+                _settings.installation_started = started
+                raise ValueError('fixture failure')
+
+            output = io.StringIO()
+            with self.subTest(started=started), \
+                    patch.object(sys, 'argv', ['install']), \
+                    patch.object(installer.os, 'geteuid', return_value=0), \
+                    patch.object(Path, 'exists', return_value=True), \
+                    patch.object(Path, 'glob', return_value=[]), \
+                    patch.object(installer, 'wizard', return_value=value), \
+                    patch.object(installer, 'install', side_effect=fail_install), \
+                    patch('sys.stderr', output):
+                self.assertEqual(installer.main(), 1)
+            self.assertEqual('No disk was changed.' in output.getvalue(), not started)
+            self.assertEqual('may be incomplete' in output.getvalue(), started)
+
+    def test_invalid_username_and_passwords_retry_inline(self):
+        with patch('builtins.input', side_effect=['root', 'tester']):
+            self.assertEqual(installer.prompt('Username', validate=installer.validate_username), 'tester')
+        with patch.object(installer.getpass, 'getpass', side_effect=[
+                'short', 'long-password', 'different-password', 'long-password', 'long-password']):
+            self.assertEqual(installer.secret('Login password'), 'long-password')
+
+    def test_swap_auto_custom_disabled_and_capacity(self):
+        with patch.object(installer, 'memory_gib', return_value=16):
+            self.assertEqual(installer.swap_size(settings(), 64 * installer.GIB), 18)
+            self.assertEqual(installer.swap_size(settings(swap_gib=8), 64 * installer.GIB), 8)
+            self.assertEqual(installer.swap_size(settings(swap_gib=0), 32 * installer.GIB), 0)
+            with self.assertRaisesRegex(ValueError, 'will not fit'):
+                installer.swap_size(settings(), 32 * installer.GIB)
+        for value in (-1, 1.5, True, '18'):
+            with self.subTest(value=value), self.assertRaises(ValueError):
+                settings(swap_gib=value).validate()
+
+    def test_install_creates_isolated_swap_and_passes_physical_resume_offset(self):
+        for size in (0, 8):
+            with self.subTest(swap_gib=size), tempfile.TemporaryDirectory() as directory:
+                root = Path(directory)
+                target = root / 'target'
+                (target / 'root').mkdir(parents=True)
+                (root / 'desktop').mkdir()
+                (root / 'packages.target').write_text('base\n')
+                (root / 'offline.db').touch()
+
+                def command(*args, **kwargs):
+                    if args[:3] == ('btrfs', 'inspect-internal', 'map-swapfile'):
+                        return '12345'
+                    if args[0] == 'genfstab':
+                        return 'UUID=abc / btrfs rw,subvolid=256,subvol=/@ 0 0\n'
+                    if args[0] == 'blkid':
+                        return 'test-uuid'
+                    return '' if kwargs.get('capture') else None
+
+                value = settings(swap_gib=size)
+                value.confirmed_at = 10
+                output = io.StringIO()
+                temporary_directory = tempfile.TemporaryDirectory
+                with patch.object(installer, 'SHARE', root), patch.object(installer, 'REPO', root), \
+                        patch.object(installer, 'TARGET', target), \
+                        patch.object(installer, 'require_disk', return_value=(1, 2, 64 * installer.GIB)), \
+                        patch.object(installer, 'verify_repository'), \
+                        patch.object(installer.shutil, 'which', return_value='/usr/bin/tool'), \
+                        patch.object(installer.os.path, 'ismount', return_value=False), \
+                        patch.object(installer, 'run', side_effect=command) as run, \
+                        patch.object(installer.tempfile, 'TemporaryDirectory',
+                                     side_effect=lambda **kwargs: temporary_directory(dir=root)), \
+                        patch.object(installer.subprocess, 'run'), \
+                        patch.object(installer.time, 'monotonic', return_value=69), \
+                        patch('sys.stdout', output):
+                    installer.install(value)
+                commands = [call.args for call in run.call_args_list]
+                swap_created = ('btrfs', 'subvolume', 'create', str(target / '@swap'))
+                swap_setup = [call for call in commands if call[:3] == ('btrfs', 'filesystem', 'mkswapfile')]
+                configure = next(call for call in commands if '/root/configure-target.sh' in call)
+                self.assertEqual(configure[-1], '12345' if size else '')
+                self.assertEqual(swap_created in commands, bool(size))
+                self.assertEqual(bool(swap_setup), bool(size))
+                self.assertEqual('/swap/swapfile none swap defaults 0 0' in (target / 'etc/fstab').read_text(), bool(size))
+                if size:
+                    self.assertEqual(swap_setup[0][-2:], ('8G', str(target / 'swap/swapfile')))
+                self.assertIn('took 59 seconds', output.getvalue())
+                self.assertTrue(value.installation_started)
 
     def test_corrupted_offline_package_is_rejected_before_installation(self):
         with tempfile.TemporaryDirectory() as directory:

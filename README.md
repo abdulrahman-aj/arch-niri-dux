@@ -1,13 +1,14 @@
 # Arch + Niri + Dux
 
-An offline Arch installer for x86_64 UEFI machines. Installs Niri, Dux 2.0,
-Alacritty, Neovim, Chromium, Git, GitHub CLI and Yay, with encrypted Btrfs and
-snapshot recovery.
+An offline Arch installer for x86_64 UEFI machines. Includes Niri, the Dux 2.0
+desktop and apps, Alacritty, Neovim, Chromium, Git and GitHub CLI, with encrypted
+Btrfs and snapshot recovery.
 
 ## Build and test
 
-Requires Linux, Nix, Make and KVM access. Allow 16 GiB of build space, 8 GiB of
-RAM and 2.2 GiB for the ISO.
+Requires Linux, Nix, Make and KVM access. Allow 24 GiB of build space, 8 GiB of
+RAM and about 2.5 GiB for the ISO. Build cache goes in
+`~/.cache/arch-niri-dux-build`; `BUILD_STATE=/path/with/space make iso` overrides it.
 
 ```sh
 make iso
@@ -17,9 +18,9 @@ make verify
 The ISO and checksums land in `out/`. VM tests need a GPU render node and virtio
 3D acceleration; `QEMU_RENDER_NODE` defaults to `/dev/dri/renderD128`.
 
-Package versions, hashes and signatures are locked. Yay and the Limine helpers
-come from Omarchy's package repository; desktop configuration comes from upstream
-Dux. Rebuilds use the same packages, but are not byte-identical.
+Signed binary packages and reviewed Dux AUR recipes are pinned separately; see
+[package inputs](packages/README.md). Desktop configuration comes from upstream
+Dux. Rebuilds use the same inputs, but are not byte-identical.
 
 ## Install
 
@@ -30,6 +31,11 @@ Dux. Rebuilds use the same packages, but are not byte-identical.
 Super+Return opens a terminal, Super+Space opens the launcher, and Super+Alt+L
 locks the screen. Personal apps and [dotfiles](https://github.com/abdulrahman-aj/dotfiles/pull/1)
 are a separate online step.
+
+Update through Dux's system updater or run `yay`; both cover repository and AUR
+packages. The installer offers automatic/custom encrypted swap or no hibernation.
+With swap enabled, use `systemctl hibernate`; closing the lid suspends when
+undocked and allows continued use on an external display when docked.
 
 ## Recover
 
@@ -44,6 +50,7 @@ stays untouched.
 
 ## Status
 
-[VM verification](VERIFICATION.md) covers installation, desktop, locking and
-recovery. Laptop Wi-Fi, audio and suspend still need physical testing.
+[VM verification](VERIFICATION.md) covers installation, desktop, updates, recovery
+and hibernation. Laptop resume and the intermittent lid symptom remain hardware
+checks.
 Secure Boot is outside v1; planned features are in [TODO.md](TODO.md).

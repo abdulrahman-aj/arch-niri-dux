@@ -1,0 +1,30 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+config_dir=${XDG_CONFIG_HOME:-$HOME/.config}
+state_dir=${XDG_STATE_HOME:-$HOME/.local/state}/arch-niri-dux
+# Dux 2.0 unpacks its embedded UI here and prunes older extractions at startup.
+gtk_scripts=("${XDG_RUNTIME_DIR:?}/dms-shell/"*/scripts/gtk.sh)
+[[ ${#gtk_scripts[@]} == 1 && -f "${gtk_scripts[0]}" ]] || {
+    echo 'Cannot locate the running Dux GTK integration.' >&2
+    exit 1
+}
+
+# Dux generates colors asynchronously after startup. Apply its own integration
+# once, after that generation, so future changes stay under Dux's control.
+for attempt in {1..90}; do
+    if [[ -s "$config_dir/gtk-3.0/dank-colors.css" && -s "$config_dir/gtk-4.0/dank-colors.css" ]]; then
+        is_light=true
+        if [[ $(gsettings get org.gnome.desktop.interface color-scheme) == "'prefer-dark'" ]]; then
+            is_light=false
+        fi
+        bash "${gtk_scripts[0]}" "$config_dir" apply "$is_light"
+        bash "${gtk_scripts[0]}" "$config_dir" patch "$is_light"
+        mkdir -p "$state_dir"
+        touch "$state_dir/application-themes"
+        exit 0
+    fi
+    sleep 1
+done
+echo 'Dux did not generate GTK colors; check journalctl --user -u dms.' >&2
+exit 1

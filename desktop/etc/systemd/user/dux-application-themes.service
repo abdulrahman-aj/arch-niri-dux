@@ -1,0 +1,14 @@
+[Unit]
+Description=Apply Dux application themes on first login
+After=graphical-session.target dms.service
+Requires=dms.service
+PartOf=graphical-session.target
+ConditionPathExists=!%h/.local/state/arch-niri-dux/application-themes
+
+[Service]
+Type=oneshot
+ExecStart=/bin/bash /usr/local/lib/arch-niri-dux/initialize-application-themes
+TimeoutStartSec=120
+
+[Install]
+WantedBy=graphical-session.target

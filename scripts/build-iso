@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 cd "$(dirname "$0")/.."
-state=${BUILD_STATE:-/tmp/arch-niri-dux-build}
+state=${BUILD_STATE:-${XDG_CACHE_HOME:-$HOME/.cache}/arch-niri-dux-build}
 mkdir -p "$state" out
 state=$(realpath "$state")
 exec 9>"$state/build.lock"

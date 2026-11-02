@@ -11,6 +11,33 @@ spec.loader.exec_module(verify)
 
 
 class VMCommandTests(unittest.TestCase):
+    def test_login_waits_for_terminal_input_before_commands_and_sudo_shell(self):
+        class LoginTerminal:
+            ready = False
+            root_requested = False
+            root_ready = False
+
+            def expect(self, pattern, timeout=120):
+                if re.search(pattern, '\x1b[?2004h'):
+                    self.ready = True
+                    self.root_ready = self.root_requested
+
+            def send(self, value):
+                # Login/PAM and sudo can flush input before the shell reader
+                # starts. A prompt-independent login still needs this barrier.
+                self.ready = False
+                if value.startswith('sudo -n bash'):
+                    self.root_requested = True
+
+            def command(self, command):
+                if not self.ready:
+                    raise AssertionError('The command was sent before the terminal could read it.')
+                self.ready = False
+
+        terminal = LoginTerminal()
+        verify.installed_login(terminal)
+        self.assertTrue(terminal.root_ready)
+
     def run_command(self, command):
         with tempfile.TemporaryDirectory() as temporary:
             vm = verify.VM(Path(temporary), Path('unused.iso'), Path('unused.qcow2'))
