@@ -24,6 +24,8 @@ dux-files-bin
 alacritty
 neovim
 chromium
+papers
+snapshot
 git
 github-cli
 fastfetch
