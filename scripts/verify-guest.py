@@ -663,6 +663,52 @@ def wallpaper_preserved():
         run('sh', '-c', f'userdel -r {user} 2>/dev/null || true')
 
 
+def session_path():
+    # Behavioral qualification for the ~/.local/bin session PATH: an innocuous
+    # wrapper must resolve in a fresh graphical session, the systemd user
+    # environment, login shells, and a Niri-spawned process. Creates its own
+    # disposable wrapper, so no personal dotfiles are required. Run after
+    # graphical_login, while Niri runs as tester.
+    account = pwd.getpwnam('tester')
+    home = Path(account.pw_dir)
+    bindir = home / '.local/bin'
+    bindir.mkdir(parents=True, exist_ok=True)
+    probe = bindir / 'dux-path-probe'
+    probe.write_text('#!/bin/sh\nprintf probe-ok > /tmp/dux-path-probe-marker\n')
+    probe.chmod(0o755)
+    run('chown', f'{account.pw_name}:{account.pw_gid}', str(bindir), str(probe))
+    marker = Path('/tmp/dux-path-probe-marker')
+    if marker.is_file():
+        marker.unlink()
+    try:
+        environment = user_command('systemctl', '--user', 'show-environment', capture=True).stdout
+        service_path = next(line.removeprefix('PATH=') for line in environment.splitlines()
+                            if line.startswith('PATH='))
+        assert str(bindir) in service_path.split(':'), f'systemd user PATH lacks {bindir}: {service_path}'
+        user_command('bash', '-lc', 'command -v dux-path-probe')
+        if Path('/usr/bin/fish').is_file():
+            user_command('fish', '--login', '-c', 'command -v dux-path-probe')
+        niri_pid = run('pgrep', '-u', account.pw_name, '-x', 'niri',
+                       stdout=subprocess.PIPE).stdout.strip()
+        assert niri_pid.isdecimal(), 'No running Niri session for the test user.'
+        environ = Path(f'/proc/{niri_pid}/environ').read_bytes().split(b'\0')
+        niri_path = next(entry.decode().removeprefix('PATH=') for entry in environ
+                         if entry.startswith(b'PATH='))
+        assert str(bindir) in niri_path.split(':'), f'Niri PATH lacks {bindir}: {niri_path}'
+        user_command('niri', 'msg', 'action', 'spawn', '--', 'dux-path-probe')
+        wait_until('Niri-spawned ~/.local/bin wrapper', lambda:
+                   marker.is_file() and marker.read_text() == 'probe-ok', timeout=30)
+        Path('/run/verify/session-path.json').write_text(json.dumps({
+            'wrapper': str(probe), 'systemd_user_path': service_path,
+            'niri_path': niri_path, 'niri_pid': int(niri_pid),
+            'login_shells': ['bash-lc'] + (['fish-login'] if Path('/usr/bin/fish').is_file() else []),
+            'niri_spawn_marker': marker.read_text(),
+        }, indent=2) + '\n')
+    finally:
+        probe.unlink(missing_ok=True)
+        marker.unlink(missing_ok=True)
+
+
 def pdf():
     assert user_command('xdg-mime', 'query', 'default', 'application/pdf', capture=True).stdout.strip() == 'org.gnome.Papers.desktop'
     assert Path('/usr/share/applications/org.gnome.Papers.desktop').is_file(), 'Papers desktop file missing.'
@@ -876,6 +922,8 @@ if __name__ == '__main__':
         wallpaper()
     elif action == 'wallpaper-preserved':
         wallpaper_preserved()
+    elif action == 'session-path':
+        session_path()
     elif action == 'pdf':
         pdf()
     elif action == 'camera':

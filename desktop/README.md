@@ -29,3 +29,13 @@ Logind suspends on lid-close when undocked and permits docked use. Niri already
 controls the built-in panel according to the lid switch. Intermittent wakeups
 still need physical laptop evidence: `journalctl -b -u systemd-logind -u
 systemd-suspend` and `systemd-inhibit --list` show sleep events and inhibitors.
+
+Session PATH: `~/.local/bin` resolves in POSIX login shells
+(`/etc/profile.d/dux-localbin.sh`), fish (`/usr/share/fish/vendor_conf.d`),
+systemd user services (`~/.config/environment.d/90-dux.conf` PATH entry) and
+Niri spawns (greetd launches `dux-niri-session`, which appends then execs
+niri). Every context appends, preserving system and Nix PATH entries; no mise
+shims are added. `environment.d` alone cannot reach Niri: greetd starts the
+compositor directly, not as a systemd user service, and Niri `spawn` does no
+shell expansion. `scripts/verify-guest.py session-path` qualifies all four
+contexts on a live VM, including a Niri-spawned wrapper writing a marker.
