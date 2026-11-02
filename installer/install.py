@@ -404,7 +404,7 @@ def install(settings):
             write('/etc/profile.d/editor.sh', 'export EDITOR=nvim\nexport VISUAL=nvim\n')
             write('/etc/xdg/mimeapps.list', '[Default Applications]\ntext/html=chromium.desktop\n'
                   'application/xhtml+xml=chromium.desktop\nx-scheme-handler/http=chromium.desktop\n'
-                  'x-scheme-handler/https=chromium.desktop\n')
+                  'x-scheme-handler/https=chromium.desktop\napplication/pdf=org.gnome.Papers.desktop\n')
             shutil.copytree(SHARE / 'desktop', TARGET, dirs_exist_ok=True)
             # arch-chroot mounts a fresh /run, so stage outside that mountpoint.
             target_script = TARGET / 'root/configure-target.sh'

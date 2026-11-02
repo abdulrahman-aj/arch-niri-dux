@@ -4,6 +4,7 @@
 import json
 import html
 import os
+import struct
 from pathlib import Path
 import pwd
 import re
@@ -181,7 +182,7 @@ def serial_console(enabled, root='/'):
         run('limine-mkinitcpio')
 
 
-def user_command(*args, capture=False):
+def user_command(*args, capture=False, timeout=None):
     user = pwd.getpwnam('tester')
     runtime = Path(f'/run/user/{user.pw_uid}')
     wayland = next((path for path in runtime.glob('wayland-*') if stat.S_ISSOCK(path.stat().st_mode)), None)
@@ -194,7 +195,7 @@ def user_command(*args, capture=False):
                'XDG_SESSION_TYPE=wayland',
                'XDG_CURRENT_DESKTOP=niri', f'NIRI_SOCKET={niri}', f'XDG_RUNTIME_DIR={runtime}',
                f'DBUS_SESSION_BUS_ADDRESS=unix:path={runtime}/bus', f'WAYLAND_DISPLAY={wayland.name}',
-               *args, stdout=subprocess.PIPE if capture else None)
+               *args, stdout=subprocess.PIPE if capture else None, timeout=timeout)
 
 
 def ipc(application, method, *parameters):
@@ -581,6 +582,212 @@ def restored():
     storage()
 
 
+def sample_pdf_bytes():
+    text = b'Dux verification PDF works'
+    content = b'BT /F1 18 Tf 20 80 Td (' + text + b') Tj ET'
+    objects = [
+        b'<< /Type /Catalog /Pages 2 0 R >>',
+        b'<< /Type /Pages /Kids [3 0 R] /Count 1 >>',
+        b'<< /Type /Page /Parent 2 0 R /MediaBox [0 0 300 144] '
+        b'/Resources << /Font << /F1 4 0 R >> >> /Contents 5 0 R >>',
+        b'<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>',
+        b'<< /Length %d >>\nstream\n' % len(content) + content + b'\nendstream',
+    ]
+    pdf = b'%PDF-1.4\n'
+    offsets = []
+    for number, body in enumerate(objects, start=1):
+        offsets.append(len(pdf))
+        pdf += b'%d 0 obj\n' % number + body + b'\nendobj\n'
+    xref = len(pdf)
+    pdf += b'xref\n0 %d\n' % (len(objects) + 1)
+    pdf += b'0000000000 65535 f \n'
+    for offset in offsets:
+        pdf += b'%010d 00000 n \n' % offset
+    pdf += b'trailer\n<< /Size %d /Root 1 0 R >>\nstartxref\n%d\n%%%%EOF' % (
+        len(objects) + 1, xref)
+    return pdf
+
+
+def png_dimensions(path):
+    data = path.read_bytes()
+    assert data[:8] == b'\x89PNG\r\n\x1a\n', 'Not a PNG screenshot.'
+    assert data[12:16] == b'IHDR', 'Screenshot PNG has no IHDR.'
+    width, height = struct.unpack('>II', data[16:24])
+    assert width > 0 and height > 0, 'Rendered screenshot has no dimensions.'
+    return width, height
+
+
+def wallpaper():
+    session = Path('/home/tester/.local/state/dms/session.json')
+    assert session.is_file(), 'Dux first-session state is missing.'
+    data = json.loads(session.read_text())
+    preset = data.get('materialWallpapers', {}).get('', {}).get('shared', {}).get('preset')
+    assert preset == 'bloom', f'First-session wallpaper must be bloom, found {preset!r}.'
+    assert not data.get('wallpaperPath'), 'Material wallpaper must be active (empty wallpaperPath).'
+    assert not data.get('monitorWallpapers'), 'Fresh user must not have per-monitor overrides.'
+    screenshot('02-wallpaper-bloom.png')
+    evidence = Path('/run/verify/02-wallpaper-bloom.png')
+    width, height = png_dimensions(evidence)
+    Path('/run/verify/wallpaper.json').write_text(json.dumps({
+        'preset': preset, 'wallpaperPath': data.get('wallpaperPath', ''),
+        'width': width, 'height': height,
+        'note': 'Parent visually confirms bloom vs dank in 02-wallpaper-bloom.png; '
+                'settings plus a dimensioned render do not assert the visual match in code.',
+    }, indent=2) + '\n')
+
+
+def wallpaper_preserved():
+    # Invoke the real script for a disposable existing-state user and verify
+    # the wallpaper choice is unchanged. No source-string checks.
+    user = 'dux-preserve-check'
+    run('sh', '-c', f'userdel -r {user} 2>/dev/null || true')
+    run('useradd', '-m', '-s', '/bin/bash', user)
+    try:
+        session = Path(f'/home/{user}/.local/state/dms/session.json')
+        session.parent.mkdir(parents=True, exist_ok=True)
+        custom = {'configVersion': 7,
+                  'materialWallpapers': {'': {'shared': {'preset': 'orbit', 'seed': '#ff0000'}}}}
+        session.write_text(json.dumps(custom))
+        before = session.read_text()
+        pam = Path('/etc/pam.d/greetd')
+        pam_backup = pam.read_bytes()
+        try:
+            run('bash', '/usr/local/lib/arch-niri-dux/configure-desktop', user)
+        finally:
+            pam.write_bytes(pam_backup)
+        assert session.read_text() == before, 'Real configure-desktop overwrote the existing wallpaper choice.'
+        Path('/run/verify/wallpaper-preserved.json').write_text(json.dumps({
+            'user': user, 'preset': 'orbit', 'preserved': True,
+        }, indent=2) + '\n')
+    finally:
+        run('sh', '-c', f'userdel -r {user} 2>/dev/null || true')
+
+
+def pdf():
+    assert user_command('xdg-mime', 'query', 'default', 'application/pdf', capture=True).stdout.strip() == 'org.gnome.Papers.desktop'
+    assert Path('/usr/share/applications/org.gnome.Papers.desktop').is_file(), 'Papers desktop file missing.'
+    assert 'application/pdf=org.gnome.Papers.desktop' in Path('/etc/xdg/mimeapps.list').read_text()
+    sample = Path('/tmp/dux-verification.pdf')
+    sample.write_bytes(sample_pdf_bytes())
+    assert sample.stat().st_size > 0
+    # Qualify the default association through the real opener, not a direct
+    # papers launch: this is what proves xdg-open routes PDFs to Papers.
+    user_command('sh', '-c', 'rm -f /tmp/xdg-open-pdf.log; xdg-open /tmp/dux-verification.pdf >/tmp/xdg-open-pdf.log 2>&1 &')
+    try:
+        wait_until('Papers graphical window via xdg-open default', lambda: any(
+            'papers' in (window.get('app_id') or '').lower() for window in windows()), timeout=90)
+        screenshot('02-papers.png')
+        rendered = Path('/run/verify/02-papers.png')
+        width, height = png_dimensions(rendered)
+        Path('/run/verify/pdf.json').write_text(json.dumps({
+            'default': 'org.gnome.Papers.desktop', 'method': 'xdg-open',
+            'sample': str(sample), 'sample_size': sample.stat().st_size,
+            'width': width, 'height': height,
+            'note': 'Parent reviews 02-papers.png for document content vs an error page.',
+        }, indent=2) + '\n')
+    finally:
+        user_command('sh', '-c', 'pkill -x papers || pkill -f papers || true')
+
+
+def pipewire_video_sources():
+    try:
+        output = user_command('pw-dump', capture=True).stdout
+    except (OSError, subprocess.CalledProcessError):
+        return []
+    try:
+        objects = json.loads(output)
+    except ValueError:
+        return []
+    sources = []
+    for obj in objects:
+        if not isinstance(obj, dict) or obj.get('type') != 'PipeWire:Interface:Node':
+            continue
+        info = obj.get('info', {})
+        props = obj.get('props', {}) or (info.get('props', {}) if isinstance(info, dict) else {})
+        if props.get('media.class') == 'Video/Source':
+            sources.append(props.get('node.name') or props.get('node.description') or 'video-source')
+    return sources
+
+
+def focus_camera():
+    window = next(window for window in windows()
+                  if 'snapshot' in (window.get('app_id') or '').lower())
+    user_command('niri', 'msg', 'action', 'focus-window', '--id', str(window['id']))
+
+
+def camera_cleanup():
+    pid_file = Path('/tmp/dux-synthetic-camera.pid')
+    if pid_file.is_file():
+        pid = int(pid_file.read_text())
+        pid_file.unlink()
+        user_command('sh', '-c', f'kill {pid} 2>/dev/null || true')
+    user_command('sh', '-c', 'pkill -x snapshot || true')
+
+
+def camera():
+    assert Path('/usr/share/applications/org.gnome.Snapshot.desktop').is_file()
+    # Supply only a generated video stream, never a physical camera/microphone.
+    user_command('gsettings', 'set', 'org.gnome.Snapshot', 'enable-audio-recording', 'false')
+    user_command('gsettings', 'set', 'org.gnome.Snapshot', 'countdown', '0')
+    user_command('gsettings', 'set', 'org.gnome.Snapshot', 'capture-mode', "'picture'")
+    Path('/tmp/dux-synthetic-camera.pid').unlink(missing_ok=True)
+    user_command('sh', '-c',
+                 'gst-launch-1.0 videotestsrc pattern=ball is-live=true ! '
+                 'video/x-raw,width=640,height=480,framerate=30/1 ! pipewiresink mode=provide '
+                 'stream-properties="properties,media.class=Video/Source,media.role=Camera,node.name=DuxTestCamera" '
+                 'client-name="DUX verification camera" '
+                 '>/tmp/dux-synthetic-camera.log 2>&1 & echo $! > /tmp/dux-synthetic-camera.pid')
+    try:
+        wait_until('Synthetic PipeWire camera', lambda:
+                   'DuxTestCamera' in pipewire_video_sources(), timeout=60)
+        before = [str(path) for folder in ('Pictures', 'Videos')
+                  for path in Path('/home/tester', folder, 'Camera').glob('*')]
+        user_command('sh', '-c', 'snapshot --debug >/tmp/snapshot.log 2>&1 &')
+        wait_until('Snapshot window', lambda: any(
+            'snapshot' in (window.get('app_id') or '').lower() for window in windows()), timeout=60)
+        focus_camera()
+        screenshot('02-snapshot.png')
+        width, height = png_dimensions(Path('/run/verify/02-snapshot.png'))
+        Path('/run/verify/camera.json').write_text(json.dumps({
+            'synthetic': True, 'source': 'DuxTestCamera', 'before': before,
+            'width': width, 'height': height,
+        }, indent=2) + '\n')
+    except Exception:
+        camera_cleanup()
+        raise
+
+
+def camera_media(video=False):
+    evidence = Path('/run/verify/camera.json')
+    state = json.loads(evidence.read_text())
+    folder = Path('/home/tester', 'Videos' if video else 'Pictures', 'Camera')
+    def completed_capture():
+        for path in folder.glob('*'):
+            if str(path) in state['before'] or not path.is_file():
+                continue
+            data = path.read_bytes()
+            if video:
+                valid = len(data) > 512 and (data.startswith(b'\x1aE\xdf\xa3') or data[4:8] == b'ftyp')
+            else:
+                valid = data.startswith(b'\xff\xd8') and data.endswith(b'\xff\xd9')
+            if valid:
+                return path
+        return None
+    captured = wait_until('Snapshot video recording' if video else 'Snapshot photograph',
+                          completed_capture, timeout=60)
+    target = Path('/run/verify') / ('camera-video' if video else 'camera-photo')
+    target = target.with_suffix(captured.suffix)
+    shutil.copyfile(captured, target)
+    state['video' if video else 'photo'] = {'path': str(captured), 'bytes': captured.stat().st_size}
+    evidence.write_text(json.dumps(state, indent=2) + '\n')
+    if video:
+        screenshot('02-snapshot-captured.png')
+        camera_cleanup()
+    else:
+        user_command('gsettings', 'set', 'org.gnome.Snapshot', 'capture-mode', "'video'")
+        focus_camera()
+
+
 def splash_fallback(disable, root='/'):
     # Real text-fallback path: Plymouth stays installed, but the kernel
     # disables its splash so the plain console passphrase prompt is used.
@@ -665,5 +872,21 @@ if __name__ == '__main__':
         assert 'true' in user_command('dms', 'ipc', 'call', 'lock', 'isLocked', capture=True).stdout.lower()
     elif action == 'unlocked':
         assert 'false' in user_command('dms', 'ipc', 'call', 'lock', 'isLocked', capture=True).stdout.lower()
+    elif action == 'wallpaper':
+        wallpaper()
+    elif action == 'wallpaper-preserved':
+        wallpaper_preserved()
+    elif action == 'pdf':
+        pdf()
+    elif action == 'camera':
+        camera()
+    elif action == 'camera-photo':
+        camera_media()
+    elif action == 'camera-screen':
+        screenshot('02-snapshot.png')
+    elif action == 'camera-video':
+        camera_media(video=True)
+    elif action == 'camera-cleanup':
+        camera_cleanup()
     else:
         raise SystemExit('Unknown guest probe')

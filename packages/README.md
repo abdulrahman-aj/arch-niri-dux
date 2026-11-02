@@ -1,7 +1,9 @@
 # Package inputs
 
 `closure.lock.json` pins the signed Arch/Omarchy binary packages. Arch's official
-repositories take precedence over Omarchy on the installed system.
+repositories take precedence over Omarchy on the installed system. Papers and
+Snapshot also come from Arch's signed packages. New entries extend the closure
+without changing existing pins unless explicitly refreshed.
 
 `aur/` contains unmodified, reviewed recipes for Dux Greeter, Search, Calendar
 and Files 2.0.0. `aur-recipes.json` records their AUR commits and file hashes.

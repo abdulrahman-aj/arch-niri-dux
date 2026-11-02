@@ -384,7 +384,7 @@ def main():
         passed('UEFI boot from encrypted disk without installation ISO')
         vm.command('test -e /dev/mapper/dux-root; findmnt -n -o FSTYPE / | grep -x btrfs; test "$(ls /sys/class/net | tr "\\n" " ")" = "lo "')
         vm.command('cat /proc/cmdline; ! grep -q /@snapshots/ /proc/cmdline; systemctl is-enabled greetd; systemctl is-active greetd; test -f /home/tester/.config/niri/config.kdl')
-        vm.command('systemctl is-active NetworkManager; systemctl is-enabled bluetooth; command -v nvim chromium alacritty yay niri dms')
+        vm.command('systemctl is-active NetworkManager; systemctl is-enabled bluetooth; command -v nvim chromium alacritty yay niri dms papers snapshot')
         vm.command('mkdir -p /run/verify; mount -t 9p -o trans=virtio,version=9p2000.L verify /run/verify || mountpoint -q /run/verify')
         vm.command('python /run/verify/verify-guest.py plymouth-config')
         vm.command('python /run/verify/verify-guest.py plymouth-status')
@@ -402,6 +402,34 @@ def main():
         # Dismiss upstream's first-login What's New through its normal button.
         vm.click(0.57, 0.92)
         time.sleep(0.5)
+        vm.command('python /run/verify/verify-guest.py wallpaper', timeout=90)
+        passed('Bloom material wallpaper is the fresh-user default and rendered')
+        vm.command('python /run/verify/verify-guest.py wallpaper-preserved', timeout=180)
+        passed('Real configure-desktop preserved an existing wallpaper choice')
+        vm.command('python /run/verify/verify-guest.py pdf', timeout=180)
+        passed('Papers is the default PDF viewer and rendered a sample document')
+        vm.command('python /run/verify/verify-guest.py camera', timeout=300)
+        permission_deadline = time.monotonic() + 60
+        while time.monotonic() < permission_deadline:
+            vm.command('python /run/verify/verify-guest.py camera-screen')
+            if (click_screen_text(vm, directory / '02-snapshot.png', 'Grant Access')
+                    or click_screen_text(vm, directory / '02-snapshot.png', 'GrantAccess')):
+                break
+            time.sleep(1)
+        else:
+            raise TimeoutError('Snapshot did not request camera permission on the fresh installation.')
+        time.sleep(3)
+        vm.command('python /run/verify/verify-guest.py camera-screen')
+        # Use Snapshot 51's upstream shutter shortcut to exercise its own
+        # capture path in both modes, rather than generating files separately.
+        # https://github.com/GNOME/snapshot/blob/51.0/src/application.rs
+        vm.key('t')
+        vm.command('python /run/verify/verify-guest.py camera-photo', timeout=90)
+        vm.key('t')
+        time.sleep(3)
+        vm.key('t')
+        vm.command('python /run/verify/verify-guest.py camera-video', timeout=90)
+        passed('Snapshot preview, shutter photo and video recording work with a synthetic camera')
         vm.command('python /run/verify/verify-guest.py focus-browser')
         vm.key('o')
         vm.command('python /run/verify/verify-guest.py file-chooser', timeout=90)

@@ -44,6 +44,7 @@
     "niri",
     "noto-fonts",
     "noto-fonts-emoji",
+    "papers",
     "pipewire",
     "pipewire-alsa",
     "pipewire-pulse",
@@ -53,6 +54,7 @@
     "python",
     "snap-pac",
     "snapper",
+    "snapshot",
     "sof-firmware",
     "udisks2",
     "vulkan-intel",
@@ -66,6 +68,15 @@
     "yay"
   ],
   "packages": [
+    {
+      "name": "aalib",
+      "version": "1.4rc5-19",
+      "filename": "aalib-1.4rc5-19-x86_64.pkg.tar.zst",
+      "sha256": "d1000be98fdbb30d96a1d77fd6cb2b666c2c6cca780c600cf12dfd42caf5f71d",
+      "url": "https://geo.mirror.pkgbuild.com/extra/os/x86_64/aalib-1.4rc5-19-x86_64.pkg.tar.zst",
+      "repository": "extra",
+      "signature": "iQIzBAABCgAdFiEEFORv5f1p8uKH4kTbYyw8wNHJyvYFAmiQxH4ACgkQYyw8wNHJyvbkpw//WJWNEYRBrjDuN03WttH8qXtSTMo68yEFt9K7H9i60L00K7I18yLT7FxaP5hKfH4aWEzTY8xHjb7L7/+o+TT/2r859zJKrqqftHVX52oMi57TC5IdiJBd/Njey5GtQZGrFKMdd7rm37ze1Ea6xv9XaWTImKYMQQGRowfLxwUA7RSwOS/DPqWGwR8IMD3cZHzG9eArPj/GpEfzCwWPcwU9fraTT7XYmxwD023ixFJcjbH/ArZWFfL5MhCXnl3LGALhpx6n+QymkOyaGPO4deiliEfmKexIqzW/LPFhccdq3kYob2AQu4jE1ogRjGf4YMZY2Z3ZggiL4ng9kosxtKvq2filIzBlNoAKr5iPCciDvpDtW7TkUga4mGKG/k/TLvq3dU6VLjx4DAfqe2iBoK2gott7FEP0ViHdRmsn6+KTG/MqHnOWNYDKypepwH64eEA4SrA2pw5tY0lyshEfqhRiqApOkvYdUL3kDbk1zc9fGW6MLeCNZbpzbkSuQPV3Cn/FkaXdlTexRqp7xMrV75zUHufsHRD0I+stNew1FwXnqcaHv0ouLJFVMXp+oJU85Mbbc9hfH9ziM2pn2cPiZCG3VMHQG1yRwey4qQqvd0b9rUojLyXlLPw2NtSLOyGNNEqKzrJWtFQUG/WkuAC83KZNTGkypbPxKCKWz8NinzCwTN4="
+    },
     {
       "name": "abseil-cpp",
       "version": "20260817.0-2",
@@ -436,6 +447,15 @@
       "signature": "iHUEABYKAB0WIQSDvIiJNRtd67toQW64rAhgDxCM3wUCarQpjAAKCRC4rAhgDxCM3762AQClF6jJ2uNuzKF2xPH8mmChwhnD9Wyulyhy7Fh+eGLhcgEA2WthZcO51hMglzTef8e7I6fZSVn5vah7N22P3shRyQA="
     },
     {
+      "name": "cdparanoia",
+      "version": "10.2-10",
+      "filename": "cdparanoia-10.2-10-x86_64.pkg.tar.zst",
+      "sha256": "03cafb8d7d0cdd713aec4e9e6cf8137562ddbbb07ac10c5a24ae16bba14bc52f",
+      "url": "https://geo.mirror.pkgbuild.com/extra/os/x86_64/cdparanoia-10.2-10-x86_64.pkg.tar.zst",
+      "repository": "extra",
+      "signature": "iQIzBAABCgAdFiEEtZcfLFwQqaCMYAMPeGxj8zDXy5IFAmpaCsgACgkQeGxj8zDXy5LEbhAAuRz/sPSI9iTvY+zp20At8WuTS2Veq8FM4ekOxEyJb6DD04U5ArqIN1f2bLvqiwReZuTv8jcIkBK9vz+yzuW19FhfdjYraBLvIC0VZRFJfb+yVaPjrjWZyPyHx36yGAHz/0CJeVIAFMXf4hB9GGR2b8qC23iuxECbIbPu6vsZuGsyw9xNLHvawoHpb+09Dz+0Hl603loMrXiIsT/u+cvTWIs2EusNjh1AnWCmmE5fX/hV8vj7HfH+73XcEH8tCjfH9Xlbvjdp0S3F4l6dw57G2KYKEYwgfH7JAUyk3H6lvvpqAs2somXDkNBJjb2tf37OLAh37VEUzw+Lz1dsK9vHJq6PEJdhNosJwm7fo0LFL7oGXXLEWEulTMXejlwJYUJpMQXYGB0tqILuzm0LaswD9+q2muodRklkNbxb0sDrasTy87I1Q2FoMUQDQeo+8EWC3osIF7QZvMCxQrWLGnF8Aid1IY/gj77cnuFg9n2H8X3GSHqQ1UGit+8t4OtVbDlapYTzPG2SFgkTmGsuG9q7dEJGUVmg5M33eq1SMqB9RU1MdyueOKk1a19MgfXqMuXm7Sqe3UvL4sgJ9fkqYVrFBzb0NsfhnWheMJEM6PAtVK2gQ2ftScDVP8cqaleN0JvRB4gSMFayBqLBt3vs9X9SvfPYVS9Vtcbbn9/qWI1KPLw="
+    },
+    {
       "name": "chromium",
       "version": "156.0.8078.79-1",
       "filename": "chromium-156.0.8078.79-1-x86_64.pkg.tar.zst",
@@ -598,6 +618,15 @@
       "signature": "iHUEABYKAB0WIQQEKYl95fO9rFN6MGltQr3RFuAGjwUCaA1ZXAAKCRBtQr3RFuAGj2KAAP938hGKN9QY8gvzXKo0GuLn4/Eki9CdiOQbosJHYAwiyQD+LZDxWiNk0REKVmH+Aywj43zeCHl4pIT5ldayxUvuigM="
     },
     {
+      "name": "djvulibre",
+      "version": "3.5.30.1-1",
+      "filename": "djvulibre-3.5.30.1-1-x86_64.pkg.tar.zst",
+      "sha256": "9fe17b451dac3c169aaa8e4ed8dae5776e1410f7712d8bd2751b6c3d4472ed5d",
+      "url": "https://geo.mirror.pkgbuild.com/extra/os/x86_64/djvulibre-3.5.30.1-1-x86_64.pkg.tar.zst",
+      "repository": "extra",
+      "signature": "iQIzBAABCgAdFiEEFORv5f1p8uKH4kTbYyw8wNHJyvYFAmo1A6cACgkQYyw8wNHJyvY6RA//RXdZvba4Wb68zVRukEX9z0AcVA2SUwO896GhPcxH4e1pNjaB6VWHuFbAnObhXeWonSZxSsOagWbULAPnU6S/9eM3/VBOZhQd5vMblvtRSJQqcDSud6rub5Qf6SqT+RuFs10zkuv/007j0w8fO0dmqJ2MiDxsNkcwpzZCXLOH8YpbZeluinAzojuYsHv3ZwQ43EEQ5KHomG5wqBuYSST3ZFtRO8EDYV6/zPkPszA4brfWaDgU/mzxymmPHme1G+ToEU/f3VFpzrOCa0tXT8E6O4ULn0WPbig7LzKYKjDzfnzd1ViZBhynpElIuc7uKpNV2aIKczcSsGcddj5JPJYqDqNzj1DWCQb9VMaYE2AmZy1589TMqJ+b6g4hDYq1HFh7PNVHB3TzGrcxP+5EFLOHw8YcQgjCk0xgKdCK5i5wgQ1qDqI2pqJOtX1mlOBR9j0e08FhV1jAmyKG5R2eX7GmMHtrrnPKcwNZ0W3RM5OVitOmZ/or9zcr3tjh1Nf53W9WZzo/7X9wDhU8sm5n62tNuc1ZIA9M3K8SH0YUCmbkzcDKe2Km27x4Ddj1jcLPXtpKJMMNRC+E8EZzHXqNrbg36K4wQTQjBnoEp4mH7I0zYFTOFA/u1C81AWjKjLWvQsI9SS5otA40XlSD26wS1zOXeALKUWhz9suPOOfUyJwmEEc="
+    },
+    {
       "name": "dosfstools",
       "version": "4.2-5",
       "filename": "dosfstools-4.2-5-x86_64.pkg.tar.zst",
@@ -677,6 +706,15 @@
       "url": "https://geo.mirror.pkgbuild.com/core/os/x86_64/elfutils-0.197-1-x86_64.pkg.tar.zst",
       "repository": "core",
       "signature": "iQIzBAABCgAdFiEELjbYYgIhSC/EXLfyqRdkdZMmtEAFAmrWzRAACgkQqRdkdZMmtEAUXBAAuNhHr35sN1Yjwh2nKs2TNOgyQVB60gAvf0b0ico9H2YXw3jP61ZAYpCMNUN5BvttrsPqSpKL9zWt/bfPpi9rt7r3NWG6hhJp5qaMaoYp1hlwJe5ds8zYaugiN7qnxGc3k0CuWs0Z8zMV63DHbBni+zIEbx94dLKhBpoacYorMomife/L/VFwF9ILPJdMODAF1DpPHS7dxckZboeuyCyWYBSNa4al2D1y/QYuLrta9ivjDDvR3kXJYNVHnYs56yDW6zcxm2FEZc55k10LnZM+MuSCOKsf/dFlXEv+1Z/XpHQEIEsubFqACcCwf1AuPeT3oxtNNlPcsFUBHfOqE2vA6RDmsFV2bHBE2OPGnVVJSw1MXgMY0BHBG/UIVtvD5MvveXViug/Gi82as8sWmYaszT8kSZdCl1Bm/fIUtd+6TS9WOelTUNyFJsYkztAnoHJd1easCpduZabcaB4IEYRtRDHjiVI1EFhPfeLlMJVzD6NZ93J7xjQ3BbyJdEGP9MDSNd9j1aMiz1QoyqEfywNcjZohkr4IGCa7WCdF95dLrM1g6WbAaSM9gJdtWKFrFeynGH+39HWiaa/DbweYtF6NL0FWaj+bv7wVHT9f9AYnYFrFExO8SBJXIEBqQ9h9LBfO9Qhh5LQbJadBLI2bC0C9F3RibHHbXHBTeCPYeyIBqv4="
+    },
+    {
+      "name": "enchant",
+      "version": "2.8.21-1",
+      "filename": "enchant-2.8.21-1-x86_64.pkg.tar.zst",
+      "sha256": "019efd404da395c3d0c4e8a1aa15ced72d340b1b9f18900a538e13d8f917c75e",
+      "url": "https://geo.mirror.pkgbuild.com/extra/os/x86_64/enchant-2.8.21-1-x86_64.pkg.tar.zst",
+      "repository": "extra",
+      "signature": "iQIzBAABCgAdFiEExdKm4O0tEcZrn6KjBjE5EQV91agFAmqegYUACgkQBjE5EQV91ahGvg/+I6FdQBl50n7I3K0YFc8PlKsYhOZDZqC2JOGiiq8hrjAQ1fYQqZ0y94mhgyuX2x/4w+btuHE3Pbqm4CNXkqoJXrmrPsP04qHYJHEs6HY0Bmxr7RVDRm2HRpfpPkbG6A6taowEy8hhnM/Qt204GJ0I4zTcN1LcYmOtvB55/sXx/EPZqX4u6soNhge5ow/w9l07ftQvHODIUQgJdY+0x8DPqufFmTUYBUr8Y4dggEorpdIZA0fletrDfZp9Mh4z7P/Gi29OJY10lcb5i+7p/OO9A2PTMMVcjYDiFvkGIZSEKQBu5xmgWWerl3cka07IQ7aFPb4chNBk7JavMSNiNher2cNfH+pAd3qJH5rN/7p+PFzzcunceqP8s8j+7TOHJTEaXkUfEvvb27MWkqldBsPaOGLiTP0wrs6f6BaLR/qKSBkmhbjQxzglmXr9lsif1wzDcbtsidudmJad81pZGi77IT/t1xWoCHOFLMPiTgQEIRh442Hl8oyP7N2Bgo5H9Kt88Lbduf8pFF7WhhdhQMgiuMvS/8synFy8RbqecgqUuZYmEUluj5w+Ic3lYNifbMm+Ou9BC1gjLiLeehMxbFwnqjYDNl6IubqBItGogWQlmRh9rGJ2j8jl+0ysfn68P59y/ciFbK8dIlKZHMFG4V4KkCxmgKin2bCdyTUOAvveoXU="
     },
     {
       "name": "erofs-utils",
@@ -803,6 +841,15 @@
       "url": "https://geo.mirror.pkgbuild.com/extra/os/x86_64/fontconfig-2:2.18.3-2-x86_64.pkg.tar.zst",
       "repository": "extra",
       "signature": "iHUEABYKAB0WIQSDvIiJNRtd67toQW64rAhgDxCM3wUCaosNYQAKCRC4rAhgDxCM3yA7AP9qy1kU95WVVRHVvhX065AETWiL1UmcCDrgpjXPSBzuBgD/QL7vsMSTE3jYCxEbu8Ya3Jzo1KvuzD24VR0h/1As8Ak="
+    },
+    {
+      "name": "freeglut",
+      "version": "3.8.0-1",
+      "filename": "freeglut-3.8.0-1-x86_64.pkg.tar.zst",
+      "sha256": "654537d5b3652fb115b018fcb971074929cf9e5101279c3e16bfd296052334ee",
+      "url": "https://geo.mirror.pkgbuild.com/extra/os/x86_64/freeglut-3.8.0-1-x86_64.pkg.tar.zst",
+      "repository": "extra",
+      "signature": "iHUEABYKAB0WIQSDvIiJNRtd67toQW64rAhgDxCM3wUCaRoicgAKCRC4rAhgDxCM3yr4AP9dPWXu9rXd4wi7vyEGZC8UhkH6hA+oOEh2NSA1NBfEWAD+IiOjA2Po2xFhL/hyNBgddDYq/4yX5m+TnnCYR9MN3gI="
     },
     {
       "name": "freetype2",
@@ -1048,6 +1095,15 @@
       "signature": "iQIzBAABCgAdFiEEJipY7GxR9+o5Wy4t/cMEC5Ksp0gFAmq74+UACgkQ/cMEC5Ksp0hHeA//aZfn2qq19/iv/Cy/9LHNNMFDPELhNcN8CvNPNFoHVuscrkNaKeigOaGXKUa1uds3sunx95auMad3JLi3Ads3kEljo327YmqTAQFIpESV6JpgmtS2oKSMSz2fvJWVArovie4KapKUtrZG5N0N++0HLrm/Yq6ucGXRML13Xf6TTjJ089q4/0v0LZjD/7mUEyG4qdE0EixWtGPGrtjXtRWK9Zuk14mgEc3v0b1Q/RMDX2OuIqrHtVP+0P7bRze+854elKGIaozWjEKmo+aHCG5CVQQRzfXb0awpgRXuNAIC0wT9Alls6u8kYuc9p30oNG/kTgus0l5fwdzBQIzcb82lp7rHfNpNFQjL9ro0y1u/Eq+SnkEI6a6H5ufaMGPkh/Hk+iVF9ixuXUnaRZmykwEL1oDhJi0wP1ifUiculIWnfgRBDBnHd+2CooJASFx9wF+Z8jL97w/QWo458ImjoBu2OBFZomhOVH4sCKFXP/hqIXpNIExvbnmZ4Y2wfX+Cs2O9p0HW6klcWnj/Gi5FkyznmVduwqAKHby4K/0ugdm+Em0qI1RCfyQ9skJpiCQQKgTAFGsNmvI0x3OUl3gDEy60z/7JlkvvJ745VL2kmCu5oQN6C68NheJ5mgu1Lav4lwglFggdMjSFFwhjTJ4qwrrnMArr9i1f9ARM//QVpd6gZl0="
     },
     {
+      "name": "glu",
+      "version": "9.0.3-3",
+      "filename": "glu-9.0.3-3-x86_64.pkg.tar.zst",
+      "sha256": "a981608b5a1c7d6cdee0e71385035dc45ada61dc1221429adde16909e17222e6",
+      "url": "https://geo.mirror.pkgbuild.com/extra/os/x86_64/glu-9.0.3-3-x86_64.pkg.tar.zst",
+      "repository": "extra",
+      "signature": "iQEzBAABCgAdFiEErcih/MFeAdRTEEGelGV6sg8qCSsFAmmQSecACgkQlGV6sg8qCSvq2ggAlyk4Jz/hr/kAdbDuY/gYs3Na51AHhuRoYj5rofm82kXJuLBK87FQLKSiNNRkODpJWy9bWDTmUe7Wokcd9yR7AQJxMXNGL8Y83Gdauq6OUUS5rhBm3Zqk2INsA3qK/yb74nCdBYPeMAk8af/2h46C+Q0DW9XftloUlogHM6Y5UHWcHjgIeMW18I3hnJEpkOUQKt6Yo1v/j1aPXZQb4Is8y3h+cnCjW089mBW341QJiPKsbL8PYaWnpScE82+bjSzSImFE+FEOfi2yvX2amcXjgXopLVDK7qxsfnpfcxQs4LZkz/EB4dRXPzppm1zDjvn6UzsgFPk9IyNmKX64Jqi0Gg=="
+    },
+    {
       "name": "glycin",
       "version": "2.2.5-1",
       "filename": "glycin-2.2.5-1-x86_64.pkg.tar.zst",
@@ -1291,6 +1347,24 @@
       "signature": "iHUEABYKAB0WIQSDvIiJNRtd67toQW64rAhgDxCM3wUCaj5E0wAKCRC4rAhgDxCM3ymkAP4lH+iSmbf/ecSXiTL120yerjtWA4GD3GJL0RGB29Pd+AD/Z7Zjuv7SnVxOnkjNixwP9l5WX9R5Ur0KbKLLXxX7+Ak="
     },
     {
+      "name": "gst-plugin-gtk4",
+      "version": "0.15.4-1",
+      "filename": "gst-plugin-gtk4-0.15.4-1-x86_64.pkg.tar.zst",
+      "sha256": "acb10e5154982d274f699d91940723a7d90d8674333e3fda9d649330841039de",
+      "url": "https://geo.mirror.pkgbuild.com/extra/os/x86_64/gst-plugin-gtk4-0.15.4-1-x86_64.pkg.tar.zst",
+      "repository": "extra",
+      "signature": "iHUEABYKAB0WIQSDvIiJNRtd67toQW64rAhgDxCM3wUCarNy1wAKCRC4rAhgDxCM38ChAQCeQDwNNfiwIDFcfciqIy9MVg+NIUUcdgZwsGNCOqQ7vgEAg54Y4lY0fTKWM2S9GXt0ds597OZG6kNEfz0FOdpUBw8="
+    },
+    {
+      "name": "gst-plugin-pipewire",
+      "version": "1:1.6.10-1",
+      "filename": "gst-plugin-pipewire-1:1.6.10-1-x86_64.pkg.tar.zst",
+      "sha256": "ec029399ae09a022e9c1cec0d2b7f2d79f7e61d4b13ce114f849a8cae3cc7353",
+      "url": "https://geo.mirror.pkgbuild.com/extra/os/x86_64/gst-plugin-pipewire-1:1.6.10-1-x86_64.pkg.tar.zst",
+      "repository": "extra",
+      "signature": "iHUEABYKAB0WIQSDvIiJNRtd67toQW64rAhgDxCM3wUCatpDdQAKCRC4rAhgDxCM31+MAQDAw4TmpYoDYIAxbT8gh3BOUriXmAEwidd6KX3MD8aH4gEA1BbNuBSYFVD+2WRvoR7JbsT141WXMc1ERCEffH7poQc="
+    },
+    {
       "name": "gst-plugins-bad-libs",
       "version": "1.28.8-1",
       "filename": "gst-plugins-bad-libs-1.28.8-1-x86_64.pkg.tar.zst",
@@ -1300,6 +1374,15 @@
       "signature": "iHUEABYKAB0WIQSDvIiJNRtd67toQW64rAhgDxCM3wUCasllmwAKCRC4rAhgDxCM31cqAPsHkdMUYvywN4al901LbDub1fHs/yMAT1QgnlfUttr6mwEA2VmkF4IqjvpQVozQDqKlTkjX9Arm/JL4R+jjXjoDUQE="
     },
     {
+      "name": "gst-plugins-base",
+      "version": "1.28.8-1",
+      "filename": "gst-plugins-base-1.28.8-1-x86_64.pkg.tar.zst",
+      "sha256": "be3374db7788bc4a8b6ad482910f24b3c5b3eb965a4472ca69e31a917b5ca102",
+      "url": "https://geo.mirror.pkgbuild.com/extra/os/x86_64/gst-plugins-base-1.28.8-1-x86_64.pkg.tar.zst",
+      "repository": "extra",
+      "signature": "iHUEABYKAB0WIQSDvIiJNRtd67toQW64rAhgDxCM3wUCasllnAAKCRC4rAhgDxCM3zXXAPsE0ub3ct/dEDD+4NQiMAjwSeIGp64U3d0reYRXMlWWKAEAyhVCsYhY+7Zl6oNjxyB6kJtTmNkosG4i1cmRAa6X2wM="
+    },
+    {
       "name": "gst-plugins-base-libs",
       "version": "1.28.8-1",
       "filename": "gst-plugins-base-libs-1.28.8-1-x86_64.pkg.tar.zst",
@@ -1307,6 +1390,15 @@
       "url": "https://geo.mirror.pkgbuild.com/extra/os/x86_64/gst-plugins-base-libs-1.28.8-1-x86_64.pkg.tar.zst",
       "repository": "extra",
       "signature": "iHUEABYKAB0WIQSDvIiJNRtd67toQW64rAhgDxCM3wUCasllnAAKCRC4rAhgDxCM3zPYAP0a1NliRjm8USaC1seYLr1yKxNXZwmW74GnBgJ2e2C1MwEAhjVj+bLtTlxQDGWjS54KtaLQJ+NPioJWKBoGLnBL3gQ="
+    },
+    {
+      "name": "gst-plugins-good",
+      "version": "1.28.8-1",
+      "filename": "gst-plugins-good-1.28.8-1-x86_64.pkg.tar.zst",
+      "sha256": "fbd6e5b7e8869764bb71cc74a0f701305c558407b7d756b6afa723f89bdfcc73",
+      "url": "https://geo.mirror.pkgbuild.com/extra/os/x86_64/gst-plugins-good-1.28.8-1-x86_64.pkg.tar.zst",
+      "repository": "extra",
+      "signature": "iHUEABYKAB0WIQSDvIiJNRtd67toQW64rAhgDxCM3wUCasllnAAKCRC4rAhgDxCM39KYAP9kq8dwTosL2dwcxKHWs++ml6uhU+HLNrT6bCYqLyr6zgD+L/PiydU2/1I4cPphXJQkyXEjd6sDcFocDPVtZvnhzwM="
     },
     {
       "name": "gstreamer",
@@ -1352,6 +1444,15 @@
       "url": "https://geo.mirror.pkgbuild.com/extra/os/x86_64/gtk4-1:4.24.1-1-x86_64.pkg.tar.zst",
       "repository": "extra",
       "signature": "iHUEABYKAB0WIQSDvIiJNRtd67toQW64rAhgDxCM3wUCasACVgAKCRC4rAhgDxCM3y3EAQDbuts90hNCWuic++FpTTSigCjSPGvZc657RUny8bcQ8gD/ZS9FLIV4W2xShQ4hiwYip8AHYNEPY3qO+oi10O1KCQg="
+    },
+    {
+      "name": "gtksourceview5",
+      "version": "5.22.0-1",
+      "filename": "gtksourceview5-5.22.0-1-x86_64.pkg.tar.zst",
+      "sha256": "757f385bfd457b91dd0856d3b543d2dd35e60bef84ec7f15761a4503df4e26b4",
+      "url": "https://geo.mirror.pkgbuild.com/extra/os/x86_64/gtksourceview5-5.22.0-1-x86_64.pkg.tar.zst",
+      "repository": "extra",
+      "signature": "iHUEABYKAB0WIQRebUlEiVizhDAfHyJJjvJH80DB4AUCarLuhwAKCRBJjvJH80DB4PN+AP4htU8DcTng5dhlxxT63Bt9uC+btnshQ5RF1iy6Eay6kAEAkqpczrrlJGzZGA0rw19wwRgvIYXGGw9CR0ioDOYldAg="
     },
     {
       "name": "gts",
@@ -1487,6 +1588,15 @@
       "url": "https://geo.mirror.pkgbuild.com/extra/os/x86_64/ijs-0.35-7-x86_64.pkg.tar.zst",
       "repository": "extra",
       "signature": "iQIzBAABCgAdFiEE8AuW0VIoAT/8nJ0Dk7EdqkwZfj0FAmnXik0ACgkQk7EdqkwZfj2pbQ/+KORrvbpQvUsjDAosb/uWoxNVSYwfyGhJ81cT3s7+KoiHDoBZ/wXtEc4zAgiRBHFBrIojuGW1Ne8KVkHPobp6/Uxg4TYF5+q3mHM0nByrCj+mDcU5UGbX7gUH1vcPv/LwK8oOvL4bMxr72lz+yqnjVN2J7oGlib6IYNe5JGhG4Q+4e8NLQ9GOrBJ21vb2qFCIex6TApNZzeto1WUoLJOKuwKVC1laAmZPL5bfmhemXwA2hdQhnJHy2vig0gNI5+v6UcE+pA8jNPRhAwSaHm+GbcjcIt+TvoJoq6Rc9OwMwjbEEq/YOOoOGHrm6WHXhEbMRbGBZODt0y6knwBCPMOrxQcgf/Pcepo272p3OUIRMO3jU8WrtpIPZW8s3QIBX87ivpbMJWv88DayqW5VqyFJvUUAYjpjFFEunvUnW/MIVIApWsFp7sfS+HmsWfTiqOs8Zji7uk/R2ZKaz3W6XtLs/woAfIzghuxIMLnHgc2/1v+1jwFHRP3Z7QIuq0nlDJIzmiyweV1Kbddeh7WXHHdgWvepA7rhPrj8qTeaYEFtZ+rF1zFlORanqbMPtmMjW5DR5sGQ8ZEKtJFhSNqaGqITtHeWJtnWmSBxIVXVozqSHtl2WdiN8/NdDAnNArGd+JJDxna2GeMKTFEH/vapCJDewG/518prwnPHOPVr3PPNUAQ="
+    },
+    {
+      "name": "imlib2",
+      "version": "1.12.7-3",
+      "filename": "imlib2-1.12.7-3-x86_64.pkg.tar.zst",
+      "sha256": "2596007da59aa913d3f347417003b7702938e1cb60434d7d504c4cb2cffeabb9",
+      "url": "https://geo.mirror.pkgbuild.com/extra/os/x86_64/imlib2-1.12.7-3-x86_64.pkg.tar.zst",
+      "repository": "extra",
+      "signature": "iHUEABYKAB0WIQQEKYl95fO9rFN6MGltQr3RFuAGjwUCapKguQAKCRBtQr3RFuAGj/fCAP4kcJM9kEL4WUpahrMFuz/jhL3eGHslTg/2TLXjL1DHTAD/Qvmj0TjEDEjypYFAtxIahUknSOxwy6vHGMgYcTIBvgc="
     },
     {
       "name": "intel-ucode",
@@ -1903,6 +2013,15 @@
       "signature": "iQIzBAABCgAdFiEEFORv5f1p8uKH4kTbYyw8wNHJyvYFAmlkXGMACgkQYyw8wNHJyvbi/g/9FWxrtDV+eQjRxwlV7JEe5YLjwQ2Ef55hVMRN5ND4Bh6CH0BDIqpN9aT4VL5ayDan909+QqAAYFMar85y2+ZD6AHNFk1eBJADrZ/KI1D1zEtSiGZPTTFnWV6lK5qgiX6HsBJXfA3QsblyxsYFSrbayfFC8JTo6Rxrw0XoHf17OVVdkqMnuooRe7yFAlz/PsLqARz5oesVaHlPUt1Zqw65wsApyAFTLKSdf7A05tVcmJdtg8YED/z1sF9IclwHMLd7d87lo5jXzUOtKdcqqPY4vmpmEw5o4Y6aAZ1eWMcaYg3dUk9GO0ur6XEgYchh2QLSftCkMpNfXxu8oyIJRtlbrFuma/uViNAox3iymK69cP2f5wLUcNSX7THpuRnGw+ReeNfGtq12fV3fo8ADBcT4dGxTdNBUerpsh9JazOVFbhF7XCreilGXj9UmdSunLB3tPQnzoKIZF7L3q4Td1cfthADep4VvCUVUMjVt7RbdfF6h4U87LXBH+pJybQodOCB1YRlgNjFiOD2Xz3DHyhZ+RkSlPaIzX0l8QNXKPWRxRyE7JixFWrsYkneIW3HpDaNWr0UZsZtXuoawX3zQqrrZQ6pF7rLhF2CodkN46G4MmeiXMPhNgpiAeZYYzEuWFDNtIBVr+lch7SZzwdIReBTnyE/fd9CvfAGruwOhOw55Jh8="
     },
     {
+      "name": "libcaca",
+      "version": "0.99.beta20-7",
+      "filename": "libcaca-0.99.beta20-7-x86_64.pkg.tar.zst",
+      "sha256": "072b0d54e3630542f808d912ea57960affc3ca6b23ae6c8bff9e1717ef2ea816",
+      "url": "https://geo.mirror.pkgbuild.com/extra/os/x86_64/libcaca-0.99.beta20-7-x86_64.pkg.tar.zst",
+      "repository": "extra",
+      "signature": "iQIzBAABCgAdFiEEFORv5f1p8uKH4kTbYyw8wNHJyvYFAmm9MBcACgkQYyw8wNHJyvb5mg//cIbBiaSKt/ljQYMgBqhB17a2NkVYCtGWF5IaAhhpcoIzOUaa/J1GfxptpInGgQZX9kR+4VSIlp7V6uzMwnHL/jjHVPOPU2O8oNTJ00IWLveTNY9OAWHC4E62CsQShHdL1USqcyKNGSXWleZBvSXkINeMVtZSqR21o9Ep5QIhRaYjLBDY1NuFECElrULPZHtMEiPqP9LSHxShmHUsdGPqQyL1k9eNpgFsyPEzaTlvOwLNM16T7lwhm4lcFQIC4JdHBMwIR+PMD4KSAQaBYhxOoRd4lI8LIlDrc22jmkDv2oMy+Mp3qi46NN9y2WeIPn+qmezaMqJr1SHoQ6cDbefa+cHbpu3pAwX/LsqZLM/Vox/4bo2ftUcuDmMhocUOGQ9SEW3JcPyK6ESQDp57PgckcsJs329gPmN7b+e+xSEGJngS6Nrdq4OKHtuUF/W+VUttOAwQe4Z/Hv40BKZ9SZe4FKbvbBEIi/+cK0rtSpkmLxMPtvcrBzRYIefAFlYl29g4WRtd5hygEuRf/1YsFyzy3bMzxVXx5Fbuv9KG5PJMSIECnoA8XDRyHDcYVm3H/X1QzG6ZtL31pfHm3HXkZ0XKqM75bgt+jx8HAqdyQwqYaY+H5keW+o+IxMqtB/UTpwTA3QmBSpVn3lXEugdmLOstZCWpqI3ykiUO6HgT9+726Mk="
+    },
+    {
       "name": "libcap",
       "version": "2.78-1",
       "filename": "libcap-2.78-1-x86_64.pkg.tar.zst",
@@ -2045,6 +2164,15 @@
       "url": "https://geo.mirror.pkgbuild.com/extra/os/x86_64/libdrm-2.4.134-1-x86_64.pkg.tar.zst",
       "repository": "extra",
       "signature": "iQEzBAABCgAdFiEErcih/MFeAdRTEEGelGV6sg8qCSsFAmob3E8ACgkQlGV6sg8qCSvbBggAjWt02yaq1Rt0zrq3B7JH4c6rVROtXFPAQVH9p0IZfh6bHK/JPkmIChZ//HB8/cXmhU/sAoaGiPZ1k6D4GdmHgdSX3MDO2J7/enAKEdTW8qLH8Tj9SMsqFDPMu89GKu/uPTLHmL6weC71mtMksUZr2nUdNPAGxH0eU8QNnjaanYc2ccsxElp7MFPzRbNg7LvYoGtmSolOqu1/gKjjy3yHh0darUxH5gllc8Cuyss1EgYz12s/lDqehvtyNQIYYawW43mGxMwG9dUwA6weBFfjERmLezIi6wa8iB3GAfW3YWwD+QboF2eLzPr8GuDpM66uvoGmfWgYWwnT3wbujT5VxQ=="
+    },
+    {
+      "name": "libdv",
+      "version": "1.0.0-12",
+      "filename": "libdv-1.0.0-12-x86_64.pkg.tar.zst",
+      "sha256": "7815939869bf655f5d36557e4fb1a60db93b6d3d3ad047951bd0bb88cd0cb376",
+      "url": "https://geo.mirror.pkgbuild.com/extra/os/x86_64/libdv-1.0.0-12-x86_64.pkg.tar.zst",
+      "repository": "extra",
+      "signature": "iQIzBAABCgAdFiEEFORv5f1p8uKH4kTbYyw8wNHJyvYFAmm9fUwACgkQYyw8wNHJyvYCEg/9EqBoagI0ppGW5O5pjbjNyOYtMn6yJpz6xVTzO9QBJRS8uhpoqh3PjtZ/2U0c2A1Uh+jHx68TKuRxWO3VLYx1LVpbti+sqLJiGATb41dYt0fYdvYxYBQAjtfAErEwpiK8oG78Q3HtDWPKgocFXGQfQbG8lat8KWvmUxAhDwcchrNR0Mt2TIYTj1Ni3MBUbEWWSjSq5eVT9maBaEXxmKnuwowwa9gKp4S5YTRzlAyuiG+1XbwqZZeqBTeqQce/+S7Zz15e3m7zbklEQISLy36WITYZ9Y7ovIwRALtkEx012F8+7qp6WLC19xfphMR21CWlO34XlBvZQc3k2Ctqbav+2JXqeVTbn5/KpSg7RkSYC8JdFpazFBB1Msy0X8Quus/6M60J05Orvjt0itEJzmWZdhTCoeewYAMpi7rUXF1OuTGA5LFAH/PDbq+1ProxYoVbaW9a1zYOBS1NxdUBgxIvDm0LPDuLR4Qz+EryaNaYPsLoCIvz0y2D09vjiZDXJ7OUzAZnT1b3AD2efb3+0r8yiTComhXbYS6Jin/UFaM4q5dNVc4cBHF4Q6VeeaLc6wwolXjDedTfB/CnKQatbxC7nF8zEK7lR71aHwRFAb9EcTmNEiFrsatvJhjjdvfTaDQqyhzIELNFeVP30BV4xAwBzLJhkQdiCHm6VBRZXEyVARI="
     },
     {
       "name": "libdvdnav",
@@ -2902,6 +3030,15 @@
       "signature": "iHUEABYKAB0WIQSDvIiJNRtd67toQW64rAhgDxCM3wUCaqZnzgAKCRC4rAhgDxCM3/uWAP9lNku1cn1/5HSysV/3cNWaRbQuGsp9a+Y6TPbsBGftrwEA/v8WCBeR+voBORvGGl5gge7yBHvMvQf5nLjDlMbDOg0="
     },
     {
+      "name": "libshout",
+      "version": "1:2.4.6-5",
+      "filename": "libshout-1:2.4.6-5-x86_64.pkg.tar.zst",
+      "sha256": "ff83687714596eb98bf599db8bdfeb107c6f3fa321027b99d70eee38786e2807",
+      "url": "https://geo.mirror.pkgbuild.com/extra/os/x86_64/libshout-1:2.4.6-5-x86_64.pkg.tar.zst",
+      "repository": "extra",
+      "signature": "iHUEABYKAB0WIQRUwf0nM2HqUUojd5Pylr3lA2jGzgUCaAqOrAAKCRDylr3lA2jGzoSYAP9o/qKY0sEwxJ6w+Dyd4KgkWA7f2pSWNKsU+zzl2CKGcwEAzxr0KaKWkcgmphqKOWMvvYXLcHzHTbM/AnKD2eNdrgE="
+    },
+    {
       "name": "libsm",
       "version": "1.2.6-1",
       "filename": "libsm-1.2.6-1-x86_64.pkg.tar.zst",
@@ -2945,6 +3082,15 @@
       "url": "https://geo.mirror.pkgbuild.com/extra/os/x86_64/libsoxr-0.1.3-5-x86_64.pkg.tar.zst",
       "repository": "extra",
       "signature": "iQIzBAABCgAdFiEElSIL6Zzm/3eK4NxnD2XH2IFQYTAFAmo/pesACgkQD2XH2IFQYTDTkxAApP4PG5dPhPvwenb5Fbu3F7T5yWQgpQedQgAS3Ec/I+t4W/VrMnamdmRPG6XI+zin2cthLapyjlZoLOZ2KtEfwLChouVZzyPzWFsBEn83Htp00+hFVCv+ur3Y5Rm1DHR/y2JbupJHDHA/3HyU0u2R6K7sz9KHpj0CNqXBAac9XaA9PgXDTDJcpOGJIZi2cHbZALo6KAJ9TKhkOh958ZQDUROsoJcg3eNDDJneYph7jZyFHL6uEblSvSB6CRQXS7/S24zqIMqBjsykHE6zDdPxf+BwYdRp6tqP7uK6FmvURqI6CXMO5IEagTuP4oTADa6tfeJ4w68rVuANVtaV/vNWLaURwudZVksmvjcOnskh95cVj6K37TnMCdg2POL14/UfQHVjKvq0YVAU+3aaiJzBp6qdjSDlR0ouMG6jL1AInk8jGYEIkSiuLkjZpocsJr7jXFW2cykb/MUn9lEJFCXmwG0U66UufaMHWR1RrIbW0OeyS8v3orTdUzn4gFDNgZgxUSzbtM1PUdHA/BIV62gUjnSECyxV6bKpRnurWyuH9yMC2xdpi6sY4vz3v6VvLuYbTbkCf7c2xBZjzYX/K5MPT0F/mqAMWkZw0m66EtO18Vp0yKrQVk2sguRDjqmyOqhNLVjNCTg9T66yA+D/7Sgu4O3cRIB9kRJgNmCCG2AZVd0="
+    },
+    {
+      "name": "libspelling",
+      "version": "0.4.10-2",
+      "filename": "libspelling-0.4.10-2-x86_64.pkg.tar.zst",
+      "sha256": "4bde1c4c6ec53418196f17665051abeb7f2d81902df65fd365d0081ef4ac68e9",
+      "url": "https://geo.mirror.pkgbuild.com/extra/os/x86_64/libspelling-0.4.10-2-x86_64.pkg.tar.zst",
+      "repository": "extra",
+      "signature": "iHUEABYKAB0WIQSDvIiJNRtd67toQW64rAhgDxCM3wUCatUj9wAKCRC4rAhgDxCM3y1KAQC4Xe1AutqJy3wJk5fsnmiwo0oZCf0SW+Fw9cv1tgmQGAEAvmiaN51m/silZ0gCVQ0v9pc97f2ThwlLZraJ4n3Iigg="
     },
     {
       "name": "libssh",
@@ -4252,6 +4398,15 @@
       "signature": "iHUEABYKAB0WIQSDvIiJNRtd67toQW64rAhgDxCM3wUCanRlnQAKCRC4rAhgDxCM399MAP9jqoD3PDLeQ1Bzle4R97uNiDz5SU2hvU0Y9XMG0m8FqAEA+RipZ4fR7lGiV9MFIBwESs3wV0/6jgKr2LLT6H6ZpAU="
     },
     {
+      "name": "papers",
+      "version": "51.1-1",
+      "filename": "papers-51.1-1-x86_64.pkg.tar.zst",
+      "sha256": "3870074d36ebef72c5d888a4bebd92efde62204c0659b6680dcc182e2a0e3e61",
+      "url": "https://geo.mirror.pkgbuild.com/extra/os/x86_64/papers-51.1-1-x86_64.pkg.tar.zst",
+      "repository": "extra",
+      "signature": "iQIzBAABCgAdFiEEFORv5f1p8uKH4kTbYyw8wNHJyvYFAmrNLJQACgkQYyw8wNHJyvYobQ/9H39AmNk5oTsqmbOujmCy1/Ds43M05f7R78kqzmUsbci37GZ5u6QyL+9P9+JeCzwP0cc5ors0g2Ljd+8FNhedQeseuqPTrOL/3ey3T/SbOlyFDsGlUHBUH0pMyy9JADLQfD+IHQYrRiOaVIiWVQ2CE2vfZfjX6NK2yZ/MsG4JXnEjZujGRjrjokfBjjnLXf2d8lQ4Nnn0THu8r74femJT4VRNNKKMj5MPcYFsk1v8DV4cWiImn5wSDaguw9JFoNRYmnD2Ews/mrdbehEfVbr+UpqGCj2956KGcK6Qg+g+dB+3nQeM6ga0o+a4NcAYSy6ZXmvFtv9zrVa9YwMxdYh6tBD5imWlMCZGPbLEaKHJmpzsX4UtweV745gZRL1SUzlfxtYrvb1/8MX7r474xGcxfdJrmHdhPzyuasmuoaVh7NzhegSwzFV4RFVtRCUAFudrWEBD9blDIgqkfPwdKqIwue/DURSmpVeI0uz4sAx56rSmLISSVSeRKhuzwoK970tDk8HTDCuBZAjV54JWreNK0V1gm2o/YG2FLkuW/M15wXnY7C7wXaK/z6Ow9iMNPfUDTHMWE95h9EzyChGht030sCQ8cMscbxJH2I71sgVggmiB4L0zRYTWUmtJnn9hklaZhuxvXHqiabAwwjLyRKIuUwOWxLhgiFFihXAe8n3HfrI="
+    },
+    {
       "name": "parted",
       "version": "3.8-1",
       "filename": "parted-3.8-1-x86_64.pkg.tar.zst",
@@ -4711,6 +4866,15 @@
       "signature": "iHUEABYKAB0WIQTrPXZP9dh+CBij4OXwXowSExrrXgUCasJT6AAKCRDwXowSExrrXqSFAP9VdwR8He2zRvqyPB4FXlmjtc5gBmLNYPrb6Fllm4jvPgEAx62viUYKaHBAMQ+pl6OT5MvJtidtMRr62L+lWkXXnwE="
     },
     {
+      "name": "snapshot",
+      "version": "51.0-1",
+      "filename": "snapshot-51.0-1-x86_64.pkg.tar.zst",
+      "sha256": "d6347b503e0a880e67a296b43354a9d2b2c713ca807d571e432eaa2f03f8c0fc",
+      "url": "https://geo.mirror.pkgbuild.com/extra/os/x86_64/snapshot-51.0-1-x86_64.pkg.tar.zst",
+      "repository": "extra",
+      "signature": "iHUEABYKAB0WIQRebUlEiVizhDAfHyJJjvJH80DB4AUCaqnAiQAKCRBJjvJH80DB4LIQAQDK055iU+FtKWpslMY8oF/zJ3Zz6UJShjiglBQ1M0DBdQD9Ez2uu591Y0MLx47+Qw57BYLQCtezbO34uSkRIbPkIgg="
+    },
+    {
       "name": "sndio",
       "version": "1.10.0-1",
       "filename": "sndio-1.10.0-1-x86_64.pkg.tar.zst",
@@ -4864,6 +5028,15 @@
       "signature": "iHUEABYKAB0WIQQEKYl95fO9rFN6MGltQr3RFuAGjwUCatM4tAAKCRBtQr3RFuAGj18ZAP9jPwK+Zs8mPs+3KlXd3zwCzll30eUQhoxcu8gsAU7LZQEAiadb9kkxf0dku1VsYWFi5rh7h4KQzShwq51eFW87kAQ="
     },
     {
+      "name": "taglib",
+      "version": "2.3.2-1",
+      "filename": "taglib-2.3.2-1-x86_64.pkg.tar.zst",
+      "sha256": "3dc1d3fabf9a8c12a5a48994e9a4b543f23596b10e0f8ad9d73db771ef854908",
+      "url": "https://geo.mirror.pkgbuild.com/extra/os/x86_64/taglib-2.3.2-1-x86_64.pkg.tar.zst",
+      "repository": "extra",
+      "signature": "iQEzBAABCgAdFiEEFRnVq6Zb9vwrc8dWek52CV2KUuQFAmqb8vYACgkQek52CV2KUuRh5Af/UDzV2w4uIo4aIQwkDBMnyHAjyOgF10KK5ZC5eUb8/WrllfEnVMKrO8xnzuWTbpO3RYk8H1OEghnWPySf/q3PD9iMmYbJobHOrmMJgTxKkOnuhJus6S5Jgx81XSJQXyWVohWv8UXmCd5HXKy+fKL7Hn3IKsg5kPCG85M655P4BFIKb6+a4y+U0q9VFNQAZIZcnW7aptsq26zWA2Dd6lSmV15i5R7i4oOut2W3WBll/su0MMYRGvl25rNpGHqSDE4YDm6nb42uIcaeXsLT/vXgJcG5rY5q94BjwrHy+UMRPDX0kS/OXLmjlJHqVXBK9as9LrMytWZ1t7P1jaMUYc27sg=="
+    },
+    {
       "name": "tar",
       "version": "1.35-5",
       "filename": "tar-1.35-5-x86_64.pkg.tar.zst",
@@ -4997,6 +5170,15 @@
       "url": "https://geo.mirror.pkgbuild.com/extra/os/x86_64/ttf-liberation-2.1.5-2-any.pkg.tar.zst",
       "repository": "extra",
       "signature": "iQIzBAABCgAdFiEEBNw/sURf7KgTwn766k97MhqQatkFAmaRwBMACgkQ6k97MhqQatlvKw//W9zMBHTeakMpWZ7vxCKeyYGrLPHlw9M6WPu9/KOxKwmzMBh/Qi5AH/gYb18ESEiTe05UHkhrFbh7bBCRWr7kMc2dxu5gtzGYpnfQ2c4OhWVVnhxxmOct/7E0my7hcsGfZIsu3rdRy9A03Da9Cqp7cLyYXvA+4TunJKzYBLvfPYxSKslHM0JSnkJiXirJ2aG9Cth/imTE4lua0sNfJSp+uqQAJmegGck4JoC1ihF+o/QrZqQEL8GejW+S1qyi/z33m4ArYIjgjwRxKlK/E5eu8ftEQ+1hlIGpOOjpx4cRSJi1+OiPMCj+bVj9Y9A+1BA11FCG9AjbkWBm3L1ylpUcF8aduLRZhgs7X/v4aTj6w1dFF6QASI26RhxsODBWHuam7Z3kiq19J0OHxuy79J2IOQjfkH3stw0Y7wEtzxRBx/tw50n8zliR987orHCuxYxA37yFJoWBUhw00zXc+mh+ZynVsLmGB9n35mqSDRizNnvYZ4uc6y+whG3HN7bUS2Yi+wlCy/jBnmL2zi6UC0qCokPEqaKlyRiNR4KXK3IN7TRoizCVb4SQrDPnNa+M+mfj70mDGX5VLyNNcIlTPzSt+DTUYan1vJbSA7uGQWm+V5Xit9nKMYooY3TsAZspMaQmH0b1HvWfXf4GPHZ5OsSB2b/+qeG3nv8tV2Y0Zo4/ZZY="
+    },
+    {
+      "name": "twolame",
+      "version": "0.4.0-4",
+      "filename": "twolame-0.4.0-4-x86_64.pkg.tar.zst",
+      "sha256": "16cd8a6134a928ab9453b11518258aca74559bf6782d93a5c484f693ad8384e0",
+      "url": "https://geo.mirror.pkgbuild.com/extra/os/x86_64/twolame-0.4.0-4-x86_64.pkg.tar.zst",
+      "repository": "extra",
+      "signature": "iQIzBAABCAAdFiEE8AuW0VIoAT/8nJ0Dk7EdqkwZfj0FAmaCW0IACgkQk7EdqkwZfj3zdBAA2KwL9aERFMlFdatguKC2MhIXasl6AsDBOMaVR0Hko3cidzceYCxk51dG1qYzj85PP/pQepauWDiXiJVOJgJFJyn1rfE9Ram1WGq59C/uX+0qL11wyjV5m9dvf5wT0p7fjX14FDrNHyFrqRcEhQhVAmDUD0YlTECanjGTv45zMCSvrg+9Ik0QT6CUDjJ/Pd12cd3P/emqSH/jWRCQRH5KonZDF+X4TocS6KemCBiuQxEmxBChcT+OkRnbarDy79T/wkDomdvosn6ilqy5zB8cmbgnlwHBJzHFfFBiueBAb2hhi+VaBZl0L8peuAINRwu3EEJQBG1P1sjnkpT+VbeWHfXOPre3OuGutkmmvOJkedYP8Y7Zgv6rd1OBIwwH1nN0MCZgtrrbykIAqSFK7DEd9yKR+znk9z8uSHQMGykrmUclhbMgUnaHz+21olk7oh4mNl+vhCT6ZqBxoEbo8Hm88OcvY12FUB5uhya7Cw5vhyEW7eSqe1XCOCo/tDtNU5u3kR2FZmSmZE1Q3ioPn4Jw7oUBjLqoewbIvqLJSomQNvAaB+2rASNsTcZcolFWtz7kEM6q3fwPGdrgdtLXsoDgwV4OIa+x9PfMkhZRx5iB2n8M5CV+F7Sryvl8R+SXLsenJCeBUu0twy60/tWSyx8ZN6WATic7iR3IRAG2/7d62YA="
     },
     {
       "name": "tzdata",
@@ -5141,6 +5323,15 @@
       "url": "https://geo.mirror.pkgbuild.com/extra/os/x86_64/vulkan-radeon-1:26.2.6-1-x86_64.pkg.tar.zst",
       "repository": "extra",
       "signature": "iHUEABYKAB0WIQSDvIiJNRtd67toQW64rAhgDxCM3wUCauJedgAKCRC4rAhgDxCM367KAQCbljp1zMuoPBSW2of4bOn31hOA1FnJlAnWxeDPmsLbUQD+OJcH+KLyiTzA0fd74Fic1nvB+UhpW8UU4W1KjU7KMgE="
+    },
+    {
+      "name": "wavpack",
+      "version": "5.9.0-1",
+      "filename": "wavpack-5.9.0-1-x86_64.pkg.tar.zst",
+      "sha256": "d5aed609ce3bf3d21d6939f1022ff89baac1784f905a5abb9967bd5a047d0f41",
+      "url": "https://geo.mirror.pkgbuild.com/extra/os/x86_64/wavpack-5.9.0-1-x86_64.pkg.tar.zst",
+      "repository": "extra",
+      "signature": "iQEzBAABCgAdFiEEFRnVq6Zb9vwrc8dWek52CV2KUuQFAml4kQ4ACgkQek52CV2KUuQOtAf+KiiGTYaIgFA/XcmTuChncxkWrFXu6I2MWYPUBjj7D4aNn8bx62HG60FjSTzsi0Bk8Fc/FZqvxOu/gNpUHs2WZKlOhkP+RUnhimv8hL/XXjJVk31ZAPDXwtVIUI+6MUXe0dydLBsAKtaZQCAmgvBUh1HOC5lz4TqCUKsDTyD/dpw7f+EobilhHy4eZuZOABuTSB4ZXf/8ziIPa+3OWex8YR4lCkLZAyfDb60XdE0i2d3fpFe0JX4Ca/ZWvtesHOFXSHHghJ7zoKAYFB6QTtBxk+QdoUSOKgIh0obWfF0qbpqD241IcnJv/ycjhNsc/mFNkDCFEaqV4poo//toq6VZjA=="
     },
     {
       "name": "wayland",
