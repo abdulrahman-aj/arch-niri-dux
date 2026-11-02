@@ -149,31 +149,27 @@ def run_interactive(command, replies, timeout=180):
 
 
 def prepare(root):
-    # Test instrumentation adds a serial console; production ISO remains unchanged.
-    config = (root / 'etc/mkinitcpio.conf').read_text()
-    match = re.search(r'^HOOKS=\((.*)\)', config, re.M)
-    assert match, 'mkinitcpio HOOKS are missing.'
-    hooks = match.group(1).split()
-    for hook in ('systemd', 'kms', 'plymouth', 'sd-encrypt'):
-        assert hook in hooks, f'mkinitcpio hook {hook} is missing: {hooks}'
-    assert hooks.index('systemd') < hooks.index('plymouth') < hooks.index('sd-encrypt'), hooks
+    # Enable post-unlock test control without changing the production boot UI.
+    plymouth_config(root)
     cmdline = root / 'etc/kernel/cmdline'
-    tokens = cmdline.read_text().split()
-    assert 'quiet' in tokens and 'splash' in tokens, tokens
-    assert any(token.startswith('rd.luks.name=') for token in tokens), tokens
-    theme = (root / 'etc/plymouth/plymouthd.conf').read_text() if (root / 'etc/plymouth/plymouthd.conf').is_file() else ''
-    assert 'Theme=bgrt' in theme, theme
-    cmdline.write_text(cmdline.read_text().strip() + ' console=tty0 console=ttyS0,115200n8\n')
-    defaults = root / 'etc/default/limine'
-    defaults.write_text(defaults.read_text() + '\nKERNEL_CMDLINE[default]+=" console=tty0 console=ttyS0,115200n8"\n')
     run('arch-chroot', str(root), 'systemctl', 'enable', 'serial-getty@ttyS0.service')
-    run('arch-chroot', str(root), 'limine-mkinitcpio')
     configuration = json.loads(Path('/run/verify/install.json').read_text())
     if configuration.get('swap_gib') == 0:
         assert not (root / 'swap/swapfile').exists()
         assert not any(token.startswith('resume=') or token.startswith('resume_offset=')
                        for token in cmdline.read_text().split())
         assert 'AllowHibernation=no' in (root / 'etc/systemd/sleep.conf.d/60-hibernation.conf').read_text()
+
+
+def enable_serial_console():
+    # Later desktop/recovery stages need serial unlock. Add that instrumentation
+    # only after the production-style graphical unlock has passed.
+    arguments = 'console=tty0 console=ttyS0,115200n8'
+    cmdline = Path('/etc/kernel/cmdline')
+    cmdline.write_text(cmdline.read_text().strip() + ' ' + arguments + '\n')
+    defaults = Path('/etc/default/limine')
+    defaults.write_text(defaults.read_text() + '\nKERNEL_CMDLINE[default]+=" ' + arguments + '"\n')
+    run('limine-mkinitcpio')
 
 
 def user_command(*args, capture=False):
@@ -592,10 +588,10 @@ def splash_fallback(disable, root='/'):
         tokens = [token for token in tokens if token != 'plymouth.enable=0']
     cmdline.write_text(' '.join(tokens) + '\n')
     defaults = root / 'etc/default/limine'
-    lines = [line for line in defaults.read_text().splitlines()
-             if 'plymouth.enable=0' not in line]
+    fallback_line = 'KERNEL_CMDLINE[default]+=" plymouth.enable=0"'
+    lines = [line for line in defaults.read_text().splitlines() if line != fallback_line]
     if disable:
-        lines.append('KERNEL_CMDLINE[default]+=" plymouth.enable=0"')
+        lines.append(fallback_line)
     defaults.write_text('\n'.join(lines) + '\n')
     if str(root) == '/':
         run('limine-snapper-sync')
@@ -640,6 +636,8 @@ if __name__ == '__main__':
         recovery()
     elif action == 'restored':
         restored()
+    elif action == 'serial-console-enable':
+        enable_serial_console()
     elif action == 'plymouth-config':
         plymouth_config(sys.argv[2] if len(sys.argv) > 2 else '/')
     elif action == 'plymouth-status':

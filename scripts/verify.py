@@ -48,7 +48,7 @@ class VM:
                 time.sleep(0.1)
         raise TimeoutError(f'QEMU socket did not appear: {path}')
 
-    def start(self, cdrom=True, network=False):
+    def start(self, cdrom=True, network=False, software_display=False):
         for name in ('serial.sock', 'qmp.sock'):
             (self.directory / name).unlink(missing_ok=True)
         firmware = Path(os.environ.get('OVMF_DIR', '/usr/share/edk2/x64'))
@@ -62,11 +62,12 @@ class VM:
         if not variables.exists():
             shutil.copyfile(template, variables)
         render_node = Path(os.environ.get('QEMU_RENDER_NODE', '/dev/dri/renderD128'))
-        if not os.access(render_node, os.R_OK | os.W_OK):
+        if not software_display and not os.access(render_node, os.R_OK | os.W_OK):
             raise RuntimeError(f'Niri VM verification needs an accessible GPU render node: {render_node}')
         command = ['qemu-system-x86_64', '-machine', 'q35,accel=kvm', '-cpu', 'host',
-                   '-m', '8192', '-smp', '4', '-display', f'egl-headless,rendernode={render_node}',
-                   '-vga', 'none', '-device', 'virtio-vga-gl',
+                   '-m', '8192', '-smp', '4', '-display',
+                   'none' if software_display else f'egl-headless,rendernode={render_node}',
+                   '-vga', 'none', '-device', 'VGA' if software_display else 'virtio-vga-gl',
                    '-drive', f'if=pflash,format=raw,readonly=on,file={code}',
                    '-drive', f'if=pflash,format=raw,file={variables}',
                    '-drive', f'if=virtio,format=qcow2,file={self.disk}',
@@ -206,20 +207,41 @@ class VM:
             raise RuntimeError(f'QEMU exited abnormally: {self.process.returncode}')
 
 
-def installed_login(vm, wrong_first=False, screenshot_tag=None):
-    vm.expect(r'(?i)(passphrase|password).*?:', timeout=180)
-    if screenshot_tag is not None:
-        # Let the splash render so the screenshot qualifies the graphical UI.
-        time.sleep(2)
-        vm.screenshot(screenshot_tag + '-plymouth-prompt')
-    if wrong_first:
-        # A mistyped passphrase must re-prompt instead of failing the boot.
-        vm.send('wrong-passphrase-retry\n')
+def wait_for_graphical_password(vm, name):
+    deadline = time.monotonic() + 180
+    while time.monotonic() < deadline:
+        path = vm.screenshot(name)
+        if path is not None:
+            text = subprocess.check_output(
+                ['tesseract', str(path), 'stdout', '--psm', '11'],
+                text=True, stderr=subprocess.DEVNULL)
+            if 'passphrase' in text.lower():
+                path.with_suffix('.txt').write_text(text)
+                return
+        time.sleep(1)
+    raise TimeoutError('The graphical disk-password prompt did not appear.')
+
+
+def installed_login(vm, graphical=False, screenshot_tag=None):
+    if graphical:
+        wait_for_graphical_password(vm, screenshot_tag + '-prompt')
+        vm.type_graphical('wrong-passphrase-retry')
+        vm.key('ret')
+        # An incorrect password must leave the disk locked and re-prompt.
+        try:
+            vm.expect(r'login:', timeout=3)
+        except TimeoutError:
+            pass
+        else:
+            raise RuntimeError('An incorrect disk password reached login.')
+        wait_for_graphical_password(vm, screenshot_tag + '-retry')
+        vm.type_graphical(PASSWORD)
+        vm.key('ret')
+    else:
         vm.expect(r'(?i)(passphrase|password).*?:', timeout=180)
-        if screenshot_tag is not None:
-            time.sleep(2)
-            vm.screenshot(screenshot_tag + '-plymouth-retry')
-    vm.send(PASSWORD + '\n')
+        if screenshot_tag is not None and vm.screenshot(screenshot_tag) is None:
+            raise RuntimeError('No screenshot available to qualify text fallback.')
+        vm.send(PASSWORD + '\n')
     vm.expect(r'login:', timeout=180)
     vm.send('tester\n')
     vm.expect(r'Password:')
@@ -324,8 +346,18 @@ def main():
         if args.install_only:
             print('Install-only debug run complete. Full acceptance has NOT passed.', flush=True)
             return 0
+        # A CPU-readable framebuffer qualifies the real pre-login UI. A serial
+        # kernel console would force Plymouth into its details/text mode.
+        vm.start(cdrom=False, software_display=True)
+        installed_login(vm, graphical=True, screenshot_tag='02-graphical-unlock')
+        vm.command('mkdir -p /run/verify; mount -t 9p -o trans=virtio,version=9p2000.L verify /run/verify')
+        vm.command('python /run/verify/verify-guest.py plymouth-status')
+        passed('Graphical disk unlock accepts keyboard input and retries an incorrect password')
+        vm.command('python /run/verify/verify-guest.py serial-console-enable', timeout=300)
+        vm.poweroff()
+        vm.stop()
         vm.start(cdrom=False)
-        installed_login(vm, wrong_first=True, screenshot_tag='02-boot')
+        installed_login(vm)
         passed('UEFI boot from encrypted disk without installation ISO')
         vm.command('test -e /dev/mapper/dux-root; findmnt -n -o FSTYPE / | grep -x btrfs; test "$(ls /sys/class/net | tr "\\n" " ")" = "lo "')
         vm.command('cat /proc/cmdline; ! grep -q /@snapshots/ /proc/cmdline; systemctl is-enabled greetd; systemctl is-active greetd; test -f /home/tester/.config/niri/config.kdl')
@@ -398,8 +430,8 @@ def main():
         vm.command('sync')
         vm.poweroff()
         vm.stop()
-        vm.start(cdrom=False)
-        installed_login(vm)
+        vm.start(cdrom=False, software_display=True)
+        installed_login(vm, screenshot_tag='06-text-fallback-prompt')
         vm.command('mkdir -p /run/verify; mount -t 9p -o trans=virtio,version=9p2000.L verify /run/verify')
         vm.command('grep -qw plymouth.enable=0 /proc/cmdline; python /run/verify/verify-guest.py storage')
         vm.screenshot('06-text-fallback')

@@ -34,10 +34,9 @@ stay visible because only `quiet splash` quiets the console. To force the
 plain console prompt, append `plymouth.enable=0` (and
 `disablehooks=plymouth` for the initramfs hook) to the kernel cmdline.
 
-Acceptance (parent runs the VM serially; this change adds no `make iso` run):
+Acceptance after rebuilding with `make iso`:
 
-- `make test` — source and build tests, including the Plymouth hook order,
-  `quiet splash`, signed closure addition and login-retry coverage.
+- `make test` — source and build tests, including fallback-setting preservation.
 - `make verify ARGS='--directory out/verify-plymouth'` — full VM run:
   wrong-passphrase retry with `02-boot-plymouth-prompt/retry` screenshots,
   `plymouth-config`/`plymouth-status` probes, snapshot recovery, and a
@@ -45,10 +44,9 @@ Acceptance (parent runs the VM serially; this change adds no `make iso` run):
 - `make verify-hibernate ARGS='--directory out/verify-plymouth'` — encrypted
   swap resume still works through the splash.
 
-Limitations: VM-only qualification here; laptop backlight/BGRT logo behavior
-is hardware-specific and still needs a physical boot check. QEMU screenshots
-are best-effort (VirGL can report `no surface`); the serial passphrase prompt
-remains the authoritative automation path. No Secure Boot or key changes.
+Laptop backlight/BGRT logo behavior is hardware-specific. The graphical unlock
+check requires screenshots and keyboard input; serial unlock alone does not
+qualify its appearance. Secure Boot remains deferred.
 
 Automation uses a private mode-0600 JSON file containing Settings fields and
 `--confirm-disk /dev/vda`. It exercises the same validation and installation
