@@ -25,7 +25,7 @@ Dux. Rebuilds use the same inputs, but are not byte-identical.
 ## Install
 
 1. Write the ISO to a USB drive and boot it in UEFI mode with Secure Boot off.
-2. Follow the terminal wizard. **It erases the selected disk.**
+2. Follow the terminal wizard. **Erase mode erases the selected disk.** Alongside mode is a draft awaiting real-OS VM acceptance; see [supported layouts and limitations](ALONGSIDE.md).
 3. Remove the USB and reboot. Unlock the disk, then log in.
 
 Super+Return opens a terminal, Super+Space opens the launcher, and Super+Alt+L
@@ -54,3 +54,5 @@ stays untouched.
 and hibernation. Laptop hibernate/resume also passed; the intermittent lid symptom
 and docked display behavior remain hardware checks.
 Secure Boot is outside v1; planned features are in [TODO.md](TODO.md).
+
+Alongside installation design, supported layouts and pending VM acceptance are documented in [ALONGSIDE.md](ALONGSIDE.md).

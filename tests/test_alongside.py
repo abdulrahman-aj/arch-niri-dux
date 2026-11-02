@@ -1,0 +1,224 @@
+"""Exercise real GPT writes to sparse disposable files, without root or VM builds."""
+import copy
+import hashlib
+import json
+from pathlib import Path
+import shutil
+import subprocess
+import tempfile
+import unittest
+from unittest.mock import patch
+
+from test_installer import installer, settings
+
+
+def table(path):
+    return json.loads(subprocess.check_output(['sfdisk', '--json', str(path)], text=True))['partitiontable']
+
+
+def digest_range(path, start, size):
+    digest = hashlib.sha256()
+    with path.open('rb') as stream:
+        stream.seek(start)
+        while size:
+            chunk = stream.read(min(size, 1024 * 1024))
+            if not chunk:
+                raise AssertionError('short disk read')
+            digest.update(chunk)
+            size -= len(chunk)
+    return digest.hexdigest()
+
+
+class AlongsideDiskTests(unittest.TestCase):
+    def setUp(self):
+        if not shutil.which('sgdisk') or not shutil.which('sfdisk'):
+            self.fail('Run through the project Nix shell; GPT tools are required.')
+        self.directory = tempfile.TemporaryDirectory()
+        self.addCleanup(self.directory.cleanup)
+        self.disk = Path(self.directory.name) / 'disk.img'
+        with self.disk.open('wb') as stream:
+            stream.truncate(48 * installer.GIB)
+        subprocess.run(['sgdisk', '--clear', '--new=1:2048:+64M', '--typecode=1:ef00',
+                        '--new=4:0:+8M', '--typecode=4:0700', str(self.disk)],
+                       check=True, stdout=subprocess.DEVNULL)
+        self.original = copy.deepcopy(table(self.disk)['partitions'])
+        # Arbitrary existing filesystem bytes, including beginning/end sentinels.
+        with self.disk.open('r+b') as stream:
+            for part in self.original:
+                stream.seek(part['start'] * 512)
+                stream.write(b'PRESERVE EFI/fallback/Windows/Linux\0' * 100)
+                stream.seek((part['start'] + part['size']) * 512 - 4096)
+                stream.write(b'last-sector-sentinel' * 100)
+        self.hashes = [digest_range(self.disk, p['start'] * 512, p['size'] * 512) for p in self.original]
+        guid = self.original[0]['uuid']
+        self.firmware = (f'BootCurrent: 0000\nBootOrder: 0001,0000\n'
+                         f'Boot0000* USB\tPciRoot(0x0)\n'
+                         f'Boot0001* Existing OS\tHD(1,GPT,{guid},0x800,0x20000)/File(\\EFI\\Microsoft\\Boot\\bootmgfw.efi)')
+        self.value = settings(disk=str(self.disk), mode='alongside', existing_boot='0001', swap_gib=0)
+        self.identity = (1, 2, 48 * installer.GIB)
+        self.real_run = installer.run
+        self.commands = []
+
+        def command(*args, **kwargs):
+            self.commands.append(args)
+            if args[0] == 'efibootmgr':
+                return self.firmware
+            return self.real_run(*args, **kwargs)
+
+        self.run_patch = patch.object(installer, 'run', side_effect=command)
+        self.run_patch.start()
+        self.addCleanup(self.run_patch.stop)
+        self.disk_patch = patch.object(installer, 'require_disk', return_value=self.identity)
+        self.disk_patch.start()
+        self.addCleanup(self.disk_patch.stop)
+        self.snapshot = installer.alongside_snapshot(self.value)
+        self.value.free_region = self.snapshot['regions'][0]
+        self.commands.clear()
+
+    def assert_old_data(self):
+        current = table(self.disk)['partitions']
+        for original, expected in zip(self.original, self.hashes):
+            self.assertIn(original, current)
+            self.assertEqual(digest_range(self.disk, original['start'] * 512, original['size'] * 512), expected)
+
+    def test_adds_only_two_partitions_and_preserves_all_old_bytes_and_metadata(self):
+        result = installer.create_alongside_partitions(self.value, self.snapshot, self.identity)
+        self.assertEqual(result, (str(self.disk) + '2', str(self.disk) + '3'))
+        current = table(self.disk)['partitions']
+        self.assertEqual(len(current), 4)
+        esp = next(p for p in current if p['node'] == result[0])
+        root = next(p for p in current if p['node'] == result[1])
+        self.assertEqual(esp['size'] * 512, 4 * installer.GIB)
+        self.assertEqual(root['start'], esp['start'] + esp['size'])
+        self.assertEqual(root['start'] + root['size'] - 1, self.value.free_region[1])
+        self.assert_old_data()
+        self.assertFalse(any('--zap-all' in c or c[0] == 'wipefs' for c in self.commands))
+
+    def test_table_or_free_extent_change_aborts_without_any_further_disk_writes(self):
+        for change in ('--change-name=4:changed', '--new=7:0:+1M'):
+            with self.subTest(change=change):
+                subprocess.run(['sgdisk', change, str(self.disk)], check=True, stdout=subprocess.DEVNULL)
+                before = table(self.disk)
+                self.commands.clear()
+                with self.assertRaisesRegex(ValueError, 'changed'):
+                    installer.create_alongside_partitions(self.value, self.snapshot, self.identity)
+                self.assertEqual(table(self.disk), before)
+                self.assertFalse(any(c[0] == 'sgdisk' and '--verify' not in c for c in self.commands))
+                self.assert_old_data_except_name()
+
+    def assert_old_data_except_name(self):
+        for original, expected in zip(self.original, self.hashes):
+            self.assertEqual(digest_range(self.disk, original['start'] * 512, original['size'] * 512), expected)
+
+    def test_identity_or_firmware_change_aborts(self):
+        with patch.object(installer, 'require_disk', return_value=(99, 2, self.identity[2])):
+            with self.assertRaisesRegex(ValueError, 'identity'):
+                installer.create_alongside_partitions(self.value, self.snapshot, self.identity)
+        self.firmware = self.firmware.replace('BootOrder: 0001,0000', 'BootOrder: 0000,0001')
+        with self.assertRaisesRegex(ValueError, 'firmware'):
+            installer.create_alongside_partitions(self.value, self.snapshot, self.identity)
+        self.assert_old_data()
+
+    def test_hybrid_mbr_is_rejected_without_repair(self):
+        with self.disk.open('r+b') as stream:
+            stream.seek(466)
+            stream.write(b'\x07')
+        before = digest_range(self.disk, 0, 1024 * 1024)
+        with self.assertRaises(ValueError):
+            installer.alongside_snapshot(self.value)
+        self.assertEqual(digest_range(self.disk, 0, 1024 * 1024), before)
+        self.assert_old_data()
+
+    def test_selected_extent_must_match_exactly(self):
+        self.value.free_region[0] += 2048
+        with self.assertRaisesRegex(ValueError, 'no longer available'):
+            installer.alongside_plan(self.value, copy.deepcopy(self.snapshot) | {'regions': [[1, 2]]})
+        self.assert_old_data()
+
+
+class AlongsidePlanningTests(unittest.TestCase):
+    def test_fragmented_space_does_not_get_combined(self):
+        table_value = dict(label='gpt', unit='sectors', sectorsize=512, firstlba=34,
+                           lastlba=100 * installer.GIB // 512,
+                           partitions=[dict(start=20 * installer.GIB // 512, size=1),
+                                       dict(start=40 * installer.GIB // 512, size=1),
+                                       dict(start=60 * installer.GIB // 512, size=1),
+                                       dict(start=80 * installer.GIB // 512, size=1)])
+        self.assertEqual(installer.free_regions(table_value), [])
+
+    def test_rejects_mbr_overlaps_and_unsupported_sector_sizes(self):
+        for changes in (dict(label='dos'), dict(sectorsize=1024),
+                        dict(partitions=[dict(start=2048, size=5000), dict(start=3000, size=100)])):
+            value = dict(label='gpt', unit='sectors', sectorsize=512, firstlba=34,
+                         lastlba=100000000, partitions=[])
+            value.update(changes)
+            with self.subTest(changes=changes), self.assertRaises(ValueError):
+                installer.free_regions(value)
+
+    def test_settings_require_explicit_region_and_boot_selection(self):
+        for changes in ({}, {'free_region': [2048, 100000000]},
+                        {'free_region': [True, 100000000], 'existing_boot': '0001'},
+                        {'free_region': [2048, 100000000], 'existing_boot': '../1'}):
+            with self.subTest(changes=changes), self.assertRaises(ValueError):
+                settings(mode='alongside', **changes).validate()
+        settings(mode='alongside', free_region=[2048, 100000000], existing_boot='0001').validate()
+
+class AlongsideBootTests(unittest.TestCase):
+    def test_detected_bitlocker_is_rejected_before_disk_mutation(self):
+        with patch.object(installer, 'disk_inventory', return_value=[
+                dict(name='/dev/vda', children=[dict(name='/dev/vda3', fstype='BitLocker')])]), \
+                patch.object(installer, 'run') as run:
+            with self.assertRaisesRegex(ValueError, 'BitLocker'):
+                installer.reject_unsupported_existing_storage(settings(), {'table': {'partitions': []}})
+            run.assert_not_called()
+
+    def test_kernel_must_accept_the_exact_planned_geometry(self):
+        with tempfile.TemporaryDirectory() as directory:
+            sysfs = Path(directory)
+            (sysfs / 'vda2').mkdir()
+            (sysfs / 'vda2/start').write_text('4096')
+            (sysfs / 'vda2/size').write_text('8192')
+            real_path = Path
+            def path(value, *args):
+                return sysfs if value == '/sys/class/block' else real_path(value, *args)
+            with patch.object(installer, 'Path', side_effect=path):
+                installer.verify_partition_nodes(settings(), [(2, 512, 1535, 'ef00', 'ESP')], 4096)
+                with self.assertRaisesRegex(ValueError, 'Kernel partition geometry'):
+                    installer.verify_partition_nodes(settings(), [(2, 513, 1536, 'ef00', 'ESP')], 4096)
+
+    def test_firmware_registration_retains_old_entries_and_uses_original_esp_guid(self):
+        before = 'BootOrder: 0001,0000\nBoot0000* USB\tPciRoot(0x0)\nBoot0001* Windows\tHD(1,GPT,old,0x800,0x10000)/File(\\EFI\\Microsoft\\Boot\\bootmgfw.efi)'
+        after = before + '\nBoot0002* Arch Niri Dux\tHD(2,GPT,new,0x10000,0x800000)/File(\\EFI\\limine\\limine_x64.efi)'
+        final = after.replace('BootOrder: 0001,0000', 'BootOrder: 0002,0001,0000')
+        snapshot = dict(entries=installer.firmware_entries(before), order='0001,0000',
+                        boots={'0001': dict(guid='original-esp-guid', path='/EFI/Microsoft/Boot/bootmgfw.efi')})
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory)
+            (target / 'boot').mkdir()
+            config = target / 'boot/limine.conf'
+            config.write_text('/Arch Niri Dux\n protocol: linux\n')
+            responses = iter([before, None, after, None, final])
+            with patch.object(installer, 'TARGET', target), \
+                    patch.object(installer, 'run', side_effect=lambda *a, **k: next(responses)) as run:
+                installer.finish_alongside_boot(settings(existing_boot='0001', mode='alongside'), snapshot, 2)
+            self.assertIn('guid(original-esp-guid):/EFI/Microsoft/Boot/bootmgfw.efi', config.read_text())
+            commands = [call.args for call in run.call_args_list]
+            create = next(command for command in commands if '--create-only' in command)
+            self.assertEqual(create[-1], '\\EFI\\limine\\limine_x64.efi')
+            self.assertIn(('efibootmgr', '--bootorder', '0002,0001,0000'), commands)
+            self.assertFalse(any('--delete-bootnum' in command for command in commands))
+
+    def test_loader_inspection_unmounts_and_never_requests_writable_mount(self):
+        temporary_directory = tempfile.TemporaryDirectory
+        with patch.object(installer.tempfile, 'TemporaryDirectory',
+                          side_effect=lambda **kwargs: temporary_directory()), \
+                patch.object(installer, 'run', side_effect=['vfat', None, None]) as run:
+            with self.assertRaises(FileNotFoundError):
+                installer.validate_existing_loader(dict(partition='/dev/vda1', path='/missing.efi'))
+            commands = [call.args for call in run.call_args_list]
+            self.assertEqual(commands[1][:5], ('mount', '-t', 'vfat', '-o', 'ro,nosuid,nodev,noexec'))
+            self.assertEqual(commands[-1][0], 'umount')
+
+
+if __name__ == '__main__':
+    unittest.main()
