@@ -25,6 +25,13 @@ class VM:
         self.directory = directory
         self.iso = iso
         self.disk = disk
+        self.optical_interface = 'usb'
+        self.graphics = 'virtio-vga-gl'
+        self.disk_interface = 'virtio'
+        self.network_model = 'virtio-net-pci'
+        self.extra_args = []
+        self.allow_reboot = False
+        self.min_free_bytes = 0
         self.process = None
         self.serial = None
         self.qmp = None
@@ -66,18 +73,26 @@ class VM:
             raise RuntimeError(f'Niri VM verification needs an accessible GPU render node: {render_node}')
         command = ['qemu-system-x86_64', '-machine', 'q35,accel=kvm', '-cpu', 'host',
                    '-m', '8192', '-smp', '4', '-display', f'egl-headless,rendernode={render_node}',
-                   '-vga', 'none', '-device', 'virtio-vga-gl',
+                   '-vga', 'none', '-device', self.graphics,
                    '-drive', f'if=pflash,format=raw,readonly=on,file={code}',
                    '-drive', f'if=pflash,format=raw,file={variables}',
-                   '-drive', f'if=virtio,format=qcow2,file={self.disk}',
-                   '-nic', 'user,model=virtio-net-pci' if network else 'none', '-no-reboot',
+                   '-drive', f'if=none,id=target-disk,format=qcow2,file={self.disk}',
+                   '-device', ('virtio-blk-pci,drive=target-disk,bootindex=2' if self.disk_interface == 'virtio'
+                               else 'ide-hd,drive=target-disk,bus=ide.0,bootindex=2'),
+                   '-nic', f'user,model={self.network_model}' if network else 'none',
                    '-virtfs', f'local,path={self.directory},mount_tag=verify,security_model=none,id=verify',
                    '-serial', f'unix:{self.directory}/serial.sock,server=on,wait=off',
                    '-qmp', f'unix:{self.directory}/qmp.sock,server=on,wait=off']
+        if not self.allow_reboot:
+            command += ['-no-reboot']
         if cdrom:
-            command += ['-device', 'qemu-xhci',
-                        '-drive', f'if=none,id=install-media,format=raw,readonly=on,file={self.iso}',
-                        '-device', 'usb-storage,drive=install-media,bootindex=1']
+            media_type = ',media=cdrom' if self.optical_interface == 'sata' else ''
+            command += ['-drive', f'if=none,id=install-media,format=raw,readonly=on{media_type},file={self.iso}']
+            if self.optical_interface == 'sata':
+                command += ['-device', 'ide-cd,drive=install-media,bus=ide.1,bootindex=1']
+            else:
+                command += ['-device', 'qemu-xhci', '-device', 'usb-storage,drive=install-media,bootindex=1']
+        command += self.extra_args
         (self.directory / ('qemu-install.json' if cdrom else 'qemu-boot.json')).write_text(json.dumps(command, indent=2))
         self.process = subprocess.Popen(command, stdout=(self.directory / 'qemu.log').open('a'), stderr=subprocess.STDOUT)
         self.serial = self.connect('serial.sock')
@@ -104,6 +119,8 @@ class VM:
     def expect(self, pattern, timeout=120):
         deadline = time.monotonic() + timeout
         while time.monotonic() < deadline:
+            if shutil.disk_usage(self.directory).free < self.min_free_bytes:
+                raise RuntimeError('VM stopped before breaching reserved host disk headroom.')
             match = re.search(pattern, self.transcript[self.read_cursor:])
             if match:
                 beginning = self.read_cursor

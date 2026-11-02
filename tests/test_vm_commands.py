@@ -87,3 +87,17 @@ class VMCommandTests(unittest.TestCase):
 
 if __name__ == '__main__':
     unittest.main()
+
+class VMDiskBudgetTests(unittest.TestCase):
+    def test_low_host_space_stops_a_guest_wait_before_more_work(self):
+        from unittest.mock import patch
+        from types import SimpleNamespace
+        with tempfile.TemporaryDirectory() as temporary:
+            vm = verify.VM(Path(temporary), None, Path('unused.qcow2'))
+            vm.min_free_bytes = 8 * 1024**3
+            try:
+                with patch.object(verify.shutil, 'disk_usage', return_value=SimpleNamespace(free=1024)):
+                    with self.assertRaisesRegex(RuntimeError, 'headroom'):
+                        vm.expect('never', timeout=1)
+            finally:
+                vm.log.close()

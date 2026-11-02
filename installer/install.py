@@ -192,6 +192,45 @@ def firmware_entries(text):
             if re.match(r'^Boot[0-9A-Fa-f]{4}[* ]', line)}
 
 
+def decode_efi_boot_path(data):
+    """Read the EFI_LOAD_OPTION device path, independent of efibootmgr formatting."""
+    length = struct.unpack_from('<H', data, 4)[0]
+    cursor = 6
+    while data[cursor:cursor+2] != b'\0\0':
+        cursor += 2
+        if cursor + 2 > len(data):
+            raise ValueError('Invalid EFI boot description.')
+    cursor += 2
+    end = cursor + length
+    if end > len(data):
+        raise ValueError('Truncated EFI device path.')
+    partition = None
+    paths = []
+    while cursor < end:
+        kind, subtype, size = struct.unpack_from('<BBH', data, cursor)
+        if size < 4 or cursor + size > end:
+            raise ValueError('Invalid EFI device path node.')
+        node = data[cursor:cursor+size]
+        if (kind, subtype) == (4, 1):
+            if partition is not None or size != 42 or node[40:42] != b'\2\2':
+                raise ValueError('Unsupported EFI hard drive path.')
+            partition = (struct.unpack_from('<I', node, 4)[0], str(uuid.UUID(bytes_le=node[24:40])))
+        if (kind, subtype) == (4, 4):
+            paths.append(node[4:].decode('utf-16-le').rstrip('\0'))
+        cursor += size
+    if partition is None or not paths:
+        return None
+    return (*partition, ''.join(paths))
+
+
+def firmware_boot_path(number):
+    variable = Path('/sys/firmware/efi/efivars') / f'Boot{number}-8be4df61-93ca-11d2-aa0d-00e098032b8c'
+    try:
+        return decode_efi_boot_path(variable.read_bytes()[4:])
+    except (OSError, ValueError, struct.error, UnicodeError):
+        return None
+
+
 def alongside_snapshot(settings):
     require_disk(settings)
     table = json.loads(run('sfdisk', '--json', settings.disk, capture=True))['partitiontable']
@@ -224,10 +263,10 @@ def alongside_snapshot(settings):
     entries = firmware_entries(firmware)
     boots = {}
     for number, entry in entries.items():
-        match = re.search(r'HD\((\d+),GPT,([0-9a-f-]+),[^)]*\)/File\(([^)]+)\)', entry, re.I)
-        if not match:
+        boot_path = firmware_boot_path(number)
+        if boot_path is None:
             continue
-        part_number, guid, path = match.groups()
+        part_number, guid, path = boot_path
         part = next((part for part in table['partitions'] if part.get('uuid', '').lower() == guid.lower()
                      and part.get('type', '').lower() == ESP_TYPE), None)
         if part is None or partition_name(settings.disk, int(part_number)) != part['node']:
@@ -604,10 +643,9 @@ def install(settings):
                 run('sgdisk', '--zap-all', '--new=1:0:+4G', '--typecode=1:ef00',
                     '--change-name=1:EFI', '--new=2:0:0', '--typecode=2:8309',
                     '--change-name=2:Linux encrypted', settings.disk)
-            if snapshot:
-                # A successful GPT write does not guarantee that the running
-                # kernel accepted the table. Never format stale device nodes.
-                run('blockdev', '--rereadpt', settings.disk)
+            # sgdisk updates kernel partition nodes. Let filesystem probes finish
+            # before inspecting them: forcing another full reread races those
+            # probes and can fail EBUSY even though the new nodes are correct.
             run('udevadm', 'settle')
             if snapshot:
                 verify_partition_nodes(settings, plan, snapshot['table']['sectorsize'])

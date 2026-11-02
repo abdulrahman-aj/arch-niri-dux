@@ -20,6 +20,7 @@
     "dux-gop",
     "dux-shell",
     "e2fsprogs",
+    "efibootmgr",
     "fastfetch",
     "fzf",
     "git",

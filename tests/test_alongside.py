@@ -4,6 +4,8 @@ import hashlib
 import json
 from pathlib import Path
 import shutil
+import struct
+import uuid
 import subprocess
 import tempfile
 import unittest
@@ -71,6 +73,9 @@ class AlongsideDiskTests(unittest.TestCase):
         self.disk_patch = patch.object(installer, 'require_disk', return_value=self.identity)
         self.disk_patch.start()
         self.addCleanup(self.disk_patch.stop)
+        self.path_patch = patch.object(installer, 'firmware_boot_path', side_effect=lambda number: (1, guid, r'\EFI\Microsoft\Boot\bootmgfw.efi') if number == '0001' else None)
+        self.path_patch.start()
+        self.addCleanup(self.path_patch.stop)
         self.snapshot = installer.alongside_snapshot(self.value)
         self.value.free_region = self.snapshot['regions'][0]
         self.commands.clear()
@@ -164,6 +169,17 @@ class AlongsidePlanningTests(unittest.TestCase):
         settings(mode='alongside', free_region=[2048, 100000000], existing_boot='0001').validate()
 
 class AlongsideBootTests(unittest.TestCase):
+    def test_decodes_real_firmware_device_path_without_parsing_efibootmgr_display(self):
+        guid = uuid.UUID('82e17562-9f24-4564-9735-bb223836c0b4')
+        hd = struct.pack('<BBHIQQ', 4, 1, 42, 15, 8192, 253952) + guid.bytes_le + b'\2\2'
+        path = r'\EFI\debian\shimx64.efi'
+        encoded = (path + '\0').encode('utf-16-le')
+        nodes = hd + struct.pack('<BBH', 4, 4, len(encoded)+4) + encoded + b'\x7f\xff\4\0'
+        option = struct.pack('<IH', 1, len(nodes)) + 'Debian\0'.encode('utf-16-le') + nodes + b'optional-data'
+        self.assertEqual(installer.decode_efi_boot_path(option), (15, str(guid), path))
+        with self.assertRaises(ValueError):
+            installer.decode_efi_boot_path(option[:20])
+
     def test_detected_bitlocker_is_rejected_before_disk_mutation(self):
         with patch.object(installer, 'disk_inventory', return_value=[
                 dict(name='/dev/vda', children=[dict(name='/dev/vda3', fstype='BitLocker')])]), \

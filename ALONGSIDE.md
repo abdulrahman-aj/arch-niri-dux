@@ -41,48 +41,65 @@ transactional against an uncooperative concurrent writer or power failure.
 Failures after partition creation leave the new partitions in place, with the
 original OS untouched; no rollback deletes partitions automatically.
 
-## Parent verification
+## Automated provisioning and acceptance
 
-Run sequentially from this checkout:
+All commands operate only on disposable QEMU disks. Run scenarios sequentially.
+The normal Nix dev shell provides QEMU, OVMF, xorriso and swtpm. `fetch-alongside`
+checks host headroom, uses official sources and records resolved URLs and SHA256.
+Debian also verifies the publisher's SHA512 manifest. Microsoft's LTSC evaluation
+ISO is fetched directly from the evaluation center's official download link;
+its local SHA256 is recorded. No product key or personal credentials are needed.
 
 ```
 make test
-./scripts/build-in-dev python3 -m unittest discover -s tests -p test_alongside.py
-# Parent only, after integrating other approved installer changes:
 make iso
-./scripts/build-in-dev python3 scripts/verify-alongside.py --iso /absolute/new.iso --fixture /absolute/debian.qcow2 --firmware /absolute/debian-OVMF_VARS.fd --directory /absolute/fresh-linux-evidence
+make fetch-alongside ARGS="--os linux --directory out/alongside/media"
+make fetch-alongside ARGS="--os windows --directory out/alongside/media"
+make provision-alongside ARGS="--os linux --media out/alongside/media/debian.qcow2 --iso out/arch-niri-dux-2026.11.02-x86_64.iso --directory out/alongside/linux-fixture"
+make verify-alongside ARGS="--os linux --iso out/arch-niri-dux-2026.11.02-x86_64.iso --fixture out/alongside/linux-fixture/disk.qcow2 --firmware out/alongside/linux-fixture/OVMF_VARS.fd --directory out/alongside/linux-test"
+make provision-alongside ARGS="--os windows --media out/alongside/media/windows11-ltsc-eval.iso --iso out/arch-niri-dux-2026.11.02-x86_64.iso --directory out/alongside/windows"
+make verify-alongside ARGS="--os windows --iso out/arch-niri-dux-2026.11.02-x86_64.iso --fixture out/alongside/windows/disk.qcow2 --firmware out/alongside/windows/OVMF_VARS.fd --windows-token out/alongside/windows/report-token --directory out/alongside/windows-test"
 ```
 
-`verify-alongside.py` is an unexecuted acceptance harness, not proof of VM
-acceptance. It requires the same KVM/render-node access as `make verify`. Its
-fixture contract is a real Debian amd64 UEFI installation with a serial ttyS0
-login, `tester` / `vm-verification-only`, passwordless sudo, a mounted `/boot/efi`,
-a registered `EFI/debian/{shim,grub}x64.efi` entry, and
-`/var/lib/alongside-sentinel` containing `preserve-existing-linux`. Provision
-from official Debian minimal installer or an official Debian cloud image; disable
-cloud-init growpart/resizefs, then enlarge the *virtual disk* offline to leave
-one >=32 GiB extent. Keep its matching OVMF variables. No EFI stub qualifies.
-Official source: https://cloud.debian.org/images/cloud/ .
-The runner uses a disposable backing overlay and copies firmware variables. It
-boots real Debian first, hashes all original partitions while offline, installs,
-compares hashes, boots new Arch by default, then selects Debian through Limine
-and checks the sentinel. The menu timing/End-key selection still needs VM
-validation. A failing/incomplete run never writes SUCCESS.
+Use the actual generated ISO filename and fresh evidence directories. Media
+already downloaded can be checked/recorded using `--verify-existing` with the
+fetch command. Do not download it again merely to run a second scenario.
 
-Windows acceptance remains unimplemented/unexecuted: acquire official Windows
-11 Enterprise evaluation media from
-https://www.microsoft.com/en-us/evalcenter/evaluate-windows-11-enterprise .
-A real installed Windows 11 GPT/UEFI fixture (no EFI stub), authenticated guest
-command transport, pre/post boot checks, original-partition hashing while
-Windows is shut down, and Limine-selected Windows boot are required before this
-TODO can be completed. No download was attempted: large fixture execution is
-reserved for the parent to serialize with builds, not blocked on a claimed
-Microsoft interaction. Linux fixture provisioning also remains parent work;
-the runner does not create a real installation itself.
+Linux provisioning uses the official Debian 13 cloud installation, configures
+only a disposable test account/sentinel through the live ISO, enlarges the
+virtual disk without growing any existing partition, relocates the backup GPT
+as fixture preparation, and registers the original signed Debian shim. Debian
+boots its real kernel and userspace; no EFI stub substitutes for an installed OS.
 
-Keep at least 8 GiB host headroom, monitor `df -h .`, reuse the existing ISO/cache,
-and run Linux then Windows sequentially. The Linux runner requires 20 GiB free
-before starting; monitor growth during execution too. Never collect broad Nix
-GC or delete unrelated user files. Do not treat unit tests, partition hashes,
-or a boot-menu screenshot as a substitute for real OS boot acceptance. Keep
-TODO.md listed until independent review and both real OS scenarios pass.
+Windows provisioning uses Windows 11 Enterprise LTSC evaluation 24H2, a sparse
+64 GiB virtual SATA disk, a 100 MiB FAT ESP, 16 MiB MSR and 24 GiB NTFS system
+partition, leaving the rest unallocated. The standard Microsoft installer reads
+an unattended answer file from a seed USB, with an emulated TPM2. Device
+encryption and hibernation are disabled inside this disposable fixture. A local
+test account and boot task report the running Windows product, build and sentinel
+over QEMU's host-only user network to a random-token route on localhost:18769;
+no host listener is exposed on external interfaces. Windows then shuts down.
+The reporter rejects old builds, missing sentinels and invalid routes.
+
+Acceptance uses a backing overlay and a copy of the fixture's firmware. It
+boots the original OS first, hashes every byte of every original partition
+while offline, installs into the selected region, compares those hashes, boots
+the new encrypted Arch installation by default, reinstalls the pinned kernel
+package to exercise actual package/snapshot hooks, verifies the existing OS
+entry survives, reboots updated Arch, and chainloads the original OS by its
+Limine entry path. Selecting a path explicitly avoids timing-dependent UI keys.
+Only test instrumentation adds a serial console to the new Arch installation.
+
+Evidence includes input hashes, serial/QEMU logs, original partition hashes,
+firmware listings, menu configuration, Windows guest reports and a milestone
+list. Only a full run writes `SUCCESS`. Never treat a screenshot or a loader
+stub as proof of a successful old-OS boot. Real-OS acceptance results are still
+pending and must be recorded before this draft is considered ready.
+
+Keep at least 8 GiB host headroom. Guest waits and Windows report waits abort
+below that threshold; media downloads reserve it before writing. Monitor
+`df -h .` as concurrent root work can consume space. After preserving evidence,
+remove only this task's disposable failed/finished VM overlays or downloaded
+Windows ISO when no longer needed. Retain input hashes, logs and reports. Do not
+run broad Nix GC or delete unrelated user/cache files. Keep TODO.md listed until
+independent review and both real OS scenarios pass.
