@@ -1,5 +1,5 @@
 [terminal]
 vt = 1
 [default_session]
-command = "dms-greeter --command /usr/local/bin/dux-niri-session"
+command = "dms-greeter --command niri"
 user = "greeter"

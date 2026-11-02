@@ -1,5 +1,29 @@
 # Verification
 
+## Session PATH regression (2026-11-02)
+
+Issue #23 was reproduced on the previously accepted desktop image: the systemd
+user PATH omitted `/home/tester/.local/bin`. A disposable qcow2 overlay retained
+the original disk, then received the shipped profile, fish, and user-environment
+files. After reboot and graphical authentication through the unchanged Niri
+greeter command, the user manager and Niri process both included the local bin
+directory. `bash -lc` resolved the test wrapper, and a real
+`niri msg action spawn -- dux-path-probe` wrote its expected marker.
+
+`make test` passed 48 source tests and nine build tests. The shell tests preserve
+existing system/Nix PATH entries and execute the real systemd environment
+generator; fish is tested when installed. This VM has no fish package.
+Independent review covers the final simplified changes. The initial proposed
+greeter wrapper was removed after VM testing showed that `--command` is a
+compositor selector, not an arbitrary command. Greetd's existing profile sourcing
+already reaches the authenticated Niri session.
+
+Local evidence: `out/verify-session-path/before-fix.txt`, `session-path.json`,
+`SESSION-PATH-PASSED` and `serial.log` in the issue worktree. This was qualification
+of the actual overlay files on an existing installation, not a rebuilt ISO.
+The committed `session-path` stage of `make verify` also checks every future
+fresh image. No physical laptop configuration was changed.
+
 ## Bloom, PDF and camera defaults (2026-11-02)
 
 Image: `arch-niri-dux-2026.11.02-x86_64.iso`

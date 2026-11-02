@@ -32,10 +32,9 @@ systemd-suspend` and `systemd-inhibit --list` show sleep events and inhibitors.
 
 Session PATH: `~/.local/bin` resolves in POSIX login shells
 (`/etc/profile.d/dux-localbin.sh`), fish (`/usr/share/fish/vendor_conf.d`),
-systemd user services (`~/.config/environment.d/90-dux.conf` PATH entry) and
-Niri spawns (greetd launches `dux-niri-session`, which appends then execs
-niri). Every context appends, preserving system and Nix PATH entries; no mise
-shims are added. `environment.d` alone cannot reach Niri: greetd starts the
-compositor directly, not as a systemd user service, and Niri `spawn` does no
-shell expansion. `scripts/verify-guest.py session-path` qualifies all four
-contexts on a live VM, including a Niri-spawned wrapper writing a marker.
+systemd user services (`~/.config/environment.d/90-dux.conf`) and Niri spawns.
+Greetd's default profile sourcing passes the login PATH to the user session.
+The greeter still uses its supported `--command niri` compositor selector.
+Each context preserves system and Nix PATH entries; no mise shims are added.
+The `session-path` stage of `make verify` checks the user-service environment,
+login shell and a real Niri-spawned wrapper without personal dotfiles.
