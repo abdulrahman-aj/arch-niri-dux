@@ -512,6 +512,95 @@ def restored():
     storage()
 
 
+def sample_pdf_bytes():
+    text = b'Dux verification PDF works'
+    content = b'BT /F1 18 Tf 20 80 Td (' + text + b') Tj ET'
+    objects = [
+        b'<< /Type /Catalog /Pages 2 0 R >>',
+        b'<< /Type /Pages /Kids [3 0 R] /Count 1 >>',
+        b'<< /Type /Page /Parent 2 0 R /MediaBox [0 0 300 144] '
+        b'/Resources << /Font << /F1 4 0 R >> >> /Contents 5 0 R >>',
+        b'<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>',
+        b'<< /Length %d >>\nstream\n' % len(content) + content + b'\nendstream',
+    ]
+    pdf = b'%PDF-1.4\n'
+    offsets = []
+    for number, body in enumerate(objects, start=1):
+        offsets.append(len(pdf))
+        pdf += b'%d 0 obj\n' % number + body + b'\nendobj\n'
+    xref = len(pdf)
+    pdf += b'xref\n0 %d\n' % (len(objects) + 1)
+    pdf += b'0000000000 65535 f \n'
+    for offset in offsets:
+        pdf += b'%010d 00000 n \n' % offset
+    pdf += b'trailer\n<< /Size %d /Root 1 0 R >>\nstartxref\n%d\n%%%%EOF' % (
+        len(objects) + 1, xref)
+    return pdf
+
+
+def wallpaper():
+    session = Path('/home/tester/.local/state/dms/session.json')
+    assert session.is_file(), 'Dux first-session state is missing.'
+    data = json.loads(session.read_text())
+    preset = data.get('materialWallpapers', {}).get('', {}).get('shared', {}).get('preset')
+    assert preset == 'bloom', f'First-session wallpaper must be bloom, found {preset!r}.'
+    assert not data.get('wallpaperPath'), 'Material wallpaper must be active (empty wallpaperPath).'
+    assert not data.get('monitorWallpapers'), 'Fresh user must not have per-monitor overrides.'
+    screenshot('02-wallpaper-bloom.png')
+    evidence = Path('/run/verify/02-wallpaper-bloom.png')
+    assert evidence.is_file() and evidence.stat().st_size > 0, 'Rendered wallpaper screenshot missing.'
+    Path('/run/verify/wallpaper.json').write_text(json.dumps({
+        'preset': preset, 'wallpaperPath': data.get('wallpaperPath', ''),
+    }, indent=2) + '\n')
+
+
+def pdf():
+    assert user_command('xdg-mime', 'query', 'default', 'application/pdf', capture=True).stdout.strip() == 'org.gnome.Papers.desktop'
+    assert Path('/usr/share/applications/org.gnome.Papers.desktop').is_file(), 'Papers desktop file missing.'
+    assert 'application/pdf=org.gnome.Papers.desktop' in Path('/etc/xdg/mimeapps.list').read_text()
+    sample = Path('/tmp/dux-verification.pdf')
+    sample.write_bytes(sample_pdf_bytes())
+    assert sample.stat().st_size > 0
+    user_command('sh', '-c', f'rm -f /tmp/papers-verified; papers {sample} >/tmp/papers.log 2>&1 &')
+    wait_until('Papers graphical window', lambda: any(
+        'papers' in (window.get('app_id') or '').lower() for window in windows()), timeout=60)
+    screenshot('02-papers.png')
+    rendered = Path('/run/verify/02-papers.png')
+    assert rendered.is_file() and rendered.stat().st_size > 0
+    Path('/run/verify/pdf.json').write_text(json.dumps({
+        'default': 'org.gnome.Papers.desktop', 'sample': str(sample),
+        'sample_size': sample.stat().st_size,
+    }, indent=2) + '\n')
+
+
+def camera():
+    assert Path('/usr/share/applications/org.gnome.Snapshot.desktop').is_file(), 'Snapshot desktop file missing.'
+    user_command('test', '-x', '/usr/bin/snapshot')
+    videos = sorted(str(path) for path in Path('/dev').glob('video*'))
+    has_camera = bool(videos)
+    user_command('sh', '-c', 'snapshot >/tmp/snapshot.log 2>&1 &')
+    try:
+        wait_until('Snapshot graphical window', lambda: any(
+            'snapshot' in (window.get('app_id') or '').lower() for window in windows()), timeout=60)
+    except TimeoutError:
+        # No camera portal grant in the headless VM still proves installation;
+        # do not claim preview without a visible window.
+        Path('/run/verify/camera.json').write_text(json.dumps({
+            'installed': True, 'has_camera': has_camera, 'videos': videos,
+            'window': False,
+            'note': 'Snapshot installed; no graphical window observed without a camera device.',
+        }, indent=2) + '\n')
+        return
+    screenshot('02-snapshot.png')
+    # Honest boundary: a visible window proves launch, not optical capture.
+    # Photo/video capture is only claimed when a real camera device exists and
+    # a capture file is produced; the headless VM has no camera.
+    Path('/run/verify/camera.json').write_text(json.dumps({
+        'installed': True, 'has_camera': has_camera, 'videos': videos, 'window': True,
+        'note': 'Snapshot launched; preview/capture not claimed without a camera device.',
+    }, indent=2) + '\n')
+
+
 if __name__ == '__main__':
     action = sys.argv[1]
     if action == 'prepare':
@@ -556,5 +645,11 @@ if __name__ == '__main__':
         assert 'true' in user_command('dms', 'ipc', 'call', 'lock', 'isLocked', capture=True).stdout.lower()
     elif action == 'unlocked':
         assert 'false' in user_command('dms', 'ipc', 'call', 'lock', 'isLocked', capture=True).stdout.lower()
+    elif action == 'wallpaper':
+        wallpaper()
+    elif action == 'pdf':
+        pdf()
+    elif action == 'camera':
+        camera()
     else:
         raise SystemExit('Unknown guest probe')

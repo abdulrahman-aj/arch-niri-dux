@@ -8,6 +8,18 @@ the upstream license is included. No personal dotfiles are used.
 the packaged Dux user services. Dux Greeter starts the packaged Niri session.
 Dux creates its own shell settings on first launch.
 
+New users start on Dux's upstream "bloom" material preset. The seed lives in
+`~/.local/state/dms/session.json` and is only created when absent; existing
+`session.json` files are never overwritten, so chosen wallpapers are preserved.
+The preset assets remain owned by upstream Dux; no vendored Niri files are
+edited for this default.
+
+Papers (`org.gnome.Papers.desktop`) is the default PDF viewer in both
+`/etc/xdg/mimeapps.list` and per-user `~/.config/mimeapps.list`. Snapshot
+(`org.gnome.Snapshot.desktop`) is the installed camera app from Arch's official
+`extra` repository. Both come from signed official packages, not the live
+desktop; the live ISO remains terminal-only.
+
 Matugen supplies Dux's colors and system light/dark preference. A first-login
 service applies upstream's GTK integration; Qt uses upstream's GTK passthrough.
 Dux Files handles folders and portal file dialogs, with GTK as fallback. The

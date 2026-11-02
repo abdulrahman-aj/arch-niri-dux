@@ -15,7 +15,21 @@ install -m 0644 /usr/share/arch-niri-dux/environment.conf "$user_home/.config/en
 cat >"$user_home/.config/mimeapps.list" <<'EOF'
 [Default Applications]
 inode/directory=dev.duxlabs.files.desktop
+application/pdf=org.gnome.Papers.desktop
 EOF
+# Seed Dux's first-session wallpaper to the upstream "bloom" material preset.
+# Dux owns the preset assets; an empty session would render its "dank" default.
+# Never overwrite an existing choice: only create the state file when absent.
+state_dir="$user_home/.local/state/dms"
+state_file="$state_dir/session.json"
+if [[ ! -e "$state_file" ]]; then
+  install -d -o "$user" -g "$user_group" "$state_dir"
+  cat >"$state_file" <<'EOF'
+{"configVersion": 7, "materialWallpapers": {"": {"shared": {"preset": "bloom", "seed": "#d0bcff"}}}}
+EOF
+  chown "$user:$user_group" "$state_file"
+  chmod 0644 "$state_file"
+fi
 # A user service directory has precedence over Nautilus's system activation file.
 ln -sf /usr/share/dbus-1/services/dev.duxlabs.files.FileManager1.service \
     "$user_home/.local/share/dbus-1/services/dev.duxlabs.files.FileManager1.service"
