@@ -165,7 +165,7 @@ def prepare(root):
         assert 'AllowHibernation=no' in (root / 'etc/systemd/sleep.conf.d/60-hibernation.conf').read_text()
 
 
-def user_command(*args, capture=False):
+def user_command(*args, capture=False, timeout=None):
     user = pwd.getpwnam('tester')
     runtime = Path(f'/run/user/{user.pw_uid}')
     wayland = next((path for path in runtime.glob('wayland-*') if stat.S_ISSOCK(path.stat().st_mode)), None)
@@ -178,7 +178,7 @@ def user_command(*args, capture=False):
                'XDG_SESSION_TYPE=wayland',
                'XDG_CURRENT_DESKTOP=niri', f'NIRI_SOCKET={niri}', f'XDG_RUNTIME_DIR={runtime}',
                f'DBUS_SESSION_BUS_ADDRESS=unix:path={runtime}/bus', f'WAYLAND_DISPLAY={wayland.name}',
-               *args, stdout=subprocess.PIPE if capture else None)
+               *args, stdout=subprocess.PIPE if capture else None, timeout=timeout)
 
 
 def ipc(application, method, *parameters):
@@ -628,7 +628,7 @@ def pipewire_video_sources():
     try:
         objects = json.loads(output)
     except ValueError:
-        return ['Video/Source'] if 'Video/Source' in output else []
+        return []
     sources = []
     for obj in objects:
         if not isinstance(obj, dict) or obj.get('type') != 'PipeWire:Interface:Node':
@@ -640,56 +640,81 @@ def pipewire_video_sources():
     return sources
 
 
+def focus_camera():
+    window = next(window for window in windows()
+                  if 'snapshot' in (window.get('app_id') or '').lower())
+    user_command('niri', 'msg', 'action', 'focus-window', '--id', str(window['id']))
+
+
+def camera_cleanup():
+    pid_file = Path('/tmp/dux-synthetic-camera.pid')
+    if pid_file.is_file():
+        pid = int(pid_file.read_text())
+        user_command('sh', '-c', f'kill {pid} 2>/dev/null || true')
+    user_command('sh', '-c', 'pkill -x snapshot || true')
+
+
 def camera():
-    assert Path('/usr/share/applications/org.gnome.Snapshot.desktop').is_file(), 'Snapshot desktop file missing.'
-    user_command('test', '-x', '/usr/bin/snapshot')
-    user_command('pacman', '-Q', 'papers', 'snapshot')
-    videos = sorted(str(path) for path in Path('/dev').glob('video*'))
-    # Deterministic synthetic camera: test pattern into PipeWire as a
-    # Video/Source Camera node through the installed GStreamer stack.
-    # Video-only; no physical camera or microphone is touched.
+    assert Path('/usr/share/applications/org.gnome.Snapshot.desktop').is_file()
+    # Supply only a generated video stream, never a physical camera/microphone.
+    user_command('gsettings', 'set', 'org.gnome.Snapshot', 'enable-audio-recording', 'false')
+    user_command('gsettings', 'set', 'org.gnome.Snapshot', 'countdown', '0')
+    user_command('gsettings', 'set', 'org.gnome.Snapshot', 'capture-mode', "'picture'")
     user_command('sh', '-c',
-                 'rm -f /tmp/dux-synthetic-camera.log /tmp/dux-synthetic-camera.pid; '
                  'gst-launch-1.0 videotestsrc pattern=ball is-live=true ! '
                  'video/x-raw,width=640,height=480,framerate=30/1 ! pipewiresink mode=provide '
-                 'stream-properties="properties,media.class=Video/Source,media.role=Camera" '
+                 'stream-properties="properties,media.class=Video/Source,media.role=Camera,node.name=DuxTestCamera" '
                  'client-name="DUX verification camera" '
                  '>/tmp/dux-synthetic-camera.log 2>&1 & echo $! > /tmp/dux-synthetic-camera.pid')
     try:
-        sources = wait_until('Synthetic PipeWire Video/Source camera',
-                             lambda: pipewire_video_sources() or False, timeout=90)
-        user_command('sh', '-c', 'rm -f /tmp/snapshot.log; snapshot >/tmp/snapshot.log 2>&1 &')
-        # Required: a missing Snapshot window fails the probe. No fallback
-        # path reports launch as verified without it.
-        wait_until('Snapshot graphical window on synthetic camera', lambda: any(
-            'snapshot' in (window.get('app_id') or '').lower() for window in windows()), timeout=90)
+        sources = wait_until('Synthetic PipeWire camera', lambda:
+                             'DuxTestCamera' in pipewire_video_sources(), timeout=60)
+        before = [str(path) for folder in ('Pictures', 'Videos')
+                  for path in Path('/home/tester', folder, 'Camera').glob('*')]
+        user_command('sh', '-c', 'snapshot --debug >/tmp/snapshot.log 2>&1 &')
+        wait_until('Snapshot window', lambda: any(
+            'snapshot' in (window.get('app_id') or '').lower() for window in windows()), timeout=60)
+        focus_camera()
         screenshot('02-snapshot.png')
         width, height = png_dimensions(Path('/run/verify/02-snapshot.png'))
-        user_command('sh', '-c',
-                     'rm -f /tmp/dux-synthetic-photo.jpg; gst-launch-1.0 videotestsrc num-buffers=1 pattern=ball ! '
-                     'videoconvert ! jpegenc ! filesink location=/tmp/dux-synthetic-photo.jpg '
-                     '>/tmp/dux-synthetic-photo.log 2>&1', timeout=120)
-        photo = Path('/tmp/dux-synthetic-photo.jpg')
-        assert photo.is_file() and photo.stat().st_size > 0, 'Synthetic photo fixture missing.'
-        user_command('sh', '-c',
-                     'rm -f /tmp/dux-synthetic-video.webm; gst-launch-1.0 videotestsrc num-buffers=90 pattern=ball ! '
-                     'videoconvert ! vp8enc ! webmmux ! filesink location=/tmp/dux-synthetic-video.webm '
-                     '>/tmp/dux-synthetic-video.log 2>&1', timeout=180)
-        video = Path('/tmp/dux-synthetic-video.webm')
-        assert video.is_file() and video.stat().st_size > 0, 'Synthetic video fixture missing.'
         Path('/run/verify/camera.json').write_text(json.dumps({
-            'installed': True, 'synthetic': True, 'video_sources': sources,
-            'videos': videos, 'window': True, 'width': width, 'height': height,
-            'photo': str(photo), 'photo_size': photo.stat().st_size,
-            'video': str(video), 'video_size': video.stat().st_size,
-            'note': 'Snapshot preview on a synthetic videotestsrc->pipewiresink Video/Source camera; '
-                    'photo/video files are deterministic GStreamer fixtures from the same synthetic source, '
-                    'not Snapshot shutter output; no physical camera/mic used; '
-                    'parent reviews 02-snapshot.png for the live preview.',
+            'synthetic': True, 'source': 'DuxTestCamera', 'before': before,
+            'width': width, 'height': height,
         }, indent=2) + '\n')
-    finally:
-        user_command('sh', '-c', 'pkill -f "DUX verification camera" || true; '
-                                 'pkill -x snapshot || pkill -f "/usr/bin/snapshot" || true')
+    except Exception:
+        camera_cleanup()
+        raise
+
+
+def camera_media(video=False):
+    evidence = Path('/run/verify/camera.json')
+    state = json.loads(evidence.read_text())
+    folder = Path('/home/tester', 'Videos' if video else 'Pictures', 'Camera')
+    def completed_capture():
+        for path in folder.glob('*'):
+            if str(path) in state['before'] or not path.is_file():
+                continue
+            data = path.read_bytes()
+            if video:
+                valid = len(data) > 512 and (data.startswith(b'\x1aE\xdf\xa3') or data[4:8] == b'ftyp')
+            else:
+                valid = data.startswith(b'\xff\xd8') and data.endswith(b'\xff\xd9')
+            if valid:
+                return path
+        return None
+    captured = wait_until('Snapshot video recording' if video else 'Snapshot photograph',
+                          completed_capture, timeout=60)
+    target = Path('/run/verify') / ('camera-video' if video else 'camera-photo')
+    target = target.with_suffix(captured.suffix)
+    shutil.copyfile(captured, target)
+    state['video' if video else 'photo'] = {'path': str(captured), 'bytes': captured.stat().st_size}
+    evidence.write_text(json.dumps(state, indent=2) + '\n')
+    if video:
+        screenshot('02-snapshot-captured.png')
+        camera_cleanup()
+    else:
+        user_command('gsettings', 'set', 'org.gnome.Snapshot', 'capture-mode', "'video'")
+        focus_camera()
 
 
 if __name__ == '__main__':
@@ -744,5 +769,11 @@ if __name__ == '__main__':
         pdf()
     elif action == 'camera':
         camera()
+    elif action == 'camera-photo':
+        camera_media()
+    elif action == 'camera-video':
+        camera_media(video=True)
+    elif action == 'camera-cleanup':
+        camera_cleanup()
     else:
         raise SystemExit('Unknown guest probe')
