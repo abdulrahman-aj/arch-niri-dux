@@ -37,7 +37,7 @@ class WindowsVM(VM):
             self.tpm_process.wait(timeout=10)
             self.tpm_process = None
 
-    def start(self, cdrom=True, network=False):
+    def start(self, cdrom=True, network=False, software_display=False):
         self.stop_tpm()
         control = self.directory / 'tpm.sock'
         control.unlink(missing_ok=True)
@@ -54,7 +54,7 @@ class WindowsVM(VM):
         saved = self.extra_args
         self.extra_args = saved + tpm_args
         try:
-            super().start(cdrom=cdrom, network=network)
+            super().start(cdrom=cdrom, network=network, software_display=software_display)
         finally:
             self.extra_args = saved
 

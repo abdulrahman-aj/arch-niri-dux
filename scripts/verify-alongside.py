@@ -115,7 +115,9 @@ open('/run/verify/new-partitions.json','w').write(json.dumps(m.alongside_plan(v,
         vm.command(f'cryptsetup open --key-file /run/verify/key {encrypted} dux-root; '
                    'mkdir -p /mnt/verify; mount -o subvol=@ /dev/mapper/dux-root /mnt/verify; '
                    f'mount {esp} /mnt/verify/boot')
-        vm.command('python /run/verify/verify-guest.py prepare /mnt/verify', timeout=300)
+        vm.command('python /run/verify/verify-guest.py prepare /mnt/verify; '
+                   'python /run/verify/verify-guest.py serial-console-enable /mnt/verify; '
+                   'arch-chroot /mnt/verify limine-mkinitcpio', timeout=300)
         vm.command('umount -R /mnt/verify; cryptsetup close dux-root; '
                    'cp /run/archiso/bootmnt/repo/linux-[0-9]*.pkg.tar.zst /run/verify/; sync')
         vm.poweroff()

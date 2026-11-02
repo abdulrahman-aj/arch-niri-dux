@@ -1,5 +1,34 @@
 # Verification
 
+## Graphical disk unlock (2026-11-02)
+
+Image: `arch-niri-dux-2026.11.02-x86_64.iso`
+
+```
+SHA-256 0f4ff7110ed3473be26239aaaab50375eac119e73e0f2034989c9955d4c8a83c
+```
+
+The rebuilt image adds signed Plymouth 26.134.222-3 to the previous 604-package
+closure, retaining all existing pins and the four reviewed Dux builds. It uses
+the stock bgrt password box, with text fallback and the existing recovery path.
+
+`make test` passed 40 source tests and nine build tests. `make iso` and
+`make verify ARGS='--directory out/verify-plymouth-qualified'` passed all 16
+acceptance stages. The GUI check boots without a serial kernel console, uses a
+CPU-readable framebuffer, waits for the visible password prompt and types an
+incorrect password followed by the correct one. Screenshots confirm the box,
+the forced `plymouth.enable=0` console prompt, and the graphical prompt after
+restoring the setting. Desktop, screen capture, lock, update snapshots,
+snapshot restoration and normal reboot also passed. Independent Muse review
+covered the boot changes; its acceptance findings were addressed before this run.
+
+`make verify-hibernate ARGS='--directory out/verify-plymouth-qualified'` passed:
+the kernel boot ID and RAM-backed nonce survived encrypted hibernation/resume.
+Local evidence includes `ACCEPTANCE-PASSED`, `milestones.json`, the
+`02-graphical-unlock-*`, `06-text-fallback-*` and `07-restored-splash-*` PNGs,
+`HIBERNATE-RESUME-PASSED` and `hibernate-resume.json` in that directory.
+Laptop-specific BGRT/backlight behavior has not been tested physically.
+
 ## Fastfetch rebuild (2026-11-02)
 
 Image: `arch-niri-dux-2026.11.02-x86_64.iso`

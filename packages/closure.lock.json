@@ -48,6 +48,7 @@
     "pipewire",
     "pipewire-alsa",
     "pipewire-pulse",
+    "plymouth",
     "polkit",
     "power-profiles-daemon",
     "python",
@@ -4403,6 +4404,15 @@
       "url": "https://geo.mirror.pkgbuild.com/core/os/x86_64/pkgconf-3.0.10-1-x86_64.pkg.tar.zst",
       "repository": "core",
       "signature": "iHUEABYKAB0WIQSDvIiJNRtd67toQW64rAhgDxCM3wUCatX7fQAKCRC4rAhgDxCM36KfAP9BIiVgPDNS+G197V30C5PhbcUhgCk9e8nmEl7j07lpHwD+OspQggLndmRYCMigUIiMwSpSpOOMub2OuRgt64ybdQk="
+    },
+    {
+      "name": "plymouth",
+      "version": "26.134.222-3",
+      "filename": "plymouth-26.134.222-3-x86_64.pkg.tar.zst",
+      "sha256": "81b2f013974aca30ec7c9f9470ad6827467147076fbcf7b22492fadb6e35b124",
+      "url": "https://geo.mirror.pkgbuild.com/extra/os/x86_64/plymouth-26.134.222-3-x86_64.pkg.tar.zst",
+      "repository": "extra",
+      "signature": "iQIzBAABCgAdFiEEFORv5f1p8uKH4kTbYyw8wNHJyvYFAmq1A/gACgkQYyw8wNHJyvaDRw//Y6S461BtweP8W2RU6KrE9DIjCHOCGu770LwSHdgmS4PQyoPWgnIOjpW8FAKuVem3pOff5WEEOwdjlotkDumMdxaXxol1dl2MsJabqz9cZAW+1NEeguULe3w3yGQifFYzaApARzLCxrPtrqcNsxcbKSdSzhrhMvNjRW74sN8ChfziI/+nfRdF2pEDjh4a2Bkka+Yd+DXA0mj8C0c6Y/G3RqQd17qFqBX05RVJBhs23i/+HrSOaNpLwAhCENpzXtF7oFFUvCEEYDoacHSYsOAbDt6Lsn1kEPTzWBXl7SYmq9duGrTCuy9NVO74STaEOuPHZsu2jqScF+9LfIKd040Bg859ISBhLRzdFx1BaeIdFkFrCMZzdrurDNIyW4pMoQK/pFApV3f02Go0k4affUs/lk5BvXQN5PVIja+PPmjNjJBQ5TQXRTdvoCwnTRIiDj49bD/OuFbVp6axEOxQQW8At7R6gLGp8WpAHfyKLq/GZgji/Gw5HyyenosMRyRnsG/eSfi/VT6xpXSEzMP9NdO+Q86jtgXxHsxASYdSxSbiKpR0+Jx1o7/FMG8nJ4ifkJPoKuXpG6NBpEcN1ttzJJxQ3E+FlPrGLK32o3Gx3tBy3jr9rxCL0b0tXI0NOGSkrakCS7JQ+VN/v5Em6qRyGNN3rJVq1c1wzbef/tDA3tA+e9A="
     },
     {
       "name": "polkit",

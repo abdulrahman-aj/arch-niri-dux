@@ -63,7 +63,7 @@ class WindowsTPMRestartTests(unittest.TestCase):
             sentinel.write_text('retain fixture state')
             pids = []
 
-            def boot(instance, cdrom=True, network=False):
+            def boot(instance, cdrom=True, network=False, software_display=False):
                 connection = socket.socket(socket.AF_UNIX)
                 try:
                     connection.connect(str(root / 'tpm.sock'))
