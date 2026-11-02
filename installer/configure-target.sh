@@ -21,12 +21,12 @@ cat >/etc/mkinitcpio.conf <<'EOF'
 MODULES=(btrfs)
 BINARIES=()
 FILES=()
-HOOKS=(base systemd autodetect microcode modconf kms keyboard sd-vconsole block sd-encrypt filesystems sd-btrfs-overlayfs fsck)
+HOOKS=(base systemd autodetect microcode modconf kms keyboard sd-vconsole block plymouth sd-encrypt filesystems sd-btrfs-overlayfs fsck)
 COMPRESSION="zstd"
 EOF
 
 install -d /etc/kernel /etc/default /etc/conf.d /etc/snapper/configs
-dux_cmdline="rd.luks.name=$dux_luks_uuid=dux-root root=/dev/mapper/dux-root rootflags=subvol=@ rw"
+dux_cmdline="rd.luks.name=$dux_luks_uuid=dux-root root=/dev/mapper/dux-root rootflags=subvol=@ rw quiet splash"
 if [[ -n "$dux_resume_offset" ]]; then
     [[ "$dux_resume_offset" =~ ^[0-9]+$ ]]
     dux_cmdline+=" resume=/dev/mapper/dux-root resume_offset=$dux_resume_offset"
@@ -69,6 +69,17 @@ NUMBER_LIMIT_IMPORTANT="5"
 TIMELINE_CREATE="no"
 EOF
 printf 'SNAPPER_CONFIGS="root"\n' >/etc/conf.d/snapper
+
+# Graphical LUKS prompt with a working text fallback. Arch's stock bgrt theme
+# keeps any firmware logo and falls back to spinner, then to text/details when
+# KMS is unavailable. Esc shows boot messages; boot failures stay visible
+# because only quiet+splash are set. plymouth.enable=0 with
+# disablehooks=plymouth restores the plain console prompt.
+plymouth-set-default-theme bgrt
+# Let the splash quit before the greeter so the login screen is never hidden.
+install -d /etc/systemd/system/greetd.service.d
+printf '[Unit]\nAfter=plymouth-quit.service plymouth-quit-wait.service\n' \
+    >/etc/systemd/system/greetd.service.d/10-plymouth.conf
 
 # Bootstrap a bootable baseline before package hooks create recovery snapshots.
 limine-install --fallback

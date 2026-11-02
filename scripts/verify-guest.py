@@ -150,7 +150,19 @@ def run_interactive(command, replies, timeout=180):
 
 def prepare(root):
     # Test instrumentation adds a serial console; production ISO remains unchanged.
+    config = (root / 'etc/mkinitcpio.conf').read_text()
+    match = re.search(r'^HOOKS=\((.*)\)', config, re.M)
+    assert match, 'mkinitcpio HOOKS are missing.'
+    hooks = match.group(1).split()
+    for hook in ('systemd', 'kms', 'plymouth', 'sd-encrypt'):
+        assert hook in hooks, f'mkinitcpio hook {hook} is missing: {hooks}'
+    assert hooks.index('systemd') < hooks.index('plymouth') < hooks.index('sd-encrypt'), hooks
     cmdline = root / 'etc/kernel/cmdline'
+    tokens = cmdline.read_text().split()
+    assert 'quiet' in tokens and 'splash' in tokens, tokens
+    assert any(token.startswith('rd.luks.name=') for token in tokens), tokens
+    theme = (root / 'etc/plymouth/plymouthd.conf').read_text() if (root / 'etc/plymouth/plymouthd.conf').is_file() else ''
+    assert 'Theme=bgrt' in theme, theme
     cmdline.write_text(cmdline.read_text().strip() + ' console=tty0 console=ttyS0,115200n8\n')
     defaults = root / 'etc/default/limine'
     defaults.write_text(defaults.read_text() + '\nKERNEL_CMDLINE[default]+=" console=tty0 console=ttyS0,115200n8"\n')
@@ -251,6 +263,60 @@ def storage():
     Path('/run/verify/swap-evidence.json').write_text(json.dumps({
         'subvolume': mounted_subvolume, 'resume_offset': int(offset), 'active_swap': swaps,
     }, indent=2) + '\n')
+
+
+def plymouth_config(root='/'):
+    # Graphical boot qualification: stock theme, hook order, quiet splash and
+    # text fallback availability. Runs on the live system (root='/') or on a
+    # mounted target during prepare().
+    root = Path(root)
+    hooks_text = (root / 'etc/mkinitcpio.conf').read_text()
+    match = re.search(r'^HOOKS=\((.*)\)', hooks_text, re.M)
+    assert match, 'mkinitcpio HOOKS are missing.'
+    hooks = match.group(1).split()
+    for hook in ('systemd', 'kms', 'plymouth', 'sd-encrypt'):
+        assert hook in hooks, f'mkinitcpio hook {hook} is missing: {hooks}'
+    assert hooks.index('systemd') < hooks.index('plymouth') < hooks.index('sd-encrypt'), hooks
+    cmdline = (root / 'etc/kernel/cmdline').read_text().split() if (root / 'etc/kernel/cmdline').is_file() \
+        else Path('/proc/cmdline').read_text().split()
+    assert 'quiet' in cmdline and 'splash' in cmdline, cmdline
+    assert any(token.startswith('rd.luks.name=') for token in cmdline), cmdline
+    assert 'plymouth.enable=0' not in cmdline, cmdline
+    # Stock tasteful theme; Arch's default bgrt keeps firmware logos and falls
+    # back to spinner, then to text/details without KMS or a framebuffer.
+    theme_conf = root / 'etc/plymouth/plymouthd.conf'
+    assert theme_conf.is_file(), 'Plymouth theme configuration is missing.'
+    assert 'Theme=bgrt' in theme_conf.read_text(), theme_conf.read_text()
+    for fallback in ('bgrt', 'spinner', 'details', 'text', 'tribar'):
+        assert (root / f'usr/share/plymouth/themes/{fallback}').is_dir(), fallback
+    dropin = root / 'etc/systemd/system/greetd.service.d/10-plymouth.conf'
+    assert dropin.is_file(), 'Greeter Plymouth ordering is missing.'
+    assert 'plymouth-quit.service' in dropin.read_text(), dropin.read_text()
+    for unit in ('plymouth-start.service', 'plymouth-quit.service', 'plymouth-quit-wait.service'):
+        assert (root / f'usr/lib/systemd/system/{unit}').is_file(), unit
+
+
+def plymouth_status():
+    # Running-system checks: splash was requested, failures stay visible and
+    # the greeter started only after the splash quit.
+    cmdline = Path('/proc/cmdline').read_text().split()
+    assert 'quiet' in cmdline and 'splash' in cmdline, cmdline
+    assert 'plymouth.enable=0' not in cmdline, cmdline
+    theme = run('plymouth-set-default-theme', stdout=subprocess.PIPE).stdout.strip()
+    assert theme == 'bgrt', theme
+    assert Path('/usr/share/plymouth/themes/bgrt/bgrt.plymouth').is_file()
+    for fallback in ('details', 'text'):
+        assert Path(f'/usr/share/plymouth/themes/{fallback}').is_dir(), fallback
+    # Boot failures must not be masked: only quiet+splash quiet the console.
+    assert 'systemd.show_status=false' not in cmdline, cmdline
+    boot_log = Path('/var/log/boot.log')
+    assert boot_log.is_file(), 'Plymouth boot log is missing.'
+    journal = run('journalctl', '-b', '--no-pager', '-o', 'short-monotonic',
+                  stdout=subprocess.PIPE).stdout
+    assert 'plymouth' in journal.lower(), 'No Plymouth activity in this boot journal.'
+    run('systemctl', 'is-active', 'greetd')
+    evidence = {'theme': theme, 'cmdline': cmdline}
+    Path('/run/verify/plymouth-evidence.json').write_text(json.dumps(evidence, indent=2) + '\n')
 
 
 def fonts():
@@ -512,6 +578,30 @@ def restored():
     storage()
 
 
+def splash_fallback(disable, root='/'):
+    # Real text-fallback path: Plymouth stays installed, but the kernel
+    # disables its splash so the plain console passphrase prompt is used.
+    # Boot failures stay visible because only quiet+splash quiet the console.
+    root = Path(root)
+    cmdline = root / 'etc/kernel/cmdline'
+    tokens = cmdline.read_text().split()
+    if disable:
+        if 'plymouth.enable=0' not in tokens:
+            tokens.append('plymouth.enable=0')
+    else:
+        tokens = [token for token in tokens if token != 'plymouth.enable=0']
+    cmdline.write_text(' '.join(tokens) + '\n')
+    defaults = root / 'etc/default/limine'
+    lines = [line for line in defaults.read_text().splitlines()
+             if 'plymouth.enable=0' not in line]
+    if disable:
+        lines.append('KERNEL_CMDLINE[default]+=" plymouth.enable=0"')
+    defaults.write_text('\n'.join(lines) + '\n')
+    if str(root) == '/':
+        run('limine-snapper-sync')
+        run('sync')
+
+
 if __name__ == '__main__':
     action = sys.argv[1]
     if action == 'prepare':
@@ -550,6 +640,14 @@ if __name__ == '__main__':
         recovery()
     elif action == 'restored':
         restored()
+    elif action == 'plymouth-config':
+        plymouth_config(sys.argv[2] if len(sys.argv) > 2 else '/')
+    elif action == 'plymouth-status':
+        plymouth_status()
+    elif action == 'splash-fallback-disable':
+        splash_fallback(True)
+    elif action == 'splash-fallback-enable':
+        splash_fallback(False)
     elif action == 'lock':
         user_command('dms', 'ipc', 'call', 'lock', 'lock')
     elif action == 'locked':

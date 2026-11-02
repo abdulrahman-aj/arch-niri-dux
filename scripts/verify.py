@@ -206,8 +206,19 @@ class VM:
             raise RuntimeError(f'QEMU exited abnormally: {self.process.returncode}')
 
 
-def installed_login(vm):
+def installed_login(vm, wrong_first=False, screenshot_tag=None):
     vm.expect(r'(?i)(passphrase|password).*?:', timeout=180)
+    if screenshot_tag is not None:
+        # Let the splash render so the screenshot qualifies the graphical UI.
+        time.sleep(2)
+        vm.screenshot(screenshot_tag + '-plymouth-prompt')
+    if wrong_first:
+        # A mistyped passphrase must re-prompt instead of failing the boot.
+        vm.send('wrong-passphrase-retry\n')
+        vm.expect(r'(?i)(passphrase|password).*?:', timeout=180)
+        if screenshot_tag is not None:
+            time.sleep(2)
+            vm.screenshot(screenshot_tag + '-plymouth-retry')
     vm.send(PASSWORD + '\n')
     vm.expect(r'login:', timeout=180)
     vm.send('tester\n')
@@ -314,12 +325,15 @@ def main():
             print('Install-only debug run complete. Full acceptance has NOT passed.', flush=True)
             return 0
         vm.start(cdrom=False)
-        installed_login(vm)
+        installed_login(vm, wrong_first=True, screenshot_tag='02-boot')
         passed('UEFI boot from encrypted disk without installation ISO')
         vm.command('test -e /dev/mapper/dux-root; findmnt -n -o FSTYPE / | grep -x btrfs; test "$(ls /sys/class/net | tr "\\n" " ")" = "lo "')
         vm.command('cat /proc/cmdline; ! grep -q /@snapshots/ /proc/cmdline; systemctl is-enabled greetd; systemctl is-active greetd; test -f /home/tester/.config/niri/config.kdl')
         vm.command('systemctl is-active NetworkManager; systemctl is-enabled bluetooth; command -v nvim chromium alacritty yay niri dms')
         vm.command('mkdir -p /run/verify; mount -t 9p -o trans=virtio,version=9p2000.L verify /run/verify || mountpoint -q /run/verify')
+        vm.command('python /run/verify/verify-guest.py plymouth-config')
+        vm.command('python /run/verify/verify-guest.py plymouth-status')
+        passed('Graphical LUKS splash with quiet splash and text fallback available')
         graphical_login(vm)
         vm.command('python /run/verify/verify-guest.py storage')
         passed('No-swap installation disables hibernation' if args.swap_gib == 0 else
@@ -378,6 +392,27 @@ def main():
         vm.command('python /run/verify/verify-guest.py restored')
         vm.screenshot('05-restored')
         passed('Restored system rebooted normally and home was preserved')
+        # Real text-fallback path: same serial automation unlocks the disk with
+        # the splash disabled, then the graphical prompt is restored.
+        vm.command('python /run/verify/verify-guest.py splash-fallback-disable')
+        vm.command('sync')
+        vm.poweroff()
+        vm.stop()
+        vm.start(cdrom=False)
+        installed_login(vm)
+        vm.command('mkdir -p /run/verify; mount -t 9p -o trans=virtio,version=9p2000.L verify /run/verify')
+        vm.command('grep -qw plymouth.enable=0 /proc/cmdline; python /run/verify/verify-guest.py storage')
+        vm.screenshot('06-text-fallback')
+        passed('Text fallback unlocks the disk with the splash disabled')
+        vm.command('python /run/verify/verify-guest.py splash-fallback-enable')
+        vm.command('sync')
+        vm.poweroff()
+        vm.stop()
+        vm.start(cdrom=False)
+        installed_login(vm)
+        vm.command('mkdir -p /run/verify; mount -t 9p -o trans=virtio,version=9p2000.L verify /run/verify')
+        vm.command('! grep -qw plymouth.enable=0 /proc/cmdline; python /run/verify/verify-guest.py plymouth-status')
+        vm.command('python /run/verify/verify-guest.py restored')
         vm.stop()
         (directory / 'ACCEPTANCE-PASSED').write_text('All acceptance stages passed.\n')
         print(f'Acceptance passed. Evidence: {directory}', flush=True)
