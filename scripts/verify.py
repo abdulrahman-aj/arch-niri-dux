@@ -409,6 +409,9 @@ def main():
         vm.command('python /run/verify/verify-guest.py pdf', timeout=180)
         passed('Papers is the default PDF viewer and rendered a sample document')
         vm.command('python /run/verify/verify-guest.py camera', timeout=300)
+        # Use Snapshot 51's upstream shutter shortcut to exercise its own
+        # capture path in both modes, rather than generating files separately.
+        # https://github.com/GNOME/snapshot/blob/51.0/src/application.rs
         vm.key('t')
         vm.command('python /run/verify/verify-guest.py camera-photo', timeout=90)
         vm.key('t')

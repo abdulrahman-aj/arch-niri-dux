@@ -719,6 +719,7 @@ def camera_cleanup():
     pid_file = Path('/tmp/dux-synthetic-camera.pid')
     if pid_file.is_file():
         pid = int(pid_file.read_text())
+        pid_file.unlink()
         user_command('sh', '-c', f'kill {pid} 2>/dev/null || true')
     user_command('sh', '-c', 'pkill -x snapshot || true')
 
@@ -729,6 +730,7 @@ def camera():
     user_command('gsettings', 'set', 'org.gnome.Snapshot', 'enable-audio-recording', 'false')
     user_command('gsettings', 'set', 'org.gnome.Snapshot', 'countdown', '0')
     user_command('gsettings', 'set', 'org.gnome.Snapshot', 'capture-mode', "'picture'")
+    Path('/tmp/dux-synthetic-camera.pid').unlink(missing_ok=True)
     user_command('sh', '-c',
                  'gst-launch-1.0 videotestsrc pattern=ball is-live=true ! '
                  'video/x-raw,width=640,height=480,framerate=30/1 ! pipewiresink mode=provide '
@@ -736,8 +738,8 @@ def camera():
                  'client-name="DUX verification camera" '
                  '>/tmp/dux-synthetic-camera.log 2>&1 & echo $! > /tmp/dux-synthetic-camera.pid')
     try:
-        sources = wait_until('Synthetic PipeWire camera', lambda:
-                             'DuxTestCamera' in pipewire_video_sources(), timeout=60)
+        wait_until('Synthetic PipeWire camera', lambda:
+                   'DuxTestCamera' in pipewire_video_sources(), timeout=60)
         before = [str(path) for folder in ('Pictures', 'Videos')
                   for path in Path('/home/tester', folder, 'Camera').glob('*')]
         user_command('sh', '-c', 'snapshot --debug >/tmp/snapshot.log 2>&1 &')
