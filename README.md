@@ -26,7 +26,7 @@ Dux. Rebuilds use the same inputs, but are not byte-identical.
 ## Install
 
 1. Write the ISO to a USB drive and boot it in UEFI mode with Secure Boot off.
-2. Follow the terminal wizard. **Erase mode erases the selected disk.** Alongside mode is a draft awaiting real-OS VM acceptance; see [supported layouts and limitations](ALONGSIDE.md).
+2. Follow the terminal wizard. **Erase mode erases the selected disk.** Alongside mode uses explicitly selected existing unallocated GPT space; see [supported layouts and verification](ALONGSIDE.md).
 3. Remove the USB and reboot. Unlock the disk in the graphical prompt
    (Esc shows boot messages; a text prompt appears automatically without
    graphics), then log in.

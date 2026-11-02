@@ -1,4 +1,4 @@
-# Alongside installation (draft; VM acceptance pending)
+# Alongside installation on GPT/UEFI
 
 This path supports x86-64 UEFI, a valid GPT with the standard 128-entry array,
 512/4096-byte logical sectors, an unused writable disk, and one contiguous
@@ -26,8 +26,9 @@ protective MBR, free extents and firmware entries/order immediately before
 partition creation. It verifies the saved partition entries afterward and the
 kernel's new partition geometry before formatting. It also runs `sgdisk --verify`
 after creation and checks both on-disk GPT CRCs, every occupied original GPT
-entry byte, and the original protective-MBR bootstrap/disk-signature bytes. It uses Limine's documented `SKIP_UEFI` setting for every initial package and
-kernel hook until configuration completes,
+entry byte, and the original protective-MBR bootstrap/disk-signature bytes.
+Limine's documented `SKIP_UEFI` setting covers every initial package and kernel
+hook until configuration completes. It then
 checks the new EFI binary exists, registers with `efibootmgr --create-only`,
 checks that its entry is active and resolves to the new ESP GUID/path, and prepends the new entry while
 retaining existing entries and order. Erase mode retains its prior wipe path.
@@ -40,7 +41,7 @@ ESP expansion/reuse, BitLocker unlocking, Secure Boot work, RAID/LDM migration o
 firmware repair. TPM-bound Windows installations can request recovery after a
 boot-chain change: the Windows acceptance fixture must have BitLocker/device
 encryption disabled. Detected BitLocker/device encryption and Windows dynamic disks are rejected
-before mutation. This draft is not ready for physical installation.
+before mutation. Qualification uses disposable VMs; Secure Boot remains deferred.
 
 An external partition editor must not run during installation. Revalidation
 closes the long confirmation/package-preflight window; it cannot make GPT edits
@@ -103,8 +104,11 @@ Only test instrumentation adds a serial console to the new Arch installation.
 Evidence includes input hashes, serial/QEMU logs, original partition hashes,
 firmware listings, menu configuration, Windows guest reports and a milestone
 list. Only a full run writes `SUCCESS`. Never treat a screenshot or a loader
-stub as proof of a successful old-OS boot. Real-OS acceptance results are still
-pending and must be recorded before this draft is considered ready.
+stub as proof of a successful old-OS boot. Both fresh real-OS scenarios passed
+all six milestones on implementation source `73139365d6c8ce44dd0dcfd27f77b624447b6935`, including main
+`0320799`. Their shared final ISO SHA256 is `591fc771dadeaaf5306cf1db00127dc422ff033b325873667eafdf6f2fb27bd9`.
+See [the verified inputs and review dispositions](VERIFICATION.md#verified-alongside-installation-2026-11-02)
+and [the exact input hashes](verification/alongside-2026-11-02.json).
 
 Keep at least 8 GiB host headroom. Guest waits and Windows report waits stop at a 9 GiB threshold to protect
 that reserve; media downloads reserve it before writing. Monitor

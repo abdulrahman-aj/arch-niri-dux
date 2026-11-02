@@ -1,0 +1,220 @@
+{
+  "verified_utc": "2026-11-02T19:55:46.332493+00:00",
+  "implementation_source_head": "73139365d6c8ce44dd0dcfd27f77b624447b6935",
+  "includes_main": "0320799",
+  "iso": "out/arch-niri-dux-2026.11.02-x86_64.iso",
+  "iso_sha256": "591fc771dadeaaf5306cf1db00127dc422ff033b325873667eafdf6f2fb27bd9",
+  "source_sha256": {
+    "installer/install.py": "d63d3a9b415c738362baa144f599b4921796bb0b444311135bbe89b58ce84b4f",
+    "installer/configure-target.sh": "9bdd6b65688cd60a94ef7f021f98bc0524d692678a83174fc48e7977b88d1e2c"
+  },
+  "source_tests": 70,
+  "build_tests": 10,
+  "scenarios": {
+    "windows": {
+      "evidence": "out/alongside/windows-final2",
+      "inputs": {
+        "iso": {
+          "path": "out/arch-niri-dux-2026.11.02-x86_64.iso",
+          "sha256": "591fc771dadeaaf5306cf1db00127dc422ff033b325873667eafdf6f2fb27bd9"
+        },
+        "fixture": {
+          "path": "out/alongside/windows4/disk.qcow2",
+          "sha256": "78c0a9e4f47a3d9cef6748239c894b04f48621d197583893e144054cbf3403b4"
+        },
+        "firmware": {
+          "path": "out/alongside/windows4/OVMF_VARS.fd",
+          "sha256": "d0c1a5d750149834799deca3c5481d4b7499834d0bb2e23eab6183b3f20d6db7"
+        }
+      },
+      "milestones": [
+        "Real existing windows boots before installation and sentinel is intact",
+        "Every byte of every existing partition survives installation",
+        "Default firmware path boots the new encrypted installation",
+        "Pinned kernel reinstall and snapshot hooks preserve the existing OS entry",
+        "New encrypted installation boots after kernel package reinstall",
+        "Existing windows boots through Limine after package update and retains its sentinel"
+      ],
+      "original_partitions": [
+        {
+          "node": "/dev/sda1",
+          "start": 2048,
+          "size": 204800,
+          "type": "C12A7328-F81F-11D2-BA4B-00A0C93EC93B",
+          "uuid": "8B0FA9CF-0D3F-4795-873D-63F827C02783",
+          "name": "EFI system partition"
+        },
+        {
+          "node": "/dev/sda2",
+          "start": 206848,
+          "size": 32768,
+          "type": "E3C9E316-0B5C-4DB8-817D-F92DF00215AE",
+          "uuid": "4E1B4885-D4E0-4045-86E2-A78F9BF8BA84",
+          "name": "Microsoft reserved partition"
+        },
+        {
+          "node": "/dev/sda3",
+          "start": 239616,
+          "size": 50331648,
+          "type": "EBD0A0A2-B9E5-4433-87C0-68B6B72699C7",
+          "uuid": "6060CBEE-335A-4523-89C3-E9F888510884",
+          "name": "Basic data partition"
+        }
+      ],
+      "original_partition_sha256": [
+        "f87ead884402c6b6c19076d238f094a4701e7feb469cb65c1e00d567308089af  /dev/sda1",
+        "080acf35a507ac9849cfcba47dc2ad83e01b75663a516279c8b9d243b719643e  /dev/sda2",
+        "2ddc0c0fd5836af2f7922ff1dfbf067ec564697d1b74412e29c3e1ca74b99819  /dev/sda3"
+      ],
+      "original_firmware_entries_retained": true,
+      "mbr_prefix_446_bytes_unchanged_after_final_boot": true,
+      "mbr_disk_signature_hex": "67b98660",
+      "raw_original_gpt_slots_unchanged_after_final_boot": true,
+      "new_firmware_entry": "Boot0007* Arch Niri Dux\tHD(4,GPT,141d3050-f593-41f6-9490-2856d13d2139,0x303a800,0x800000)/\\EFI\\limine\\limine_x64.efi",
+      "chainload_after_update": "/Existing OS (firmware 0004)\n    protocol: efi\n    path: guid(8b0fa9cf-0d3f-4795-873d-63f827c02783):/EFI/Microsoft/Boot/bootmgfw.efi\n",
+      "before": {
+        "version": "10.0.26100",
+        "build": "26100",
+        "caption": "Microsoft Windows 11 Enterprise LTSC Evaluation",
+        "sentinel": "preserve-existing-windows",
+        "partitions": [
+          {
+            "PartitionNumber": 1,
+            "Size": 104857600,
+            "Offset": 1048576,
+            "Type": "System"
+          },
+          {
+            "PartitionNumber": 2,
+            "Size": 16777216,
+            "Offset": 105906176,
+            "Type": "Reserved"
+          },
+          {
+            "PartitionNumber": 3,
+            "Size": 25769803776,
+            "Offset": 122683392,
+            "Type": "Basic"
+          }
+        ],
+        "boot": "8b0d55d8-7634-4a35-bab2-1063a1aa2dcd"
+      },
+      "after": {
+        "version": "10.0.26100",
+        "build": "26100",
+        "caption": "Microsoft Windows 11 Enterprise LTSC Evaluation",
+        "sentinel": "preserve-existing-windows",
+        "partitions": [
+          {
+            "PartitionNumber": 1,
+            "Size": 104857600,
+            "Offset": 1048576,
+            "Type": "System"
+          },
+          {
+            "PartitionNumber": 2,
+            "Size": 16777216,
+            "Offset": 105906176,
+            "Type": "Reserved"
+          },
+          {
+            "PartitionNumber": 3,
+            "Size": 25769803776,
+            "Offset": 122683392,
+            "Type": "Basic"
+          },
+          {
+            "PartitionNumber": 4,
+            "Size": 4294967296,
+            "Offset": 25892487168,
+            "Type": "System"
+          },
+          {
+            "PartitionNumber": 5,
+            "Size": 38532005376,
+            "Offset": 30187454464,
+            "Type": "Unknown"
+          }
+        ],
+        "boot": "584f41af-f4e1-44de-9177-ddc90fe5774a"
+      }
+    },
+    "linux": {
+      "evidence": "out/alongside/debian-final2",
+      "inputs": {
+        "iso": {
+          "path": "out/arch-niri-dux-2026.11.02-x86_64.iso",
+          "sha256": "591fc771dadeaaf5306cf1db00127dc422ff033b325873667eafdf6f2fb27bd9"
+        },
+        "fixture": {
+          "path": "out/alongside/linux-fixture/disk.qcow2",
+          "sha256": "be5b7351faaed9a6fc118143469c501af08d050ba528328aee93066f9a443900"
+        },
+        "firmware": {
+          "path": "out/alongside/linux-fixture/OVMF_VARS.fd",
+          "sha256": "2697ab625e63607515ca6d80b6c6be69d9291bdae36c9a3b6019065abb307581"
+        }
+      },
+      "milestones": [
+        "Real existing linux boots before installation and sentinel is intact",
+        "Every byte of every existing partition survives installation",
+        "Default firmware path boots the new encrypted installation",
+        "Pinned kernel reinstall and snapshot hooks preserve the existing OS entry",
+        "New encrypted installation boots after kernel package reinstall",
+        "Existing linux boots through Limine after package update and retains its sentinel"
+      ],
+      "original_partitions": [
+        {
+          "node": "/dev/vda1",
+          "start": 262144,
+          "size": 6027264,
+          "type": "4F68BCE3-E8CD-4DB1-96E7-FBCAF984B709",
+          "uuid": "84FD0772-D38A-4FE7-B574-DCB86F5E263F"
+        },
+        {
+          "node": "/dev/vda14",
+          "start": 2048,
+          "size": 6144,
+          "type": "21686148-6449-6E6F-744E-656564454649",
+          "uuid": "76D4C84C-A620-4F6C-937D-32BD65E03413"
+        },
+        {
+          "node": "/dev/vda15",
+          "start": 8192,
+          "size": 253952,
+          "type": "C12A7328-F81F-11D2-BA4B-00A0C93EC93B",
+          "uuid": "82E17562-9F24-4564-9735-BB223836C0B4"
+        }
+      ],
+      "original_partition_sha256": [
+        "709ca70943f8e91c1ace37551e077dce30f4a309089414ca530988f138dd0e70  /dev/vda1",
+        "f9742e694ea71fe1c5b067cdb2a3b8a8f1761117fb8d4f3596ec560dd8d54b27  /dev/vda14",
+        "f268ef1b60bea6265f15bb70e0c83965cb76d3f139796bb99da7f4b417e1184b  /dev/vda15"
+      ],
+      "original_firmware_entries_retained": true,
+      "mbr_prefix_446_bytes_unchanged_after_final_boot": true,
+      "mbr_disk_signature_hex": "00000000",
+      "raw_original_gpt_slots_unchanged_after_final_boot": true,
+      "new_firmware_entry": "Boot0006* Arch Niri Dux\tHD(2,GPT,1a9182ad-7134-4420-aa93-ee9f30f39da8,0x5ff800,0x800000)/\\EFI\\limine\\limine_x64.efi",
+      "chainload_after_update": "/Existing OS (firmware 0004)\n    protocol: efi\n    path: guid(82e17562-9f24-4564-9735-bb223836c0b4):/EFI/debian/shimx64.efi\n"
+    }
+  },
+  "build_minimum_observed_free_bytes": 28580683776,
+  "vm_stop_threshold_gib": 9,
+  "required_headroom_gib": 8,
+  "official_media": {
+    "debian": {
+      "source": "https://cloud.debian.org/images/cloud/trixie/20261026-2643/debian-13-genericcloud-amd64-20261026-2643.qcow2",
+      "resolved": "https://saimei.ftp.acc.umu.se/images/cloud/trixie/20261026-2643/debian-13-genericcloud-amd64-20261026-2643.qcow2",
+      "size": 341114880,
+      "sha256": "dd7f5e92d879a983d757fc6acd8c5df0294abd9ba57137b29f8c863bb74a6904",
+      "verified_sha512": "3ace18e33bdd036edb49d1f79342bd01d2ab980e35194edb0b410435cd543538d286a0bd13bbb0835f7862306e3d385ce2f6a70d8ecf0bd961111166adbc1b8e"
+    },
+    "windows": {
+      "source": "https://go.microsoft.com/fwlink/?clcid=0x409&country=us&culture=en-us&linkid=2289029",
+      "resolved": "https://software-static.download.prss.microsoft.com/dbazure/888969d5-f34g-4e03-ac9d-1f9786c66749/26100.1742.240906-0331.ge_release_svc_refresh_CLIENT_LTSC_EVAL_x64FRE_en-us.iso",
+      "size": 5112850432,
+      "sha256": "67cec5865eaa037a72ddc633a717a10a2bed50778862267223ddb9c60ef5da68"
+    }
+  }
+}
