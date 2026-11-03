@@ -8,10 +8,15 @@ install -d -o "$user" -g "$user_group" "$user_home/.config/niri" \
     "$user_home/.config/environment.d" "$user_home/.local/share/dbus-1/services"
 # The Dux 2.0 upstream Niri integration is vendored verbatim with source hashes.
 cp -a /usr/share/arch-niri-dux/niri/. "$user_home/.config/niri/"
-sed -i 's/{{TERMINAL_COMMAND}}/alacritty/g' "$user_home/.config/niri/dms/binds.kdl"
+sed -i 's/{{TERMINAL_COMMAND}}/xdg-terminal-exec/g' "$user_home/.config/niri/dms/binds.kdl"
 printf '\ninclude "/usr/share/arch-niri-dux/session.kdl"\n' >> "$user_home/.config/niri/config.kdl"
 # Use upstream's GTK passthrough for Qt, without another AUR platform plugin.
 install -m 0644 /usr/share/arch-niri-dux/environment.conf "$user_home/.config/environment.d/90-dux.conf"
+# Dux's terminal picker reads the per-user list rather than resolving system defaults.
+if [[ ! -e "$user_home/.config/xdg-terminals.list" ]]; then
+    install -m 0644 -o "$user" -g "$user_group" /etc/xdg/xdg-terminals.list \
+        "$user_home/.config/xdg-terminals.list"
+fi
 cat >"$user_home/.config/mimeapps.list" <<'EOF'
 [Default Applications]
 inode/directory=dev.duxlabs.files.desktop

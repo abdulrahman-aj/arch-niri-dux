@@ -342,13 +342,21 @@ def desktop():
     user_command('fastfetch', '--logo', 'none', '--structure', 'OS:Kernel')
     user_command('test', '-w', '/home/tester/.config')
     user_command('yay', '--version')
+    assert user_command('xdg-terminal-exec', '--print-id', capture=True).stdout.strip() == 'Alacritty.desktop'
+    assert Path('/home/tester/.config/xdg-terminals.list').read_text().strip() == 'Alacritty.desktop'
     outputs = json.loads(user_command('niri', 'msg', '--json', 'outputs', capture=True).stdout)
     assert any(output.get('current_mode') is not None for output in outputs.values())
     user_command('dms', 'ipc', 'call', 'lock', 'isLocked')
     user_command('nvim', '--headless', '-u', 'NONE', '-c', 'call writefile(["editor works"], "/tmp/nvim-verified")', '-c', 'qall!')
     assert Path('/tmp/nvim-verified').read_text().strip() == 'editor works'
-    user_command('sh', '-c', 'alacritty -e sh -c "echo terminal-works > /tmp/alacritty-verified; sleep 15" >/tmp/alacritty-verify.log 2>&1 &')
-    run('bash', '-c', 'for attempt in $(seq 1 30); do test -s /tmp/alacritty-verified && exit 0; sleep 1; done; exit 1')
+    marker = Path('/tmp/default-terminal-verified')
+    marker.unlink(missing_ok=True)
+    user_command('niri', 'msg', 'action', 'spawn', '--', 'sh', '-c',
+                 'test "$TERMINAL" = xdg-terminal-exec && exec xdg-terminal-exec sh -c '
+                 '"echo terminal-works > /tmp/default-terminal-verified; sleep 15" '
+                 '>/tmp/default-terminal-verify.log 2>&1')
+    wait_until('Default terminal launched by Niri', lambda:
+               marker.is_file() and marker.read_text().strip() == 'terminal-works', timeout=30)
     html = Path('/tmp/chromium-smoke.html')
     html.write_text(BROWSER_PAGE)
     user_command('sh', '-c',
@@ -649,6 +657,10 @@ def wallpaper_preserved():
                   'materialWallpapers': {'': {'shared': {'preset': 'orbit', 'seed': '#ff0000'}}}}
         session.write_text(json.dumps(custom))
         before = session.read_text()
+        terminal = Path(f'/home/{user}/.config/xdg-terminals.list')
+        terminal.parent.mkdir(parents=True, exist_ok=True)
+        terminal_before = '# Personal terminal preference\nOther.desktop\nAlacritty.desktop\n'
+        terminal.write_text(terminal_before)
         pam = Path('/etc/pam.d/greetd')
         pam_backup = pam.read_bytes()
         try:
@@ -656,8 +668,9 @@ def wallpaper_preserved():
         finally:
             pam.write_bytes(pam_backup)
         assert session.read_text() == before, 'Real configure-desktop overwrote the existing wallpaper choice.'
+        assert terminal.read_text() == terminal_before, 'Real configure-desktop overwrote the existing terminal choice.'
         Path('/run/verify/wallpaper-preserved.json').write_text(json.dumps({
-            'user': user, 'preset': 'orbit', 'preserved': True,
+            'user': user, 'preset': 'orbit', 'preserved': True, 'terminal_preserved': True,
         }, indent=2) + '\n')
     finally:
         run('sh', '-c', f'userdel -r {user} 2>/dev/null || true')
