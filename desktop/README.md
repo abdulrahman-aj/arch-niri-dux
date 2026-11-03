@@ -14,6 +14,9 @@ The user entrypoint includes these
 defaults before local `dms/*.kdl` files; `dms/binds.kdl` starts empty and holds
 only overrides. Later bindings replace earlier ones, so a disabled shortcut
 can override its stock action with `spawn "true"` (this still consumes the key).
+An optional `recent-windows.kdl` loads before `dms/binds.kdl` for hand-managed
+MRU preferences. This avoids [Dux 2.0's shortcut-save bugs](https://github.com/abdulrahman-aj/arch-niri-dux/issues/33)
+until a fixed package is available; generated `dms/alttab.kdl` controls appearance.
 Existing user Niri files are preserved when configuring another time. Generated
 layout/input files remain local, so Dux settings continue to control them.
 Existing installations keep their full-copy configuration until explicitly
