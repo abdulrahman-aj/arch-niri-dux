@@ -338,6 +338,8 @@ def fonts():
 def niri_overrides():
     bindings = Path('/home/tester/.config/niri/dms/binds.kdl')
     before = bindings.read_bytes()
+    recent = bindings.parent.parent / 'recent-windows.kdl'
+    before_recent = recent.read_bytes() if recent.exists() else None
 
     def current():
         sheet = json.loads(user_command('dms', 'keybinds', 'show', 'niri', capture=True).stdout)
@@ -346,18 +348,28 @@ def niri_overrides():
 
     stock = current()
     try:
+        recent.write_text('recent-windows {\n    binds {\n'
+                          '        Alt+Tab { next-window scope="workspace"; }\n    }\n}\n')
+        assert current()['Alt+Tab']['action'] == 'next-window scope="workspace"'
         result = json.loads(user_command('dms', 'keybinds', 'set', 'niri', 'Mod+Q', 'spawn true', capture=True).stdout)
         assert result['success'], result
         overridden = current()
         assert overridden['Mod+Q']['action'] == 'spawn true', overridden['Mod+Q']
         assert overridden['Mod+Return']['action'] == stock['Mod+Return']['action']
+        assert overridden['Alt+Tab']['action'] == 'next-window scope="workspace"'
         user_command('niri', 'validate')
         user_command('dms', 'keybinds', 'reset', 'niri', 'Mod+Q')
         assert current()['Mod+Q']['action'] == stock['Mod+Q']['action']
+        assert current()['Alt+Tab']['action'] == 'next-window scope="workspace"'
     finally:
         bindings.write_bytes(before)
+        if before_recent is None:
+            recent.unlink(missing_ok=True)
+        else:
+            recent.write_bytes(before_recent)
     Path('/run/verify/niri-overrides.json').write_text(json.dumps({
         'stock_inherited': True, 'override_effective': True, 'reset_restores_stock': True,
+        'manual_mru_preserved': True,
     }, indent=2) + '\n')
 
 
