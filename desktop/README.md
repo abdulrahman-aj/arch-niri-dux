@@ -22,6 +22,9 @@ desktop; the live ISO remains terminal-only.
 
 Matugen supplies Dux's colors and system light/dark preference. A first-login
 service applies upstream's GTK integration; Qt uses upstream's GTK passthrough.
+Terminal shortcuts, user services and recovery tools use `xdg-terminal-exec`.
+Alacritty is the factory preference in `/etc/xdg/xdg-terminals.list`; users can
+select another installed terminal through Dux or `~/.config/xdg-terminals.list`.
 Dux Files handles folders and portal file dialogs, with GTK as fallback. The
 GNOME portal handles screen sharing; Nautilus remains its Arch dependency.
 

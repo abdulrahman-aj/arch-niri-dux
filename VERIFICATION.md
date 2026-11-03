@@ -295,3 +295,18 @@ source hashes; repeat it using a fresh evidence directory:
 ```sh
 make verify ARGS="--iso out/arch-niri-dux-2026.11.02-x86_64.iso --directory out/verify-combined-final"
 ```
+
+## Default terminal resolution (2026-11-03)
+
+`make test` passed 72 source and 10 build tests. The two resolver regressions
+also passed against the exact signed Arch `xdg-terminal-exec 0.14.3-2` package
+in the disposable VM. All 626 existing package pins remain unchanged.
+
+Targeted verification applied the production desktop overlay to an existing
+accepted installation: fresh terminal preference seeding, actual Niri-launched
+Alacritty and command payload, systemd user environment, recovery `-e` invocation,
+existing-choice preservation, desktop smoke and native Niri validation passed.
+This qualifies the package/overlay delta; no ISO was rebuilt or full install,
+hibernation or alongside acceptance repeated. Independent Muse review found no
+blocking defects. Source hashes and check scope are recorded in
+`verification/default-terminal-2026-11-03.json`.

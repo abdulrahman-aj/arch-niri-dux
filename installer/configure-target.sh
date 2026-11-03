@@ -48,7 +48,7 @@ ROOT_SUBVOLUME_PATH="/@"
 ROOT_SNAPSHOTS_PATH="/@snapshots"
 FS_UUID="$dux_btrfs_uuid"
 RESTORE_METHOD=replace
-TERMINAL=alacritty
+TERMINAL=xdg-terminal-exec
 TERMINAL_ARG="-e"
 EOF
 # Keep package/kernel hooks from registering boot entries before the installer

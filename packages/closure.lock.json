@@ -64,6 +64,7 @@
     "wl-clipboard",
     "xdg-desktop-portal-gnome",
     "xdg-desktop-portal-gtk",
+    "xdg-terminal-exec",
     "xdg-utils",
     "xwayland-satellite",
     "yay"
@@ -5495,6 +5496,15 @@
       "url": "https://geo.mirror.pkgbuild.com/extra/os/x86_64/xdg-desktop-portal-gtk-1.15.3-2-x86_64.pkg.tar.zst",
       "repository": "extra",
       "signature": "iHUEABYKAB0WIQSDvIiJNRtd67toQW64rAhgDxCM3wUCatUo9wAKCRC4rAhgDxCM32gJAP9CyQuwcruN0mO01c6hfuDV2Go5L4rX9JAJL4gtbzSGKwD/a9Uc7T0oAzG+PXmTAZSRc0XdCkx8a5Ti0eX+Rk0qTQ8="
+    },
+    {
+      "name": "xdg-terminal-exec",
+      "version": "0.14.3-2",
+      "filename": "xdg-terminal-exec-0.14.3-2-any.pkg.tar.zst",
+      "sha256": "a43ac5a86ab7ee994558ac06d95909484f72f14980912b78463009ade9286fef",
+      "url": "https://geo.mirror.pkgbuild.com/extra/os/x86_64/xdg-terminal-exec-0.14.3-2-any.pkg.tar.zst",
+      "repository": "extra",
+      "signature": "iQIzBAABCgAdFiEEJipY7GxR9+o5Wy4t/cMEC5Ksp0gFAmqs8u4ACgkQ/cMEC5Ksp0iAwA/6AwgegDTi2mdglgqNZesZ9ICvvTGQbDhhbXUVYux9/myqpST6Y5ZvsWiiqh8BXwI2CbLEr8o4gmVfWzE+bLdFw9gmX9/P9cBHIGftfGVBvq01PvVvp7YDU5daxIsOlzpCrIK5KWdIRc/aseUx7CwDEs1bUaqthv+nO39Z0OkwqxHckhTVE1AjApzq8zLT6aS1bEeR9KdFbuG/Rsan90DICCLqLsDjtl9s5p9ZcYPsplcLCrNy/425YoW4O/q9ra4rHHdUfahuegKp5q8YEnKsGnqYPK43z5ZOB1BI2H0CFsqIC1PX2oZiQJbvk/bpYS9UuLfZ7V1T5XLrMDhfFy+cru9Z3NXZ88vGqXxz7vyx9F1eCnU0YXOJ71zKZgbCAsefm1VxFMHJeRyvYxE7HW6GDwfjVKxX3crSjYVEG+wfLrRIl0LEDsIiwRGrbaCorlC9hlif/ikvZmIGs9318oRMvyI9hr69rPjO2x9CHJ/q3dJHUivqSWCYyBR6r0sXX8/WeWh76W1oxQha48y5DIKbOzsiuaGAJryzQAyMKvBl0cd83UqjX30lG1uoYUyP1+VgHCxiDNkhTqz2kOfYdVV/+cFOf40X73y2ujVZJ1/ZiouHbw7kqQCGvR/21k+mbM8pQqZ4R5wlnpFlVnO4VF20dCX3kK8EbENu5dwX8LD4a9w="
     },
     {
       "name": "xdg-user-dirs",
