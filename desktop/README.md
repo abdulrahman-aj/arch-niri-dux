@@ -8,6 +8,17 @@ the upstream license is included. No personal dotfiles are used.
 the packaged Dux user services. Dux Greeter starts the packaged Niri session.
 Dux creates its own shell settings on first launch.
 
+Niri's stock configuration and terminal-resolved bindings are exposed as
+`/usr/share/arch-niri-dux/niri/defaults.kdl`, generated during the ISO build.
+The user entrypoint includes these
+defaults before local `dms/*.kdl` files; `dms/binds.kdl` starts empty and holds
+only overrides. Later bindings replace earlier ones, so a disabled shortcut
+can override its stock action with `spawn "true"` (this still consumes the key).
+Existing user Niri files are preserved when configuring another time. Generated
+layout/input files remain local, so Dux settings continue to control them.
+Existing installations keep their full-copy configuration until explicitly
+switched to the new entrypoint; no automatic migration changes user files.
+
 New users start on Dux's upstream "bloom" material preset. The seed lives in
 `~/.local/state/dms/session.json` and is only created when absent; existing
 `session.json` files are never overwritten, so chosen wallpapers are preserved.
