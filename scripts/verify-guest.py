@@ -335,8 +335,36 @@ def fonts():
         assert actual == expected, (pattern, actual, expected)
 
 
+def niri_overrides():
+    bindings = Path('/home/tester/.config/niri/dms/binds.kdl')
+    before = bindings.read_bytes()
+
+    def current():
+        sheet = json.loads(user_command('dms', 'keybinds', 'show', 'niri', capture=True).stdout)
+        assert sheet['dmsStatus']['effective'], sheet['dmsStatus']
+        return {bind['key']: bind for group in sheet['binds'].values() for bind in group}
+
+    stock = current()
+    try:
+        result = json.loads(user_command('dms', 'keybinds', 'set', 'niri', 'Mod+Q', 'spawn true', capture=True).stdout)
+        assert result['success'], result
+        overridden = current()
+        assert overridden['Mod+Q']['action'] == 'spawn true', overridden['Mod+Q']
+        assert overridden['Mod+Return']['action'] == stock['Mod+Return']['action']
+        user_command('niri', 'validate')
+        user_command('dms', 'keybinds', 'reset', 'niri', 'Mod+Q')
+        assert current()['Mod+Q']['action'] == stock['Mod+Q']['action']
+    finally:
+        bindings.write_bytes(before)
+    Path('/run/verify/niri-overrides.json').write_text(json.dumps({
+        'stock_inherited': True, 'override_effective': True, 'reset_restores_stock': True,
+    }, indent=2) + '\n')
+
+
 def desktop():
     fonts()
+    niri_overrides()
+    user_command('niri', 'validate')
     user_command('gh', '--version')
     user_command('git', '--version')
     user_command('fastfetch', '--logo', 'none', '--structure', 'OS:Kernel')
@@ -661,6 +689,18 @@ def wallpaper_preserved():
         terminal.parent.mkdir(parents=True, exist_ok=True)
         terminal_before = '# Personal terminal preference\nOther.desktop\nAlacritty.desktop\n'
         terminal.write_text(terminal_before)
+        niri = Path(f'/home/{user}/.config/niri')
+        (niri / 'dms').mkdir(parents=True)
+        niri_files = {
+            niri / 'config.kdl': 'include "/usr/share/arch-niri-dux/niri/defaults.kdl"\n'
+                                'include "dms/layout.kdl"\ninclude "dms/windowrules.kdl"\n'
+                                'include "dms/binds.kdl"\n',
+            niri / 'dms/binds.kdl': 'binds {\n    Mod+Q repeat=false { spawn "true"; }\n}\n',
+            niri / 'dms/layout.kdl': 'layout { gaps 19; }\n',
+            niri / 'dms/windowrules.kdl': 'window-rule { match app-id="preserve-check"; open-floating true; }\n',
+        }
+        for path, content in niri_files.items():
+            path.write_text(content)
         pam = Path('/etc/pam.d/greetd')
         pam_backup = pam.read_bytes()
         try:
@@ -669,8 +709,12 @@ def wallpaper_preserved():
             pam.write_bytes(pam_backup)
         assert session.read_text() == before, 'Real configure-desktop overwrote the existing wallpaper choice.'
         assert terminal.read_text() == terminal_before, 'Real configure-desktop overwrote the existing terminal choice.'
+        for path, content in niri_files.items():
+            assert path.read_text() == content, f'Real configure-desktop overwrote {path}.'
+        run('runuser', '-u', user, '--', 'niri', 'validate', '--config', str(niri / 'config.kdl'))
         Path('/run/verify/wallpaper-preserved.json').write_text(json.dumps({
             'user': user, 'preset': 'orbit', 'preserved': True, 'terminal_preserved': True,
+            'niri_preserved': True,
         }, indent=2) + '\n')
     finally:
         run('sh', '-c', f'userdel -r {user} 2>/dev/null || true')
