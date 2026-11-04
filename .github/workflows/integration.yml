@@ -56,7 +56,7 @@ jobs:
     permissions:
       contents: write
     env:
-      GNUPGHOME: ${{ runner.temp }}/integration-keyring
+      GNUPGHOME: /tmp/integration-release-keyring
     steps:
       - run: pacman -Syu --noconfirm --needed python git github-cli jq gnupg
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6

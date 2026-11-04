@@ -357,3 +357,22 @@ upgrade fixture is deliberately unsigned. No prototype-ISO migration or laptop
 changes were performed. Hashes and results are in
 `verification/packaged-integration-2026-11-04.json`; local evidence is in
 `out/verify-packaged-integration-qualified/`.
+
+## Signed integration updates — 2026-11-04
+
+All 85 source and 10 build tests passed, including real pacman install/upgrade
+against a signed temporary repository, source/artifact tampering, historical
+subkey expiry/replacement, encrypted recovery and signing with the CI-only
+subkey. Workflow syntax is checked with actionlint.
+
+A fresh offline ISO using a disposable release identity passed all 26 VM
+milestones. The installer populated trusted release keys and enabled the signed
+repository; the upgrade fixture rejected a tampered database before changing
+packages, then upgraded both packages and a new baseline dependency with required
+package/database signatures. The installed keyring-refresh hook ran. Personal
+configuration, baseline opt-out and snapshot recovery passed again.
+
+This fixture does not claim production GitHub/Pages delivery. Its exact inputs,
+identity and results are in `verification/signed-updates-2026-11-04.json`;
+local evidence is in `out/verify-signed-fixture/`. Production-key publication and
+the resulting release ISO are recorded after the first versioned release.

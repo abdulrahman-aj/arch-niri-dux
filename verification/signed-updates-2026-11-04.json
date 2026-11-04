@@ -1,0 +1,113 @@
+{
+  "date": "2026-11-04",
+  "implementation_commit": "928599fd602e0b3d5380dc46366dd5cd159ef183",
+  "scope": "Disposable-key VM qualification; production publication recorded separately.",
+  "inputs": {
+    "iso": "/home/abdulrahman/Work/arch-niri-dux/out/arch-niri-dux-2026.11.04-x86_64.iso",
+    "iso_sha256": "436d0dd7ba528579c272515565e2051e398e1eafd19620824520f8d1691ec78b",
+    "package_manifest_sha256": "4e231f3c1aefd8eae83c9a0ac9bbd0d8720128cd2f027b63ee295fdcadeb4708",
+    "verification_scripts": {
+      "verify.py": "c62ed4141b18cdeb30c012c728ae56508a74acb377c2bd131c8eca7d9589d2f6",
+      "verify-guest.py": "52672917c47b1c372b7e7ad2d5f4dfd1d5f588860a23fe60714527e17913c6e4",
+      "verify-baseline.py": "c3c9b4488f4225e8121c26411cd913c2de0f917f7d99517254b70b63d267a96d",
+      "build-integration.py": "d7a4786bbf3c5147f51f5f714cd619f47cc9f376da5b3d2a818180ff6df090a2",
+      "verify-integration.py": "6d076bdd0916940568700514ef5b643ecb217aa59dcd63eacb5bd6dda5bf17e4"
+    }
+  },
+  "iso_bytes": 2643109888,
+  "integration": {
+    "version": "0.1.0-1",
+    "source_sha256": "75b5970071c594954d1478bc162ed5bdbba1ace2ee4cf99756c3d43481247b14",
+    "recipe_sha256": "f2d0bd7e2f12546a740a8b6ae2de90c3776a6845f0fffd2f94a59f078f1960e6",
+    "source_date_epoch": 1793791434,
+    "packages": [
+      {
+        "name": "arch-niri-dux",
+        "filename": "arch-niri-dux-0.1.0-1-any.pkg.tar.zst",
+        "sha256": "8dc5bf060a4cb5e153da39f2bec99a5554c8602c373b5cd671caea4f6f2413e9"
+      },
+      {
+        "name": "arch-niri-dux-baseline",
+        "filename": "arch-niri-dux-baseline-0.1.0-1-any.pkg.tar.zst",
+        "sha256": "ba273c64f5a2f082362d0636c0ee01ba1310b3f1b2ec49ef64e9bd92af4cb677"
+      }
+    ]
+  },
+  "milestones": [
+    "Offline encrypted installation completed",
+    "Graphical disk unlock accepts keyboard input and retries an incorrect password",
+    "UEFI boot from encrypted disk without installation ISO",
+    "Plymouth configuration and boot services are active",
+    "Encrypted swap outside root snapshots; physical resume offset matches the kernel",
+    "Niri, Dux, terminal, Neovim and Chromium smoke checks",
+    "Login shells, user services and Niri spawns resolve local user executables",
+    "GOP metrics, live file indexing, Calendar event create/read and Dux Files integration",
+    "Live Dux light/dark changes reach Chromium, GTK settings, portals and Dux apps",
+    "Bloom material wallpaper is the fresh-user default and rendered",
+    "User initialization preserved existing desktop choices",
+    "Manuals, archive round-trip, rsync, JSON/search and diagnostic CLI tools work",
+    "Images and text open in the selected apps; text edits save; Calculator launches",
+    "Decibels audio and four Celluloid open/play/close cycles output the expected fixture tones",
+    "Video thumbnails, phone/camera backend loading and Dux multimedia backends",
+    "Driverless CUPS queue delivered a PDF to a loopback IPP printer",
+    "Papers is the default PDF viewer and rendered a sample document",
+    "Snapshot preview, shutter photo and video recording work with a synthetic camera",
+    "Chromium open-file request uses Dux Files and responds to cancellation",
+    "Chromium screen sharing produced nonblank captured desktop content",
+    "Screen lock and password unlock",
+    "Integration upgrade, baseline changes and personal preservation passed; recovery fixture prepared",
+    "Limine snapshot boot and restoration",
+    "Restored system rebooted normally and home was preserved",
+    "Text fallback unlocks the disk with the splash disabled",
+    "Graphical password screen works again after text fallback"
+  ],
+  "installed_trust": {
+    "versions": [
+      "arch-niri-dux 0.1.0-1",
+      "arch-niri-dux-baseline 0.1.0-1"
+    ],
+    "owned_paths": [
+      "/usr/share/arch-niri-dux/niri/defaults.kdl",
+      "/usr/lib/arch-niri-dux/initialize-user",
+      "/usr/lib/environment.d/90-dux.conf",
+      "/usr/lib/systemd/user/dux-application-themes.service",
+      "/etc/xdg/mimeapps.list",
+      "/etc/greetd/dux.toml",
+      "/usr/share/pacman/keyrings/arch-niri-dux.gpg",
+      "/etc/pacman.d/arch-niri-dux.conf",
+      "/usr/lib/systemd/system/greetd.service.d/50-arch-niri-dux.conf"
+    ],
+    "no_packaged_home_files": true,
+    "release_key_fingerprint": "1DBC369711C26523A5259B079333E701F57AB3F7",
+    "release_key_trusted": true,
+    "signed_repository_enabled": true
+  },
+  "signed_upgrade": {
+    "before": [
+      "arch-niri-dux 0.1.0-1",
+      "arch-niri-dux-baseline 0.1.0-1"
+    ],
+    "after": [
+      "arch-niri-dux 0.1.0-2",
+      "arch-niri-dux-baseline 0.1.0-2"
+    ],
+    "personal_sha256": {
+      "/home/tester/.config/niri/config.kdl": "1152477feb4fb5e742d429247383ff8544d195ff2cd3c3bf612799cdb505d121",
+      "/home/tester/.config/niri/dms/binds.kdl": "a29186a7b16c6218fe4bee14dd0be53d7e7d5223bb04f6cbe54b174d5a57b408",
+      "/home/tester/.config/xdg-terminals.list": "d63b322123983f24343609ca7ae5402b435a7002f49b13e4164ddd862ee38d9e"
+    },
+    "owned_file_added_and_removed": true,
+    "baseline_addition_installed": true,
+    "baseline_can_be_removed_independently": true,
+    "signed_packages_and_database": true,
+    "tampered_database_rejected": true,
+    "installed_keyring_refresh_hook_ran": true
+  },
+  "source_tests": 85,
+  "build_tests": 10,
+  "limits": [
+    "Disposable signing identities, not the production release.",
+    "No laptop changes or old-prototype migration.",
+    "GitHub CI/Pages publication and production-key ISO remain separate gates."
+  ]
+}

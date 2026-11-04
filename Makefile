@@ -10,6 +10,7 @@ verify-hibernate:
 build-test:
 	./scripts/build-in-dev python3 -m unittest discover -s scripts -p 'build_test.py'
 test:
+	./scripts/build-in-dev actionlint
 	./scripts/build-in-dev bash -c 'python3 -m unittest discover -s tests && python3 -m unittest discover -s scripts -p build_test.py'
 verify-alongside:
 	./scripts/build-in-dev python3 scripts/verify-alongside.py $(ARGS)
