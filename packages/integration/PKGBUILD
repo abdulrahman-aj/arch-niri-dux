@@ -1,8 +1,8 @@
 # scripts/build-integration.py supplies the local source archive and its checksum.
 pkgbase=arch-niri-dux
 pkgname=(arch-niri-dux arch-niri-dux-baseline)
-pkgver=0.1.0
-pkgrel=2
+pkgver=0.2.0
+pkgrel=1
 pkgdesc='Arch Niri Dux desktop integration'
 arch=(any)
 url='https://github.com/abdulrahman-aj/arch-niri-dux'
@@ -18,7 +18,7 @@ prepare() {
 }
 
 package_arch-niri-dux() {
-    depends=(bash systemd pacman niri dux-shell dux-greeter-bin dux-search-bin dux-calendar-bin
+    depends=(bash systemd pacman niri 'dux-shell>=2.1.0' dux-greeter-bin dux-search-bin dux-calendar-bin
              dux-files-bin greetd gnome-keyring matugen adw-gtk-theme gtk3
              xdg-desktop-portal-gnome xdg-desktop-portal-gtk xdg-terminal-exec xdg-utils)
     backup=(etc/fonts/conf.d/50-arabic.conf etc/greetd/dux.toml

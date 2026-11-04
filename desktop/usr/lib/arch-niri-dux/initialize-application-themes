@@ -3,23 +3,49 @@ set -euo pipefail
 
 config_dir=${XDG_CONFIG_HOME:-$HOME/.config}
 state_dir=${XDG_STATE_HOME:-$HOME/.local/state}/arch-niri-dux
-# Dux 2.0 unpacks its embedded UI here and prunes older extractions at startup.
+[[ ! -e "$state_dir/application-themes" ]] || exit 0
+# Dux unpacks its embedded UI here and prunes older extractions at startup.
 gtk_scripts=("${XDG_RUNTIME_DIR:?}/dms-shell/"*/scripts/gtk.sh)
 [[ ${#gtk_scripts[@]} == 1 && -f "${gtk_scripts[0]}" ]] || {
     echo 'Cannot locate the running Dux GTK integration.' >&2
     exit 1
 }
 
-# Dux generates colors asynchronously after startup. Apply its own integration
-# once, after that generation, so future changes stay under Dux's control.
+# Dux generates colors asynchronously. Query its actual mode: before GTK is
+# opted in, the portal's preference need not match the shell yet.
 for attempt in {1..90}; do
-    if [[ -s "$config_dir/gtk-3.0/dank-colors.css" && -s "$config_dir/gtk-4.0/dank-colors.css" ]]; then
+    # Re-read while waiting so a theme selected during startup stays selected.
+    gtk_theme=$(gsettings get org.gnome.desktop.interface gtk-theme)
+    case "$gtk_theme" in
+        "'Adwaita'"|"'Adwaita-dark'"|"'adw-gtk3'"|"'adw-gtk3-dark'"|"''") ;;
+        *) mkdir -p "$state_dir"; touch "$state_dir/application-themes"; exit 0 ;;
+    esac
+    mode=$(dms ipc call theme getMode 2>/dev/null || true)
+    if [[ -s "$config_dir/gtk-3.0/dank-colors.css" && -s "$config_dir/gtk-4.0/dank-colors.css" && $mode =~ ^(light|dark)$ ]]; then
         is_light=true
-        if [[ $(gsettings get org.gnome.desktop.interface color-scheme) == "'prefer-dark'" ]]; then
+        theme=adw-gtk3
+        if [[ $mode == dark ]]; then
             is_light=false
+            theme=adw-gtk3-dark
         fi
         bash "${gtk_scripts[0]}" "$config_dir" apply "$is_light"
-        bash "${gtk_scripts[0]}" "$config_dir" patch "$is_light"
+        # Dux can patch concurrently after matugen completes. Already-current
+        # (3) is success; skipped (2) or a real error must not mark this applied.
+        if bash "${gtk_scripts[0]}" "$config_dir" patch "$is_light"; then
+            :
+        else
+            status=$?
+            [[ $status == 3 ]] || exit "$status"
+        fi
+        # This is our one-time factory opt-in, equivalent to choosing Apply in
+        # Dux. Subsequent changes and refreshes remain under Dux's control.
+        backup="$config_dir/gtk-3.0/gtk-theme.dms-backup"
+        if [[ ! -e $backup ]]; then
+            previous=${gtk_theme#\'}
+            printf '%s\n' "${previous%\'}" >"$backup"
+        fi
+        gsettings set org.gnome.desktop.interface gtk-theme "$theme"
+        gsettings set org.gnome.desktop.interface color-scheme "prefer-$mode"
         mkdir -p "$state_dir"
         touch "$state_dir/application-themes"
         exit 0

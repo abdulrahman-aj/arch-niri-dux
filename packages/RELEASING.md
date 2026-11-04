@@ -68,5 +68,6 @@ Loss or compromise without a trusted overlap requires manual trust recovery;
 ordinary signatures cannot bootstrap a wholly new identity automatically.
 
 New ISOs install the public keyring offline and enable the repository. Updating
-the keyring package refreshes that trust through a pacman hook. Older prototype
-ISOs are outside this migration scope.
+the keyring package refreshes that trust through a pacman hook. The 2.1 release is a clean configuration baseline: all 2.0 installations must
+reinstall or explicitly adopt its Niri entrypoint. No automatic 2.0 home-config
+migration is provided. Keep normal package-update qualification from 2.1 onward.

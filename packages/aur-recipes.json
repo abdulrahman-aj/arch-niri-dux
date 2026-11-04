@@ -2,43 +2,43 @@
   {
     "name": "dux-greeter-bin",
     "url": "https://aur.archlinux.org/dux-greeter-bin.git",
-    "commit": "5cd0ba4583b7e2a4b4c776b1ad9f92f8cd8ec993",
-    "source_date_epoch": 1792777125,
+    "commit": "98e69e446ca43e5c39371424050124bc1a738e09",
+    "source_date_epoch": 1793756880,
     "files": {
-      ".SRCINFO": "72676d5ebcb917e2b59c4c57b54e2fc4e9a17ac584ed1032f3bb763fc226df37",
-      "PKGBUILD": "e6320a02585cc07b352bc8183ba885602587ac827490dc8b48b72c408050de64",
+      ".SRCINFO": "4fc9989db6e2f79dbf10f5ffa06595c090e3e793c56f63024991c85940be12f4",
+      "PKGBUILD": "3498ede7be1bf4b85bfbd38b21d4833085dfbab47aec9e4a55b1c9f661ea89e5",
       "dux-greeter.install": "1f93e096453193c7842ad9599e8ab7ff89ff3da2549800e790fceb8c712773f6"
     }
   },
   {
     "name": "dux-search-bin",
     "url": "https://aur.archlinux.org/dux-search-bin.git",
-    "commit": "d9fea4b7176c05f4bd159c519cd454d0e21a94f5",
-    "source_date_epoch": 1792777145,
+    "commit": "419840e0c9d9fd30a78237406afe8d397b222168",
+    "source_date_epoch": 1793756886,
     "files": {
-      ".SRCINFO": "fe528367851727452507240838547d0f5291e4c4f1e1ee9c3088900bfc744071",
-      "PKGBUILD": "17092795ab797f6f6b5e2571af3dc417cbb19adcc9d2c94389ffdc5e6793889e",
+      ".SRCINFO": "eaee2c3f99a442fc1b943a42e66f5cdcfbf6c86a8a285609d91e19dd93dd611a",
+      "PKGBUILD": "ae25b029de82a01ef2b60b8a08fa802f596bc12435426ca05579581a527302fd",
       "dsearch.service": "4203149be986e77617da42b0c7297e268b5daf89bf796ecbc41263e7746b031d"
     }
   },
   {
     "name": "dux-calendar-bin",
     "url": "https://aur.archlinux.org/dux-calendar-bin.git",
-    "commit": "755d645271c1338f89902e2d16037138e508bc5d",
-    "source_date_epoch": 1792777084,
+    "commit": "a2f08b95939281835f8105b085c03f05975ddf63",
+    "source_date_epoch": 1793756868,
     "files": {
-      ".SRCINFO": "2c48de8ec8776778e8a23a8f4780c1032959a2fc9880e8bce99f8db9d9a2152c",
-      "PKGBUILD": "df9078c2fddbaa60f857b0032b2af65f0e6ed0f89aebe4d03cb00ce80da4bcf9"
+      ".SRCINFO": "0aa44fb959096b61ed2e094533be14109b93bd6bd0537cc724bf83a59d47bf28",
+      "PKGBUILD": "ca94b48c4337305081c34493b45af9c159d1e4fee6a827e0afa4a3431fa9d486"
     }
   },
   {
     "name": "dux-files-bin",
     "url": "https://aur.archlinux.org/dux-files-bin.git",
-    "commit": "61ef147f1ef0681bfe3b6a210cbcaa575de39bc1",
-    "source_date_epoch": 1792527946,
+    "commit": "11e7ec6338873d6a7f805a79f460ac00f0364e05",
+    "source_date_epoch": 1793756874,
     "files": {
-      ".SRCINFO": "309fad2a1172d99458bda2f3b01f7588d2e65672b38659610d9a62997af91152",
-      "PKGBUILD": "289d2dd50778f961d63e4e5dacb28cd270d6d8203ffb7fbd174792298d850e1f"
+      ".SRCINFO": "67f61326fe1f96ecba780af61af55a54784129e34fe064765d99c3e9afc4a260",
+      "PKGBUILD": "218c63836f6a56b8a4bb027059118621ac1ce8f101ea3820c4f1d4ae56e49c0e"
     }
   }
 ]

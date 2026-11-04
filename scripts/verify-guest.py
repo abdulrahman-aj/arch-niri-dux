@@ -339,6 +339,11 @@ def fonts():
 
 def niri_overrides():
     bindings = Path('/home/tester/.config/niri/dms/binds.kdl')
+    generated = bindings.with_name('binds-next.kdl')
+    wait_until('Dux-generated Niri compatibility bindings', generated.is_file)
+    included = json.loads(user_command('dms', 'config', 'resolve-include', 'niri',
+                                      'binds-next.kdl', capture=True).stdout)
+    assert included['exists'] and included['included'], included
     before = bindings.read_bytes()
     recent = bindings.parent.parent / 'recent-windows.kdl'
     before_recent = recent.read_bytes() if recent.exists() else None
@@ -349,6 +354,12 @@ def niri_overrides():
         return {bind['key']: bind for group in sheet['binds'].values() for bind in group}
 
     stock = current()
+    assert stock['Alt+F4']['action'] == 'close-window', stock.get('Alt+F4')
+    # Stow owns the per-user file, not the separately included system defaults.
+    tracked = bindings.with_name('verification-tracked-binds.kdl')
+    assert not bindings.is_symlink() and not tracked.exists()
+    bindings.rename(tracked)
+    bindings.symlink_to(tracked.name)
     try:
         recent.write_text('recent-windows {\n    binds {\n'
                           '        Alt+Tab { next-window scope="workspace"; }\n    }\n}\n')
@@ -358,13 +369,17 @@ def niri_overrides():
         overridden = current()
         assert overridden['Mod+Q']['action'] == 'spawn true', overridden['Mod+Q']
         assert overridden['Mod+Return']['action'] == stock['Mod+Return']['action']
+        assert overridden['Alt+F4']['action'] == 'close-window'
+        assert bindings.is_symlink(), 'Dux replaced the tracked override link.'
         assert overridden['Alt+Tab']['action'] == 'next-window scope="workspace"'
         user_command('niri', 'validate')
         user_command('dms', 'keybinds', 'reset', 'niri', 'Mod+Q')
         assert current()['Mod+Q']['action'] == stock['Mod+Q']['action']
         assert current()['Alt+Tab']['action'] == 'next-window scope="workspace"'
     finally:
-        bindings.write_bytes(before)
+        tracked.write_bytes(before)
+        bindings.unlink()
+        tracked.rename(bindings)
         if before_recent is None:
             recent.unlink(missing_ok=True)
         else:
@@ -372,6 +387,9 @@ def niri_overrides():
     Path('/run/verify/niri-overrides.json').write_text(json.dumps({
         'stock_inherited': True, 'override_effective': True, 'reset_restores_stock': True,
         'manual_mru_preserved': True,
+        'native_binds_next_included': included,
+        'alt_f4_inherited': True,
+        'tracked_override_link_preserved': True,
     }, indent=2) + '\n')
 
 
@@ -441,6 +459,13 @@ def dux_components():
             'systemctl', '--user', 'is-active', service, capture=True).stdout.strip() == 'active')
     wait_until('Upstream GTK theme initialization', lambda:
                Path('/home/tester/.local/state/arch-niri-dux/application-themes').is_file(), timeout=120)
+    mode = user_command('dms', 'ipc', 'call', 'theme', 'getMode', capture=True).stdout.strip()
+    gtk_theme = user_command('gsettings', 'get', 'org.gnome.desktop.interface', 'gtk-theme', capture=True).stdout.strip()
+    assert gtk_theme == ("'adw-gtk3-dark'" if mode == 'dark' else "'adw-gtk3'"), (mode, gtk_theme)
+    listeners = user_command('ss', '-H', '-ltn', capture=True).stdout
+    assert not re.search(r':43654\b', listeners), 'Fresh Search must use its socket without an HTTP listener.'
+    versions = user_command('pacman', '-Q', 'dux-shell', 'dux-gop', 'dux-greeter-bin',
+                            'dux-search-bin', 'dux-calendar-bin', 'dux-files-bin', capture=True).stdout
     metrics = json.loads(user_command('dgop', 'memory', '--json', capture=True).stdout)
     assert metrics, 'GOP did not return memory metrics.'
     fixture = Path('/home/tester/dux-verification-document.txt')
@@ -477,6 +502,8 @@ def dux_components():
     Path('/run/verify/dux-components.json').write_text(json.dumps({
         'gop_metrics': metrics, 'file_manager': file_manager, 'portal': portal,
         'calendar_event_created_and_read': event['id'], 'indexed_file': str(fixture),
+        'versions': versions.splitlines(), 'gtk_theme': gtk_theme, 'mode': mode,
+        'search_http_listener_absent': True,
     }, indent=2) + '\n')
 
 
@@ -495,6 +522,10 @@ def themes():
             setting = user_command('gsettings', 'get', 'org.gnome.desktop.interface', 'color-scheme', capture=True).stdout.strip()
             allowed = {"'prefer-dark'"} if mode == 'dark' else {"'prefer-light'", "'default'"}
             if setting not in allowed:
+                return False
+            gtk_theme = user_command('gsettings', 'get', 'org.gnome.desktop.interface',
+                                     'gtk-theme', capture=True).stdout.strip()
+            if gtk_theme != ("'adw-gtk3-dark'" if mode == 'dark' else "'adw-gtk3'"):
                 return False
             portal_value = {"'default'": 0, "'prefer-dark'": 1, "'prefer-light'": 2}[setting]
             portal = user_command('gdbus', 'call', '--session', '--dest', 'org.freedesktop.portal.Desktop',
@@ -725,7 +756,11 @@ def wallpaper_preserved():
     run('sh', '-c', f'userdel -r {user} 2>/dev/null || true')
     run('useradd', '-m', '-s', '/bin/bash', user)
     try:
+        run('runuser', '-u', user, '--', 'env', '-u', 'XDG_CONFIG_HOME', '-u', 'XDG_STATE_HOME',
+            '-u', 'XDG_DATA_HOME', f'HOME=/home/{user}', 'bash', '/usr/lib/arch-niri-dux/initialize-user')
         session = Path(f'/home/{user}/.local/state/dms/session.json')
+        assert json.loads(session.read_text())['materialWallpapers']['']['shared']['preset'] == 'bloom'
+        run('runuser', '-u', user, '--', 'niri', 'validate', '--config', f'/home/{user}/.config/niri/config.kdl')
         session.parent.mkdir(parents=True, exist_ok=True)
         custom = {'configVersion': 7,
                   'materialWallpapers': {'': {'shared': {'preset': 'orbit', 'seed': '#ff0000'}}}}
@@ -743,7 +778,7 @@ def wallpaper_preserved():
         (applications / 'org.example.Editor.desktop').write_text(
             '[Desktop Entry]\nType=Application\nName=Personal editor\nExec=/usr/bin/true\nMimeType=text/plain;\n')
         niri = Path(f'/home/{user}/.config/niri')
-        (niri / 'dms').mkdir(parents=True)
+        (niri / 'dms').mkdir(parents=True, exist_ok=True)
         niri_files = {
             niri / 'config.kdl': 'include "/usr/share/arch-niri-dux/niri/defaults.kdl"\n'
                                 'include "dms/layout.kdl"\ninclude "dms/windowrules.kdl"\n'
@@ -771,6 +806,7 @@ def wallpaper_preserved():
             'user': user, 'preset': 'orbit', 'preserved': True, 'terminal_preserved': True,
             'niri_preserved': True,
             'mime_preserved': True,
+            'fresh_account_initialized': True,
         }, indent=2) + '\n')
     finally:
         run('sh', '-c', f'userdel -r {user} 2>/dev/null || true')
@@ -831,6 +867,15 @@ def pdf():
         }, indent=2) + '\n')
     finally:
         user_command('sh', '-c', 'pkill -x papers || pkill -f papers || true')
+
+
+def files_pdf_prepare():
+    sample = Path('/home/tester/dux-preview.pdf')
+    sample.write_bytes(sample_pdf_bytes())
+    ipc('dfiles', 'ui.open', f'path={sample}')
+    window = wait_until('Dux Files PDF selection', lambda: next(
+        (item for item in windows() if item.get('app_id') == 'dev.duxlabs.files'), None))
+    user_command('niri', 'msg', 'action', 'focus-window', '--id', str(window['id']))
 
 
 def pipewire_video_sources():
@@ -1066,6 +1111,12 @@ if __name__ == '__main__':
         session_path()
     elif action == 'pdf':
         pdf()
+    elif action == 'files-pdf-prepare':
+        files_pdf_prepare()
+    elif action == 'files-pdf-capture':
+        screenshot('02-dfiles-pdf.png')
+    elif action == 'onboarding-screen':
+        screenshot('02-onboarding.png')
     elif action == 'camera':
         camera()
     elif action == 'camera-photo':

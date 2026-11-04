@@ -80,6 +80,7 @@
     "power-profiles-daemon",
     "python",
     "qt6-multimedia",
+    "qt6-webengine",
     "ripgrep",
     "rsync",
     "snap-pac",
@@ -772,21 +773,21 @@
     },
     {
       "name": "dux-gop",
-      "version": "2.0.0-1",
-      "filename": "dux-gop-2.0.0-1-x86_64.pkg.tar.zst",
-      "sha256": "4b36a696aa48bc0c7a531276b0947bc9d48e83e8ee7625e1a1da33d0438a2793",
-      "url": "https://geo.mirror.pkgbuild.com/extra/os/x86_64/dux-gop-2.0.0-1-x86_64.pkg.tar.zst",
+      "version": "2.1.0-1",
+      "filename": "dux-gop-2.1.0-1-x86_64.pkg.tar.zst",
+      "sha256": "02f09294f66bc485c46e51ddddd3a63a17f6caf83fbd1366cb488a3d4b80f10b",
+      "url": "https://geo.mirror.pkgbuild.com/extra/os/x86_64/dux-gop-2.1.0-1-x86_64.pkg.tar.zst",
       "repository": "extra",
-      "signature": "iQIzBAABCgAdFiEEsNZSlUdmBrcfDG+CqF6BHrTKLggFAmrYdUsACgkQqF6BHrTKLgjRuxAA4LlygrlIT7iGWQXh7elyWaQUxpXKIfycAVBChA/qUipvq5UrM6vKiJf2JDNd5kq5fOeRZu+1knorM/aAP8DvexzaznRF3VYvPmEynTY5f3sEI9V+OnHsUC7IrSgWGXp4HPhoYldeGjtQZEj+On5Y1Y8bzlw6nDoZBaZEVxUcK39l0vz5SQNiaQOsgZxoV3jDmJM9bW2Tin/tS6ydaxiGQDM60vMLOwrVcoHz81t8p/I8GL1cF9sCVpuDP61uk8GesA/KAvadsc6lszUrloZlRD1pEgLuCt0gOS57lmlXQkLc4qQe2UwA8WzPdCOgV7WQwnlUxkqzaahRHiLMks40Ay7pRkLk9UKMHoUfvBhCjgOi0b7+HizWG0eM0EdF5MTmUCYJq+DYarNAD376FMezoSeTCZxbcs2JZlL+ykIExUqg5aaZ4ujWkD6sOsUtUgVFRlglOA8RAfVi67n3mltGYhWdCtUcQs0//jIM6325nGJXkjbdhxkkJ0294hHu0eqBRUR6SErcMIEZ5NytifiT9cfrtTds8DV9O0eH+Je7Hh9XZ0ZuC6GTbw34to1+GBo2yoYSz5gNw+qRstu1Yda5z7UkYq+o3g7P13nnbMBbLI6sFQp7B3sysLNhOP/o/F2AQGy5zhP1Sqn+1YudDr+NyVK1NVLEc7lf+qNxBlyS47c="
+      "signature": "iQIzBAABCgAdFiEEsNZSlUdmBrcfDG+CqF6BHrTKLggFAmrq6PUACgkQqF6BHrTKLgi5hBAArkcf47WjKvPyj7FOdcrZegkB4S+YxXjz1Yks1lZLvT2K/xmncvsFYsiJSzDMAVhBk9+G8Evtt7Tbh9yHFm73Uf4XXsIqw9VwjJGC+DkpL2mV7CTRY44NmD4CICIRzb+4pid64pC/aqsNtS0Q5jizdaCZ6mcq0Qe3gZL3oV1PaXOIVqvk9EbzfPHJoKQI+QqAUolaRIb0dn2Lg8Eo+JepR9fLzSehhuORHF9aRjNoQ4ybD0L/3avLEygJlqG5+jsbaNzk9IKuPLExD6n7FlpnjsWyFCyT86lkWjxt06SNiNKPBQwQZq6iVQiElIQhtUjtxmerYZEryJjarxq62pZVzw9Xqc37ycuAPBigUWUU10YL9c5pz48PqLwovfKMwsYoth5uW0MRsFu3I6R5N4D2IKTlTaV1vHuKhUd6j7GU8jUmBrQabZrENk53n6ebM+uuWMFLG5AiYAw80nODf6NX/ElpXU5JCm86I8VXgCzWgg+HwrAURO4RQo/QARMf3DZ+LbGhd2clzmX1dyPHcnejJRZqyXcCYkD7XNZLIzwFMY/0MgMXwcuZt1GhBa4ilhhNAlrYEXtmpjRUs+Hi4tD5LNszGGv+69fU85Sn/bxb/s+eQBy5cTR4fMScWxM+NW0ZiqlE4I2yicUomV8DFuRFyg+3S5+MvqBKj22EnFJDGkg="
     },
     {
       "name": "dux-shell",
-      "version": "2.0.0-1",
-      "filename": "dux-shell-2.0.0-1-x86_64.pkg.tar.zst",
-      "sha256": "edc7264a828172b15f24cc0d1b09fdb6f5c5550ffc8c7c888fd84c5e328c1683",
-      "url": "https://geo.mirror.pkgbuild.com/extra/os/x86_64/dux-shell-2.0.0-1-x86_64.pkg.tar.zst",
+      "version": "2.1.0-1",
+      "filename": "dux-shell-2.1.0-1-x86_64.pkg.tar.zst",
+      "sha256": "788eac145146f0bca12a259e411fd18e945d6fe029e8410f3bca7747ee4a4483",
+      "url": "https://geo.mirror.pkgbuild.com/extra/os/x86_64/dux-shell-2.1.0-1-x86_64.pkg.tar.zst",
       "repository": "extra",
-      "signature": "iQIzBAABCgAdFiEEsNZSlUdmBrcfDG+CqF6BHrTKLggFAmrYg8YACgkQqF6BHrTKLgiE9A//ZIG3YVcmUzts0+agnQ6U6CtcINebhv3mJAEh7qpQsM21IGhfPj/+3/vD8M9hJoFFab+c4H1caE2qbCHwgZyO1diUxINVrUHYazEEf+s3YrcxzYasZ185RYTCtlQX3Z/Yr9R1V9HxE1cn5gevfxvoT9tz9uA/P5xN1GBC7gb39cly+TIAqLU4n1rfijID1VQ7b+fOqZWK8fXF1CyT6DQA2unl9rIhogAaN77xT4V1jZ49skXlJ8/l1o35i12tNnXv8EzLjGU3kCVqSiCo2RLvXm63DFvzY8pnBH4DqGQDh6tTHvAsNPziMzosVHZEVINSbbI2DEP2xljpb7xZ+4KlrGNVYje+OgaaiWdv4hAXZ9UkMEYWSxNXY087w2afRNZfFrW4ikD7l5xm3GuH5KQYhAg4q2W4C0K11yB3+Y1SZrEa+MYwcFJaLi1vaL9PWvsoXF4NF6xJXe/3ea6xhl1BHbBEnoLAZbNbDVbI+uU+NDlOP9TwQVw+SaiQQRHlTN3qQ7LrDusAiw6P/LYDT6qn3JHlK2LSMXtf2RZTr8HFs5uORbdWdSbLCe3PN3hCUdTkJoM6hjMhQ3/Nhn6O2tYBjfItN9/G35+gHdxO4npz8vLjM0sIqGqcA7nGuf/cAoljKyCnMFQBliIfZwl6evCZ3TXoVYvpxQBmMG9BXtRw4Xo="
+      "signature": "iQIzBAABCgAdFiEEsNZSlUdmBrcfDG+CqF6BHrTKLggFAmrq6TEACgkQqF6BHrTKLgi7JQ/+ISJTBpy/uIz06//OZDQObjCqC5B/oabRcev+7MPTJCr7Z0JV0fjPixL1DWaUb8hMyDwnnJQew/ly0xSXgj5EMXr9PBYXjlYk9kqYTz9W/RC5Wu64YhGYNXx66nBVHW3+8hL9XRDHku9CXQTY/2rI2nmIFaxV1Co4iXdnMvsbtyj/8A/dgykEOmCQF05mMxxe+MbwOisT70Q5nZO/gBkHmSBKLh1m0kQ/VkcBpu5dIPiEnXhJ6xAqWJP8kIRh1Eki6638cf3F+GZqNrY1aLaD+4jjVWg+TUl9Y5VrfMM0jzzRgJhE3zZrviMHeonK8JmzhjLlqf5KlpK8udE0kjBlyoFR8OYz6dMneL+QLC6U1RyIreqwRLXB9lnZs4BNYNUk5bcAXQmArnpgmwp23Sk8pItDQaA+qOA+gB0GqioSMa60uTf0eG/SKSdCKH+LArMtpAo86sRX55Dgzlc+nS690b2biBMEwPyOf7imFCGYcMQgEBDmVpfEnaAQOm/xsoFHx7KPXd08QEF0PFhFhA9OtsTK/t9SwDdMYzKTx5NuHeTANfB4bMmBmIMH1PDEvlU3sduYzYnwhV4Gy0owkb/tRoQZvrxpEOR9sIQs43VB/5XiT9I4BYOCXeuRnhM1+Fx64yoD1qF+svKK3uMEdc1KGXbjZ4iQdCpUjw6akeevWj8="
     },
     {
       "name": "e2fsprogs",
@@ -5199,6 +5200,15 @@
       "signature": "iQEzBAABCgAdFiEEFRnVq6Zb9vwrc8dWek52CV2KUuQFAmq+prkACgkQek52CV2KUuQ/YwgAm2Kr/TESW3rHPf4mIkAdOnEu1+OuYHqW4n8ZWLkDwStzb690PnSuu6nKXt+GcOzbu8Vn5IDfujhKZ6Phoy4R5enYIQK/q8caCGxEXhtrd89EsCtJomPe9+t49LX3m/LCnj/tVn+EhoMonPBFPHOMAXBln8+zjsBkOeGAz5063/YvU6qtPQyGxaNfowV9ULXR9WNt+dgztYBUiYp/gfivq4QGbUR+goG7RSK3r52QR1u/4hqp8Sanmxknj19IgDFts5hGt8Lyjx285cIJx/+kIQAzjRCZ1sCpCEWPiSRdI5EtO3M7ewCzqfRl1wjPVnGxsDhdz/3Ps95k2XPIcw+trw=="
     },
     {
+      "name": "qt6-positioning",
+      "version": "6.12.0-1",
+      "filename": "qt6-positioning-6.12.0-1-x86_64.pkg.tar.zst",
+      "sha256": "7c2599cd4ec2655d7a3eb00d7a4b81363da1a7e72b9d3858d8e6909bc289bc36",
+      "url": "https://geo.mirror.pkgbuild.com/extra/os/x86_64/qt6-positioning-6.12.0-1-x86_64.pkg.tar.zst",
+      "repository": "extra",
+      "signature": "iQEzBAABCgAdFiEEFRnVq6Zb9vwrc8dWek52CV2KUuQFAmq+pl4ACgkQek52CV2KUuRysQf9Fi/aA6qr9OCxHbeAZdyt7F2C8bZNNbsLMsETr2qujlh/ElIJGxRy/Zv73HEbvzFGVGoCjeeP74MaApJCk5UE+OGpqzGHi6QXax79eiwctIaMB6O0VW4sCmE3/pIb/cuJiPJuQyaQOfJya2rORR4IFXu2LJr+BQbOmuS+YRYw/cl2nheoBOCTS6Gok/RTMUOwPfJgpKmOGYuPq6N2hRGZ8G0laKWxEr0pUMmtOII4t+UeZZ4f6dP4z5OQ7tQ3YCymNuj/qHecZr23py5sccAUWi54LnQwiZB/3sgOFKNDr5QDfXCLo+xpSvcb9Hk5pf3QAkesY8AEI5AHL/XlBDGCng=="
+    },
+    {
       "name": "qt6-svg",
       "version": "6.12.0-1",
       "filename": "qt6-svg-6.12.0-1-x86_64.pkg.tar.zst",
@@ -5226,6 +5236,24 @@
       "signature": "iQEzBAABCgAdFiEEFRnVq6Zb9vwrc8dWek52CV2KUuQFAmq+pssACgkQek52CV2KUuRCfgf+MKIyz6RI5w4laqa6dHr+9TCVVJxxqntOpWPZOg8/sy/0a4f2RpvnLrtKJZlAQIYsQfxUKgr800VYbMkzRgzuDN01M74m5i5NkxvC6qwOwl6N+Em8hy9dky1E78w2Uzu09iY3OEqalae2PuL03vLVCkEx0F/fwBS9r5BYDm1x/He48wpLoyY9Nb+FNoZ+ZZEukyM2k/qH7p1Y7Kn1flr1mEfy7tB035YTQFGTvSJVgEbCt/30ixhzZ7MvFcaNAor2V4rhbKKY5IvV4+ro34unDuXv8lZ924WYPTid6WLG3vAitN/zYv7UeCl1xFgffFCFaqPoYd+BF9VgSTHO2lN4fg=="
     },
     {
+      "name": "qt6-webchannel",
+      "version": "6.12.0-1",
+      "filename": "qt6-webchannel-6.12.0-1-x86_64.pkg.tar.zst",
+      "sha256": "8246bb014ef7b1d2194efcd355b3aa8308c0b1be7aea6cdfb7b73ad7cd63cfd1",
+      "url": "https://geo.mirror.pkgbuild.com/extra/os/x86_64/qt6-webchannel-6.12.0-1-x86_64.pkg.tar.zst",
+      "repository": "extra",
+      "signature": "iQEzBAABCgAdFiEEFRnVq6Zb9vwrc8dWek52CV2KUuQFAmq+pn4ACgkQek52CV2KUuSR1AgApraC8mx77tYlNRsN5bx8aHk64Ws3AJUUHCWgPadCrSFwZEKHTVwEhnBQ5505QJvAd6wsg22xZd5ul5iMMRyD3QobWH/0xfOWkHRYn8dTw+Itwn0AXozRqz3WP5ETiYe9SjlTZtkqT6YgoCDoIPAjqTmWUNZB1OUjZm4qgzXN+M6zN/J6ntrkYTqUi4Hin+rXYicy9L8B12k1AJobQNjqFr1ZyJcOUnJSwTuk6A4WJRXY0+k15iHZwGNbj9ndv9ZrblAmAl7bb9+n2C+VIvZaU0lZ5wV64W5rON9PUY8BE3cHVlTIpTpjxD7rKfcCrmjpyT19Cx2xr5ycP9hDM7GYtA=="
+    },
+    {
+      "name": "qt6-webengine",
+      "version": "6.11.3-2",
+      "filename": "qt6-webengine-6.11.3-2-x86_64.pkg.tar.zst",
+      "sha256": "22af5a4ea0c4f583aeeb497df4d168c67e042c011d4e120006cbaefb8a481a8b",
+      "url": "https://geo.mirror.pkgbuild.com/extra/os/x86_64/qt6-webengine-6.11.3-2-x86_64.pkg.tar.zst",
+      "repository": "extra",
+      "signature": "iQEzBAABCgAdFiEEFRnVq6Zb9vwrc8dWek52CV2KUuQFAmrgsDkACgkQek52CV2KUuSPpAf/f4NcwwiITC5yqsuoYjsD9Bua3FTWndbUM2vnvcT088Wxu2Vrpd3rQjIE1mnmlN1woiH3V2k+o6QRUgsoOhiaVclsydAD7+wwvENVdHQHKwR7orGpcYFa44Zw2p/1xefC0qG1Vu+BvxxGSnu4nB+b2+Nrr8g6ovh887sO6Nhvzf3fWSayl747Wi0x3jJJh/NAGgPfi1Qc4xhAwAdKvFk7u4v1SXn5awuZdFfuXn3mMVoXfZU9GbsCmQLIFHsptibkjVvq2+WnDiQrGeSjtua99qzgD/d++ZwqvaJhFAkBQEVL361V7fR559hzEr0tF1KwTUYYqqGpXY/XCjRV1Idoog=="
+    },
+    {
       "name": "quickshell",
       "version": "0.3.2-1",
       "filename": "quickshell-0.3.2-1-x86_64.pkg.tar.zst",
@@ -5242,6 +5270,15 @@
       "url": "https://geo.mirror.pkgbuild.com/extra/os/x86_64/rav1e-0.8.1-3-x86_64.pkg.tar.zst",
       "repository": "extra",
       "signature": "iQIzBAABCgAdFiEElSIL6Zzm/3eK4NxnD2XH2IFQYTAFAmo+69QACgkQD2XH2IFQYTBjog//cYmLojQRWTo3DemJhT4BhXibjF5HxFcI42RDB33HBUSIRtKeexg/6U4DFKBH9cQ6tguzvgpj+Zqck1lrUlUOBqD4qLymg8+MwQRQB/8lsKPRA4SJPsHJkB9Ai/HXtAssiyChuU6rOsqSJKFWtjMRor9RZjCb238hS7sh6R0kwyhFStYFzUw4/U7309KgDwTShbTPp/L7LghEpEj2Q4ZXYyQLvwH5o3ai8+M1CTzZDvVaiqYtz2qj1JvGQ69KFaJ2njkZLdfQFnYY+V/e4/klPa1qbd/USKtp8e90BfByZ93bLWoSO78IPERpAbxMnRpF8+ocZZsrs3VN51X6u2Yi0s5wgGakswb39HLy6yzVW3f0Q8zikAW/zN1/nHNp0rIYdV+CZZ00db6PTPxNPhFB+lfy8JMNK/znKW47JNphN5t1nBODrxl6mIbUGtQxkHtz96UPVBqFHjlDgvKvhQgL33nslKPNhiJqYIs7FL/6FXtKwy5QNJF2FRyl6s3EMdGEr1oWVOdc7HFVh1n+q40lQ096HiQtbbaQ9ewFSc/Z/1UKRRKsz+dAShk/8nJBDPUogvVWCEEXGaPmQjGLzvmgKwdKEtByt4Ngh3+W4l5fwT12w2X+YNLGl5hzRTI0ak0tPr2F3vtNAwv8ieOZKYMGUB+eBeArgEr5tRVv3uZcArk="
+    },
+    {
+      "name": "re2",
+      "version": "2:2025.11.05-6",
+      "filename": "re2-2:2025.11.05-6-x86_64.pkg.tar.zst",
+      "sha256": "f055975eadd1916f1952c5caefcaaf32ef60f1e4461b2f4ac079b0e3c42d61d4",
+      "url": "https://geo.mirror.pkgbuild.com/extra/os/x86_64/re2-2:2025.11.05-6-x86_64.pkg.tar.zst",
+      "repository": "extra",
+      "signature": "iQIzBAABCgAdFiEE8AuW0VIoAT/8nJ0Dk7EdqkwZfj0FAmqG6h4ACgkQk7EdqkwZfj0wcQ//UM8K+hwVy7KwyXKbJRfEQeQctsVUtiLIohyJ0gcJ5KChQxPOXPWmskJsLg861RChEORPb7vvcqfbrkTxRghPbPAuwuUqcvm/alTyz1KMpdA1h11godEbkc8l8rEmf7Tn3mYeEAkOptoC5lp2vTfmksGA2JVf5JW8PEo9JlpyYnJCkCTryemC6JXF+bfjTp0NqVtNfKXAZvTXxpOIL62OdeMiSMhQlPj/ybvAcILc+PWVykfyrH70Qv/9ISODMvo5VFBkbkgm42QnZUxiWLwmjHuEY5glnQmV1kCgIe5p7me1TqBc2K/pK5NtFzI1iNP4//lLMMDabHoV5Jzv2/+/MbPWbrvlwu0PA+wkwRrICtrxJGDe0TjIBHOQnEkptM8IEPT7NZ/cEq/H84ctvtnpzC1JvhxGgBM92Bv4N0MPNkr5u+76d94E8WmsNTVY5bXTvafsY324aToDWoR6Gw1XHtQxxjGSrZL08kMdB3KKnVYCmhBb3rqFHYCgfc9Go1L7UqEKfqdfLI61Q27wsZcUw7RXtdGiAwAbuN79+/iUIDN19HwxXkzU7nJiTrknDYq9Ud77VjrzFnqS1DWci/Jgg0gXvjHCI08YJku7sz1ubMF4gqmqSpWxRgyQjSTb1rWIFROc6SLjZRWfuX+AXAtB7ZsG2HYRhhgMvAAiw/aPQvs="
     },
     {
       "name": "readline",

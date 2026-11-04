@@ -1,6 +1,6 @@
 # Packaged desktop integration
 
-`usr/share/arch-niri-dux/niri` contains the upstream Dux v2.0.0 Niri integration,
+`usr/share/arch-niri-dux/niri` contains the upstream Dux v2.1.0 Niri integration,
 vendored verbatim. `packages/desktop-sources.json` records source URLs and hashes;
 the upstream license is included. No personal dotfiles are used.
 
@@ -15,15 +15,18 @@ Niri's stock configuration and terminal-resolved bindings are exposed as
 `/usr/share/arch-niri-dux/niri/defaults.kdl`, generated during package construction.
 The user entrypoint includes these
 defaults before local `dms/*.kdl` files; `dms/binds.kdl` starts empty and holds
-only overrides. Later bindings replace earlier ones, so a disabled shortcut
+only overrides. Dux generates `dms/binds-next.kdl` for the installed Niri; the
+entrypoint includes it before personal bindings. Keep that generated file local.
+Later bindings replace earlier ones, so a disabled shortcut
 can override its stock action with `spawn "true"` (this still consumes the key).
 An optional `recent-windows.kdl` loads before `dms/binds.kdl` for hand-managed
-MRU preferences. This avoids [Dux 2.0's shortcut-save bugs](https://github.com/abdulrahman-aj/arch-niri-dux/issues/33)
+MRU preferences. This avoids [Dux's shortcut-save bugs, still present in 2.1](https://github.com/abdulrahman-aj/arch-niri-dux/issues/33)
 until a fixed package is available; generated `dms/alttab.kdl` controls appearance.
 Existing user Niri files are preserved when configuring another time. Generated
 layout/input files remain local, so Dux settings continue to control them.
-Existing installations keep their full-copy configuration until explicitly
-switched to the new entrypoint; no automatic migration changes user files.
+Dux 2.1 starts a clean configuration baseline. Existing 2.0 installations must
+reinstall or explicitly adopt the new entrypoint; no automatic migration changes
+user files. Package updates from the 2.1 baseline remain supported.
 
 New users start on Dux's upstream "bloom" material preset. The seed lives in
 `~/.local/state/dms/session.json` and is only created when absent; existing
@@ -38,7 +41,9 @@ Decibels for common audio, Chromium for the browser and Dux Files for folders;
 User initialization preserves `~/.config/mimeapps.list`, so user choices
 keep winning across reruns. GNOME Calculator is installed standalone;
 `EDITOR`/`VISUAL` remain `nvim`. Snapshot (`org.gnome.Snapshot.desktop`) is the
-camera app. These apps come from signed Arch packages; the live ISO remains
+camera app. Qt PDF support (`qt6-webengine`) enables PDF preview inside Dux
+Files, while Papers remains the default document app. These apps come from
+signed Arch packages; the live ISO remains
 terminal-only.
 
 CUPS and Avahi start for Dux's native driverless printer settings; CUPS keeps
@@ -47,7 +52,9 @@ and camera file access. SMB shares remain an optional install. Qt Multimedia
 and cava support Dux's own effects without changing its settings.
 
 Matugen supplies Dux's colors and system light/dark preference. A first-login
-service applies upstream's GTK integration; Qt uses upstream's GTK passthrough.
+service applies upstream's GTK integration and selects the matching GTK theme
+and light/dark preference once; subsequent choices are left to Dux. A pre-existing
+custom GTK theme is preserved. Qt uses upstream's GTK passthrough.
 Terminal shortcuts, user services and recovery tools use `xdg-terminal-exec`.
 Alacritty is the factory preference in `/etc/xdg/xdg-terminals.list`; users can
 select another installed terminal through Dux or `~/.config/xdg-terminals.list`.
