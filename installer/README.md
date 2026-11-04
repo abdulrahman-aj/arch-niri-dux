@@ -8,11 +8,12 @@ The live ISO must provide `fzf` for selection menus, plus:
 
 - `/run/archiso/bootmnt/repo`: a local pacman repository with the complete target closure;
 - `/usr/local/share/arch-niri-dux/packages.target`: one package name per line;
-- `/usr/local/share/arch-niri-dux/desktop`: a target-root overlay containing upstream
-  Niri/Dux defaults and greeter configuration. The required Bash script
-  `/usr/local/lib/arch-niri-dux/configure-desktop USERNAME` runs inside the installed
-  system after the overlay is copied, to create user configuration and enable
-  the appropriate greeter. It must not download anything.
+- `arch-niri-dux` and `arch-niri-dux-baseline` in the offline repository. Pacman
+  owns the shared desktop integration; the baseline tracks the selected package
+  list. It installs after initial boot setup so `snap-pac` starts with a bootable
+  system. `/usr/lib/arch-niri-dux/initialize-user` runs as the new desktop user
+  to seed absent settings. Machine initialization and service enablement remain
+  in `configure-target.sh`. None of these steps downloads anything.
 
 Partitioning uses a 4 GiB FAT32 ESP and a LUKS2 Btrfs root. Independent root,
 home, logs, package cache, and snapshots subvolumes keep recovery away from home.

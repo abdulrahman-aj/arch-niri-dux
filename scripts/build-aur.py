@@ -44,6 +44,7 @@ def main():
     config.write_text('source /etc/makepkg.conf\nOPTIONS+=(!debug)\n')
     subprocess.run(['chown', 'nobody:nobody', str(artifacts)], check=True)
     manifest = json.loads((root / 'packages/closure.lock.json').read_text())
+    manifest['integration'] = json.loads((destination / 'integration.manifest.json').read_text())
     manifest['aur_packages'] = []
     for recipe in json.loads((root / 'packages/aur-recipes.json').read_text()):
         source = validate_recipe(root, recipe)

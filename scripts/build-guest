@@ -54,6 +54,14 @@ CONF
 repo-add /build/payload/repo/offline.db.tar.gz /build/payload/repo/*.pkg.tar.zst
 # Rebuilds install the build tools from the same verified closure as the ISO.
 pacman -Sy --config /build/pacman-pinned.conf --noconfirm --needed archiso python base-devel git
+rm -rf /build/integration-work /build/integration-packages
+mkdir -p /build/integration-work /build/integration-packages
+chown nobody:nobody /build/integration-work /build/integration-packages
+integration_epoch=$(git -c safe.directory=/source -C /source log -1 --format=%ct)
+runuser -u nobody -- python /source/scripts/build-integration.py /source \
+    /build/integration-work /build/integration-packages --epoch "$integration_epoch"
+cp /build/integration-packages/*.pkg.tar.zst /build/payload/repo/
+cp /build/integration-packages/integration.manifest.json /build/payload/repo/
 python /source/scripts/build-aur.py /source /build/payload/repo
 # The verified payload is authoritative; the builder's download cache is redundant.
 rm -f /build/cache/*.pkg.tar.*
@@ -83,13 +91,6 @@ CONF
 mkdir -p "$profile/airootfs/usr/local/lib/arch-niri-dux" "$profile/airootfs/usr/local/bin" "$profile/airootfs/usr/local/share/arch-niri-dux"
 cp -a /source/installer "$profile/airootfs/usr/local/lib/arch-niri-dux/installer"
 find "$profile/airootfs/usr/local/lib/arch-niri-dux/installer" -type d -name __pycache__ -exec rm -rf {} +
-cp -a /source/desktop "$profile/airootfs/usr/local/share/arch-niri-dux/desktop"
-# User-owned includes must resolve beside the user's config, not these defaults.
-# Generate once in the image, leaving the hash-pinned upstream sources intact.
-niri_defaults="$profile/airootfs/usr/local/share/arch-niri-dux/desktop/usr/share/arch-niri-dux/niri"
-sed '/^include /d' "$niri_defaults/config.kdl" > "$niri_defaults/defaults.kdl"
-printf '\ninclude "binds.kdl"\ninclude "../session.kdl"\n' >> "$niri_defaults/defaults.kdl"
-sed 's/{{TERMINAL_COMMAND}}/xdg-terminal-exec/g' "$niri_defaults/dms/binds.kdl" > "$niri_defaults/binds.kdl"
 cp /source/packages/packages.target "$profile/airootfs/usr/local/share/arch-niri-dux/packages.target"
 cat > "$profile/airootfs/usr/local/bin/arch-niri-install" <<'WRAPPER'
 #!/bin/sh

@@ -334,3 +334,26 @@ Physical device access, LAN discovery and paper output remain hardware checks;
 the laptop was untouched. Results, source/artifact hashes and limits are recorded
 in `verification/fresh-install-baseline-2026-11-04.json`. Local run evidence is in
 `out/verify-celluloid-final/`.
+
+## Packaged integration foundation — 2026-11-04
+
+`make test` passed 79 source and 10 build tests. A fresh ISO built the owning
+`arch-niri-dux` package and separate full-baseline metapackage with makepkg;
+the offline VM passed all 26 acceptance milestones. Pacman owns shared defaults,
+helpers and vendor units; user initialization runs unprivileged and preserves
+existing settings. Greetd retains its upstream config while a vendor service
+drop-in selects our separately owned, backup-designated `dux.toml`.
+
+An offline test release upgraded both packages from `0.1.0-1` to `0.1.0-2`,
+added a baseline dependency, added/removed owned files and preserved personal
+configuration. Removing the baseline left integration installed. Snapshot
+restoration recovered the earlier owned files and package database, removed the
+new fixture package and preserved home. The normal boot and both unlock paths
+passed again afterward.
+
+Sol implemented the refactor; Muse and GLM reviewed YAGNI/correctness. Production
+signing/repository delivery remains a separate implementation gate; this local
+upgrade fixture is deliberately unsigned. No prototype-ISO migration or laptop
+changes were performed. Hashes and results are in
+`verification/packaged-integration-2026-11-04.json`; local evidence is in
+`out/verify-packaged-integration-qualified/`.

@@ -1,15 +1,18 @@
-# Target desktop overlay
+# Packaged desktop integration
 
 `usr/share/arch-niri-dux/niri` contains the upstream Dux v2.0.0 Niri integration,
 vendored verbatim. `packages/desktop-sources.json` records source URLs and hashes;
 the upstream license is included. No personal dotfiles are used.
 
-`configure-desktop USERNAME` installs those defaults with Alacritty and enables
-the packaged Dux user services. Dux Greeter starts the packaged Niri session.
-Dux creates its own shell settings on first launch.
+The `arch-niri-dux` package owns these system files. The installer enables the
+Dux services and runs `/usr/lib/arch-niri-dux/initialize-user` as the desktop
+user to seed only missing settings. Package upgrades never replay account or
+user initialization. Dux Greeter starts Niri; Dux creates its own shell settings.
+The Greetd service selects our `/etc/greetd/dux.toml`; Arch retains ownership of
+its separate stock `config.toml`. Pacman preserves local edits to `dux.toml`.
 
 Niri's stock configuration and terminal-resolved bindings are exposed as
-`/usr/share/arch-niri-dux/niri/defaults.kdl`, generated during the ISO build.
+`/usr/share/arch-niri-dux/niri/defaults.kdl`, generated during package construction.
 The user entrypoint includes these
 defaults before local `dms/*.kdl` files; `dms/binds.kdl` starts empty and holds
 only overrides. Later bindings replace earlier ones, so a disabled shortcut
@@ -32,7 +35,7 @@ Papers (`org.gnome.Papers.desktop`) is the default PDF viewer from the factory
 `/etc/xdg/mimeapps.list`. Fresh users also inherit Loupe for common images,
 GNOME Text Editor for plain text and Markdown, Celluloid for common video,
 Decibels for common audio, Chromium for the browser and Dux Files for folders;
-`configure-desktop` preserves per-user `~/.config/mimeapps.list`, so user choices
+User initialization preserves `~/.config/mimeapps.list`, so user choices
 keep winning across reruns. GNOME Calculator is installed standalone;
 `EDITOR`/`VISUAL` remain `nvim`. Snapshot (`org.gnome.Snapshot.desktop`) is the
 camera app. These apps come from signed Arch packages; the live ISO remains
@@ -58,7 +61,7 @@ systemd-suspend` and `systemd-inhibit --list` show sleep events and inhibitors.
 
 Session PATH: `~/.local/bin` resolves in POSIX login shells
 (`/etc/profile.d/dux-localbin.sh`), systemd user services
-(`~/.config/environment.d/90-dux.conf`) and Niri spawns.
+(`/usr/lib/environment.d/90-dux.conf`, with per-user overrides) and Niri spawns.
 Greetd's default profile sourcing passes the login PATH to the user session.
 The greeter still uses its supported `--command niri` compositor selector.
 Each context preserves system and Nix PATH entries; no mise shims are added.

@@ -374,6 +374,19 @@ def niri_overrides():
 
 
 def desktop():
+    versions = run('pacman', '-Q', 'arch-niri-dux', 'arch-niri-dux-baseline', stdout=subprocess.PIPE).stdout
+    owned = ['/usr/share/arch-niri-dux/niri/defaults.kdl', '/usr/lib/arch-niri-dux/initialize-user',
+             '/usr/lib/environment.d/90-dux.conf', '/usr/lib/systemd/user/dux-application-themes.service',
+             '/etc/xdg/mimeapps.list', '/etc/greetd/dux.toml',
+             '/usr/lib/systemd/system/greetd.service.d/50-arch-niri-dux.conf']
+    for path in owned:
+        assert run('pacman', '-Qqo', path, stdout=subprocess.PIPE).stdout.strip() == 'arch-niri-dux', path
+    assert run('pacman', '-Qqo', '/etc/greetd/config.toml', stdout=subprocess.PIPE).stdout.strip() == 'greetd'
+    files = run('pacman', '-Qlq', 'arch-niri-dux', stdout=subprocess.PIPE).stdout.splitlines()
+    assert not any(path.startswith('/home/') for path in files), 'Package owns personal settings.'
+    Path('/run/verify/integration-packages.json').write_text(json.dumps({
+        'versions': versions.splitlines(), 'owned_paths': owned, 'no_packaged_home_files': True,
+    }, indent=2) + '\n')
     fonts()
     niri_overrides()
     user_command('niri', 'validate')
@@ -587,6 +600,7 @@ def snapshots():
     number = run('snapper', '-c', 'root', 'create', '--print-number', '--cleanup-algorithm', 'number',
                  '--description', 'VM known-good', stdout=subprocess.PIPE).stdout.strip()
     Path('/run/verify/recovery-snapshot').write_text(number + '\n')
+    run('python', '/run/verify/verify-integration.py')
     home.write_text('home-created-after-snapshot\n')
     Path('/etc/dux-verification-version').write_text('changed-after-snapshot\n')
     run('limine-snapper-sync')
@@ -626,6 +640,13 @@ def restored():
     assert '/@snapshots/' not in Path('/proc/cmdline').read_text()
     assert Path('/etc/dux-verification-version').read_text().strip() == 'known-good'
     assert Path('/home/tester/keep-this-file').read_text().strip() == 'home-created-after-snapshot'
+    expected = json.loads(Path('/run/verify/integration-upgrade.json').read_text())['before']
+    actual = run('pacman', '-Q', 'arch-niri-dux', 'arch-niri-dux-baseline', stdout=subprocess.PIPE).stdout.splitlines()
+    assert actual == expected, (actual, expected)
+    assert Path('/usr/share/arch-niri-dux/niri/config.kdl').is_file()
+    assert not Path('/usr/share/arch-niri-dux/upgrade-fixture').exists()
+    assert subprocess.run(['pacman', '-Q', 'dux-verification-app'], stdout=subprocess.DEVNULL,
+                          stderr=subprocess.DEVNULL).returncode != 0
     run('systemctl', 'is-active', 'greetd')
     storage()
 
@@ -720,20 +741,18 @@ def wallpaper_preserved():
         }
         for path, content in niri_files.items():
             path.write_text(content)
-        pam = Path('/etc/pam.d/greetd')
-        pam_backup = pam.read_bytes()
-        try:
-            run('bash', '/usr/local/lib/arch-niri-dux/configure-desktop', user)
-        finally:
-            pam.write_bytes(pam_backup)
-        assert session.read_text() == before, 'Real configure-desktop overwrote the existing wallpaper choice.'
-        assert terminal.read_text() == terminal_before, 'Real configure-desktop overwrote the existing terminal choice.'
-        assert mime.read_text() == mime_before, 'Real configure-desktop overwrote existing MIME choices.'
+        # The fixture represents an existing user's own files, not root-owned data.
+        run('chown', '-R', f'{user}:{user}', f'/home/{user}')
+        run('runuser', '-u', user, '--', 'env', '-u', 'XDG_CONFIG_HOME', '-u', 'XDG_STATE_HOME',
+            '-u', 'XDG_DATA_HOME', 'bash', '/usr/lib/arch-niri-dux/initialize-user')
+        assert session.read_text() == before, 'User initialization overwrote the existing wallpaper choice.'
+        assert terminal.read_text() == terminal_before, 'User initialization overwrote the existing terminal choice.'
+        assert mime.read_text() == mime_before, 'User initialization overwrote existing MIME choices.'
         selected = run('runuser', '-u', user, '--', 'env', 'XDG_CURRENT_DESKTOP=niri',
                        'xdg-mime', 'query', 'default', 'text/plain', stdout=subprocess.PIPE).stdout.strip()
         assert selected == 'org.example.Editor.desktop', selected
         for path, content in niri_files.items():
-            assert path.read_text() == content, f'Real configure-desktop overwrote {path}.'
+            assert path.read_text() == content, f'User initialization overwrote {path}.'
         run('runuser', '-u', user, '--', 'niri', 'validate', '--config', str(niri / 'config.kdl'))
         Path('/run/verify/wallpaper-preserved.json').write_text(json.dumps({
             'user': user, 'preset': 'orbit', 'preserved': True, 'terminal_preserved': True,

@@ -4,6 +4,7 @@
 import argparse
 import csv
 import hashlib
+import importlib.util
 import json
 import os
 from pathlib import Path
@@ -352,12 +353,26 @@ def main():
         'iso': str(iso.resolve()), 'iso_sha256': iso_digest,
         'package_manifest_sha256': package_digest,
         'verification_scripts': {name: hashlib.sha256((ROOT / 'scripts' / name).read_bytes()).hexdigest()
-                                 for name in ('verify.py', 'verify-guest.py', 'verify-baseline.py')},
+                                 for name in ('verify.py', 'verify-guest.py', 'verify-baseline.py',
+                                              'build-integration.py', 'verify-integration.py')},
     }, indent=2) + '\n')
     (directory / 'key').write_text(PASSWORD)
     (directory / 'key').chmod(0o600)
     shutil.copyfile(Path(__file__).with_name('verify-guest.py'), directory / 'verify-guest.py')
     shutil.copyfile(Path(__file__).with_name('verify-baseline.py'), directory / 'verify-baseline.py')
+    for name in ('build-integration.py', 'verify-integration.py'):
+        shutil.copyfile(ROOT / 'scripts' / name, directory / name)
+    spec = importlib.util.spec_from_file_location('integration_builder', ROOT / 'scripts/build-integration.py')
+    integration = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(integration)
+    source = directory / 'integration-input'
+    source.mkdir()
+    manifest = json.loads((ROOT / 'out/packages.manifest.json').read_text())['integration']
+    if integration.digest(ROOT / 'packages/integration/PKGBUILD') != manifest['recipe_sha256']:
+        raise ValueError('Integration recipe changed after the ISO build; rebuild before verifying.')
+    archive = integration.prepare_source(ROOT, source, manifest['source_date_epoch'])
+    if integration.digest(archive) != manifest['source_sha256']:
+        raise ValueError('Integration sources changed after the ISO build; rebuild before verifying.')
     vm = VM(directory, iso.resolve(), disk)
     milestones = []
     def passed(name):
@@ -430,7 +445,7 @@ def main():
         vm.command('python /run/verify/verify-guest.py wallpaper', timeout=90)
         passed('Bloom material wallpaper is the fresh-user default and rendered')
         vm.command('python /run/verify/verify-guest.py wallpaper-preserved', timeout=180)
-        passed('Real configure-desktop preserved an existing wallpaper choice')
+        passed('User initialization preserved existing desktop choices')
         vm.command('python /run/verify/verify-baseline.py cli', timeout=120)
         passed('Manuals, archive round-trip, rsync, JSON/search and diagnostic CLI tools work')
         vm.command('python /run/verify/verify-baseline.py prepare', timeout=300)
@@ -517,8 +532,8 @@ def main():
         vm.key('ret')
         vm.command('for attempt in $(seq 1 30); do python /run/verify/verify-guest.py unlocked && exit 0; sleep 1; done; exit 1', timeout=60)
         passed('Screen lock and password unlock')
-        vm.command('python /run/verify/verify-guest.py snapshots', timeout=300)
-        passed('Automatic package snapshots created; recovery fixture prepared')
+        vm.command('python /run/verify/verify-guest.py snapshots', timeout=600)
+        passed('Integration upgrade, baseline changes and personal preservation passed; recovery fixture prepared')
         vm.command('sync')
         vm.poweroff()
         vm.stop()
