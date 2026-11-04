@@ -166,7 +166,10 @@ class VM:
         return path
 
     def key(self, name):
-        self.qmp_command('send-key', {'keys': [{'type': 'qcode', 'data': name}], 'hold-time': 50})
+        self.chord(name)
+
+    def chord(self, *names):
+        self.qmp_command('send-key', {'keys': [{'type': 'qcode', 'data': name} for name in names], 'hold-time': 50})
 
     def click(self, x, y):
         self.qmp_command('input-send-event', {'events': [
@@ -348,10 +351,13 @@ def main():
     (directory / 'inputs.json').write_text(json.dumps({
         'iso': str(iso.resolve()), 'iso_sha256': iso_digest,
         'package_manifest_sha256': package_digest,
+        'verification_scripts': {name: hashlib.sha256((ROOT / 'scripts' / name).read_bytes()).hexdigest()
+                                 for name in ('verify.py', 'verify-guest.py', 'verify-baseline.py')},
     }, indent=2) + '\n')
     (directory / 'key').write_text(PASSWORD)
     (directory / 'key').chmod(0o600)
     shutil.copyfile(Path(__file__).with_name('verify-guest.py'), directory / 'verify-guest.py')
+    shutil.copyfile(Path(__file__).with_name('verify-baseline.py'), directory / 'verify-baseline.py')
     vm = VM(directory, iso.resolve(), disk)
     milestones = []
     def passed(name):
@@ -425,6 +431,36 @@ def main():
         passed('Bloom material wallpaper is the fresh-user default and rendered')
         vm.command('python /run/verify/verify-guest.py wallpaper-preserved', timeout=180)
         passed('Real configure-desktop preserved an existing wallpaper choice')
+        vm.command('python /run/verify/verify-baseline.py cli', timeout=120)
+        passed('Manuals, archive round-trip, rsync, JSON/search and diagnostic CLI tools work')
+        vm.command('python /run/verify/verify-baseline.py prepare', timeout=300)
+        vm.command('python /run/verify/verify-baseline.py image', timeout=120)
+        vm.command('python /run/verify/verify-baseline.py text', timeout=120)
+        vm.click(0.2, 0.2)
+        time.sleep(0.2)
+        vm.command('python /run/verify/verify-baseline.py text-focused')
+        vm.chord('ctrl', 'a')
+        time.sleep(0.1)
+        vm.type_graphical('editedbyduxverification')
+        vm.chord('ctrl', 's')
+        vm.command('python /run/verify/verify-baseline.py text-saved', timeout=60)
+        vm.command('python /run/verify/verify-baseline.py calculator', timeout=120)
+        passed('Images and text open in the selected apps; text edits save; Calculator launches')
+        # Reopen video four times: first-launch success missed the original hang.
+        for kind in ('audio', 'video', 'video', 'video', 'video'):
+            vm.command('python /run/verify/verify-baseline.py open-' + kind, timeout=120)
+            vm.command('python /run/verify/verify-baseline.py capture-' + kind, timeout=30)
+            capture_file = directory / ('baseline-' + kind + '.json')
+            if not json.loads(capture_file.read_text())['tone_detected']:
+                # Some players open paused; exercise their normal play shortcut.
+                vm.key('spc')
+                vm.command('python /run/verify/verify-baseline.py capture-' + kind, timeout=30)
+            vm.command('python /run/verify/verify-baseline.py played-' + kind, timeout=60)
+        passed('Decibels audio and four Celluloid open/play/close cycles output the expected fixture tones')
+        vm.command('python /run/verify/verify-baseline.py backends', timeout=90)
+        passed('Video thumbnails, phone/camera backend loading and Dux multimedia backends')
+        vm.command('python /run/verify/verify-baseline.py printing', timeout=150)
+        passed('Driverless CUPS queue delivered a PDF to a loopback IPP printer')
         vm.command('python /run/verify/verify-guest.py pdf', timeout=180)
         passed('Papers is the default PDF viewer and rendered a sample document')
         vm.command('python /run/verify/verify-guest.py camera', timeout=300)

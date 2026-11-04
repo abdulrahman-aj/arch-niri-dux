@@ -28,11 +28,20 @@ New users start on Dux's upstream "bloom" material preset. The seed lives in
 The preset assets remain owned by upstream Dux; no vendored Niri files are
 edited for this default.
 
-Papers (`org.gnome.Papers.desktop`) is the default PDF viewer in both
-`/etc/xdg/mimeapps.list` and per-user `~/.config/mimeapps.list`. Snapshot
-(`org.gnome.Snapshot.desktop`) is the installed camera app from Arch's official
-`extra` repository. Both come from signed official packages, not the live
-desktop; the live ISO remains terminal-only.
+Papers (`org.gnome.Papers.desktop`) is the default PDF viewer from the factory
+`/etc/xdg/mimeapps.list`. Fresh users also inherit Loupe for common images,
+GNOME Text Editor for plain text and Markdown, Celluloid for common video,
+Decibels for common audio, Chromium for the browser and Dux Files for folders;
+`configure-desktop` preserves per-user `~/.config/mimeapps.list`, so user choices
+keep winning across reruns. GNOME Calculator is installed standalone;
+`EDITOR`/`VISUAL` remain `nvim`. Snapshot (`org.gnome.Snapshot.desktop`) is the
+camera app. These apps come from signed Arch packages; the live ISO remains
+terminal-only.
+
+CUPS and Avahi start for Dux's native driverless printer settings; CUPS keeps
+its stock localhost-only listeners. GVFS supplies Android, Apple-device
+and camera file access. SMB shares remain an optional install. Qt Multimedia
+and cava support Dux's own effects without changing its settings.
 
 Matugen supplies Dux's colors and system light/dark preference. A first-login
 service applies upstream's GTK integration; Qt uses upstream's GTK passthrough.

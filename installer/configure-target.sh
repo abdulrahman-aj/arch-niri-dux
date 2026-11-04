@@ -97,6 +97,19 @@ systemctl disable snapper-timeline.timer 2>/dev/null || true
 systemctl enable power-profiles-daemon.service
 systemctl enable getty@tty2.service
 
+# Dux uses localhost:631, so start CUPS itself as well as its Unix socket.
+# Avahi supplies printer discovery; keep stock local-only CUPS configuration.
+systemctl enable cups.service avahi-daemon.service
+
+# Resolve printer .local names before unicast DNS, preserving other NSS sources.
+if ! grep -Eq '^[[:space:]]*hosts:.*mdns' /etc/nsswitch.conf 2>/dev/null; then
+    if grep -Eq '^[[:space:]]*hosts:.*(^|[[:space:]])resolve([[:space:]]|$)' /etc/nsswitch.conf; then
+        sed -i -E '/^[[:space:]]*hosts:/ s/(^|[[:space:]])resolve([[:space:]]|$)/\1mdns_minimal [NOTFOUND=return] resolve\2/' /etc/nsswitch.conf
+    elif grep -Eq '^[[:space:]]*hosts:.*(^|[[:space:]])dns([[:space:]]|$)' /etc/nsswitch.conf; then
+        sed -i -E '/^[[:space:]]*hosts:/ s/(^|[[:space:]])dns([[:space:]]|$)/\1mdns_minimal [NOTFOUND=return] dns\2/' /etc/nsswitch.conf
+    fi
+fi
+
 # The overlay is ISO data; setup must not depend on preserved executable bits.
 bash /usr/local/lib/arch-niri-dux/configure-desktop "$dux_user"
 

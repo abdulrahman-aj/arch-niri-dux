@@ -1,0 +1,56 @@
+[Default Applications]
+# Folders and documents.
+inode/directory=dev.duxlabs.files.desktop
+application/pdf=org.gnome.Papers.desktop
+# Web browsing.
+text/html=chromium.desktop
+application/xhtml+xml=chromium.desktop
+x-scheme-handler/http=chromium.desktop
+x-scheme-handler/https=chromium.desktop
+# Plain text and Markdown.
+text/plain=org.gnome.TextEditor.desktop
+text/markdown=org.gnome.TextEditor.desktop
+text/x-markdown=org.gnome.TextEditor.desktop
+# Common still images (explicit types; no image/* wildcard).
+image/jpeg=org.gnome.Loupe.desktop
+image/png=org.gnome.Loupe.desktop
+image/gif=org.gnome.Loupe.desktop
+image/webp=org.gnome.Loupe.desktop
+image/bmp=org.gnome.Loupe.desktop
+image/tiff=org.gnome.Loupe.desktop
+image/svg+xml=org.gnome.Loupe.desktop
+image/avif=org.gnome.Loupe.desktop
+image/heic=org.gnome.Loupe.desktop
+image/heif=org.gnome.Loupe.desktop
+image/jxl=org.gnome.Loupe.desktop
+# Common video types.
+video/mp4=io.github.celluloid_player.Celluloid.desktop
+video/mpeg=io.github.celluloid_player.Celluloid.desktop
+video/ogg=io.github.celluloid_player.Celluloid.desktop
+video/webm=io.github.celluloid_player.Celluloid.desktop
+video/x-matroska=io.github.celluloid_player.Celluloid.desktop
+video/matroska=io.github.celluloid_player.Celluloid.desktop
+video/quicktime=io.github.celluloid_player.Celluloid.desktop
+video/x-msvideo=io.github.celluloid_player.Celluloid.desktop
+video/vnd.avi=io.github.celluloid_player.Celluloid.desktop
+video/x-ms-wmv=io.github.celluloid_player.Celluloid.desktop
+video/x-flv=io.github.celluloid_player.Celluloid.desktop
+video/mp2t=io.github.celluloid_player.Celluloid.desktop
+# Common audio types.
+audio/mpeg=org.gnome.Decibels.desktop
+audio/wav=org.gnome.Decibels.desktop
+audio/vnd.wave=org.gnome.Decibels.desktop
+audio/x-wav=org.gnome.Decibels.desktop
+audio/flac=org.gnome.Decibels.desktop
+audio/x-flac=org.gnome.Decibels.desktop
+audio/aac=org.gnome.Decibels.desktop
+audio/mp4=org.gnome.Decibels.desktop
+audio/ogg=org.gnome.Decibels.desktop
+audio/opus=org.gnome.Decibels.desktop
+audio/x-vorbis=org.gnome.Decibels.desktop
+audio/x-opus+ogg=org.gnome.Decibels.desktop
+audio/x-m4a=org.gnome.Decibels.desktop
+audio/x-mp3=org.gnome.Decibels.desktop
+audio/x-mpeg=org.gnome.Decibels.desktop
+audio/x-aac=org.gnome.Decibels.desktop
+audio/x-vorbis+ogg=org.gnome.Decibels.desktop
