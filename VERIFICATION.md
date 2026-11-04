@@ -311,27 +311,26 @@ hibernation or alongside acceptance repeated. Independent Muse review found no
 blocking defects. Source hashes and check scope are recorded in
 `verification/default-terminal-2026-11-03.json`.
 
-## Fresh-install baseline (2026-11-04, blocked on video)
+## Fresh-install baseline (2026-11-04)
 
-The candidate ISO is 2,640,097,280 bytes (2.46 GiB). All 627 existing binary
-pins are preserved; the 58 added payloads passed hash and signature checks.
-The source/build suites passed 76 and 10 tests respectively. Independent Muse
-review completed; its MIME-alias and NSS-verification findings were addressed.
+The final ISO is 2,643,089,408 bytes (2.46 GiB). All 627 existing binary pins
+are preserved; the 62 added payloads passed hash and signature checks. The
+source/build suites passed 76 and 10 tests respectively. Independent Muse
+reviews of the baseline and Celluloid replacement found no outstanding blockers.
 
-Fresh offline installation and resumed acceptance completed 25 non-video stages,
-including real image opening, text editing/saving, audio output, CLI operations,
-virtual driverless printing, synthetic camera capture, portals, snapshot recovery
-and graphical/text disk unlock. The verifier's window-input fix was reproduced
-with Chromium open. This was a resumed run, not a successful uninterrupted
-`make verify`; no `ACCEPTANCE-PASSED` marker was created.
+A complete uninterrupted `make verify` run on a fresh offline UEFI VM passed
+all 26 stages and wrote `ACCEPTANCE-PASSED`. This includes real image opening,
+text editing/saving, audio output, four Celluloid open/play/close cycles, CLI
+operations, virtual driverless printing through Dux, synthetic camera capture,
+portals, snapshot recovery, and graphical/text disk unlock.
 
-Showtime intermittently hangs before mapping a window. Its captured main thread
-blocks in `gst_play_get_volume`, matching the signature in
-[Fedora bug 2509505](https://bugzilla.redhat.com/show_bug.cgi?id=2509505).
-No packaged fix was found; selecting a different video app requires the owner's
-decision. PR #35 stays draft. Physical device access, LAN discovery and paper
-output remain hardware checks; the laptop was untouched.
+Celluloid is the owner-approved video default; Decibels remains the audio app.
+The original Showtime candidate intermittently blocked in `gst_play_get_volume`,
+matching the signature in [Fedora bug 2509505](https://bugzilla.redhat.com/show_bug.cgi?id=2509505).
+The relevant historical thread stacks remain in
+`verification/showtime-deadlock-2026-11-04.txt`; no workaround for that app ships.
 
-Results, source/artifact hashes and limits are recorded in
-`verification/fresh-install-baseline-2026-11-04.json`; the relevant thread stacks
-are in `verification/showtime-deadlock-2026-11-04.txt`.
+Physical device access, LAN discovery and paper output remain hardware checks;
+the laptop was untouched. Results, source/artifact hashes and limits are recorded
+in `verification/fresh-install-baseline-2026-11-04.json`. Local run evidence is in
+`out/verify-celluloid-final/`.

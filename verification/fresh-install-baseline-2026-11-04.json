@@ -1,18 +1,19 @@
 {
   "date": "2026-11-04",
-  "status": "blocked_on_video_player_decision",
-  "qualification": "Fresh offline UEFI installation plus resumed desktop/recovery checks on the same unmodified installed system. The verifier input-targeting fix was reproduced with Chromium present. All non-video stages completed; the full make verify command has not passed and no ACCEPTANCE-PASSED marker exists.",
-  "implementation_head": "68884de80b5d4d9ebb8ba25c65d624b45e1d579e",
+  "status": "passed",
+  "qualification": "A complete uninterrupted make verify run from a fresh offline UEFI VM disk using the final Celluloid ISO. All 26 acceptance stages passed, with an ACCEPTANCE-PASSED marker.",
+  "implementation_head": "56c973304fd6a0610de8c5fd36b18cb4bf696a20",
+  "command": "make verify ARGS='--iso out/arch-niri-dux-2026.11.04-x86_64.iso --directory out/verify-celluloid-final'",
   "iso": {
     "path": "out/arch-niri-dux-2026.11.04-x86_64.iso",
-    "bytes": 2640097280,
-    "sha256": "14c89c045d81b221baf4a3ed3ccfe26609a4b7e80576f51f3c74aa27b58be721",
-    "package_manifest_sha256": "ceb517d98aaab8475df5d18661c1f59a4078a062dbfed343101257673bddc8a8"
+    "bytes": 2643089408,
+    "sha256": "43ffc8a49f341fc8f5c1bf2e89eb98dfc070c0a4492161715a5ef126d9b2b344",
+    "package_manifest_sha256": "8af932aeff27d53b93a9c9c9e21e2b815555f0e8e18e3b6547eb2e1089c13d39"
   },
   "packages": {
     "existing_pins_preserved": 627,
-    "new_signed_payloads_hash_and_signature_verified": 58,
-    "total_binary_closure": 685,
+    "new_signed_payloads_hash_and_signature_verified": 62,
+    "total_binary_closure": 689,
     "live_package_list_unchanged": true
   },
   "tests": {
@@ -34,6 +35,7 @@
     "Real configure-desktop preserved an existing wallpaper choice",
     "Manuals, archive round-trip, rsync, JSON/search and diagnostic CLI tools work",
     "Images and text open in the selected apps; text edits save; Calculator launches",
+    "Decibels audio and four Celluloid open/play/close cycles output the expected fixture tones",
     "Video thumbnails, phone/camera backend loading and Dux multimedia backends",
     "Driverless CUPS queue delivered a PDF to a loopback IPP printer",
     "Papers is the default PDF viewer and rendered a sample document",
@@ -67,11 +69,18 @@
         "FLAC",
         "MP3"
       ],
+      "gstreamer_and_mpv": true,
       "video_thumbnail": true
     },
     "baseline-audio": {
       "frequency_hz": 440,
-      "tone_amplitude": 4094.898320589051,
+      "tone_amplitude": 4065.969432797763,
+      "tone_detected": true,
+      "method": "PipeWire null-sink monitor; no physical audio device"
+    },
+    "baseline-video": {
+      "frequency_hz": 660,
+      "tone_amplitude": 2876.088452482041,
       "tone_detected": true,
       "method": "PipeWire null-sink monitor; no physical audio device"
     },
@@ -111,40 +120,36 @@
       "mime_preserved": true
     }
   },
-  "video_blocker": {
-    "application": "showtime 50.0-1",
-    "symptom": "Intermittent startup hang before any window maps; process stays alive. Some earlier attempts played correctly, which does not qualify reliability.",
-    "captured_trace": "verification/showtime-deadlock-2026-11-04.txt",
-    "matching_report": "https://bugzilla.redhat.com/show_bug.cgi?id=2509505",
-    "packaged_fix": "None found in current Arch/Omarchy releases; owner fallback choice pending.",
-    "fallback_not_implemented": "Celluloid (mpv backend), keeping Decibels for audio."
+  "video_open_play_close_cycles": 4,
+  "video_selection": {
+    "application": "celluloid 0.30-2",
+    "audio_application": "decibels 49.6.1-2",
+    "reason": "Owner-approved replacement after the original Showtime candidate intermittently deadlocked before mapping a window. No GPU/environment workaround or retry bypass was shipped.",
+    "historical_trace": "verification/showtime-deadlock-2026-11-04.txt",
+    "matching_report": "https://bugzilla.redhat.com/show_bug.cgi?id=2509505"
   },
   "limits": [
     "Physical phone/camera file access, LAN printer discovery and paper output untested; loopback driverless IPP and a synthetic camera were tested.",
     "No laptop changes.",
     "Alongside OS acceptance and physical hibernation were not repeated for this desktop/package delta."
   ],
-  "independent_review": "Muse review completed; MIME aliases and NSS assertion findings addressed. Separate read-only research found no packaged fix for the reproduced Showtime hang.",
+  "independent_review": "Muse reviewed the baseline and the Celluloid replacement separately. No outstanding blocking code findings; the required fresh full ISO acceptance now passes.",
   "source_sha256": {
     "installer/install.py": "1ad9021929e61c46478bcdd4ef5536f6d5a663ecb55301dace8bb3a5261ac06c",
     "installer/configure-target.sh": "ba395f2be0308936a47af813a23414f3d77707d3666ab6a570cb154473c82515",
-    "desktop/etc/xdg/mimeapps.list": "19c9edb346da4f13abd34e949a6fd0068beb41877dba30533012591411af19f4",
+    "desktop/etc/xdg/mimeapps.list": "981e040c063b1147a5f7fa651727786b997ab523e4811b9cd87ef660d4530d8a",
     "desktop/usr/local/lib/arch-niri-dux/configure-desktop": "e8292a701281ce2a47d7d9f8637c03a3f57b0e175d71d09ef93c3803449c59a4",
-    "packages/packages.target": "7aa18b1b3e85e3bd600bc78843c9ccf6d79247bff3d9b231f155c3b53b85d977",
-    "packages/closure.lock.json": "873fb2e6239534e0f888dbb97c548b3e787b34916d7f95667ef0b8e58ea86c29",
+    "packages/packages.target": "332c2e256233d4e27793ea9a0899af7521b18dbf97d869e9ee1078adb2df7e99",
+    "packages/closure.lock.json": "dd76752a52e9d8540c8da5fad981dbd63bb412a04370adbc88d559ffb66440cc",
     "keys/trusted-packagers.gpg": "90e14373b906c12fa5b51a6f33f13f13ae36ec81bc90b0ad54695f11a6c8a2d4",
-    "scripts/verify.py": "d3076a3af083f55d97ae1e7a1655b52f480c5388b1b05a11e78b119f4795b381",
+    "scripts/verify.py": "6bf39a5a6bd20243535ed08b82039681ba34d5b537a6061558b283192844adf5",
     "scripts/verify-guest.py": "8e9c244cf5eff1023089e950ebba6209166d228f76fe1937a855f081bf318149",
-    "scripts/verify-baseline.py": "ed1844e537b875400653b9bec6785204ab3e346a61d31a82e6f2d466209d99c4"
+    "scripts/verify-baseline.py": "c3c9b4488f4225e8121c26411cd913c2de0f917f7d99517254b70b63d267a96d"
   },
-  "evidence_directory": "out/verify-baseline-final",
-  "continuation": {
-    "reason": "Restarted the same unmodified installed VM after verifier input-targeting failure; reran image opening and text editing with Chromium present, then executed the remaining acceptance body from verify.py.",
-    "remaining_body_sha256": "35c50c9761e5f7b9c51ab78f9811cd2efb5222f2965f505dd6190bf64d6ebf7a",
-    "verification_scripts": {
-      "verify.py": "d3076a3af083f55d97ae1e7a1655b52f480c5388b1b05a11e78b119f4795b381",
-      "verify-guest.py": "8e9c244cf5eff1023089e950ebba6209166d228f76fe1937a855f081bf318149",
-      "verify-baseline.py": "ed1844e537b875400653b9bec6785204ab3e346a61d31a82e6f2d466209d99c4"
-    }
-  }
+  "verification_scripts": {
+    "verify.py": "6bf39a5a6bd20243535ed08b82039681ba34d5b537a6061558b283192844adf5",
+    "verify-guest.py": "8e9c244cf5eff1023089e950ebba6209166d228f76fe1937a855f081bf318149",
+    "verify-baseline.py": "c3c9b4488f4225e8121c26411cd913c2de0f917f7d99517254b70b63d267a96d"
+  },
+  "evidence_directory": "out/verify-celluloid-final"
 }
