@@ -1,0 +1,102 @@
+{
+  "date": "2026-11-04",
+  "scope": "Package foundation; signing and repository publication are not yet implemented.",
+  "iso": "/home/abdulrahman/Work/arch-niri-dux/out/arch-niri-dux-2026.11.04-x86_64.iso",
+  "iso_sha256": "7dc486f4de693c3667398311573964fd726e861d7e091d15cbc9f33844a4b302",
+  "iso_bytes": 2643109888,
+  "package_manifest_sha256": "8e6f659cc504a0da00755a0855490091adf4c155ba043833e1b176a245aa1f6e",
+  "integration": {
+    "source_sha256": "d153e67e21dbc17ccf702b88acabccdff72dafe63bfbf231efbc607b8fbe1e4f",
+    "recipe_sha256": "4ed8df9a5b7181c423598a65a74d0f1d1e8a6ecd78646cfbc43a73b4e8655476",
+    "source_date_epoch": 1793757683,
+    "packages": [
+      {
+        "name": "arch-niri-dux",
+        "filename": "arch-niri-dux-0.1.0-1-any.pkg.tar.zst",
+        "sha256": "8cbe9d4e6e6d3eadc8918f812821bb84b32af1f321903c614247e2343512e862"
+      },
+      {
+        "name": "arch-niri-dux-baseline",
+        "filename": "arch-niri-dux-baseline-0.1.0-1-any.pkg.tar.zst",
+        "sha256": "7b43d4ec1a4f0cfd41b23243bc5c9cbd829707074ff1be5ebf844601608f7c5e"
+      }
+    ]
+  },
+  "source_tests": 79,
+  "build_tests": 10,
+  "milestones": [
+    "Offline encrypted installation completed",
+    "Graphical disk unlock accepts keyboard input and retries an incorrect password",
+    "UEFI boot from encrypted disk without installation ISO",
+    "Plymouth configuration and boot services are active",
+    "Encrypted swap outside root snapshots; physical resume offset matches the kernel",
+    "Niri, Dux, terminal, Neovim and Chromium smoke checks",
+    "Login shells, user services and Niri spawns resolve local user executables",
+    "GOP metrics, live file indexing, Calendar event create/read and Dux Files integration",
+    "Live Dux light/dark changes reach Chromium, GTK settings, portals and Dux apps",
+    "Bloom material wallpaper is the fresh-user default and rendered",
+    "User initialization preserved existing desktop choices",
+    "Manuals, archive round-trip, rsync, JSON/search and diagnostic CLI tools work",
+    "Images and text open in the selected apps; text edits save; Calculator launches",
+    "Decibels audio and four Celluloid open/play/close cycles output the expected fixture tones",
+    "Video thumbnails, phone/camera backend loading and Dux multimedia backends",
+    "Driverless CUPS queue delivered a PDF to a loopback IPP printer",
+    "Papers is the default PDF viewer and rendered a sample document",
+    "Snapshot preview, shutter photo and video recording work with a synthetic camera",
+    "Chromium open-file request uses Dux Files and responds to cancellation",
+    "Chromium screen sharing produced nonblank captured desktop content",
+    "Screen lock and password unlock",
+    "Integration upgrade, baseline changes and personal preservation passed; recovery fixture prepared",
+    "Limine snapshot boot and restoration",
+    "Restored system rebooted normally and home was preserved",
+    "Text fallback unlocks the disk with the splash disabled",
+    "Graphical password screen works again after text fallback"
+  ],
+  "ownership": {
+    "versions": [
+      "arch-niri-dux 0.1.0-1",
+      "arch-niri-dux-baseline 0.1.0-1"
+    ],
+    "owned_paths": [
+      "/usr/share/arch-niri-dux/niri/defaults.kdl",
+      "/usr/lib/arch-niri-dux/initialize-user",
+      "/usr/lib/environment.d/90-dux.conf",
+      "/usr/lib/systemd/user/dux-application-themes.service",
+      "/etc/xdg/mimeapps.list",
+      "/etc/greetd/dux.toml",
+      "/usr/lib/systemd/system/greetd.service.d/50-arch-niri-dux.conf"
+    ],
+    "no_packaged_home_files": true
+  },
+  "upgrade": {
+    "before": [
+      "arch-niri-dux 0.1.0-1",
+      "arch-niri-dux-baseline 0.1.0-1"
+    ],
+    "after": [
+      "arch-niri-dux 0.1.0-2",
+      "arch-niri-dux-baseline 0.1.0-2"
+    ],
+    "personal_sha256": {
+      "/home/tester/.config/niri/config.kdl": "1152477feb4fb5e742d429247383ff8544d195ff2cd3c3bf612799cdb505d121",
+      "/home/tester/.config/niri/dms/binds.kdl": "a29186a7b16c6218fe4bee14dd0be53d7e7d5223bb04f6cbe54b174d5a57b408",
+      "/home/tester/.config/xdg-terminals.list": "d63b322123983f24343609ca7ae5402b435a7002f49b13e4164ddd862ee38d9e"
+    },
+    "owned_file_added_and_removed": true,
+    "baseline_addition_installed": true,
+    "baseline_can_be_removed_independently": true
+  },
+  "verification_scripts": {
+    "verify.py": "766b4ce2895dd1da653d2c72c5637b1854ee8426abc2dbbacb87643b15d7cd20",
+    "verify-guest.py": "08002359472aaefb8f6477b921e679a0c03a5cd7899356c5ef675ad39e28f2bd",
+    "verify-baseline.py": "c3c9b4488f4225e8121c26411cd913c2de0f917f7d99517254b70b63d267a96d",
+    "build-integration.py": "54923dd6c08a454422746949ae858748b397f68008813537b842e0ab6c984aeb",
+    "verify-integration.py": "351de6621342e61d92f5406a66b2b4e7f62f472e876a32735eab11cd8c3c1c4e"
+  },
+  "review": "Muse YAGNI review and GLM correctness review; implemented and corrected by Sol.",
+  "limits": [
+    "Disposable local unsigned upgrade fixture; production transport/signing is a later gate.",
+    "No migration from prototype ISO installations; no laptop changes.",
+    "Root snapshot restore qualified owned files and pacman database; home and ESP are separate."
+  ]
+}

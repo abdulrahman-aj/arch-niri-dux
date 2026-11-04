@@ -1,5 +1,16 @@
 # Package inputs
 
+`integration/PKGBUILD` builds our owning `arch-niri-dux` package and the separate
+`arch-niri-dux-baseline` metapackage. The baseline depends on `packages.target`;
+dropping it allows removing optional baseline apps while retaining integration
+updates. Existing prototype ISOs are not automatically migrated. App retirement
+will use targeted reviewed transitions, without general orphan cleanup.
+
+`scripts/build-integration.py` prepares a deterministic local source archive and
+records its checksum for makepkg. The ISO installs these package artifacts
+instead of copying an unowned overlay. The output manifest records their hashes
+and source provenance separately from signed upstream and reviewed AUR inputs.
+
 `closure.lock.json` pins the signed Arch/Omarchy binary packages. Arch's official
 repositories take precedence over Omarchy on the installed system. Papers and
 Snapshot also come from Arch's signed packages. New entries extend the closure

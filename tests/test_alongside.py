@@ -359,6 +359,9 @@ class AlongsideRegistrationTests(unittest.TestCase):
                     patch.object(installer.subprocess, 'run'):
                 installer.install(value)
                 self.assertEqual(len(transactions), 2)
+                self.assertIn('arch-niri-dux', transactions[0])
+                self.assertNotIn('arch-niri-dux-baseline', transactions[0])
+                self.assertIn('arch-niri-dux-baseline', transactions[1])
                 self.assertNotIn('SKIP_UEFI', (target / 'etc/default/limine').read_text())
                 finish.side_effect = ValueError('unexpected firmware entries')
                 with self.assertRaisesRegex(ValueError, 'unexpected firmware entries'):

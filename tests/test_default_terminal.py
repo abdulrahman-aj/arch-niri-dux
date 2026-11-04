@@ -38,7 +38,7 @@ class DefaultTerminalTests(unittest.TestCase):
             'XDG_DATA_HOME': str(self.apps.parent), 'XDG_DATA_DIRS': str(self.root / 'empty'),
             'XDG_CACHE_HOME': str(self.root / 'cache'), 'XDG_CURRENT_DESKTOP': 'niri',
         }
-        settings = (ROOT / 'desktop/usr/share/arch-niri-dux/environment.conf').read_text()
+        settings = (ROOT / 'desktop/usr/lib/environment.d/90-dux.conf').read_text()
         self.terminal = next(line.split('=', 1)[1] for line in settings.splitlines()
                              if line.startswith('TERMINAL='))
 

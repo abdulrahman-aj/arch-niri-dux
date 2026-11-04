@@ -685,7 +685,8 @@ def install(settings):
         package_db = stage / 'db'
         package_db.mkdir()
         resolved = run('pacman', '--config', str(offline_conf), '--dbpath', str(package_db),
-                       '--sync', '--refresh', '--print', '--noconfirm', '--print-format', '%f', *packages, capture=True)
+                       '--sync', '--refresh', '--print', '--noconfirm', '--print-format', '%f',
+                       *packages, 'arch-niri-dux', 'arch-niri-dux-baseline', capture=True)
         for filename in resolved.splitlines():
             if '.pkg.tar.' in filename and not (REPO / filename).is_file():
                 raise ValueError(f'Offline dependency is missing: {filename}')
@@ -741,7 +742,7 @@ def install(settings):
                     raise ValueError('Btrfs returned an invalid swap resume offset.')
             print('\n[3/6] Installing packages from the USB…', flush=True)
             # Install transaction hooks only after Snapper and boot are configured.
-            base_packages = [package for package in packages if package != 'snap-pac']
+            base_packages = [package for package in packages if package != 'snap-pac'] + ['arch-niri-dux']
             if snapshot:
                 # Both EFI deployment and kernel hooks may invoke limine-install.
                 # Its documented skip setting covers every initial transaction.
@@ -758,8 +759,6 @@ def install(settings):
             write('/etc/locale.gen', 'en_US.UTF-8 UTF-8\n')
             write('/etc/locale.conf', 'LANG=en_US.UTF-8\n')
             write('/etc/vconsole.conf', 'KEYMAP=' + settings.keymap + '\n')
-            write('/etc/profile.d/editor.sh', 'export EDITOR=nvim\nexport VISUAL=nvim\n')
-            shutil.copytree(SHARE / 'desktop', TARGET, dirs_exist_ok=True)
             # arch-chroot mounts a fresh /run, so stage outside that mountpoint.
             target_script = TARGET / 'root/configure-target.sh'
             shutil.copy2(Path(__file__).with_name('configure-target.sh'), target_script)
@@ -774,7 +773,9 @@ def install(settings):
                 data=f'{settings.username}:{settings.password}\n')
             print('\n[5/6] Preparing automatic snapshots and recovery…', flush=True)
             if 'snap-pac' in packages:
-                run('pacstrap', '-C', str(offline_conf), '-G', '-M', str(TARGET), 'snap-pac')
+                run('pacstrap', '-C', str(offline_conf), '-G', '-M', str(TARGET), 'snap-pac', 'arch-niri-dux-baseline')
+            else:
+                run('pacstrap', '-C', str(offline_conf), '-G', '-M', str(TARGET), 'arch-niri-dux-baseline')
             run('arch-chroot', str(TARGET), 'snapper', '--no-dbus', '-c', 'root',
                 'create', '--cleanup-algorithm', 'number', '--description', 'Fresh installation')
             run('arch-chroot', str(TARGET), 'limine-snapper-sync')

@@ -110,8 +110,18 @@ if ! grep -Eq '^[[:space:]]*hosts:.*mdns' /etc/nsswitch.conf 2>/dev/null; then
     fi
 fi
 
-# The overlay is ISO data; setup must not depend on preserved executable bits.
-bash /usr/local/lib/arch-niri-dux/configure-desktop "$dux_user"
+# Account initialization is separate from package updates and system policy.
+runuser -u "$dux_user" -- env -u XDG_CONFIG_HOME -u XDG_STATE_HOME -u XDG_DATA_HOME \
+    bash /usr/lib/arch-niri-dux/initialize-user
+systemctl --global enable dms.service dsearch.service dcal.service dfiles.service dux-application-themes.service
+systemd-tmpfiles --create /usr/lib/tmpfiles.d/dms-greeter.conf
+# Calendar credentials use the Secret portal; unlock its keyring at login.
+for dux_pam_line in 'auth optional pam_gnome_keyring.so' 'session optional pam_gnome_keyring.so auto_start'; do
+    if ! grep -Fxq "$dux_pam_line" /etc/pam.d/greetd; then
+        printf '\n%s\n' "$dux_pam_line" >>/etc/pam.d/greetd
+    fi
+done
+systemctl enable greetd
 
 # The installer stays offline; enable online repositories only on the target.
 pacman-key --populate omarchy
