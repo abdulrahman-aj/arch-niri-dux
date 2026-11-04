@@ -701,6 +701,13 @@ def wallpaper_preserved():
         terminal.parent.mkdir(parents=True, exist_ok=True)
         terminal_before = '# Personal terminal preference\nOther.desktop\nAlacritty.desktop\n'
         terminal.write_text(terminal_before)
+        mime = Path(f'/home/{user}/.config/mimeapps.list')
+        mime_before = '[Default Applications]\ntext/plain=org.example.Editor.desktop\n'
+        mime.write_text(mime_before)
+        applications = Path(f'/home/{user}/.local/share/applications')
+        applications.mkdir(parents=True)
+        (applications / 'org.example.Editor.desktop').write_text(
+            '[Desktop Entry]\nType=Application\nName=Personal editor\nExec=/usr/bin/true\nMimeType=text/plain;\n')
         niri = Path(f'/home/{user}/.config/niri')
         (niri / 'dms').mkdir(parents=True)
         niri_files = {
@@ -721,12 +728,17 @@ def wallpaper_preserved():
             pam.write_bytes(pam_backup)
         assert session.read_text() == before, 'Real configure-desktop overwrote the existing wallpaper choice.'
         assert terminal.read_text() == terminal_before, 'Real configure-desktop overwrote the existing terminal choice.'
+        assert mime.read_text() == mime_before, 'Real configure-desktop overwrote existing MIME choices.'
+        selected = run('runuser', '-u', user, '--', 'env', 'XDG_CURRENT_DESKTOP=niri',
+                       'xdg-mime', 'query', 'default', 'text/plain', stdout=subprocess.PIPE).stdout.strip()
+        assert selected == 'org.example.Editor.desktop', selected
         for path, content in niri_files.items():
             assert path.read_text() == content, f'Real configure-desktop overwrote {path}.'
         run('runuser', '-u', user, '--', 'niri', 'validate', '--config', str(niri / 'config.kdl'))
         Path('/run/verify/wallpaper-preserved.json').write_text(json.dumps({
             'user': user, 'preset': 'orbit', 'preserved': True, 'terminal_preserved': True,
             'niri_preserved': True,
+            'mime_preserved': True,
         }, indent=2) + '\n')
     finally:
         run('sh', '-c', f'userdel -r {user} 2>/dev/null || true')

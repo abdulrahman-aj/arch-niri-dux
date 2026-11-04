@@ -13,3 +13,10 @@ their build provenance is recorded separately in the output manifest.
 
 When intentionally updating the package lock, check new signing fingerprints
 against the source distribution's public keyring before adding their public keys.
+
+The added signing subkey `4C13F5553C2D87AD23220A073EC2E354F61AC9F6`
+belongs to Hyacinthe Cartiaux's primary key
+`DB310957BB30360A67311D87886D7ACFED689539`, published in Arch's
+[maintainer directory](https://archlinux.org/people/package-maintainers/#hyacinthe).
+Its binding and Arch master-key certifications were checked in the distribution
+keyring before verifying the pinned strace and nss-mdns payloads.

@@ -27,11 +27,9 @@ if [[ ! -e "$user_home/.config/xdg-terminals.list" ]]; then
     install -m 0644 -o "$user" -g "$user_group" /etc/xdg/xdg-terminals.list \
         "$user_home/.config/xdg-terminals.list"
 fi
-cat >"$user_home/.config/mimeapps.list" <<'EOF'
-[Default Applications]
-inode/directory=dev.duxlabs.files.desktop
-application/pdf=org.gnome.Papers.desktop
-EOF
+# Factory MIME defaults live in /etc/xdg/mimeapps.list. Do not create a
+# per-user mimeapps.list here: a fresh user inherits the factory defaults,
+# while an existing ~/.config/mimeapps.list keeps winning on reruns.
 # Seed Dux's first-session wallpaper to the upstream "bloom" material preset.
 # Dux owns the preset assets; an empty session would render its "dank" default.
 # Never overwrite an existing choice: only create the state file when absent.
