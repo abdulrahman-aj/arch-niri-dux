@@ -107,7 +107,7 @@ def prepare():
                        '-pix_fmt', 'yuv420p', '-c:a', 'aac', str(FILES / 'baseline-video.mp4'), timeout=90)
     for extension, codec in [('flac', 'flac'), ('mp3', 'libmp3lame')]:
         guest.user_command('ffmpeg', '-nostdin', '-loglevel', 'error', '-y',
-                           '-f', 'lavfi', '-i', 'sine=frequency=660:sample_rate=48000',
+                           '-f', 'lavfi', '-i', 'sine=frequency=440:sample_rate=48000',
                            '-t', '30', '-c:a', codec, str(FILES / ('baseline-audio.' + extension)), timeout=60)
     guest.user_command('ffmpeg', '-nostdin', '-loglevel', 'error', '-y',
                        '-i', str(FILES / 'baseline-video.mp4'), '-t', '3', '-c', 'copy',
@@ -203,8 +203,10 @@ def capture_audio(kind):
     guest.user_command('ffmpeg', '-nostdin', '-loglevel', 'error', '-y',
                        '-f', 'pulse', '-i', 'dux_verify_audio.monitor',
                        '-t', '3', '-ac', '1', '-ar', '48000', '-c:a', 'pcm_s16le', str(path), timeout=15)
-    amplitude = tone_amplitude(path)
-    record('baseline-' + kind, {'tone_amplitude': amplitude, 'tone_detected': amplitude > 200,
+    frequency = 440 if kind == 'audio' else 660
+    amplitude = tone_amplitude(path, frequency)
+    record('baseline-' + kind, {'frequency_hz': frequency,
+                                 'tone_amplitude': amplitude, 'tone_detected': amplitude > 200,
                                  'method': 'PipeWire null-sink monitor; no physical audio device'})
 
 
