@@ -26,7 +26,13 @@ recipes also verify every source through `makepkg`. These packages are built as
 an unprivileged user inside the disposable builder, not downloaded or built
 during installation. They do not carry Arch package signatures.
 
-`out/packages.manifest.json` records the signed closure and the locally built
-packages with their hashes and recipe provenance. Installed AUR packages receive
+`scripts/iso_payload.py` finalizes the ISO repository, checksums and combined
+`out/packages.manifest.json` after the package producers finish. It rejects
+missing, unexpected or mismatched packages and checks the generated database
+against their declared inventory. The AUR builder reports only its own results;
+with no AUR recipes the finalizer needs no AUR result file.
+
+The manifest records the signed closure and locally built packages with their
+hashes and recipe provenance. Installed AUR packages receive
 updates through Yay or Dux's system updater; future recipe changes still require
 review. Replacing these AUR sources is tracked in TODO.md.

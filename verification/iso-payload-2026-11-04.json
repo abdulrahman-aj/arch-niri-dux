@@ -1,0 +1,36 @@
+{
+  "date": "2026-11-04",
+  "inputs": {
+    "iso": "/home/abdulrahman/Work/arch-niri-dux/out/arch-niri-dux-2026.11.04-x86_64.iso",
+    "iso_sha256": "1642f02d59c83e73f26de313aa43caf389ed6d5bca6e3ac76dfa7a4c176372ea",
+    "package_manifest_sha256": "5b7bcc446a08f3d8fcdcd05781319497d7a2be3356fb3e75dcfa2b77e2e81c73",
+    "verification_scripts": {
+      "verify.py": "fdb9859e13e5705c54a000e2d13ee032c398c55095761499588b6c11f0bb2f53",
+      "verify-guest.py": "2cb75fd54190af6120254f5473ceb8287035f93a93b892d25b27feddaa0c1bb8",
+      "verify-baseline.py": "c3c9b4488f4225e8121c26411cd913c2de0f917f7d99517254b70b63d267a96d",
+      "build-integration.py": "d7a4786bbf3c5147f51f5f714cd619f47cc9f376da5b3d2a818180ff6df090a2",
+      "verify-integration.py": "6d076bdd0916940568700514ef5b643ecb217aa59dcd63eacb5bd6dda5bf17e4"
+    }
+  },
+  "iso_bytes": 2641993728,
+  "finalizer_sha256": "5e127bac88d187ae62f3520ebb19f83092d22c6be6d372f311b8e247165e4237",
+  "package_counts": {
+    "sync": 689,
+    "integration": 2,
+    "aur": 4
+  },
+  "combined_manifest_byte_identical_to_before_refactor": true,
+  "source_tests": 100,
+  "build_tests": 10,
+  "actionlint_passed": true,
+  "build_command": "make iso",
+  "verification_command": "make verify ARGS=\"--iso out/arch-niri-dux-2026.11.04-x86_64.iso --directory out/verify-iso-payload --install-only\"",
+  "installation_seconds": 55,
+  "milestones": [
+    "Offline encrypted installation completed"
+  ],
+  "limits": [
+    "Install-only qualification covers media manifest equality, repository checksum validation, dependency preflight, offline encrypted installation and guest preparation; the full desktop/recovery suite was not repeated.",
+    "Package contents and integration release remain identical to the previously qualified production image; no new release or laptop changes."
+  ]
+}

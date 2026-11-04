@@ -1,4 +1,3 @@
-import importlib.util
 import hashlib
 import json
 import io
@@ -8,11 +7,7 @@ import tempfile
 import unittest
 from unittest.mock import patch
 
-MODULE_PATH = Path(__file__).resolve().parents[1] / 'installer/install.py'
-spec = importlib.util.spec_from_file_location('installer', MODULE_PATH)
-installer = importlib.util.module_from_spec(spec)
-sys.modules[spec.name] = installer
-spec.loader.exec_module(installer)
+from installer import install as installer
 
 
 def settings(**changes):

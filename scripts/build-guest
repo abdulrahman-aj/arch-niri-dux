@@ -71,12 +71,11 @@ if compgen -G '/build/integration-packages/*.pkg.tar.zst.sig' >/dev/null; then
 fi
 rm -rf /source/out/integration
 cp -r /build/integration-packages /source/out/integration
-python /source/scripts/build-aur.py /source /build/payload/repo
+python /source/scripts/build-aur.py /source /build/payload/repo /build/aur.manifest.json
 # The verified payload is authoritative; the builder's download cache is redundant.
 rm -f /build/cache/*.pkg.tar.*
 fstrim /build || true
-repo-add /build/payload/repo/offline.db.tar.gz /build/payload/repo/*.pkg.tar.zst
-(cd /build/payload/repo && sha256sum *.pkg.tar.zst *.db > SHA256SUMS)
+python /source/scripts/iso_payload.py /source /build/payload/repo --aur-manifest /build/aur.manifest.json
 cp /state/trusted-packagers.gpg /source/out/trusted-packagers.gpg
 cp -a /usr/share/archiso/configs/releng /build/profile-new
 rm -rf /build/profile
