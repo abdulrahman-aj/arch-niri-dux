@@ -395,3 +395,22 @@ approved the release-delivery probe. Source/artifact hashes, CI/release URLs,
 production identity, all milestones and the continuation are recorded in
 `verification/published-integration-2026-11-04.json`. Local evidence is in
 `out/verify-published-release/`. No laptop changes were made.
+
+## ISO payload ownership — 2026-11-04
+
+The payload finalizer now owns inventory validation, the final offline database,
+combined manifest and checksums. Actionlint, 100 source tests and 10 build tests
+passed. Fourteen finalizer tests exercise real package archives, `repo-add` and
+the installer's checksum consumer, including zero-AUR assembly and rejection of
+missing, unexpected, duplicate, corrupted and inconsistent package inputs.
+Independent Muse review found no blockers.
+
+`make iso` succeeded with the same 695 package files and a byte-identical
+combined manifest. The image is 2,641,993,728 bytes (2.46 GiB), SHA256
+`1642f02d59c83e73f26de313aa43caf389ed6d5bca6e3ac76dfa7a4c176372ea`.
+The fresh offline VM passed manifest equality, payload checksums, dependency
+preflight, encrypted installation and guest preparation. This was an
+`--install-only` run; the desktop/recovery suite was not repeated. Package
+contents and the signed integration release are unchanged. Exact inputs and
+limits are in `verification/iso-payload-2026-11-04.json`; local diagnostics are
+in `out/verify-iso-payload/`. No laptop changes were made.

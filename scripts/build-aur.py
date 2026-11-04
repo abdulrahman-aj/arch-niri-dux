@@ -33,7 +33,7 @@ def validate_recipe(root, recipe):
 
 
 def main():
-    root, destination = map(Path, sys.argv[1:3])
+    root, destination, manifest_path = map(Path, sys.argv[1:4])
     if not os.path.ismount('/source') or not os.path.ismount('/build'):
         raise SystemExit('Run only inside the isolated ISO builder.')
     workspace = Path('/build/aur')
@@ -43,9 +43,7 @@ def main():
     # Binary-only recipes do not need Arch's default split debug packages.
     config.write_text('source /etc/makepkg.conf\nOPTIONS+=(!debug)\n')
     subprocess.run(['chown', 'nobody:nobody', str(artifacts)], check=True)
-    manifest = json.loads((root / 'packages/closure.lock.json').read_text())
-    manifest['integration'] = json.loads((destination / 'integration.manifest.json').read_text())
-    manifest['aur_packages'] = []
+    packages = []
     for recipe in json.loads((root / 'packages/aur-recipes.json').read_text()):
         source = validate_recipe(root, recipe)
         work = workspace / recipe['name']
@@ -70,10 +68,10 @@ def main():
         if package.parent != artifacts or not package.name.endswith('.pkg.tar.zst'):
             raise ValueError('Unexpected AUR build output')
         shutil.copy2(package, destination / package.name)
-        manifest['aur_packages'].append(dict(name=recipe['name'], filename=package.name,
-                                             sha256=digest(package), recipe=recipe))
-    (root / 'out').mkdir(exist_ok=True)
-    (root / 'out/packages.manifest.json').write_text(json.dumps(manifest, indent=2) + '\n')
+        packages.append(dict(name=recipe['name'], filename=package.name,
+                             sha256=digest(package), recipe=recipe))
+    manifest_path.parent.mkdir(parents=True, exist_ok=True)
+    manifest_path.write_text(json.dumps(packages, indent=2) + '\n')
 
 
 if __name__ == '__main__':
