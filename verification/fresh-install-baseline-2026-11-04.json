@@ -1,0 +1,150 @@
+{
+  "date": "2026-11-04",
+  "status": "blocked_on_video_player_decision",
+  "qualification": "Fresh offline UEFI installation plus resumed desktop/recovery checks on the same unmodified installed system. The verifier input-targeting fix was reproduced with Chromium present. All non-video stages completed; the full make verify command has not passed and no ACCEPTANCE-PASSED marker exists.",
+  "implementation_head": "68884de80b5d4d9ebb8ba25c65d624b45e1d579e",
+  "iso": {
+    "path": "out/arch-niri-dux-2026.11.04-x86_64.iso",
+    "bytes": 2640097280,
+    "sha256": "14c89c045d81b221baf4a3ed3ccfe26609a4b7e80576f51f3c74aa27b58be721",
+    "package_manifest_sha256": "ceb517d98aaab8475df5d18661c1f59a4078a062dbfed343101257673bddc8a8"
+  },
+  "packages": {
+    "existing_pins_preserved": 627,
+    "new_signed_payloads_hash_and_signature_verified": 58,
+    "total_binary_closure": 685,
+    "live_package_list_unchanged": true
+  },
+  "tests": {
+    "source": 76,
+    "build": 10,
+    "result": "passed"
+  },
+  "completed_vm_milestones": [
+    "Offline encrypted installation completed",
+    "Graphical disk unlock accepts keyboard input and retries an incorrect password",
+    "UEFI boot from encrypted disk without installation ISO",
+    "Plymouth configuration and boot services are active",
+    "Encrypted swap outside root snapshots; physical resume offset matches the kernel",
+    "Niri, Dux, terminal, Neovim and Chromium smoke checks",
+    "Login shells, user services and Niri spawns resolve local user executables",
+    "GOP metrics, live file indexing, Calendar event create/read and Dux Files integration",
+    "Live Dux light/dark changes reach Chromium, GTK settings, portals and Dux apps",
+    "Bloom material wallpaper is the fresh-user default and rendered",
+    "Real configure-desktop preserved an existing wallpaper choice",
+    "Manuals, archive round-trip, rsync, JSON/search and diagnostic CLI tools work",
+    "Images and text open in the selected apps; text edits save; Calculator launches",
+    "Video thumbnails, phone/camera backend loading and Dux multimedia backends",
+    "Driverless CUPS queue delivered a PDF to a loopback IPP printer",
+    "Papers is the default PDF viewer and rendered a sample document",
+    "Snapshot preview, shutter photo and video recording work with a synthetic camera",
+    "Chromium open-file request uses Dux Files and responds to cancellation",
+    "Chromium screen sharing produced nonblank captured desktop content",
+    "Screen lock and password unlock",
+    "Automatic package snapshots created; recovery fixture prepared",
+    "Limine snapshot boot and restoration",
+    "Restored system rebooted normally and home was preserved",
+    "Text fallback unlocks the disk with the splash disabled",
+    "Graphical password screen works again after text fallback"
+  ],
+  "new_app_results": {
+    "baseline-image": {
+      "default": "org.gnome.Loupe.desktop",
+      "opened": true
+    },
+    "baseline-text": {
+      "opened_with": "org.gnome.TextEditor.desktop",
+      "edited_and_saved": true
+    },
+    "baseline-calculator": {
+      "launched": true
+    },
+    "baseline-codecs": {
+      "decoded": [
+        "MP4/H.264/AAC",
+        "Matroska/H.264/AAC",
+        "WebM/VP8/Vorbis",
+        "FLAC",
+        "MP3"
+      ],
+      "video_thumbnail": true
+    },
+    "baseline-audio": {
+      "frequency_hz": 440,
+      "tone_amplitude": 4094.898320589051,
+      "tone_detected": true,
+      "method": "PipeWire null-sink monitor; no physical audio device"
+    },
+    "baseline-backends": {
+      "phone_camera_binaries_load": true,
+      "qt_multimedia_import": true,
+      "cava_available": true,
+      "note": "Physical phone/camera access is not qualified by this VM check."
+    },
+    "baseline-printing": {
+      "driverless_queue": true,
+      "dux_printers": [
+        {
+          "name": "DuxProbe",
+          "uri": "ipp://localhost:631/printers/DuxProbe",
+          "state": "idle",
+          "stateReason": "none",
+          "location": "",
+          "info": "DuxProbe",
+          "makeModel": "Printer - IPP Everywhere",
+          "accepting": true,
+          "jobs": null
+        }
+      ],
+      "submitted": "request id is DuxProbe-1 (1 file(s))",
+      "received_pdf_bytes": [
+        10039
+      ],
+      "note": "Loopback IPP emulator; physical printers and LAN discovery untested."
+    },
+    "wallpaper-preserved": {
+      "user": "dux-preserve-check",
+      "preset": "orbit",
+      "preserved": true,
+      "terminal_preserved": true,
+      "niri_preserved": true,
+      "mime_preserved": true
+    }
+  },
+  "video_blocker": {
+    "application": "showtime 50.0-1",
+    "symptom": "Intermittent startup hang before any window maps; process stays alive. Some earlier attempts played correctly, which does not qualify reliability.",
+    "captured_trace": "verification/showtime-deadlock-2026-11-04.txt",
+    "matching_report": "https://bugzilla.redhat.com/show_bug.cgi?id=2509505",
+    "packaged_fix": "None found in current Arch/Omarchy releases; owner fallback choice pending.",
+    "fallback_not_implemented": "Celluloid (mpv backend), keeping Decibels for audio."
+  },
+  "limits": [
+    "Physical phone/camera file access, LAN printer discovery and paper output untested; loopback driverless IPP and a synthetic camera were tested.",
+    "No laptop changes.",
+    "Alongside OS acceptance and physical hibernation were not repeated for this desktop/package delta."
+  ],
+  "independent_review": "Muse review completed; MIME aliases and NSS assertion findings addressed. Separate read-only research found no packaged fix for the reproduced Showtime hang.",
+  "source_sha256": {
+    "installer/install.py": "1ad9021929e61c46478bcdd4ef5536f6d5a663ecb55301dace8bb3a5261ac06c",
+    "installer/configure-target.sh": "ba395f2be0308936a47af813a23414f3d77707d3666ab6a570cb154473c82515",
+    "desktop/etc/xdg/mimeapps.list": "19c9edb346da4f13abd34e949a6fd0068beb41877dba30533012591411af19f4",
+    "desktop/usr/local/lib/arch-niri-dux/configure-desktop": "e8292a701281ce2a47d7d9f8637c03a3f57b0e175d71d09ef93c3803449c59a4",
+    "packages/packages.target": "7aa18b1b3e85e3bd600bc78843c9ccf6d79247bff3d9b231f155c3b53b85d977",
+    "packages/closure.lock.json": "873fb2e6239534e0f888dbb97c548b3e787b34916d7f95667ef0b8e58ea86c29",
+    "keys/trusted-packagers.gpg": "90e14373b906c12fa5b51a6f33f13f13ae36ec81bc90b0ad54695f11a6c8a2d4",
+    "scripts/verify.py": "d3076a3af083f55d97ae1e7a1655b52f480c5388b1b05a11e78b119f4795b381",
+    "scripts/verify-guest.py": "8e9c244cf5eff1023089e950ebba6209166d228f76fe1937a855f081bf318149",
+    "scripts/verify-baseline.py": "ed1844e537b875400653b9bec6785204ab3e346a61d31a82e6f2d466209d99c4"
+  },
+  "evidence_directory": "out/verify-baseline-final",
+  "continuation": {
+    "reason": "Restarted the same unmodified installed VM after verifier input-targeting failure; reran image opening and text editing with Chromium present, then executed the remaining acceptance body from verify.py.",
+    "remaining_body_sha256": "35c50c9761e5f7b9c51ab78f9811cd2efb5222f2965f505dd6190bf64d6ebf7a",
+    "verification_scripts": {
+      "verify.py": "d3076a3af083f55d97ae1e7a1655b52f480c5388b1b05a11e78b119f4795b381",
+      "verify-guest.py": "8e9c244cf5eff1023089e950ebba6209166d228f76fe1937a855f081bf318149",
+      "verify-baseline.py": "ed1844e537b875400653b9bec6785204ab3e346a61d31a82e6f2d466209d99c4"
+    }
+  }
+}
