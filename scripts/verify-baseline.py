@@ -40,6 +40,7 @@ def focus_app(name):
         guest.screenshot('baseline-missing-' + name.lower() + '.png')
         raise
     guest.user_command('niri', 'msg', 'action', 'focus-window', '--id', str(window['id']))
+    guest.wait_until(name + ' focused', lambda: (app_window(name) or {}).get('is_focused'))
     return window
 
 
@@ -153,6 +154,13 @@ def text():
         actual = guest.user_command('xdg-mime', 'query', 'default', mime, capture=True).stdout.strip()
         assert actual == 'org.gnome.TextEditor.desktop', (mime, actual)
     open_file('baseline-notes.txt', 'TextEditor')
+    # Earlier probes leave Chromium open beside the editor. Use a known input
+    # surface rather than assuming the editor occupies the left half.
+    guest.user_command('niri', 'msg', 'action', 'fullscreen-window')
+    outputs = json.loads(guest.user_command('niri', 'msg', '--json', 'outputs', capture=True).stdout)
+    logical = next(output['logical'] for output in outputs.values() if output.get('logical'))
+    guest.wait_until('Full-screen editor', lambda:
+                     app_window('TextEditor')['layout']['window_size'][0] >= logical['width'] - 4)
 
 
 def text_saved():
