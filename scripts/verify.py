@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Run the ISO in a UEFI VM without a network device; retain evidence locally."""
+"""Run offline UEFI acceptance, optionally checking published delivery afterward."""
 
 import argparse
 import csv
@@ -323,6 +323,8 @@ def main():
     parser.add_argument('--directory', type=Path, help='Fresh verification workspace; default under /tmp')
     parser.add_argument('--disk', type=Path, help='New disposable qcow2 path; default inside the workspace')
     parser.add_argument('--install-only', action='store_true', help='Debug only; does not produce acceptance success')
+    parser.add_argument('--online-repository', action='store_true',
+                        help='After offline acceptance, boot with networking and check published package delivery')
     parser.add_argument('--swap-gib', type=int, help='Override Auto swap sizing; 0 disables swap and hibernation')
     args = parser.parse_args()
     if args.swap_gib is not None and args.swap_gib < 0:
@@ -368,6 +370,7 @@ def main():
     source = directory / 'integration-input'
     source.mkdir()
     manifest = json.loads((ROOT / 'out/packages.manifest.json').read_text())['integration']
+    (directory / 'release-manifest.json').write_text(json.dumps(manifest, indent=2) + '\n')
     release_spec = importlib.util.spec_from_file_location('integration_release', ROOT / 'scripts/integration-release.py')
     release = importlib.util.module_from_spec(release_spec)
     release_spec.loader.exec_module(release)
@@ -582,6 +585,14 @@ def main():
         vm.command('python /run/verify/verify-guest.py serial-console-enable', timeout=300)
         vm.poweroff()
         vm.stop()
+        if args.online_repository:
+            vm.start(cdrom=False, network=True)
+            installed_login(vm)
+            vm.command('mkdir -p /run/verify; mount -t 9p -o trans=virtio,version=9p2000.L verify /run/verify')
+            vm.command('python /run/verify/verify-guest.py published-repository', timeout=300)
+            passed('Published HTTPS repository and packages verify against offline trust and exact release hashes')
+            vm.poweroff()
+            vm.stop()
         (directory / 'ACCEPTANCE-PASSED').write_text('All acceptance stages passed.\n')
         print(f'Acceptance passed. Evidence: {directory}', flush=True)
         return 0

@@ -2,6 +2,7 @@
 """Guest-only acceptance probes, executed exclusively on the disposable VM disk."""
 
 import json
+import hashlib
 import html
 import os
 import struct
@@ -15,6 +16,7 @@ import signal
 import stat
 import subprocess
 import sys
+import tempfile
 import time
 import urllib.error
 import urllib.request
@@ -954,12 +956,54 @@ def splash_fallback(disable, root='/'):
         run('sync')
 
 
+def published_repository():
+    evidence = Path('/run/verify')
+    assert (evidence / 'install.json').is_file(), 'Requires the disposable installation fixture.'
+    run('systemd-detect-virt', '--vm')
+    repository = Path('/etc/pacman.d/arch-niri-dux.conf').read_text()
+    assert 'SigLevel = Required TrustedOnly' in repository
+    assert 'Server = https://abdulrahman-aj.github.io/arch-niri-dux/x86_64' in repository
+    personal = [Path('/home/tester/.config') / name for name in
+                ('niri/config.kdl', 'niri/dms/binds.kdl', 'xdg-terminals.list')]
+    before = {str(path): hashlib.sha256(path.read_bytes()).hexdigest() for path in personal}
+    manifest = json.loads((evidence / 'release-manifest.json').read_text())
+    hashes = {}
+    with tempfile.TemporaryDirectory(prefix='dux-published-repository-') as directory:
+        work = Path(directory)
+        cache = work / 'cache'
+        cache.mkdir()
+        configuration = work / 'pacman.conf'
+        # Only our repository participates; do not pull unrelated Arch updates
+        # into this release qualification. Default installed GPG trust is used.
+        configuration.write_text('[options]\nArchitecture = auto\n'
+                                 f'CacheDir = {cache}\n' + repository)
+        run('pacman', '--config', str(configuration), '-Syyu', '--noconfirm')
+        # Force downloads into an empty cache even when this ISO already has
+        # the current version. Package identity must match the signed ISO input.
+        run('pacman', '--config', str(configuration), '-S', '--noconfirm',
+            'arch-niri-dux', 'arch-niri-dux-baseline')
+        for package in manifest['packages']:
+            payload = cache / package['filename']
+            hashes[package['name']] = hashlib.sha256(payload.read_bytes()).hexdigest()
+            assert hashes[package['name']] == package['sha256'], package['name']
+    for path in personal:
+        assert hashlib.sha256(path.read_bytes()).hexdigest() == before[str(path)], path
+    run('pacman', '-Dk')
+    (evidence / 'published-repository.json').write_text(json.dumps({
+        'version': manifest['version'], 'package_sha256': hashes, 'personal_sha256': before,
+        'offline_trust_used': True, 'database_and_packages_required_signed': True,
+        'https_delivery': True,
+    }, indent=2) + '\n')
+
+
 if __name__ == '__main__':
     action = sys.argv[1]
     if action == 'prepare':
         prepare(Path(sys.argv[2]))
     elif action == 'desktop':
         desktop()
+    elif action == 'published-repository':
+        published_repository()
     elif action == 'storage':
         storage()
     elif action == 'dux-components':

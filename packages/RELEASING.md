@@ -20,6 +20,11 @@ metapackage opts out of its future app additions, without removing integration.
    the signed repository to GitHub Pages. The build job has no signing secret.
 5. Run `make iso` to build with those exact authenticated packages, rather than
    independently rebuilding packages under the same version.
+   Then `make verify-release` runs offline acceptance followed by a networked VM
+   boot: real HTTPS repository/package verification uses the installed offline
+   trust, checks exact release hashes, and preserves personal config.
+   Select the artifact explicitly when retaining several ISOs:
+   `make verify-release ARGS='--iso out/NAME.iso --directory out/verify-release-VERSION'`.
 
 The protected release and Pages environments allow only `integration-v*` tags.
 The publisher also requires the tagged commit to belong to main and refuses a
