@@ -12,6 +12,7 @@ import socket
 import struct
 import subprocess
 import sys
+import time
 import wave
 import zlib
 
@@ -161,6 +162,12 @@ def text():
     logical = next(output['logical'] for output in outputs.values() if output.get('logical'))
     guest.wait_until('Full-screen editor', lambda:
                      app_window('TextEditor')['layout']['window_size'][0] >= logical['width'] - 4)
+    # Client size changes before Niri's full-screen animation finishes moving it.
+    time.sleep(1.5)
+
+
+def text_focused():
+    assert (app_window('TextEditor') or {}).get('is_focused'), guest.windows()
 
 
 def text_saved():
@@ -318,9 +325,9 @@ if __name__ == '__main__':
             ['systemd-detect-virt', '--vm', '--quiet']).returncode != 0:
         raise SystemExit('Run this probe only inside the disposable verification VM.')
     action = sys.argv[1]
-    if action in ('cli', 'prepare', 'image', 'text', 'text-saved', 'calculator', 'backends', 'printing'):
+    if action in ('cli', 'prepare', 'image', 'text', 'text-focused', 'text-saved', 'calculator', 'backends', 'printing'):
         {'cli': cli, 'prepare': prepare, 'image': image, 'text': text,
-         'text-saved': text_saved, 'calculator': calculator, 'backends': backends,
+         'text-focused': text_focused, 'text-saved': text_saved, 'calculator': calculator, 'backends': backends,
          'printing': printing}[action]()
     elif action.startswith('open-'):
         media(action.removeprefix('open-'))

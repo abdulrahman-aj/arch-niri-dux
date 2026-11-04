@@ -438,6 +438,7 @@ def main():
         vm.command('python /run/verify/verify-baseline.py text', timeout=120)
         vm.click(0.2, 0.2)
         time.sleep(0.2)
+        vm.command('python /run/verify/verify-baseline.py text-focused')
         vm.chord('ctrl', 'a')
         time.sleep(0.1)
         vm.type_graphical('editedbyduxverification')
