@@ -30,7 +30,7 @@ edited for this default.
 
 Papers (`org.gnome.Papers.desktop`) is the default PDF viewer from the factory
 `/etc/xdg/mimeapps.list`. Fresh users also inherit Loupe for common images,
-GNOME Text Editor for plain text and Markdown, Showtime for common video,
+GNOME Text Editor for plain text and Markdown, Celluloid for common video,
 Decibels for common audio, Chromium for the browser and Dux Files for folders;
 `configure-desktop` preserves per-user `~/.config/mimeapps.list`, so user choices
 keep winning across reruns. GNOME Calculator is installed standalone;

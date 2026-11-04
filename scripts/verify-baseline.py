@@ -123,6 +123,8 @@ def prepare():
         guest.user_command('gst-launch-1.0', '-q', 'playbin',
                            'uri=' + (FILES / filename).as_uri(),
                            'audio-sink=fakesink', 'video-sink=fakesink', timeout=90)
+        guest.user_command('mpv', '--no-config', '--no-terminal', '--vo=null', '--ao=null',
+                           '--length=1', str(FILES / filename), timeout=30)
     guest.user_command('ffmpegthumbnailer', '-i', str(FILES / 'baseline-video.mp4'),
                        '-o', str(FILES / 'thumbnail.png'), '-s', '160', timeout=30)
     guest.png_dimensions(FILES / 'thumbnail.png')
@@ -130,7 +132,7 @@ def prepare():
     guest.user_command('pactl', 'set-default-sink', 'dux_verify_audio')
     guest.user_command('pactl', 'set-sink-volume', 'dux_verify_audio', '100%')
     record('baseline-codecs', {'decoded': ['MP4/H.264/AAC', 'Matroska/H.264/AAC', 'WebM/VP8/Vorbis', 'FLAC', 'MP3'],
-                                'video_thumbnail': True})
+                                'gstreamer_and_mpv': True, 'video_thumbnail': True})
 
 
 def open_file(filename, name):
@@ -188,11 +190,10 @@ def calculator():
 
 
 def media(kind):
-    filename, application, mime = {
-        'audio': ('baseline-audio.flac', 'Decibels', 'audio/flac'),
-        'video': ('baseline-video.mp4', 'Showtime', 'video/mp4'),
+    filename, application, mime, expected = {
+        'audio': ('baseline-audio.flac', 'Decibels', 'audio/flac', 'org.gnome.Decibels.desktop'),
+        'video': ('baseline-video.mp4', 'Celluloid', 'video/mp4', 'io.github.celluloid_player.Celluloid.desktop'),
     }[kind]
-    expected = 'org.gnome.' + application + '.desktop'
     actual = guest.user_command('xdg-mime', 'query', 'default', mime, capture=True).stdout.strip()
     assert actual == expected, (mime, actual)
     open_file(filename, application)
@@ -228,7 +229,7 @@ def capture_audio(kind):
 def media_played(kind):
     data = json.loads((EVIDENCE / ('baseline-' + kind + '.json')).read_text())
     assert data['tone_detected'], data
-    application = 'Decibels' if kind == 'audio' else 'Showtime'
+    application = 'Decibels' if kind == 'audio' else 'Celluloid'
     guest.screenshot('baseline-' + application.lower() + '-playing.png')
     close_app(application)
 

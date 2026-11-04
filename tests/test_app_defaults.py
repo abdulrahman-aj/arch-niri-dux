@@ -23,7 +23,7 @@ EXECS = {
     'chromium.desktop': 'chromium-fake',
     'org.gnome.TextEditor.desktop': 'gnome-text-editor-fake',
     'org.gnome.Loupe.desktop': 'loupe-fake',
-    'org.gnome.Showtime.desktop': 'showtime-fake',
+    'io.github.celluloid_player.Celluloid.desktop': 'celluloid-fake',
     'org.gnome.Decibels.desktop': 'decibels-fake',
     'Other.desktop': 'other-fake',
 }
@@ -121,11 +121,11 @@ class FactoryMimeTests(unittest.TestCase):
         self.assertEqual(self.query('text/markdown'), 'org.gnome.TextEditor.desktop')
         self.assertEqual(self.query('image/jpeg'), 'org.gnome.Loupe.desktop')
         self.assertEqual(self.query('image/png'), 'org.gnome.Loupe.desktop')
-        self.assertEqual(self.query('video/mp4'), 'org.gnome.Showtime.desktop')
+        self.assertEqual(self.query('video/mp4'), 'io.github.celluloid_player.Celluloid.desktop')
         self.assertEqual(self.query('audio/mpeg'), 'org.gnome.Decibels.desktop')
         self.assertEqual(self.query('audio/vnd.wave'), 'org.gnome.Decibels.desktop')
-        self.assertEqual(self.query('video/matroska'), 'org.gnome.Showtime.desktop')
-        self.assertEqual(self.query('video/vnd.avi'), 'org.gnome.Showtime.desktop')
+        self.assertEqual(self.query('video/matroska'), 'io.github.celluloid_player.Celluloid.desktop')
+        self.assertEqual(self.query('video/vnd.avi'), 'io.github.celluloid_player.Celluloid.desktop')
         self.assertEqual(self.query('image/heif'), 'org.gnome.Loupe.desktop')
 
 

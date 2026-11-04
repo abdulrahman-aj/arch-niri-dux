@@ -2,7 +2,7 @@
 
 An offline Arch installer for x86_64 UEFI machines. Includes Niri, the Dux 2.0
 desktop and apps, encrypted Btrfs and snapshot recovery. Common files open in
-Papers, Loupe, GNOME Text Editor, Showtime and Decibels. Includes Chromium,
+Papers, Loupe, GNOME Text Editor, Celluloid and Decibels. Includes Chromium,
 Alacritty, Neovim, Snapshot, Calculator, standard CLI tools, Btop and Fastfetch,
 plus driverless printing and phone/camera file-access backends. Fastfetch is
 also available on the live ISO.

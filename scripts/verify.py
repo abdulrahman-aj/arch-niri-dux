@@ -446,7 +446,8 @@ def main():
         vm.command('python /run/verify/verify-baseline.py text-saved', timeout=60)
         vm.command('python /run/verify/verify-baseline.py calculator', timeout=120)
         passed('Images and text open in the selected apps; text edits save; Calculator launches')
-        for kind in ('audio', 'video'):
+        # Reopen video four times: first-launch success missed the original hang.
+        for kind in ('audio', 'video', 'video', 'video', 'video'):
             vm.command('python /run/verify/verify-baseline.py open-' + kind, timeout=120)
             vm.command('python /run/verify/verify-baseline.py capture-' + kind, timeout=30)
             capture_file = directory / ('baseline-' + kind + '.json')
@@ -455,7 +456,7 @@ def main():
                 vm.key('spc')
                 vm.command('python /run/verify/verify-baseline.py capture-' + kind, timeout=30)
             vm.command('python /run/verify/verify-baseline.py played-' + kind, timeout=60)
-        passed('Decibels and Showtime open through xdg-open and output the fixture audio')
+        passed('Decibels audio and four Celluloid open/play/close cycles output the expected fixture tones')
         vm.command('python /run/verify/verify-baseline.py backends', timeout=90)
         passed('Video thumbnails, phone/camera backend loading and Dux multimedia backends')
         vm.command('python /run/verify/verify-baseline.py printing', timeout=150)
