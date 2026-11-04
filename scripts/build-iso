@@ -6,6 +6,13 @@ mkdir -p "$state" out
 state=$(realpath "$state")
 exec 9>"$state/build.lock"
 flock -n 9 || { echo 'Another ISO build is using this state directory' >&2; exit 1; }
+mode=${1:-release}
+[[ $mode == release || $mode == development ]] || { echo 'Expected release or development mode' >&2; exit 1; }
+printf '%s\n' "$mode" >"$state/integration-mode"
+[[ -s keys/integration-signing.gpg && -s keys/integration-signing.fingerprint ]] || {
+    echo 'Provision the integration public signing identity before building an ISO.' >&2
+    exit 1
+}
 [[ -r /dev/kvm && -w /dev/kvm ]] || { echo 'KVM is required' >&2; exit 1; }
 for tool in qemu-system-x86_64 qemu-img bsdtar curl gpgv python3; do
     command -v "$tool" >/dev/null || { echo "Missing required tool: $tool" >&2; exit 1; }

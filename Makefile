@@ -1,6 +1,8 @@
-.PHONY: iso verify verify-hibernate test build-test verify-alongside provision-alongside fetch-alongside
+.PHONY: iso iso-development verify verify-hibernate test build-test verify-alongside provision-alongside fetch-alongside
 iso:
 	./scripts/build-in-dev ./scripts/build-iso
+iso-development:
+	./scripts/build-in-dev ./scripts/build-iso development
 verify:
 	./scripts/build-in-dev python3 scripts/verify.py $(ARGS)
 verify-hibernate:
@@ -8,6 +10,7 @@ verify-hibernate:
 build-test:
 	./scripts/build-in-dev python3 -m unittest discover -s scripts -p 'build_test.py'
 test:
+	./scripts/build-in-dev actionlint
 	./scripts/build-in-dev bash -c 'python3 -m unittest discover -s tests && python3 -m unittest discover -s scripts -p build_test.py'
 verify-alongside:
 	./scripts/build-in-dev python3 scripts/verify-alongside.py $(ARGS)

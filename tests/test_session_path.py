@@ -28,6 +28,13 @@ class SessionPathTests(unittest.TestCase):
             config = Path(home) / '.config/environment.d'
             config.mkdir(parents=True)
             shutil.copyfile(ENVIRONMENT, config / '90-dux.conf')
+            # The real generator also reads the host distro (Ubuntu's
+            # 99-environment.conf resets PATH). Isolate our fixture by masking it.
+            host_configs = {path.name for directory in ('/etc/environment.d', '/run/environment.d',
+                                                         '/usr/local/lib/environment.d', '/usr/lib/environment.d')
+                            for path in Path(directory).glob('*.conf')}
+            for name in host_configs - {'90-dux.conf'}:
+                (config / name).symlink_to('/dev/null')
             output = subprocess.check_output(
                 [str(GENERATOR)], text=True,
                 env={'HOME': home, 'PATH': START_PATH, 'XDG_CONFIG_HOME': str(config.parent)})

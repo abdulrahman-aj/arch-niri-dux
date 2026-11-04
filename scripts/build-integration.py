@@ -3,15 +3,29 @@
 
 import argparse
 import hashlib
+import io
 import json
 import os
 from pathlib import Path
+import re
+import shutil
 import subprocess
 import tarfile
 import tempfile
 
 
 NAMES = {'arch-niri-dux', 'arch-niri-dux-baseline'}
+
+
+def version(root):
+    recipe = (root / 'packages/integration/PKGBUILD').read_text()
+    values = []
+    for name in ('pkgver', 'pkgrel'):
+        match = re.search(rf'^{name}=([0-9]+(?:\.[0-9]+)*)$', recipe, re.MULTILINE)
+        if not match:
+            raise ValueError(f'Expected a numeric literal {name} in the integration recipe.')
+        values.append(match[1])
+    return '-'.join(values)
 
 
 def digest(path):
@@ -23,6 +37,12 @@ def prepare_source(root, workspace, epoch):
     """Make a bounded, deterministic input archive, independent of Git metadata."""
     sources = [root / 'packages/packages.target']
     sources.extend(sorted((root / 'desktop').rglob('*')))
+    signing_key = root / 'keys/integration-signing.gpg'
+    if signing_key.is_file():
+        fingerprint = (root / 'keys/integration-signing.fingerprint').read_text().strip()
+        if not re.fullmatch(r'[A-F0-9]{40}', fingerprint):
+            raise ValueError('Invalid integration signing fingerprint.')
+        sources.append(signing_key)
     archive = workspace / 'integration.tar'
     with tarfile.open(archive, 'w') as output:
         for path in sources:
@@ -30,7 +50,12 @@ def prepare_source(root, workspace, epoch):
                 raise ValueError(f'Unexpected integration source symlink: {path}')
             if not path.is_file() or path == root / 'desktop/README.md':
                 continue
-            name = 'packages.target' if path == sources[0] else str(path.relative_to(root))
+            if path == sources[0]:
+                name = 'packages.target'
+            elif path == signing_key:
+                name = 'desktop/usr/share/pacman/keyrings/arch-niri-dux.gpg'
+            else:
+                name = str(path.relative_to(root))
             info = output.gettarinfo(str(path), name)
             info.uid = info.gid = 0
             info.uname = info.gname = ''
@@ -38,6 +63,11 @@ def prepare_source(root, workspace, epoch):
             info.mode = 0o644
             with path.open('rb') as stream:
                 output.addfile(info, stream)
+        if signing_key.is_file():
+            data = f'{fingerprint}:6:\n'.encode()
+            info = tarfile.TarInfo('desktop/usr/share/pacman/keyrings/arch-niri-dux-trusted')
+            info.size, info.mtime, info.mode = len(data), epoch, 0o644
+            output.addfile(info, io.BytesIO(data))
     recipe = root / 'packages/integration/PKGBUILD'
     # The input is our checkout, not downloaded upstream code. Record its exact
     # hash in both makepkg's checksum and the artifact provenance.
@@ -67,8 +97,10 @@ def build_packages(root, workspace, destination, epoch):
         result.append(dict(name=name, filename=path.name, sha256=digest(path)))
     if {entry['name'] for entry in result} != NAMES or len(result) != len(NAMES):
         raise ValueError('Expected both the integration and baseline packages.')
-    provenance = dict(source_sha256=digest(archive), recipe_sha256=digest(root / 'packages/integration/PKGBUILD'),
+    provenance = dict(version=version(root), source_sha256=digest(archive), recipe_sha256=digest(root / 'packages/integration/PKGBUILD'),
                       source_date_epoch=epoch, packages=sorted(result, key=lambda entry: entry['name']))
+    shutil.copyfile(archive, destination / 'integration.tar')
+    shutil.copyfile(root / 'packages/integration/PKGBUILD', destination / 'integration.PKGBUILD')
     (destination / 'integration.manifest.json').write_text(json.dumps(provenance, indent=2) + '\n')
 
 

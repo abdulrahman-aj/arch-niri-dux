@@ -57,11 +57,20 @@ pacman -Sy --config /build/pacman-pinned.conf --noconfirm --needed archiso pytho
 rm -rf /build/integration-work /build/integration-packages
 mkdir -p /build/integration-work /build/integration-packages
 chown nobody:nobody /build/integration-work /build/integration-packages
-integration_epoch=$(git -c safe.directory=/source -C /source log -1 --format=%ct)
-runuser -u nobody -- python /source/scripts/build-integration.py /source \
-    /build/integration-work /build/integration-packages --epoch "$integration_epoch"
+if [[ $(cat /state/integration-mode) == release ]]; then
+    python /source/scripts/integration-release.py fetch /source /build/integration-packages
+else
+    integration_epoch=$(git -c safe.directory=/source -C /source log -1 --format=%ct)
+    runuser -u nobody -- python /source/scripts/build-integration.py /source \
+        /build/integration-work /build/integration-packages --epoch "$integration_epoch"
+fi
 cp /build/integration-packages/*.pkg.tar.zst /build/payload/repo/
 cp /build/integration-packages/integration.manifest.json /build/payload/repo/
+if compgen -G '/build/integration-packages/*.pkg.tar.zst.sig' >/dev/null; then
+    cp /build/integration-packages/*.pkg.tar.zst.sig /build/payload/repo/
+fi
+rm -rf /source/out/integration
+cp -r /build/integration-packages /source/out/integration
 python /source/scripts/build-aur.py /source /build/payload/repo
 # The verified payload is authoritative; the builder's download cache is redundant.
 rm -f /build/cache/*.pkg.tar.*

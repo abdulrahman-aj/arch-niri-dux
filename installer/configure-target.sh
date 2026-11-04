@@ -145,3 +145,9 @@ Include = /etc/pacman.d/mirrorlist
 Server = https://pkgs.omarchy.org/stable/$arch
 EOF
 printf 'Server = https://geo.mirror.pkgbuild.com/$repo/os/$arch\n' >/etc/pacman.d/mirrorlist
+[[ -s /usr/share/pacman/keyrings/arch-niri-dux.gpg ]] || {
+    echo 'Integration release keyring is missing; refusing a system without its update source.' >&2
+    exit 1
+}
+pacman-key --populate arch-niri-dux
+printf '\nInclude = /etc/pacman.d/arch-niri-dux.conf\n' >>/etc/pacman.conf

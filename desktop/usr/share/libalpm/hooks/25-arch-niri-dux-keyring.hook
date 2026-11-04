@@ -1,0 +1,10 @@
+[Trigger]
+Operation = Upgrade
+Type = Path
+Target = usr/share/pacman/keyrings/arch-niri-dux.gpg
+
+[Action]
+Description = Refreshing Arch Niri Dux release signing keys...
+When = PostTransaction
+Depends = pacman
+Exec = /usr/bin/pacman-key --populate arch-niri-dux

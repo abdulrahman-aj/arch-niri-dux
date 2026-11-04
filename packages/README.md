@@ -7,7 +7,8 @@ updates. Existing prototype ISOs are not automatically migrated. App retirement
 will use targeted reviewed transitions, without general orphan cleanup.
 
 `scripts/build-integration.py` prepares a deterministic local source archive and
-records its checksum for makepkg. The ISO installs these package artifacts
+records its checksum for makepkg. Release ISOs fetch the exact signed release
+artifacts; development ISOs build the local recipe. The ISO installs these artifacts
 instead of copying an unowned overlay. The output manifest records their hashes
 and source provenance separately from signed upstream and reviewed AUR inputs.
 

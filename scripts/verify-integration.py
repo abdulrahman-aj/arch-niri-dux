@@ -70,13 +70,41 @@ def main():
             str(packages), '--epoch', '1234')
         run(*prefix, 'env', f'PKGDEST={packages}', 'makepkg', '--config', str(fake / 'makepkg.conf'),
             '--nodeps', '--noconfirm', cwd=fake)
-        run('repo-add', str(packages / 'upgrade.db.tar.gz'), *map(str, packages.glob('*.pkg.tar.zst')))
+        signing = work / 'signing'
+        keyring = work / 'keyring'
+        signing.mkdir(mode=0o700)
+        keyring.mkdir(mode=0o700)
+        gpg = ['gpg', '--homedir', str(signing), '--batch', '--yes', '--pinentry-mode', 'loopback']
+        run(*gpg, '--passphrase', '', '--quick-gen-key', 'Disposable VM update fixture', 'ed25519', 'sign', '1d')
+        listing = run(*gpg, '--with-colons', '--list-keys')
+        fingerprint = next(line.split(':')[9] for line in listing.splitlines() if line.startswith('fpr:'))
+        public = work / 'public.gpg'
+        run(*gpg, '--output', str(public), '--export', fingerprint)
+        run('gpg', '--homedir', str(keyring), '--batch', '--import', str(public))
+        subprocess.run(['gpg', '--homedir', str(keyring), '--batch', '--import-ownertrust'],
+                       input=f'{fingerprint}:6:\n', text=True, check=True)
+        for package in packages.glob('*.pkg.tar.zst'):
+            run(*gpg, '--detach-sign', str(package))
+        database = packages / 'upgrade.db.tar.gz'
+        run('repo-add', '--include-sigs', str(database), *map(str, packages.glob('*.pkg.tar.zst')))
+        run(*gpg, '--detach-sign', str(database))
+        (packages / 'upgrade.db.sig').symlink_to('upgrade.db.tar.gz.sig')
         configuration = work / 'pacman.conf'
-        # This local throwaway repository tests package semantics; production
-        # signed publication is qualified separately with disposable keys.
-        configuration.write_text('[options]\nArchitecture = auto\nSigLevel = Never\n'
+        # The disposable signing identity never touches installed trust. The ISO's
+        # production keyring bootstrap and refresh hook are exercised separately.
+        configuration.write_text('[options]\nArchitecture = auto\nSigLevel = Required TrustedOnly\n'
+                                 f'GPGDir = {keyring}\n'
                                  f'[upgrade]\nServer = file://{packages}\n')
-        run('pacman', '--config', str(configuration), '-Syu', '--noconfirm')
+        original = database.read_bytes()
+        database.write_bytes(original + b'tampered')
+        rejected = subprocess.run(['pacman', '--config', str(configuration), '-Syu', '--noconfirm'],
+                                  capture_output=True, text=True)
+        assert rejected.returncode != 0 and 'signature' in rejected.stderr.lower(), rejected
+        assert run('pacman', '-Q', 'arch-niri-dux', 'arch-niri-dux-baseline') == versions
+        database.write_bytes(original)
+        # Force refresh after the deliberately rejected database download.
+        upgrade_output = run('pacman', '--config', str(configuration), '-Syyu', '--noconfirm')
+        assert 'Refreshing Arch Niri Dux release signing keys' in upgrade_output, upgrade_output
         updated = run('pacman', '-Q', 'arch-niri-dux', 'arch-niri-dux-baseline')
         assert updated != versions
         assert new_file.read_text() == 'Integration upgrade verified\n' and not old_file.exists()
@@ -90,10 +118,14 @@ def main():
             assert hashlib.sha256(path.read_bytes()).hexdigest() == before[str(path)], path
         run(*prefix, 'niri', 'validate', '--config', str(personal[0]))
         run('pacman', '-Dk')
+        for home in (signing, keyring):
+            run('gpgconf', '--homedir', str(home), '--kill', 'all')
         (evidence / 'integration-upgrade.json').write_text(json.dumps({
             'before': versions.splitlines(), 'after': updated.splitlines(),
             'personal_sha256': before, 'owned_file_added_and_removed': True,
             'baseline_addition_installed': True, 'baseline_can_be_removed_independently': True,
+            'signed_packages_and_database': True, 'tampered_database_rejected': True,
+            'installed_keyring_refresh_hook_ran': True,
         }, indent=2) + '\n')
 
 
