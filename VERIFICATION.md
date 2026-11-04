@@ -374,5 +374,24 @@ configuration, baseline opt-out and snapshot recovery passed again.
 
 This fixture does not claim production GitHub/Pages delivery. Its exact inputs,
 identity and results are in `verification/signed-updates-2026-11-04.json`;
-local evidence is in `out/verify-signed-fixture/`. Production-key publication and
-the resulting release ISO are recorded after the first versioned release.
+local evidence is in `out/verify-signed-fixture/`.
+
+### Published release qualification
+
+CI signed and published `integration-v0.1.0-2` to GitHub Releases and Pages.
+`make iso` fetched those exact authenticated artifacts. The release ISO is
+2,643,109,888 bytes (2.46 GiB), SHA256
+`54f0fb68484cb675087ecdfe784a4dbf14d19437fc63b2d49f88e9b32d3afc9b`.
+
+All 27 stages of `make verify-release` were covered. The initial runner stopped
+after 25 stages without writing a failure marker; the final graphical and HTTPS
+checks resumed on the same disk with identical verification scripts. The new
+online check downloaded the real signed database and both packages using only
+the ISO-provisioned trust. Package hashes matched the signed release input;
+personal config stayed unchanged and the package database remained consistent.
+
+Actionlint, 86 source tests and 10 build tests passed. Independent GLM review
+approved the release-delivery probe. Source/artifact hashes, CI/release URLs,
+production identity, all milestones and the continuation are recorded in
+`verification/published-integration-2026-11-04.json`. Local evidence is in
+`out/verify-published-release/`. No laptop changes were made.
