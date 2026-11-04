@@ -1,6 +1,8 @@
-.PHONY: iso verify verify-hibernate test build-test verify-alongside provision-alongside fetch-alongside
+.PHONY: iso iso-development verify verify-hibernate test build-test verify-alongside provision-alongside fetch-alongside
 iso:
 	./scripts/build-in-dev ./scripts/build-iso
+iso-development:
+	./scripts/build-in-dev ./scripts/build-iso development
 verify:
 	./scripts/build-in-dev python3 scripts/verify.py $(ARGS)
 verify-hibernate:

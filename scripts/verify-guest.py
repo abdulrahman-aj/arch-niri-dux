@@ -378,14 +378,25 @@ def desktop():
     owned = ['/usr/share/arch-niri-dux/niri/defaults.kdl', '/usr/lib/arch-niri-dux/initialize-user',
              '/usr/lib/environment.d/90-dux.conf', '/usr/lib/systemd/user/dux-application-themes.service',
              '/etc/xdg/mimeapps.list', '/etc/greetd/dux.toml',
+             '/usr/share/pacman/keyrings/arch-niri-dux.gpg', '/etc/pacman.d/arch-niri-dux.conf',
              '/usr/lib/systemd/system/greetd.service.d/50-arch-niri-dux.conf']
     for path in owned:
         assert run('pacman', '-Qqo', path, stdout=subprocess.PIPE).stdout.strip() == 'arch-niri-dux', path
     assert run('pacman', '-Qqo', '/etc/greetd/config.toml', stdout=subprocess.PIPE).stdout.strip() == 'greetd'
     files = run('pacman', '-Qlq', 'arch-niri-dux', stdout=subprocess.PIPE).stdout.splitlines()
     assert not any(path.startswith('/home/') for path in files), 'Package owns personal settings.'
+    public = run('gpg', '--batch', '--with-colons', '--show-keys',
+                 '/usr/share/pacman/keyrings/arch-niri-dux.gpg', stdout=subprocess.PIPE).stdout
+    fingerprint = next(line.split(':')[9] for line in public.splitlines() if line.startswith('fpr:'))
+    trusted = run('gpg', '--batch', '--homedir', '/etc/pacman.d/gnupg', '--with-colons',
+                  '--list-keys', fingerprint, stdout=subprocess.PIPE).stdout
+    assert next(line.split(':')[1] for line in trusted.splitlines() if line.startswith('pub:')) in ('u', 'f')
+    assert 'Include = /etc/pacman.d/arch-niri-dux.conf' in Path('/etc/pacman.conf').read_text()
+    assert 'SigLevel = Required TrustedOnly' in Path('/etc/pacman.d/arch-niri-dux.conf').read_text()
     Path('/run/verify/integration-packages.json').write_text(json.dumps({
         'versions': versions.splitlines(), 'owned_paths': owned, 'no_packaged_home_files': True,
+        'release_key_fingerprint': fingerprint, 'release_key_trusted': True,
+        'signed_repository_enabled': True,
     }, indent=2) + '\n')
     fonts()
     niri_overrides()

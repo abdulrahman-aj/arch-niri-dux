@@ -18,11 +18,12 @@ prepare() {
 }
 
 package_arch-niri-dux() {
-    depends=(bash systemd niri dux-shell dux-greeter-bin dux-search-bin dux-calendar-bin
+    depends=(bash systemd pacman niri dux-shell dux-greeter-bin dux-search-bin dux-calendar-bin
              dux-files-bin greetd gnome-keyring matugen adw-gtk-theme gtk3
              xdg-desktop-portal-gnome xdg-desktop-portal-gtk xdg-terminal-exec xdg-utils)
     backup=(etc/fonts/conf.d/50-arabic.conf etc/greetd/dux.toml
             etc/profile.d/dux-localbin.sh etc/profile.d/dux-editor.sh
+            etc/pacman.d/arch-niri-dux.conf
             etc/systemd/logind.conf.d/30-lid.conf
             etc/xdg/mimeapps.list etc/xdg/xdg-desktop-portal/niri-portals.conf
             etc/xdg/xdg-terminals.list)

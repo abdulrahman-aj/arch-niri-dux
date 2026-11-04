@@ -18,6 +18,9 @@ make iso
 make verify
 ```
 
+`make iso` uses the recipe version's signed release packages. For unreleased
+integration changes, use `make iso-development` instead. See [release maintenance](packages/RELEASING.md).
+
 The ISO and checksums land in `out/`. VM tests need a GPU render node and virtio
 3D acceleration; `QEMU_RENDER_NODE` defaults to `/dev/dri/renderD128`.
 

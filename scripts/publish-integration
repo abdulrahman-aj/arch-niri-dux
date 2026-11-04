@@ -1,0 +1,51 @@
+#!/usr/bin/env bash
+set -euo pipefail
+root=${1:?Usage: publish-integration ROOT PACKAGES HISTORY OUTPUT}
+packages=${2:?}
+history=${3:?}
+output=${4:?}
+tag=${GITHUB_REF_NAME:?}
+commit=${GITHUB_SHA:?}
+repository=${GITHUB_REPOSITORY:?}
+[[ $repository == abdulrahman-aj/arch-niri-dux && $tag =~ ^integration-v[0-9]+(\.[0-9]+)*-[0-9]+(\.[0-9]+)*$ ]]
+git -C "$root" merge-base --is-ancestor "$commit" origin/main
+
+releases=$(mktemp)
+trap 'rm -f "$releases"' EXIT
+# Fetch successfully before interpreting an empty release list as a first release.
+gh api --paginate --slurp "repos/$repository/releases" >"$releases"
+current=$(jq --arg tag "$tag" '[.[][] | select(.tag_name == $tag)][0] // null' "$releases")
+published=false
+if [[ $current != null ]]; then
+    if [[ $(jq -r '.isDraft // .draft' <<<"$current") == true ]]; then
+        # An interrupted upload has not been advertised to pacman clients yet.
+        [[ $(jq -r '.body' <<<"$current") == "Signed integration packages for $commit." ]]
+        [[ $(jq -r '.target_commitish' <<<"$current") == "$commit" ]]
+        gh release delete "$tag" --repo "$repository" --yes
+    else
+        # Reuse immutable published bytes when retrying a failed Pages deployment.
+        packages=$(mktemp -d)
+        python "$root/scripts/integration-release.py" fetch "$root" "$packages"
+        published=true
+    fi
+fi
+mkdir -p "$history"
+while IFS= read -r previous; do
+    [[ $previous =~ ^integration-v[0-9]+(\.[0-9]+)*-[0-9]+(\.[0-9]+)*$ ]]
+    gh release download "$previous" --repo "$repository" --dir "$history" \
+        --pattern 'arch-niri-dux-*.pkg.tar.zst' --pattern 'arch-niri-dux-*.pkg.tar.zst.sig'
+done < <(jq -r --arg tag "$tag" '.[][] | select((.draft or .prerelease) | not) |
+          .tag_name | select(startswith("integration-v") and . != $tag)' "$releases")
+python "$root/scripts/integration-release.py" publish "$root" "$packages" "$history" "$output" \
+    --tag "$tag" --commit "$commit"
+if [[ $published == false ]]; then
+    assets=()
+    while IFS= read -r name; do
+        assets+=("$output/$name" "$output/$name.sig")
+    done < <(jq -r '.packages[].filename' "$output/integration.manifest.json")
+    assets+=("$output/integration.manifest.json" "$output/integration.manifest.json.sig"
+             "$output/integration.tar" "$output/integration.PKGBUILD")
+    gh release create "$tag" --repo "$repository" --draft --target "$commit" \
+        --title "$tag" --notes "Signed integration packages for $commit." "${assets[@]}"
+    gh release edit "$tag" --repo "$repository" --draft=false
+fi

@@ -368,11 +368,16 @@ def main():
     source = directory / 'integration-input'
     source.mkdir()
     manifest = json.loads((ROOT / 'out/packages.manifest.json').read_text())['integration']
-    if integration.digest(ROOT / 'packages/integration/PKGBUILD') != manifest['recipe_sha256']:
-        raise ValueError('Integration recipe changed after the ISO build; rebuild before verifying.')
-    archive = integration.prepare_source(ROOT, source, manifest['source_date_epoch'])
-    if integration.digest(archive) != manifest['source_sha256']:
-        raise ValueError('Integration sources changed after the ISO build; rebuild before verifying.')
+    release_spec = importlib.util.spec_from_file_location('integration_release', ROOT / 'scripts/integration-release.py')
+    release = importlib.util.module_from_spec(release_spec)
+    release_spec.loader.exec_module(release)
+    release.validate_manifest(ROOT, ROOT / 'out/integration')
+    for filename, target, field in [('integration.tar', 'integration.tar', 'source_sha256'),
+                                     ('integration.PKGBUILD', 'PKGBUILD', 'recipe_sha256')]:
+        original = ROOT / 'out/integration' / filename
+        if integration.digest(original) != manifest[field]:
+            raise ValueError(f'Integration build input changed: {filename}')
+        shutil.copyfile(original, source / target)
     vm = VM(directory, iso.resolve(), disk)
     milestones = []
     def passed(name):
