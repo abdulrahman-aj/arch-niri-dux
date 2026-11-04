@@ -8,7 +8,7 @@ tag=${GITHUB_REF_NAME:?}
 commit=${GITHUB_SHA:?}
 repository=${GITHUB_REPOSITORY:?}
 [[ $repository == abdulrahman-aj/arch-niri-dux && $tag =~ ^integration-v[0-9]+(\.[0-9]+)*-[0-9]+(\.[0-9]+)*$ ]]
-git -C "$root" merge-base --is-ancestor "$commit" origin/main
+git -c safe.directory="$root" -C "$root" merge-base --is-ancestor "$commit" origin/main
 
 releases=$(mktemp)
 trap 'rm -f "$releases"' EXIT
