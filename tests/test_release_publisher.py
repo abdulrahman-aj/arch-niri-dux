@@ -1,5 +1,6 @@
 import os
 from pathlib import Path
+import shutil
 import subprocess
 import tempfile
 import unittest
@@ -22,11 +23,12 @@ class PublisherCheckoutTests(unittest.TestCase):
             commands = root / 'bin'
             commands.mkdir()
             gh = commands / 'gh'
-            gh.write_text('#!/bin/sh\ntouch "$PUBLISHER_MARKER"\nexit 17\n')
+            gh.write_text(f'#!{shutil.which("sh")}\ntouch "$PUBLISHER_MARKER"\nexit 17\n')
             gh.chmod(0o755)
             environment = os.environ | {
                 'PATH': str(commands) + ':' + os.environ['PATH'], 'GIT_CONFIG_GLOBAL': '/dev/null',
                 'GIT_CONFIG_NOSYSTEM': '1', 'GITHUB_REF_NAME': 'integration-v0.1.0-2',
+                'LC_ALL': 'C',
                 'GITHUB_SHA': commit, 'GITHUB_REPOSITORY': 'abdulrahman-aj/arch-niri-dux',
                 'PUBLISHER_MARKER': str(root / 'reached-release-api'),
             }
@@ -35,7 +37,8 @@ class PublisherCheckoutTests(unittest.TestCase):
             # another UID. Fakeroot changes metadata only within this temp fixture.
             result = subprocess.run(['fakeroot', 'bash', '-c',
                                      'chown -R 1234 "$1"; '
-                                     'if git -C "$1" status >"$1/control.log" 2>&1; then exit 90; fi; '
+                                     'if git -C "$1" merge-base --is-ancestor "$GITHUB_SHA" origin/main '
+                                     '>"$1/control.log" 2>&1; then exit 90; fi; '
                                      'exec bash "$2" "$1" "$1/packages" "$1/history" "$1/output"',
                                      'bash', str(checkout), str(ROOT / 'scripts/publish-integration')],
                                     env=environment, text=True, capture_output=True)
