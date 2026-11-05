@@ -1,12 +1,16 @@
 """Windows fixture guest reporting over QEMU's host-only user network."""
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import json
+from pathlib import Path
 import queue
-import threading
-import time
 import shutil
 import subprocess
+import sys
+import threading
+import time
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from verification._common import MIN_FREE_BYTES
 from verification.vm import VM
 from xml.sax.saxutils import escape
 
@@ -21,7 +25,7 @@ class WindowsVM(VM):
         self.graphics = 'VGA'
         self.disk_interface = 'ide'
         self.network_model = 'e1000e'
-        self.min_free_bytes = 9 * 1024**3
+        self.min_free_bytes = MIN_FREE_BYTES
         self.tpm_process = None
         self.tpm_state = directory / 'tpm'
         if tpm_source is not None:
@@ -102,7 +106,7 @@ class BootReports:
         last_key = 0
         last_screenshot = 0
         while time.monotonic() < deadline:
-            if shutil.disk_usage(self.directory).free < 9 * 1024**3:
+            if shutil.disk_usage(self.directory).free < MIN_FREE_BYTES:
                 raise RuntimeError('Stopped Windows VM before breaching 8 GiB host headroom.')
             if time.monotonic() - last_screenshot > 30:
                 vm.screenshot(name + '-progress')

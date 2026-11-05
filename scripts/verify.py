@@ -13,7 +13,7 @@ import sys
 import tempfile
 
 from verification import apps, boot, browser, camera, desktop, integration, pdf, recovery
-from verification._common import Milestones, load_module, mount_verify
+from verification._common import INSTALL_CLOSE, Milestones, install_open, load_module, mount_verify
 from verification.vm import VM, PASSWORD, stage_probes
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -79,7 +79,7 @@ def main():
     try:
         print(f'VM evidence: {directory}', flush=True)
         vm.start()
-        vm.expect(r'root@archiso[^\n]*#', timeout=180)
+        vm.expect_root(timeout=180)
         # USB boot with enough RAM reproduces archiso's automatic-copy path.
         # The payload must stay on mounted media instead of disappearing.
         vm.command('grep -qw copytoram=n /proc/cmdline; mountpoint -q /run/archiso/bootmnt; test ! -e /run/archiso/copytoram/airootfs.sfs')
@@ -96,9 +96,9 @@ def main():
             raise RuntimeError('Installer did not report its elapsed completion time.')
         (directory / 'install-time-seconds').write_text(elapsed.group(1) + '\n')
         passed('Offline encrypted installation completed')
-        vm.command("cryptsetup open --key-file /run/verify/key /dev/vda2 dux-root; mkdir -p /mnt/verify; mount -o subvol=@ /dev/mapper/dux-root /mnt/verify; mount /dev/vda1 /mnt/verify/boot")
+        vm.command(install_open('/dev/vda2', '/dev/vda1'))
         vm.command('cd /run/verify && python -m verification.boot prepare /mnt/verify', timeout=300)
-        vm.command('umount -R /mnt/verify; cryptsetup close dux-root; sync')
+        vm.command(INSTALL_CLOSE + '; sync')
         vm.stop()
         subprocess.run(['qemu-img', 'snapshot', '-c', 'pristine', str(disk)], check=True)
         if args.install_only:

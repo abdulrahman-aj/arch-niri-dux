@@ -159,6 +159,19 @@ def require_disk(settings):
             str(Path('/sys/class/block', Path(settings.disk).name).resolve()))
 
 
+def _sfdisk_table(settings):
+    return json.loads(run('sfdisk', '--json', settings.disk, capture=True))['partitiontable']
+
+
+def _mbr_bootstrap_hex(mbr):
+    return hashlib.sha256(mbr[:446]).hexdigest()
+
+
+def _ensure_disk_identity(settings, expected, message):
+    if require_disk(settings) != expected:
+        raise ValueError(message)
+
+
 
 ESP_TYPE = 'c12a7328-f81f-11d2-ba4b-00a0c93ec93b'
 LUKS_TYPE = 'ca7d7ccb-63ed-4c53-861c-1742536059cc'
@@ -288,7 +301,7 @@ def firmware_order(text):
 
 def alongside_snapshot(settings):
     require_disk(settings)
-    table = json.loads(run('sfdisk', '--json', settings.disk, capture=True))['partitiontable']
+    table = _sfdisk_table(settings)
     regions = free_regions(table)
     verify_gpt(settings.disk)
     mbr, header, primary, backup_header, secondary = read_gpt_metadata(settings.disk, table['sectorsize'])
@@ -314,7 +327,7 @@ def alongside_snapshot(settings):
                 if primary[index*128:index*128+16] != bytes(16)}
     return dict(table=table, regions=regions, boots=boots, entries=entries, order=firmware_order(firmware),
                 metadata=hashlib.sha256(mbr + header + primary + backup_header + secondary).hexdigest(),
-                bootstrap=hashlib.sha256(mbr[:446]).hexdigest(), occupied=occupied)
+                bootstrap=_mbr_bootstrap_hex(mbr), occupied=occupied)
 
 
 def alongside_plan(settings, snapshot):
@@ -376,12 +389,12 @@ def create_alongside_partitions(settings, snapshot, identity):
         '--wipe-partitions', 'never', settings.disk, data='\n'.join(lines) + '\n')
     verify_gpt(settings.disk)
     mbr, _, primary, _, secondary = read_gpt_metadata(settings.disk, snapshot['table']['sectorsize'])
-    if (hashlib.sha256(mbr[:446]).hexdigest() != snapshot['bootstrap']
+    if (_mbr_bootstrap_hex(mbr) != snapshot['bootstrap']
             or any(primary[index*128:(index+1)*128].hex() != original
                    or secondary[index*128:(index+1)*128].hex() != original
                    for index, original in snapshot['occupied'].items())):
         raise ValueError('Original GPT entries or MBR bootstrap changed; refusing to format.')
-    current = json.loads(run('sfdisk', '--json', settings.disk, capture=True))['partitiontable']
+    current = _sfdisk_table(settings)
     if (current['id'] != snapshot['table']['id']
             or len(current['partitions']) != len(snapshot['table']['partitions']) + 2
             or any(part not in current['partitions'] for part in snapshot['table']['partitions'])):
@@ -549,8 +562,8 @@ def wizard():
     settings.passphrase = secret('Disk passphrase')
     settings.password = secret('Login password')
     settings.validate()
-    if require_disk(settings) != settings.confirmed_device:
-        raise ValueError('Disk identity changed while entering installation settings.')
+    _ensure_disk_identity(settings, settings.confirmed_device,
+                           'Disk identity changed while entering installation settings.')
     summary = (f'ERASE ALL DATA on {settings.disk} ({int(disk["size"]) / GIB:.1f} GiB, '
                f'{(disk.get("model") or "unknown model").strip()})\n'
                f'User: {settings.username}    Host: {settings.hostname}\n'
@@ -650,8 +663,8 @@ def install(settings):
         if not shutil.which(name):
             raise ValueError(f'Required installer tool missing: {name}')
     # Recheck immediately before the first destructive operation.
-    if require_disk(settings) != original_device:
-        raise ValueError('Disk identity changed; refusing to erase it.')
+    _ensure_disk_identity(settings, original_device,
+                           'Disk identity changed; refusing to erase it.')
     snapshot = None
     available_bytes = int(original_device[2])
     if settings.mode == 'alongside':
@@ -690,8 +703,8 @@ def install(settings):
         for filename in resolved.splitlines():
             if '.pkg.tar.' in filename and not (REPO / filename).is_file():
                 raise ValueError(f'Offline dependency is missing: {filename}')
-        if require_disk(settings) != original_device:
-            raise ValueError('Disk identity changed during package preflight; refusing to erase it.')
+        _ensure_disk_identity(settings, original_device,
+                               'Disk identity changed during package preflight; refusing to erase it.')
         try:
             print('\n[2/6] Partitioning and encrypting the selected disk…', flush=True)
             if snapshot:

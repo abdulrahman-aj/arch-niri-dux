@@ -137,6 +137,9 @@ class VM:
                     raise RuntimeError('QEMU exited; inspect serial.log and qemu.log.')
         raise TimeoutError(f'VM did not produce {pattern!r}; inspect serial.log.')
 
+    def expect_root(self, timeout=180):
+        return self.expect(r'root@archiso[^\n]*#', timeout=timeout)
+
     def command(self, command, timeout=120):
         marker = '__VERIFY_' + secrets.token_hex(8) + '__'
         payload = f"(\nset -e\n{command}\n)\nverify_status=$?; printf '\\n{marker}:%s\\n' \"$verify_status\""

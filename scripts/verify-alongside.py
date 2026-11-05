@@ -8,7 +8,7 @@ import shlex
 import shutil
 import subprocess
 
-from verification._common import Milestones, mount_verify
+from verification._common import INSTALL_CLOSE, MIN_FREE_BYTES, Milestones, install_open, mount_verify
 from verification.vm import VM, PASSWORD, installed_login, stage_probes
 from alongside_windows import WindowsVM, BootReports
 
@@ -57,7 +57,7 @@ def main():
         reports = BootReports(directory, args.windows_token.read_text().strip())
     else:
         vm = VM(directory, args.iso.resolve(), disk)
-    vm.min_free_bytes = 9 * 1024**3
+    vm.min_free_bytes = MIN_FREE_BYTES
     device = '/dev/sda' if reports else '/dev/vda'
     (directory / 'key').write_text(PASSWORD)
     (directory / 'key').chmod(0o600)
@@ -72,7 +72,7 @@ def main():
             vm.poweroff()
         passed(f'Real existing {args.os} boots before installation and sentinel is intact')
         vm.start()
-        vm.expect(r'root@archiso[^\n]*#', timeout=180)
+        vm.expect_root(timeout=180)
         vm.command(mount_verify())
         for filename in ('install.py', 'configure-target.sh'):
             digest = hashlib.sha256((ROOT / 'installer' / filename).read_bytes()).hexdigest()
@@ -108,13 +108,11 @@ open('/run/verify/new-partitions.json','w').write(json.dumps(m.alongside_plan(v,
         plan = json.loads((directory / 'new-partitions.json').read_text())
         separator = 'p' if device[-1].isdigit() else ''
         esp, encrypted = [device + separator + str(part[0]) for part in plan]
-        vm.command(f'cryptsetup open --key-file /run/verify/key {encrypted} dux-root; '
-                   'mkdir -p /mnt/verify; mount -o subvol=@ /dev/mapper/dux-root /mnt/verify; '
-                   f'mount {esp} /mnt/verify/boot')
+        vm.command(install_open(encrypted, esp))
         vm.command('cd /run/verify && python -m verification.boot prepare /mnt/verify; '
                    'cd /run/verify && python -m verification.boot serial-console-enable /mnt/verify; '
                    'arch-chroot /mnt/verify limine-mkinitcpio', timeout=300)
-        vm.command('umount -R /mnt/verify; cryptsetup close dux-root; '
+        vm.command(INSTALL_CLOSE + '; '
                    'cp /run/archiso/bootmnt/repo/linux-[0-9]*.pkg.tar.zst /run/verify/; sync')
         vm.poweroff()
         vm.start(cdrom=False)

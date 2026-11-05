@@ -7,6 +7,8 @@ from pathlib import Path
 import shutil
 import urllib.request
 
+from verification._common import HOST_HEADROOM_BYTES
+
 SOURCES = {
     'linux': ('https://cloud.debian.org/images/cloud/trixie/20261026-2643/debian-13-genericcloud-amd64-20261026-2643.qcow2', 'debian.qcow2'),
     'windows': ('https://go.microsoft.com/fwlink/?clcid=0x409&country=us&culture=en-us&linkid=2289029', 'windows11-ltsc-eval.iso'),
@@ -27,7 +29,7 @@ def main():
     request = urllib.request.Request(url, method='HEAD' if args.verify_existing else 'GET')
     with urllib.request.urlopen(request, timeout=60) as response:
         size = int(response.headers['Content-Length'])
-        if not args.verify_existing and shutil.disk_usage(args.directory).free < size + 8 * 1024**3:
+        if not args.verify_existing and shutil.disk_usage(args.directory).free < size + HOST_HEADROOM_BYTES:
             parser.error('Download would leave less than 8 GiB host headroom.')
         resolved = response.url
         if args.verify_existing:
@@ -37,7 +39,7 @@ def main():
         if not args.verify_existing:
             with destination.open('xb') as stream:
                 for chunk in chunks:
-                    if shutil.disk_usage(args.directory).free < 8 * 1024**3 + len(chunk):
+                    if shutil.disk_usage(args.directory).free < HOST_HEADROOM_BYTES + len(chunk):
                         raise RuntimeError('Concurrent disk use exhausted the reserved download budget.')
                     stream.write(chunk)
     if destination.stat().st_size != size:

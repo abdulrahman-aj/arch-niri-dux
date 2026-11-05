@@ -98,6 +98,16 @@ MIN_FREE_BYTES = 9 * 1024**3
 HOST_HEADROOM_BYTES = 8 * 1024**3
 
 
+# Encrypted target inspection from the live ISO: open, mount @, mount ESP.
+def install_open(encrypted, esp):
+    return (f'cryptsetup open --key-file /run/verify/key {encrypted} dux-root; '
+            'mkdir -p /mnt/verify; mount -o subvol=@ /dev/mapper/dux-root /mnt/verify; '
+            f'mount {esp} /mnt/verify/boot')
+
+
+INSTALL_CLOSE = 'umount -R /mnt/verify; cryptsetup close dux-root'
+
+
 def private_dir(path, **kwargs):
     """Create a mode-0700 directory (evidence, keys, staged fixtures)."""
     path = Path(path)
