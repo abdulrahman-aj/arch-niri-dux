@@ -48,7 +48,11 @@ def installed(value, command):
                 patch.object(installer.tempfile, 'TemporaryDirectory',
                              side_effect=lambda **kwargs: temporary_directory(dir=root)), \
                 patch.object(installer.subprocess, 'run'), \
-                patch.object(installer.time, 'monotonic', side_effect=[10, 69]), \
+                patch.object(installer.time, 'monotonic',
+                             # Elapsed-time math uses the first two calls;
+                             # the tail keeps failure-path tests from
+                             # tripping on an exhausted mock instead.
+                             side_effect=[10, 69] + [69] * 8), \
                 patch('sys.stdout', output):
             installer.install(value)
             yield run, output, target, root
