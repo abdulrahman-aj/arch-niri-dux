@@ -511,3 +511,24 @@ sudo policy changed, and the laptop was untouched. This development-image run
 does not qualify the later signed release or its HTTPS delivery. Inputs, hashes
 and results are in `verification/optional-backends-2026-11-05.json`; local
 evidence is in `out/verify-optional-backends-fixed/`.
+
+## Dux backend recommendations. 2026-11-05
+
+The `0.2.0-4` development image adds `smartmontools`, `qt6-imageformats`,
+`i2c-tools` and `dnsmasq`, plus the two image-format dependencies. All 697
+previous sync pins remain unchanged. Lint, 123 source tests and 7 build tests
+passed. The fresh offline VM passed all 27 acceptance stages.
+
+Targeted tests failed without smartctl and Qt WebP decoding, then passed after
+the signed package additions. Dux discovered smartctl, Qt decoded WebP,
+NetworkManager assigned a DHCP lease over a virtual Ethernet pair, and printer
+requests still worked through the shared daemon-request helper. The full run
+also confirmed I2C module loading at boot and valid udev rule syntax. The rule
+grants active-session access only to I2C buses under display controllers.
+
+Physical drive health data, monitor DDC and Wi-Fi AP operation remain hardware
+checks. Updated installations need a reboot for the DDC setup. The laptop was
+untouched. This development-image run does not qualify later release bytes or
+HTTPS delivery. Inputs and results are in
+`verification/desktop-recommendations-2026-11-05.json`; local evidence is in
+`out/verify-desktop-recommendations-candidate/`.
