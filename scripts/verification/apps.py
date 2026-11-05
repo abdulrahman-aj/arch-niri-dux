@@ -248,9 +248,27 @@ def backends():
     result = guest.user_command('bash', '-c', f'quickshell -p {qml} 2>&1', capture=True, timeout=30)
     assert 'DUX_MULTIMEDIA_OK' in result.stdout, result.stdout
     guest.user_command('cava', '-v', capture=True, timeout=10)
+    # Exercise Qt's decoder, not Loupe's separate image stack or plugin filenames.
+    avif = FILES / 'baseline-image.avif'
+    guest.user_command('ffmpeg', '-nostdin', '-loglevel', 'error', '-y',
+                       '-i', str(FILES / 'baseline-image.png'), '-frames:v', '1',
+                       '-c:v', 'libaom-av1', '-still-picture', '1', str(avif), timeout=60)
+    # A synchronous decode can finish before Quickshell connects its quit handler.
+    qml.write_text('import QtQuick\nimport Quickshell\nScope {\n'
+                   'Image { id: image; source: "' + avif.as_uri() + '" }\n'
+                   'Timer { interval: 100; running: true; repeat: true; onTriggered: {\n'
+                   'if (image.status === Image.Ready) { console.log("DUX_AVIF_OK"); Qt.quit(); }\n'
+                   'if (image.status === Image.Error) Qt.exit(1); } } }\n')
+    result = guest.user_command('bash', '-c', f'quickshell -p {qml} 2>&1', capture=True, timeout=30)
+    assert 'DUX_AVIF_OK' in result.stdout, result.stdout
+    fingerprint = json.loads(guest.run(
+        'busctl', '--system', '--json=short', 'call', 'net.reactivated.Fprint',
+        '/net/reactivated/Fprint/Manager', 'net.reactivated.Fprint.Manager', 'GetDevices',
+        stdout=subprocess.PIPE).stdout)
+    assert fingerprint['type'] == 'ao', fingerprint
     record('baseline-backends', {'phone_camera_binaries_load': True, 'qt_multimedia_import': True,
-                                  'cava_available': True,
-                                  'note': 'Physical phone/camera access is not qualified by this VM check.'})
+                                  'cava_available': True, 'qt_avif_decoded': True, 'fingerprint_backend_responded': True,
+                                  'note': 'Physical phone/camera access and fingerprint enrollment/authentication are not qualified by this VM check.'})
 
 
 def printing():

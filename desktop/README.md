@@ -39,7 +39,9 @@ survive reruns. GNOME Calculator is installed standalone.
 `EDITOR`/`VISUAL` remain `nvim`. Snapshot is the camera app and uses
 `org.gnome.Snapshot.desktop`. Qt PDF support in `qt6-webengine` enables PDF preview inside Dux
 Files, while Papers remains the default document app. These apps come from
-signed Arch packages. The live ISO remains terminal-only.
+signed Arch packages. `kimageformats` adds AVIF, HEIF and JPEG XL decoding for Qt
+apps. `fprintd` supplies the fingerprint backend; enrollment and authentication
+require supported hardware and user setup. The live ISO remains terminal-only.
 
 CUPS and Avahi start for Dux's native driverless printer settings. CUPS keeps
 its stock localhost-only listeners. GVFS supplies Android, Apple-device
