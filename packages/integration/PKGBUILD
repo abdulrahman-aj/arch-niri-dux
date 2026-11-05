@@ -44,7 +44,9 @@ package_arch-niri-dux-baseline() {
     local line package
     while IFS= read -r line; do
         package=${line%%#*}
-        # The reviewed list contains one package per line, without whitespace.
+        # Same normalization as scripts/build-lock.py: strip comments, then all
+        # whitespace (package names cannot contain any).
+        package=${package//[[:space:]]/}
         [[ -z $package ]] || depends+=("$package")
     done <"$srcdir/packages.target"
 }

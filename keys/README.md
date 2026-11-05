@@ -14,6 +14,12 @@ their build provenance is recorded separately in the output manifest.
 When intentionally updating the package lock, check new signing fingerprints
 against the source distribution's public keyring before adding their public keys.
 
+Our own release identity lives here too: `integration-signing.gpg` is the
+public key clients use to verify `arch-niri-dux` packages, and
+`integration-signing.fingerprint` pins its primary key. Only a short-lived
+signing subkey ever reaches CI; rotation and encrypted offline recovery are
+described in [release maintenance](../packages/RELEASING.md).
+
 The added signing subkey `4C13F5553C2D87AD23220A073EC2E354F61AC9F6`
 belongs to Hyacinthe Cartiaux's primary key
 `DB310957BB30360A67311D87886D7ACFED689539`, published in Arch's

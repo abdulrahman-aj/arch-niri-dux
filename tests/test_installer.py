@@ -1,11 +1,12 @@
 import hashlib
 import json
 import io
+import contextlib
 from pathlib import Path
 import sys
 import tempfile
 import unittest
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 from installer import install as installer
 
@@ -23,6 +24,34 @@ def disk(**changes):
                   ro=False, mountpoints=[None], children=[])
     values.update(changes)
     return values
+
+
+@contextlib.contextmanager
+def installed(value, command):
+    """Run install() with the standard mocked disk/payload harness."""
+    with tempfile.TemporaryDirectory() as directory:
+        root = Path(directory)
+        target = root / 'target'
+        (target / 'root').mkdir(parents=True)
+        (root / 'desktop').mkdir()
+        (root / 'packages.target').write_text('base\n')
+        (root / 'offline.db').touch()
+        output = io.StringIO()
+        temporary_directory = tempfile.TemporaryDirectory
+        with patch.object(installer, 'SHARE', root), patch.object(installer, 'REPO', root), \
+                patch.object(installer, 'TARGET', target), \
+                patch.object(installer, 'require_disk', return_value=(1, 2, 64 * installer.GIB)), \
+                patch.object(installer, 'verify_repository'), \
+                patch.object(installer.shutil, 'which', return_value='/usr/bin/tool'), \
+                patch.object(installer.os.path, 'ismount', return_value=False), \
+                patch.object(installer, 'run', side_effect=command) as run, \
+                patch.object(installer.tempfile, 'TemporaryDirectory',
+                             side_effect=lambda **kwargs: temporary_directory(dir=root)), \
+                patch.object(installer.subprocess, 'run'), \
+                patch.object(installer.time, 'monotonic', side_effect=[10, 69]), \
+                patch('sys.stdout', output):
+            installer.install(value)
+            yield run, output, target, root
 
 
 class InstallerSafetyTests(unittest.TestCase):
@@ -201,14 +230,7 @@ class InstallerSafetyTests(unittest.TestCase):
 
     def test_install_creates_isolated_swap_and_passes_physical_resume_offset(self):
         for size in (0, 8):
-            with self.subTest(swap_gib=size), tempfile.TemporaryDirectory() as directory:
-                root = Path(directory)
-                target = root / 'target'
-                (target / 'root').mkdir(parents=True)
-                (root / 'desktop').mkdir()
-                (root / 'packages.target').write_text('base\n')
-                (root / 'offline.db').touch()
-
+            with self.subTest(swap_gib=size):
                 def command(*args, **kwargs):
                     if args[:3] == ('btrfs', 'inspect-internal', 'map-swapfile'):
                         return '12345'
@@ -219,33 +241,73 @@ class InstallerSafetyTests(unittest.TestCase):
                     return '' if kwargs.get('capture') else None
 
                 value = settings(swap_gib=size)
-                output = io.StringIO()
-                temporary_directory = tempfile.TemporaryDirectory
-                with patch.object(installer, 'SHARE', root), patch.object(installer, 'REPO', root), \
-                        patch.object(installer, 'TARGET', target), \
-                        patch.object(installer, 'require_disk', return_value=(1, 2, 64 * installer.GIB)), \
-                        patch.object(installer, 'verify_repository'), \
-                        patch.object(installer.shutil, 'which', return_value='/usr/bin/tool'), \
-                        patch.object(installer.os.path, 'ismount', return_value=False), \
-                        patch.object(installer, 'run', side_effect=command) as run, \
-                        patch.object(installer.tempfile, 'TemporaryDirectory',
-                                     side_effect=lambda **kwargs: temporary_directory(dir=root)), \
-                        patch.object(installer.subprocess, 'run'), \
-                        patch.object(installer.time, 'monotonic', side_effect=[10, 69]), \
-                        patch('sys.stdout', output):
-                    installer.install(value)
-                commands = [call.args for call in run.call_args_list]
-                swap_created = ('btrfs', 'subvolume', 'create', str(target / '@swap'))
-                swap_setup = [call for call in commands if call[:3] == ('btrfs', 'filesystem', 'mkswapfile')]
-                configure = next(call for call in commands if '/root/configure-target.sh' in call)
-                self.assertEqual(configure[-1], '12345' if size else '')
-                self.assertEqual(swap_created in commands, bool(size))
-                self.assertEqual(bool(swap_setup), bool(size))
-                self.assertEqual('/swap/swapfile none swap defaults 0 0' in (target / 'etc/fstab').read_text(), bool(size))
-                if size:
-                    self.assertEqual(swap_setup[0][-2:], ('8G', str(target / 'swap/swapfile')))
-                self.assertIn('took 59 seconds', output.getvalue())
-                self.assertTrue(value.installation_started)
+                with installed(value, command) as (run, output, target, _root):
+                    commands = [call.args for call in run.call_args_list]
+                    swap_created = ('btrfs', 'subvolume', 'create', str(target / '@swap'))
+                    swap_setup = [call for call in commands if call[:3] == ('btrfs', 'filesystem', 'mkswapfile')]
+                    configure = next(call for call in commands if '/root/configure-target.sh' in call)
+                    self.assertEqual(configure[-1], '12345' if size else '')
+                    self.assertEqual(swap_created in commands, bool(size))
+                    self.assertEqual(bool(swap_setup), bool(size))
+                    self.assertEqual('/swap/swapfile none swap defaults 0 0' in (target / 'etc/fstab').read_text(), bool(size))
+                    if size:
+                        self.assertEqual(swap_setup[0][-2:], ('8G', str(target / 'swap/swapfile')))
+                    self.assertIn('took 59 seconds', output.getvalue())
+                    self.assertTrue(value.installation_started)
+
+    def test_erase_invokes_luks2_format_with_key_file_before_open(self):
+        def command(*args, **kwargs):
+            if args[:3] == ('btrfs', 'inspect-internal', 'map-swapfile'):
+                return '12345'
+            if args[0] == 'genfstab':
+                return 'UUID=abc / btrfs rw,subvolid=256,subvol=/@ 0 0\n'
+            if args[0] == 'blkid':
+                return 'test-uuid'
+            return '' if kwargs.get('capture') else None
+
+        with installed(settings(swap_gib=0), command) as (run, _output, _target, _root):
+            commands = [call.args for call in run.call_args_list]
+            wipe = ('wipefs', '--all', '/dev/vda')
+            zap = ('sgdisk', '--zap-all', '--new=1:0:+4G', '--typecode=1:ef00',
+                   '--change-name=1:EFI', '--new=2:0:0', '--typecode=2:8309',
+                   '--change-name=2:Linux encrypted', '/dev/vda')
+            formatted = ('cryptsetup', 'luksFormat', '--batch-mode', '--type', 'luks2',
+                         '--pbkdf-memory', '262144', '--key-file', '-', '/dev/vda2')
+            opened = ('cryptsetup', 'open', '--key-file', '-', '/dev/vda2', 'dux-root')
+            for expected in (wipe, zap, formatted, opened):
+                self.assertIn(expected, commands)
+            self.assertLess(commands.index(wipe), commands.index(zap))
+            self.assertLess(commands.index(zap), commands.index(formatted))
+            self.assertLess(commands.index(formatted), commands.index(opened))
+            self.assertIn(('mkfs.btrfs', '--force', '--label', 'DUX_ROOT', '/dev/mapper/dux-root'), commands)
+
+    def test_secure_boot_aborts_before_any_disk_touch(self):
+        boot = MagicMock()
+        boot.read_bytes.return_value = b'\x06\x00\x00\x00\x01'
+        with patch.object(sys, 'argv', ['arch-niri-install']), \
+                patch.object(installer.os, 'geteuid', return_value=0), \
+                patch.object(Path, 'exists', return_value=True), \
+                patch.object(Path, 'glob', return_value=[boot]), \
+                patch.object(installer, 'run', side_effect=AssertionError('disk touched')), \
+                patch('sys.stderr', io.StringIO()):
+            with self.assertRaises(SystemExit) as stopped:
+                installer.main()
+            self.assertEqual(stopped.exception.code, 2)
+
+    def test_bios_boot_aborts_before_any_disk_touch(self):
+        with patch.object(sys, 'argv', ['arch-niri-install']), \
+                patch.object(installer.os, 'geteuid', return_value=0), \
+                patch.object(Path, 'exists', return_value=False), \
+                patch.object(installer, 'run', side_effect=AssertionError('disk touched')), \
+                patch('sys.stderr', io.StringIO()):
+            with self.assertRaises(SystemExit) as stopped:
+                installer.main()
+            self.assertEqual(stopped.exception.code, 2)
+
+    def test_undersized_free_region_rejects_swap_fit(self):
+        tiny = settings(mode='alongside', free_region=[2048, 4096], existing_boot='0001')
+        with self.assertRaisesRegex(ValueError, 'will not fit'):
+            installer.swap_size(tiny, (4096 - 2048 + 1) * 512)
 
     def test_corrupted_offline_package_is_rejected_before_installation(self):
         with tempfile.TemporaryDirectory() as directory:

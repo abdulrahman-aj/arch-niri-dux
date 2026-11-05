@@ -241,10 +241,14 @@ def verify_gpt(device):
 def read_gpt_metadata(device, sector):
     with open(device, 'rb', buffering=0) as disk:
         mbr = disk.read(512)
+        if len(mbr) != 512:
+            raise ValueError('Truncated GPT metadata.')
         if mbr[510:512] != b'\x55\xaa' or [mbr[450 + n * 16] for n in range(4)] != [0xee, 0, 0, 0]:
             raise ValueError('Hybrid or unsupported protective MBR.')
         disk.seek(sector)
         header = disk.read(sector)
+        if len(header) != sector:
+            raise ValueError('Truncated GPT metadata.')
         # Restrict support to the standard GPT table size. Capture both copies,
         # including unused slots, so a new partition cannot escape revalidation.
         if header[:8] != b'EFI PART' or struct.unpack_from('<II', header, 80) != (128, 128):
@@ -255,6 +259,8 @@ def read_gpt_metadata(device, sector):
         primary = disk.read(128 * 128)
         disk.seek(backup * sector)
         backup_header = disk.read(sector)
+        if len(backup_header) != sector:
+            raise ValueError('Truncated GPT metadata.')
         backup_array = struct.unpack_from('<Q', backup_header, 72)[0]
         disk.seek(backup_array * sector)
         secondary = disk.read(128 * 128)

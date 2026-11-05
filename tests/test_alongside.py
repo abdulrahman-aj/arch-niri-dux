@@ -2,6 +2,7 @@
 import copy
 import hashlib
 import json
+import os
 from pathlib import Path
 import shutil
 import struct
@@ -164,6 +165,23 @@ class AlongsideDiskTests(unittest.TestCase):
                 installer.alongside_snapshot(self.value.disk)
         self.assertEqual(digest_range(self.disk, self.disk.stat().st_size - 512, 512), before)
         self.assert_old_data()
+
+    def test_truncated_gpt_metadata_is_rejected(self):
+        with self.disk.open('r+b') as stream:
+            stream.truncate(17408 + 100)
+        with self.assertRaisesRegex(ValueError, 'Truncated'):
+            installer.read_gpt_metadata(str(self.disk), 512)
+
+    def test_short_gpt_header_is_rejected(self):
+        with tempfile.NamedTemporaryFile(delete=False) as stream:
+            head = bytearray(512)
+            head[450] = 0xee
+            head[510:512] = b'\x55\xaa'
+            stream.write(bytes(head) + b'\x00' * 88)
+            name = stream.name
+        self.addCleanup(os.unlink, name)
+        with self.assertRaisesRegex(ValueError, 'Truncated GPT metadata'):
+            installer.read_gpt_metadata(name, 512)
 
     def test_post_creation_gpt_corruption_is_rejected(self):
         def command(*args, **kwargs):

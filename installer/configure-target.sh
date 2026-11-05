@@ -53,12 +53,14 @@ TERMINAL_ARG="-e"
 EOF
 # Keep package/kernel hooks from registering boot entries before the installer
 # has verified that the original firmware entries survived configuration.
-if [[ "$dux_defer_efi" == defer-efi ]]; then
+if [[ "$dux_defer_efi" == defer-efi ]] && ! grep -qx 'SKIP_UEFI=yes' /etc/default/limine; then
     printf '\nSKIP_UEFI=yes\n' >>/etc/default/limine
 fi
 
 # Recovery must never resume a normal-root memory image over an older snapshot.
-printf '\nSNAPSHOT_KERNEL_PARAMETERS+=noresume\n' >>/etc/limine-snapper-sync.conf
+if ! grep -qx 'SNAPSHOT_KERNEL_PARAMETERS+=noresume' /etc/limine-snapper-sync.conf; then
+    printf '\nSNAPSHOT_KERNEL_PARAMETERS+=noresume\n' >>/etc/limine-snapper-sync.conf
+fi
 for dux_sleep_unit in systemd-hibernate systemd-hybrid-sleep systemd-suspend-then-hibernate; do
     install -d "/etc/systemd/system/$dux_sleep_unit.service.d"
     printf '[Unit]\nConditionKernelCommandLine=!noresume\n' \
@@ -152,4 +154,6 @@ printf 'Server = https://geo.mirror.pkgbuild.com/$repo/os/$arch\n' >/etc/pacman.
     exit 1
 }
 pacman-key --populate arch-niri-dux
-printf '\nInclude = /etc/pacman.d/arch-niri-dux.conf\n' >>/etc/pacman.conf
+if ! grep -Fxq 'Include = /etc/pacman.d/arch-niri-dux.conf' /etc/pacman.conf; then
+    printf '\nInclude = /etc/pacman.d/arch-niri-dux.conf\n' >>/etc/pacman.conf
+fi

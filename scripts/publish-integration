@@ -11,7 +11,8 @@ repository=${GITHUB_REPOSITORY:?}
 git -c safe.directory="$root" -C "$root" merge-base --is-ancestor "$commit" origin/main
 
 releases=$(mktemp)
-trap 'rm -f "$releases"' EXIT
+fetched=''
+trap 'rm -f "$releases"; if [[ -n "$fetched" ]]; then rm -rf "$fetched"; fi' EXIT
 # Fetch successfully before interpreting an empty release list as a first release.
 gh api --paginate --slurp "repos/$repository/releases" >"$releases"
 current=$(jq --arg tag "$tag" '[.[][] | select(.tag_name == $tag)][0] // null' "$releases")
@@ -24,8 +25,9 @@ if [[ $current != null ]]; then
         gh release delete "$tag" --repo "$repository" --yes
     else
         # Reuse immutable published bytes when retrying a failed Pages deployment.
-        packages=$(mktemp -d)
-        python "$root/scripts/integration-release.py" fetch "$root" "$packages"
+        fetched=$(mktemp -d)
+        python "$root/scripts/integration-release.py" fetch "$root" "$fetched"
+        packages=$fetched
         published=true
     fi
 fi
