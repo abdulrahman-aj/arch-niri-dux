@@ -93,5 +93,51 @@
     "No new ISO or full fresh-install acceptance run; package payload changed without installer/boot logic or dependency changes.",
     "Candidate artifacts are local development builds; nothing signed with the production key or published.",
     "No host package installation, laptop change, dotfiles change or physical device test."
-  ]
+  ],
+  "lint_discovery_follow_up": {
+    "changes": [
+      "Ruff discovers repository-wide Python sources.",
+      "ShellCheck discovers tracked/untracked shell sources and first-party PKGBUILD recipes; generated/vendor paths, deleted files and symlinks are excluded."
+    ],
+    "checks": {
+      "source_tests": 111,
+      "build_tests": 10,
+      "actionlint": "passed",
+      "ruff": "passed",
+      "shellcheck": "passed",
+      "real_discovery_regression_tests": 5
+    },
+    "test_log_sha256": "62d12636f9db175b4828d0f3c1ab5b3096d6ffcd24f46b1cd16a04309cd2f042",
+    "integration_build": {
+      "version": "0.2.0-2",
+      "source_sha256": "b7aa885ea4c0a370f4fd5a01ef707b6e0d2d99e3ad18a1f0f2ebbe210f67793f",
+      "recipe_sha256": "726588d3578e9cb1b028e2a29dc65b3d5acbab11fdb9cc714185e8f7d8adaf7a",
+      "source_date_epoch": 1793822162,
+      "packages": [
+        {
+          "name": "arch-niri-dux",
+          "filename": "arch-niri-dux-0.2.0-2-any.pkg.tar.zst",
+          "sha256": "d027ef035197cab5e17290a60d3327629b4029af4c85b6fe9c8c82c910fb77d9"
+        },
+        {
+          "name": "arch-niri-dux-baseline",
+          "filename": "arch-niri-dux-baseline-0.2.0-2-any.pkg.tar.zst",
+          "sha256": "0865848bfc37565bd3557dd8fc81715c101d07598399fd5a5edc70bbd8222420"
+        }
+      ]
+    },
+    "installed_file_inventory_and_28_file_contents_match_vm_qualified_package": true,
+    "limits": [
+      "Package recipe change only quotes an equivalent pkgbase literal; installed file contents remain identical, so the previous targeted VM qualification is retained."
+    ],
+    "review": {
+      "models": [
+        "Muse Spark 1.3 Contributor (xhigh)",
+        "GLM 5.3 Flash (high)"
+      ],
+      "disposition": "Both independent reviews found no blockers. Root fixed subdirectory invocation and top-level output exclusion consistency, with regression coverage."
+    },
+    "discovery_script_sha256": "d8b775a6a2cc7c1bd98894d5192cb7037ed01295b6c044d7a0b7f4b26ac69132",
+    "recipe_quote_rationale": "Equivalent quoted pkgbase avoids the ShellCheck SC2100 arithmetic heuristic."
+  }
 }

@@ -13,8 +13,8 @@ build-test:
 	./scripts/build-in-dev python3 -m unittest discover -s scripts -p 'build_test.py'
 lint:
 	./scripts/build-in-dev actionlint
-	./scripts/build-in-dev ruff check scripts installer tests
-	./scripts/build-in-dev shellcheck scripts/build-fetch-bootstrap scripts/build-guest scripts/build-in-dev scripts/build-iso scripts/publish-integration installer/configure-target.sh desktop/usr/lib/arch-niri-dux/* desktop/etc/profile.d/*.sh
+	./scripts/build-in-dev ruff check .
+	./scripts/build-in-dev python3 scripts/lint-shell.py
 test: lint
 	./scripts/build-in-dev bash -c 'python3 -m unittest discover -s tests && python3 -m unittest discover -s scripts -p build_test.py'
 verify-alongside:

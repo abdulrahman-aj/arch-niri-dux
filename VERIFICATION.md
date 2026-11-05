@@ -469,3 +469,13 @@ rerun, production publication or laptop changes were performed. Exact package
 hashes, probe hashes and limits are in
 `verification/dead-code-cleanup-2026-11-05.json`; local evidence is in
 `out/verify-dead-code-cleanup-qualified/`.
+
+Lint discovery follow-up: Python is checked repository-wide; shell sources and
+first-party recipes are discovered from tracked and untracked files at the Git
+root. Five real-tool tests cover new paths, exclusions, recipe context and
+subdirectory invocation. Ruff, ShellCheck, actionlint, 111 source tests and
+10 build tests passed. Muse and GLM Flash independently reviewed the change;
+their root/exclusion edge cases were fixed with regression coverage. Real package
+builds still emit the same inventory and all 28 installed file contents as the
+VM-qualified package. The evidence JSON records the new recipe/artifact hashes;
+no further VM or ISO run was needed for this lint-only follow-up.
