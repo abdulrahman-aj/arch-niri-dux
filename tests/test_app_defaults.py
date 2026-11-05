@@ -8,8 +8,8 @@ import unittest
 
 
 from scripts.verification.pdf import sample_pdf_bytes
+from tests.helpers import ROOT
 
-ROOT = Path(__file__).resolve().parents[1]
 FACTORY = ROOT / 'desktop/etc/xdg/mimeapps.list'
 
 # Desktop IDs must match the factory file and official Arch package files.

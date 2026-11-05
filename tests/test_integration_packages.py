@@ -1,4 +1,3 @@
-import importlib.util
 import os
 from pathlib import Path
 import shutil
@@ -7,10 +6,9 @@ import tarfile
 import tempfile
 import unittest
 
-ROOT = Path(__file__).resolve().parents[1]
-spec = importlib.util.spec_from_file_location('integration_builder', ROOT / 'scripts/build-integration.py')
-builder = importlib.util.module_from_spec(spec)
-spec.loader.exec_module(builder)
+from tests.helpers import ROOT, load_script
+
+builder = load_script('integration_builder', ROOT / 'scripts/build-integration.py')
 
 
 class IntegrationSourceTests(unittest.TestCase):
