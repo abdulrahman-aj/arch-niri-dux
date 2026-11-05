@@ -2,7 +2,7 @@
 
 ## Session PATH regression (2026-11-02)
 
-Issue #23 was reproduced on the accepted desktop image. After applying the
+A test run reproduced issue #23 on the accepted desktop image. After applying the
 login-profile and user-service PATH defaults to a disposable VM overlay and
 rebooting, Bash and an actual Niri spawn resolved the local test executable.
 Evidence is in the issue worktree's `out/verify-session-path/`: `before-fix.txt`,
@@ -28,7 +28,7 @@ Plymouth image without changing its pins or signing keys.
 `make test` passed 41 source tests and nine build tests. `make iso` and
 `make verify ARGS='--directory out/verify-desktop-qualified'` passed all 20
 acceptance stages on a fresh offline installation. Independent Muse review
-approved the code with real VM qualification required before merging.
+approved the code and required real VM qualification before merging.
 
 The real first-session state selects bloom; screenshot review confirms its
 render. Running the real desktop configuration for a disposable user with an
@@ -38,7 +38,7 @@ sample PDF to Papers, whose screenshot shows the expected document text.
 Snapshot received a synthetic PipeWire video source, requested camera permission,
 and captured a photo and a three-second video through its own shutter shortcut.
 The screenshot shows the live moving-ball preview; the JPEG contains the ball.
-The WebM decoded successfully with FFmpeg as VP8, 640x480, three seconds. No
+FFmpeg decoded the WebM as VP8, 640x480, three seconds. No
 physical camera or microphone was accessed. Physical camera compatibility remains
 unqualified. The full run also passed Dux integration, themes, file dialogs,
 screen sharing, lock, package snapshots, recovery, normal reboot, text unlock
@@ -71,7 +71,7 @@ incorrect password followed by the correct one. Screenshots confirm the box,
 the forced `plymouth.enable=0` console prompt, and the graphical prompt after
 restoring the setting. Desktop, screen capture, lock, update snapshots,
 snapshot restoration and normal reboot also passed. Independent Muse review
-covered the boot changes; its acceptance findings were addressed before this run.
+covered the boot changes; its findings were addressed before this run.
 
 `make verify-hibernate ARGS='--directory out/verify-plymouth-qualified'` passed:
 the kernel boot ID and RAM-backed nonce survived encrypted hibernation/resume.
@@ -95,7 +95,7 @@ four reviewed, locally built Dux packages; both additions verify with the
 existing trusted keyring.
 
 `make iso` and `make verify ARGS='--directory out/verify-fastfetch'` passed.
-The VM executed `fastfetch --logo none --structure OS:Kernel` successfully on
+The VM ran `fastfetch --logo none --structure OS:Kernel` on
 the live USB image and as the installed desktop user, without a network device.
 All 12 acceptance stages passed, including snapshot restoration and the normal
 reboot afterward. `make test` passed 42 source tests and nine build tests;
@@ -156,7 +156,7 @@ those checks remain open. Secure Boot remains outside scope.
 
 On 2026-11-02, an SSH audit of the ASUS Zenbook 14 UX3405MA running
 `7.2.14-arch1-1` found an existing hardware hibernate/resume cycle in the current
-boot's journal: systemd started hibernation at 10:52:44 and returned at 10:53:53
+boot's journal. systemd started hibernation at 10:52:44 and returned at 10:53:53
 (Asia/Amman). The kernel recorded S4 entry, waking from S4 and hibernation exit.
 The active 17 GiB swapfile resides in the encrypted Btrfs `@swap` subvolume;
 the running kernel's resume device and offset match its boot arguments.
@@ -205,7 +205,7 @@ session PATH and fish-scope cleanup). Both fresh scenarios used
 591fc771dadeaaf5306cf1db00127dc422ff033b325873667eafdf6f2fb27bd9
 ```
 
-`make test` passed **70 source tests and 10 build tests**. The final ISO was built
+`make test` passed 70 source tests and 10 build tests. The final ISO was built
 with the normal shared cache and flock. Both real-OS scenarios passed all six
 acceptance milestones:
 
@@ -269,7 +269,7 @@ reboots, key changes or Secure Boot changes were performed. The VM layouts used
    registration or making an inactive new entry default.
 6. EBUSY disposition: remove the redundant full kernel reread; wait for udev
    and require exact kernel partition starts/sizes. No blind recovery or table
-   restoration is attempted. Both final runs exercise this path successfully.
+   restoration is attempted. Both final runs exercised this path successfully.
 
 The builder also waits for Archiso's keyring initializer before its own key
 operations, with a regression for the initialization barrier and failure path.
@@ -303,13 +303,13 @@ also passed against the exact signed Arch `xdg-terminal-exec 0.14.3-2` package
 in the disposable VM. All 626 existing package pins remain unchanged.
 
 Targeted verification applied the production desktop overlay to an existing
-accepted installation: fresh terminal preference seeding, actual Niri-launched
-Alacritty and command payload, systemd user environment, recovery `-e` invocation,
-existing-choice preservation, desktop smoke and native Niri validation passed.
-This qualifies the package/overlay delta; no ISO was rebuilt or full install,
-hibernation or alongside acceptance repeated. Independent Muse review found no
-blocking defects. Source hashes and check scope are recorded in
-`verification/default-terminal-2026-11-03.json`.
+accepted installation. It covered fresh terminal preference seeding, actual
+Niri-launched Alacritty with its command payload, the systemd user environment,
+the recovery `-e` invocation, existing-choice preservation, desktop smoke and
+native Niri validation. This qualifies the package/overlay delta; no ISO was
+rebuilt or full install, hibernation or alongside acceptance repeated.
+Independent Muse review found no blocking defects. Source hashes and check scope
+are recorded in `verification/default-terminal-2026-11-03.json`.
 
 ## Fresh-install baseline (2026-11-04)
 
@@ -335,7 +335,7 @@ the laptop was untouched. Results, source/artifact hashes and limits are recorde
 in `verification/fresh-install-baseline-2026-11-04.json`. Local run evidence is in
 `out/verify-celluloid-final/`.
 
-## Packaged integration foundation — 2026-11-04
+## Packaged integration foundation (2026-11-04)
 
 `make test` passed 79 source and 10 build tests. A fresh ISO built the owning
 `arch-niri-dux` package and separate full-baseline metapackage with makepkg;
@@ -352,13 +352,13 @@ new fixture package and preserved home. The normal boot and both unlock paths
 passed again afterward.
 
 Sol implemented the refactor; Muse and GLM reviewed YAGNI/correctness. Production
-signing/repository delivery remains a separate implementation gate; this local
+signing and repository delivery remain separate future work; this local
 upgrade fixture is deliberately unsigned. No laptop changes were performed.
 Hashes and results are in
 `verification/packaged-integration-2026-11-04.json`; local evidence is in
 `out/verify-packaged-integration-qualified/`.
 
-## Signed integration updates — 2026-11-04
+## Signed integration updates (2026-11-04)
 
 All 85 source and 10 build tests passed, including real pacman install/upgrade
 against a signed temporary repository, source/artifact tampering, historical
@@ -383,7 +383,7 @@ CI signed and published `integration-v0.1.0-2` to GitHub Releases and Pages.
 2,643,109,888 bytes (2.46 GiB), SHA256
 `54f0fb68484cb675087ecdfe784a4dbf14d19437fc63b2d49f88e9b32d3afc9b`.
 
-All 27 stages of `make verify-release` were covered. The initial runner stopped
+`make verify-release` passed all 27 stages. The initial runner stopped
 after 25 stages without writing a failure marker; the final graphical and HTTPS
 checks resumed on the same disk with identical verification scripts. The new
 online check downloaded the real signed database and both packages using only
@@ -396,7 +396,7 @@ production identity, all milestones and the continuation are recorded in
 `verification/published-integration-2026-11-04.json`. Local evidence is in
 `out/verify-published-release/`. No laptop changes were made.
 
-## ISO payload ownership — 2026-11-04
+## ISO payload ownership (2026-11-04)
 
 The payload finalizer now owns inventory validation, the final offline database,
 combined manifest and checksums. Actionlint, 100 source tests and 10 build tests
@@ -415,7 +415,7 @@ contents and the signed integration release are unchanged. Exact inputs and
 limits are in `verification/iso-payload-2026-11-04.json`; local diagnostics are
 in `out/verify-iso-payload/`. No laptop changes were made.
 
-## Dux 2.1 qualification — 2026-11-05
+## Dux 2.1 qualification (2026-11-05)
 
 Shell, GOP, Greeter, Search, Calendar and Files are all 2.1.0. The lock retains
 687 existing signed pins unchanged, updates Shell/GOP and adds four PDF-preview
@@ -449,7 +449,7 @@ are not claimed. Exact inputs, results and limits are in
 `verification/dux-2.1-2026-11-05.json`; local
 evidence is in `out/verify-dux21-accepted/`.
 
-## Dead-code cleanup and lint gate — 2026-11-05
+## Dead-code cleanup and lint gate (2026-11-05)
 
 `make test` passed Ruff, ShellCheck, actionlint, 106 source tests and 10 build
 tests. A package-output regression test executes the real packaging functions:
@@ -470,7 +470,7 @@ hashes, probe hashes and limits are in
 `verification/dead-code-cleanup-2026-11-05.json`; local evidence is in
 `out/verify-dead-code-cleanup-qualified/`.
 
-Lint discovery follow-up: Python is checked repository-wide; shell sources and
+A lint-discovery follow-up checked Python repository-wide; shell sources and
 first-party recipes are discovered from tracked and untracked files at the Git
 root. Five real-tool tests cover new paths, exclusions, recipe context and
 subdirectory invocation. Ruff, ShellCheck, actionlint, 111 source tests and
@@ -480,7 +480,7 @@ builds still emit the same inventory and all 28 installed file contents as the
 VM-qualified package. The evidence JSON records the new recipe/artifact hashes;
 no further VM or ISO run was needed for this lint-only follow-up.
 
-## Verification locality — 2026-11-05
+## Verification locality (2026-11-05)
 
 Shared VM control/staging now lives under `scripts/verification/`; each scenario
 owns its host interaction, guest checks and cleanup. Recovery delegates upgrade
@@ -497,7 +497,7 @@ the earlier acceptance run. Genuine hibernation resume retained the kernel boot
 ID and RAM token. The image is 2,742,851,584 bytes (2.55 GiB), SHA256
 `c85ef5db95465a00690de1384567764a60dea4aa4e3a098f5aa4a0ebf3f6fee4`.
 After runtime acceptance, only a redundant import was removed; all scenario/VM
-function bodies match the staged code, and final unit/lint/cold-import checks pass.
-Exact inputs, results and limits are in
+function bodies match the staged code, and final unit/lint/cold-import checks
+passed. Exact inputs, results and limits are in
 `verification/verification-locality-2026-11-05.json`; local evidence is in
 `out/verify-locality/`. No production release or laptop changes were made.
