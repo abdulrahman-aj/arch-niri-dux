@@ -81,7 +81,7 @@ class AlongsideDiskTests(unittest.TestCase):
         self.path_patch = patch.object(installer, 'firmware_boot_path', side_effect=lambda number: (1, guid, r'\EFI\Microsoft\Boot\bootmgfw.efi') if number == '0001' else None)
         self.path_patch.start()
         self.addCleanup(self.path_patch.stop)
-        self.snapshot = installer.alongside_snapshot(self.value)
+        self.snapshot = installer.alongside_snapshot(self.value.disk)
         self.value.free_region = self.snapshot['regions'][0]
         self.commands.clear()
 
@@ -109,7 +109,7 @@ class AlongsideDiskTests(unittest.TestCase):
         with self.disk.open('r+b') as stream:
             stream.write(bytes(440) + struct.pack('<I', 0x6086b967) + bytes(2))
         self.mbr_hash = digest_range(self.disk, 0, 446)
-        snapshot = installer.alongside_snapshot(self.value)
+        snapshot = installer.alongside_snapshot(self.value.disk)
         installer.create_alongside_partitions(self.value, snapshot, self.identity)
         with self.disk.open('rb') as stream:
             stream.seek(440)
@@ -148,7 +148,7 @@ class AlongsideDiskTests(unittest.TestCase):
             stream.write(b'\x07')
         before = digest_range(self.disk, 0, 1024 * 1024)
         with self.assertRaises(ValueError):
-            installer.alongside_snapshot(self.value)
+            installer.alongside_snapshot(self.value.disk)
         self.assertEqual(digest_range(self.disk, 0, 1024 * 1024), before)
         self.assert_old_data()
 
@@ -161,7 +161,7 @@ class AlongsideDiskTests(unittest.TestCase):
         before = digest_range(self.disk, self.disk.stat().st_size - 512, 512)
         with patch.object(installer, 'verify_gpt'):
             with self.assertRaisesRegex(ValueError, 'checksum mismatch'):
-                installer.alongside_snapshot(self.value)
+                installer.alongside_snapshot(self.value.disk)
         self.assertEqual(digest_range(self.disk, self.disk.stat().st_size - 512, 512), before)
         self.assert_old_data()
 

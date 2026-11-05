@@ -43,7 +43,6 @@ class Settings:
     existing_boot: str | None = None
     confirmed_layout: dict | None = field(default=None, init=False)
     confirmed_device: tuple | None = field(default=None, init=False)
-    confirmed_at: float | None = field(default=None, init=False)
     installation_started: bool = field(default=False, init=False)
 
     def validate(self):
@@ -149,14 +148,14 @@ def eligible_disks():
     return [disk for disk in disk_inventory() if disk_rejection(disk, swaps) is None]
 
 
-def require_disk(settings):
-    matches = [disk for disk in eligible_disks() if disk['name'] == settings.disk]
+def require_disk(disk):
+    matches = [entry for entry in eligible_disks() if entry['name'] == disk]
     if len(matches) != 1:
         raise ValueError('Target disk is unavailable, mounted, in use, read-only or too small.')
-    device_stat = os.stat(settings.disk)
+    device_stat = os.stat(disk)
     return (device_stat.st_rdev, device_stat.st_ino, matches[0]['size'],
             matches[0].get('serial'), matches[0].get('wwn'),
-            str(Path('/sys/class/block', Path(settings.disk).name).resolve()))
+            str(Path('/sys/class/block', Path(disk).name).resolve()))
 
 
 
@@ -286,12 +285,12 @@ def firmware_order(text):
     return order[1].upper()
 
 
-def alongside_snapshot(settings):
-    require_disk(settings)
-    table = json.loads(run('sfdisk', '--json', settings.disk, capture=True))['partitiontable']
+def alongside_snapshot(disk):
+    require_disk(disk)
+    table = json.loads(run('sfdisk', '--json', disk, capture=True))['partitiontable']
     regions = free_regions(table)
-    verify_gpt(settings.disk)
-    mbr, header, primary, backup_header, secondary = read_gpt_metadata(settings.disk, table['sectorsize'])
+    verify_gpt(disk)
+    mbr, header, primary, backup_header, secondary = read_gpt_metadata(disk, table['sectorsize'])
     firmware = run('efibootmgr', '--verbose', capture=True)
     entries = firmware_entries(firmware)
     boots = {}
@@ -302,7 +301,7 @@ def alongside_snapshot(settings):
         part_number, guid, path = boot_path
         part = next((part for part in table['partitions'] if part.get('uuid', '').lower() == guid.lower()
                      and part.get('type', '').lower() == ESP_TYPE), None)
-        if part is None or partition_name(settings.disk, int(part_number)) != part['node']:
+        if part is None or partition_name(disk, int(part_number)) != part['node']:
             continue
         path = path.replace('\\', '/')
         if not re.fullmatch(r'/[A-Za-z0-9_./-]+\.efi', path, re.I) or '..' in path.split('/'):
@@ -362,7 +361,7 @@ def validate_existing_loader(boot):
 def create_alongside_partitions(settings, snapshot, identity):
     plan = alongside_plan(settings, snapshot)
     # Last read before mutation, after payload and dependency preflight.
-    if require_disk(settings) != identity or alongside_snapshot(settings) != snapshot:
+    if require_disk(settings.disk) != identity or alongside_snapshot(settings.disk) != snapshot:
         raise ValueError('Disk identity, GPT, free extents or firmware entries changed; no partitions created.')
     lines = []
     for number, first, last, kind, label in plan:
@@ -507,7 +506,7 @@ def wizard():
     region = None
     boot_number = None
     if mode.startswith('Alongside'):
-        snapshot = alongside_snapshot(Settings(disk['name'], '', '', '', '', '', ''))
+        snapshot = alongside_snapshot(disk['name'])
         regions = {f'Sectors {first}–{last} ({(last-first+1)*snapshot["table"]["sectorsize"]/GIB:.2f} GiB)': [first, last]
                    for first, last in snapshot['regions']}
         region = regions[choose('Unallocated region', list(regions))]
@@ -545,11 +544,11 @@ def wizard():
             break
         except ValueError as error:
             swap_error = str(error)
-    settings.confirmed_device = require_disk(settings)
+    settings.confirmed_device = require_disk(settings.disk)
     settings.passphrase = secret('Disk passphrase')
     settings.password = secret('Login password')
     settings.validate()
-    if require_disk(settings) != settings.confirmed_device:
+    if require_disk(settings.disk) != settings.confirmed_device:
         raise ValueError('Disk identity changed while entering installation settings.')
     summary = (f'ERASE ALL DATA on {settings.disk} ({int(disk["size"]) / GIB:.1f} GiB, '
                f'{(disk.get("model") or "unknown model").strip()})\n'
@@ -572,7 +571,6 @@ def wizard():
     if choose('Confirm installation', ['Cancel', action], header=summary) != action:
         raise Cancelled()
     settings.swap_gib = size
-    settings.confirmed_at = time.monotonic()
     return settings
 
 
@@ -628,9 +626,9 @@ def verify_repository(repository):
 
 
 def install(settings):
-    started_at = settings.confirmed_at if settings.confirmed_at is not None else time.monotonic()
+    started_at = time.monotonic()
     settings.validate()
-    original_device = require_disk(settings)
+    original_device = require_disk(settings.disk)
     if settings.confirmed_device is not None and original_device != settings.confirmed_device:
         raise ValueError('The confirmed disk was replaced; refusing to erase it.')
     if Path('/dev/mapper', MAPPER).exists():
@@ -642,20 +640,18 @@ def install(settings):
     packages = [package for package in packages if package]
     if not packages or any(not re.fullmatch(r'[a-zA-Z0-9@+_.-]+', package) for package in packages):
         raise ValueError('Invalid or missing target package list.')
-    if not list(REPO.glob('*.db')):
-        raise ValueError('The ISO offline package repository is missing.')
     print('\n[1/6] Checking the offline package payload…', flush=True)
     verify_repository(REPO)
     for name in (('sfdisk', 'efibootmgr') if settings.mode == 'alongside' else ()) + ('sgdisk', 'wipefs', 'cryptsetup', 'mkfs.btrfs', 'mkfs.fat', 'pacstrap', 'arch-chroot'):
         if not shutil.which(name):
             raise ValueError(f'Required installer tool missing: {name}')
     # Recheck immediately before the first destructive operation.
-    if require_disk(settings) != original_device:
+    if require_disk(settings.disk) != original_device:
         raise ValueError('Disk identity changed; refusing to erase it.')
     snapshot = None
     available_bytes = int(original_device[2])
     if settings.mode == 'alongside':
-        snapshot = alongside_snapshot(settings)
+        snapshot = alongside_snapshot(settings.disk)
         if settings.confirmed_layout is not None and settings.confirmed_layout != snapshot:
             raise ValueError('Confirmed partition table or firmware entries changed.')
         plan = alongside_plan(settings, snapshot)
@@ -690,7 +686,7 @@ def install(settings):
         for filename in resolved.splitlines():
             if '.pkg.tar.' in filename and not (REPO / filename).is_file():
                 raise ValueError(f'Offline dependency is missing: {filename}')
-        if require_disk(settings) != original_device:
+        if require_disk(settings.disk) != original_device:
             raise ValueError('Disk identity changed during package preflight; refusing to erase it.')
         try:
             print('\n[2/6] Partitioning and encrypting the selected disk…', flush=True)
@@ -816,7 +812,6 @@ def main():
             settings = Settings(**json.loads(args.config.read_text()))
             if args.confirm_disk != settings.disk:
                 parser.error('--config requires --confirm-disk with the exact target disk path.')
-            settings.confirmed_at = time.monotonic()
         else:
             settings = wizard()
         install(settings)

@@ -88,7 +88,7 @@ def main():
 p='/usr/local/lib/arch-niri-dux/installer/install.py'
 s=importlib.util.spec_from_file_location('installer',p); m=importlib.util.module_from_spec(s);sys.modules[s.name]=m;s.loader.exec_module(m)
 v=m.Settings('DEVICE','tester','alongside','UTC','us','vm-verification-only','vm-verification-only',swap_gib=0,mode='alongside')
-t=m.alongside_snapshot(v)
+t=m.alongside_snapshot(v.disk)
 assert len(t['regions'])==1
 boots=[n for n,b in t['boots'].items() if 'BOOTPATH' in b['path'].lower()]
 assert boots and len({(t['boots'][n]['guid'],t['boots'][n]['path'].lower()) for n in boots})==1

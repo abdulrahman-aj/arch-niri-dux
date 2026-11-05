@@ -201,7 +201,6 @@ class InstallerSafetyTests(unittest.TestCase):
                     return '' if kwargs.get('capture') else None
 
                 value = settings(swap_gib=size)
-                value.confirmed_at = 10
                 output = io.StringIO()
                 temporary_directory = tempfile.TemporaryDirectory
                 with patch.object(installer, 'SHARE', root), patch.object(installer, 'REPO', root), \
@@ -214,7 +213,7 @@ class InstallerSafetyTests(unittest.TestCase):
                         patch.object(installer.tempfile, 'TemporaryDirectory',
                                      side_effect=lambda **kwargs: temporary_directory(dir=root)), \
                         patch.object(installer.subprocess, 'run'), \
-                        patch.object(installer.time, 'monotonic', return_value=69), \
+                        patch.object(installer.time, 'monotonic', side_effect=[10, 69]), \
                         patch('sys.stdout', output):
                     installer.install(value)
                 commands = [call.args for call in run.call_args_list]
