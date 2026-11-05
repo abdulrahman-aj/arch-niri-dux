@@ -2,320 +2,21 @@
 """Run offline UEFI acceptance, optionally checking published delivery afterward."""
 
 import argparse
-import csv
 import hashlib
 import importlib.util
 import json
 import os
 from pathlib import Path
 import re
-import secrets
-import shlex
 import shutil
-import socket
 import subprocess
-import struct
 import sys
 import tempfile
-import time
+
+from verification import apps, boot, browser, camera, desktop, integration, pdf, recovery
+from verification.vm import VM, PASSWORD, stage_probes
 
 ROOT = Path(__file__).resolve().parents[1]
-PASSWORD = 'vm-verification-only'
-
-
-class VM:
-    def __init__(self, directory, iso, disk):
-        self.directory = directory
-        self.iso = iso
-        self.disk = disk
-        self.optical_interface = 'usb'
-        self.graphics = 'virtio-vga-gl'
-        self.disk_interface = 'virtio'
-        self.network_model = 'virtio-net-pci'
-        self.extra_args = []
-        self.allow_reboot = False
-        self.min_free_bytes = 0
-        self.process = None
-        self.serial = None
-        self.qmp = None
-        self.transcript = ''
-        self.read_cursor = 0
-        self.log = (directory / 'serial.log').open('a')
-
-    def connect(self, name):
-        path = self.directory / name
-        deadline = time.monotonic() + 60
-        while time.monotonic() < deadline:
-            try:
-                connection = socket.socket(socket.AF_UNIX)
-                connection.connect(str(path))
-                connection.settimeout(0.25)
-                return connection
-            except (FileNotFoundError, ConnectionRefusedError):
-                connection.close()
-                if self.process.poll() is not None:
-                    raise RuntimeError('QEMU exited; inspect qemu.log.')
-                time.sleep(0.1)
-        raise TimeoutError(f'QEMU socket did not appear: {path}')
-
-    def start(self, cdrom=True, network=False, software_display=False):
-        for name in ('serial.sock', 'qmp.sock'):
-            (self.directory / name).unlink(missing_ok=True)
-        firmware = Path(os.environ.get('OVMF_DIR', '/usr/share/edk2/x64'))
-        pairs = [('OVMF_CODE.4m.fd', 'OVMF_VARS.4m.fd'), ('OVMF_CODE.fd', 'OVMF_VARS.fd')]
-        pair = next(((firmware / code, firmware / variables) for code, variables in pairs
-                     if (firmware / code).is_file() and (firmware / variables).is_file()), None)
-        if pair is None:
-            raise RuntimeError(f'OVMF code and variable-store firmware missing under {firmware}')
-        code, template = pair
-        variables = self.directory / 'OVMF_VARS.fd'
-        if not variables.exists():
-            shutil.copyfile(template, variables)
-        render_node = Path(os.environ.get('QEMU_RENDER_NODE', '/dev/dri/renderD128'))
-        if not software_display and not os.access(render_node, os.R_OK | os.W_OK):
-            raise RuntimeError(f'Niri VM verification needs an accessible GPU render node: {render_node}')
-        command = ['qemu-system-x86_64', '-machine', 'q35,accel=kvm', '-cpu', 'host',
-                   '-m', '8192', '-smp', '4', '-display',
-                   'none' if software_display else f'egl-headless,rendernode={render_node}',
-                   '-vga', 'none', '-device', 'VGA' if software_display else self.graphics,
-                   '-drive', f'if=pflash,format=raw,readonly=on,file={code}',
-                   '-drive', f'if=pflash,format=raw,file={variables}',
-                   '-drive', f'if=none,id=target-disk,format=qcow2,file={self.disk}',
-                   '-device', ('virtio-blk-pci,drive=target-disk,bootindex=2' if self.disk_interface == 'virtio'
-                               else 'ide-hd,drive=target-disk,bus=ide.0,bootindex=2'),
-                   '-nic', f'user,model={self.network_model}' if network else 'none',
-                   '-virtfs', f'local,path={self.directory},mount_tag=verify,security_model=none,id=verify',
-                   '-serial', f'unix:{self.directory}/serial.sock,server=on,wait=off',
-                   '-qmp', f'unix:{self.directory}/qmp.sock,server=on,wait=off']
-        if not self.allow_reboot:
-            command += ['-no-reboot']
-        if cdrom:
-            media_type = ',media=cdrom' if self.optical_interface == 'sata' else ''
-            command += ['-drive', f'if=none,id=install-media,format=raw,readonly=on{media_type},file={self.iso}']
-            if self.optical_interface == 'sata':
-                command += ['-device', 'ide-cd,drive=install-media,bus=ide.1,bootindex=1']
-            else:
-                command += ['-device', 'qemu-xhci', '-device', 'usb-storage,drive=install-media,bootindex=1']
-        command += self.extra_args
-        (self.directory / ('qemu-install.json' if cdrom else 'qemu-boot.json')).write_text(json.dumps(command, indent=2))
-        self.process = subprocess.Popen(command, stdout=(self.directory / 'qemu.log').open('a'), stderr=subprocess.STDOUT)
-        self.serial = self.connect('serial.sock')
-        qmp_socket = self.connect('qmp.sock')
-        qmp_socket.settimeout(30)
-        self.qmp = qmp_socket.makefile('rwb', buffering=0)
-        self.qmp.readline()
-        self.qmp_command('qmp_capabilities')
-        self.transcript = ''
-        self.read_cursor = 0
-
-    def qmp_command(self, command, arguments=None):
-        self.qmp.write(json.dumps({'execute': command, 'arguments': arguments or {}}).encode() + b'\n')
-        while True:
-            result = json.loads(self.qmp.readline())
-            if 'error' in result:
-                raise RuntimeError(result['error'])
-            if 'return' in result:
-                return result['return']
-
-    def send(self, value):
-        self.serial.sendall(value.encode())
-
-    def expect(self, pattern, timeout=120):
-        deadline = time.monotonic() + timeout
-        while time.monotonic() < deadline:
-            if shutil.disk_usage(self.directory).free < self.min_free_bytes:
-                raise RuntimeError('VM stopped before breaching reserved host disk headroom.')
-            match = re.search(pattern, self.transcript[self.read_cursor:])
-            if match:
-                beginning = self.read_cursor
-                self.read_cursor += match.end()
-                return match, self.transcript[beginning:self.read_cursor]
-            try:
-                data = self.serial.recv(65536)
-                if not data:
-                    raise RuntimeError('VM serial connection closed unexpectedly.')
-                text = data.decode(errors='replace')
-                self.transcript += text
-                self.log.write(text)
-                self.log.flush()
-            except socket.timeout:
-                if self.process.poll() is not None:
-                    raise RuntimeError('QEMU exited; inspect serial.log and qemu.log.')
-        raise TimeoutError(f'VM did not produce {pattern!r}; inspect serial.log.')
-
-    def command(self, command, timeout=120):
-        marker = '__VERIFY_' + secrets.token_hex(8) + '__'
-        payload = f"(\nset -e\n{command}\n)\nverify_status=$?; printf '\\n{marker}:%s\\n' \"$verify_status\""
-        self.send('bash -c ' + shlex.quote(payload) + '\n')
-        match, output = self.expect(r'\r?\n' + marker + r':([0-9]+)\r?\n', timeout)
-        if match.group(1) != '0':
-            raise RuntimeError(f'Guest command failed ({match.group(1)}): {command}\n{output[-3000:]}')
-        return output
-
-    def screenshot(self, name):
-        path = self.directory / (name + '.png')
-        try:
-            self.qmp_command('screendump', {'filename': str(path), 'format': 'png'})
-        except RuntimeError as error:
-            detail = error.args[0]
-            if not isinstance(detail, dict) or detail.get('desc') != 'no surface':
-                raise
-            # VirGL scanout can remain in a GPU texture with no QMP surface.
-            # The desktop probe separately requires a real Niri screenshot.
-            path.with_suffix('.unavailable.txt').write_text('QEMU GL backend has no CPU-readable surface.\n')
-            return None
-        return path
-
-    def key(self, name):
-        self.chord(name)
-
-    def chord(self, *names):
-        self.qmp_command('send-key', {'keys': [{'type': 'qcode', 'data': name} for name in names], 'hold-time': 50})
-
-    def click(self, x, y):
-        self.qmp_command('input-send-event', {'events': [
-            {'type': 'abs', 'data': {'axis': 'x', 'value': round(x * 32767)}},
-            {'type': 'abs', 'data': {'axis': 'y', 'value': round(y * 32767)}},
-        ]})
-        self.qmp_command('input-send-event', {'events': [{'type': 'btn', 'data': {'down': True, 'button': 'left'}}]})
-        time.sleep(0.15)
-        self.qmp_command('input-send-event', {'events': [{'type': 'btn', 'data': {'down': False, 'button': 'left'}}]})
-
-    def type_graphical(self, value):
-        for character in value:
-            if character.islower() or character.isdigit():
-                self.key(character)
-            elif character == '-':
-                self.key('minus')
-            else:
-                raise ValueError('Unsupported verification keyboard character.')
-            time.sleep(0.08)
-
-    def poweroff(self, timeout=180):
-        self.send('systemctl poweroff\n')
-        self.wait_exit(timeout)
-
-    def wait_exit(self, timeout=180):
-        deadline = time.monotonic() + timeout
-        # Drain the console while waiting: shutdown can otherwise block when
-        # the Unix socket's receive buffer fills with service/terminal output.
-        while self.process.poll() is None:
-            if time.monotonic() >= deadline:
-                raise TimeoutError('VM did not exit; inspect serial.log.')
-            try:
-                data = self.serial.recv(65536)
-                if data:
-                    self.log.write(data.decode(errors='replace'))
-                    self.log.flush()
-                else:
-                    self.process.wait(timeout=15)
-            except socket.timeout:
-                pass
-        if self.process.returncode != 0:
-            raise RuntimeError(f'QEMU exited abnormally during shutdown: {self.process.returncode}')
-
-    def stop(self):
-        if self.process is not None and self.process.poll() is None:
-            self.process.terminate()
-            try:
-                self.process.wait(timeout=10)
-            except subprocess.TimeoutExpired:
-                self.process.kill()
-                self.process.wait()
-        if self.serial:
-            self.serial.close()
-        if self.qmp:
-            self.qmp.close()
-        if self.process is not None and self.process.returncode not in (None, 0):
-            raise RuntimeError(f'QEMU exited abnormally: {self.process.returncode}')
-
-
-def wait_for_password_screen(vm, name):
-    deadline = time.monotonic() + 180
-    while time.monotonic() < deadline:
-        path = vm.screenshot(name)
-        if path is not None:
-            text = subprocess.check_output(
-                ['tesseract', str(path), 'stdout', '--psm', '11'],
-                text=True, stderr=subprocess.DEVNULL)
-            if 'passphrase' in text.lower():
-                path.with_suffix('.txt').write_text(text)
-                return
-        time.sleep(1)
-    raise TimeoutError('The disk-password prompt did not appear on screen.')
-
-
-def click_screen_text(vm, path, phrase):
-    # Chromium's share chooser can appear later or move with window geometry.
-    # Locate its visible label instead of clicking a guessed screen coordinate.
-    output = subprocess.check_output(
-        ['tesseract', str(path), 'stdout', '--psm', '11', 'tsv'],
-        text=True, stderr=subprocess.DEVNULL)
-    words = [row for row in csv.DictReader(output.splitlines(), delimiter='\t')
-             if row.get('text', '').strip()]
-    target = phrase.casefold().split()
-    width, height = struct.unpack('>II', path.read_bytes()[16:24])
-    for index in range(len(words) - len(target) + 1):
-        match = words[index:index + len(target)]
-        if [word['text'].casefold() for word in match] != target:
-            continue
-        if len({(word['block_num'], word['par_num'], word['line_num']) for word in match}) != 1:
-            continue
-        left = min(int(word['left']) for word in match)
-        right = max(int(word['left']) + int(word['width']) for word in match)
-        top = min(int(word['top']) for word in match)
-        bottom = max(int(word['top']) + int(word['height']) for word in match)
-        vm.click((left + right) / 2 / width, (top + bottom) / 2 / height)
-        return True
-    return False
-
-
-def installed_login(vm, keyboard_unlock=False, screenshot_tag=None):
-    if keyboard_unlock:
-        wait_for_password_screen(vm, screenshot_tag + '-prompt')
-        vm.type_graphical('wrong-passphrase-retry')
-        vm.key('ret')
-        # Let LUKS finish its intentionally expensive password check, then
-        # require the password screen again before attempting the correct key.
-        time.sleep(3)
-        wait_for_password_screen(vm, screenshot_tag + '-retry')
-        vm.type_graphical(PASSWORD)
-        vm.key('ret')
-    else:
-        vm.expect(r'(?i)(passphrase|password).*?:', timeout=180)
-        if screenshot_tag is not None:
-            wait_for_password_screen(vm, screenshot_tag)
-        vm.send(PASSWORD + '\n')
-    vm.expect(r'login:', timeout=180)
-    vm.send('tester\n')
-    vm.expect(r'Password:')
-    vm.send(PASSWORD + '\n')
-    # Login/PAM can flush queued input while restoring the terminal. Both
-    # Bash and Fish enable bracketed paste when their interactive reader starts.
-    input_ready = r'\x1b\[\?2004h'
-    vm.expect(input_ready, timeout=60)
-    vm.command('test "$(id -u)" = 1000')
-    vm.expect(input_ready, timeout=60)
-    # Personal setup may change the login shell or grant passwordless sudo.
-    # Completion markers establish readiness without depending on either prompt.
-    vm.command('printf "%s\\n" ' + shlex.quote(PASSWORD) + ' | sudo -S -p "" -v')
-    vm.expect(input_ready, timeout=60)
-    vm.send('sudo -n bash --noprofile --norc\n')
-    vm.expect(input_ready, timeout=60)
-    vm.command('test "$(id -u)" = 0')
-
-
-def graphical_login(vm):
-    vm.command('python /run/verify/verify-guest.py greeter')
-    # Pinned upstream's first-login user picker, on the VM's single display.
-    vm.click(0.5, 0.5)
-    time.sleep(0.3)
-    vm.click(0.5, 0.443)
-    time.sleep(0.3)
-    vm.type_graphical(PASSWORD)
-    vm.key('ret')
-    vm.command('for attempt in $(seq 1 60); do pgrep -u tester -x niri >/dev/null && exit 0; sleep 1; done; exit 1', timeout=90)
-
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
@@ -351,22 +52,18 @@ def main():
     with iso.open('rb') as stream:
         iso_digest = hashlib.file_digest(stream, 'sha256').hexdigest()
     package_digest = hashlib.sha256((ROOT / 'out/packages.manifest.json').read_bytes()).hexdigest()
+    probe_hashes = stage_probes(directory)
+    probe_hashes['verify.py'] = hashlib.sha256(Path(__file__).read_bytes()).hexdigest()
     (directory / 'inputs.json').write_text(json.dumps({
         'iso': str(iso.resolve()), 'iso_sha256': iso_digest,
         'package_manifest_sha256': package_digest,
-        'verification_scripts': {name: hashlib.sha256((ROOT / 'scripts' / name).read_bytes()).hexdigest()
-                                 for name in ('verify.py', 'verify-guest.py', 'verify-baseline.py',
-                                              'build-integration.py', 'verify-integration.py')},
+        'verification_scripts': probe_hashes,
     }, indent=2) + '\n')
     (directory / 'key').write_text(PASSWORD)
     (directory / 'key').chmod(0o600)
-    shutil.copyfile(Path(__file__).with_name('verify-guest.py'), directory / 'verify-guest.py')
-    shutil.copyfile(Path(__file__).with_name('verify-baseline.py'), directory / 'verify-baseline.py')
-    for name in ('build-integration.py', 'verify-integration.py'):
-        shutil.copyfile(ROOT / 'scripts' / name, directory / name)
     spec = importlib.util.spec_from_file_location('integration_builder', ROOT / 'scripts/build-integration.py')
-    integration = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(integration)
+    builder = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(builder)
     source = directory / 'integration-input'
     source.mkdir()
     manifest = json.loads((ROOT / 'out/packages.manifest.json').read_text())['integration']
@@ -378,7 +75,7 @@ def main():
     for filename, target, field in [('integration.tar', 'integration.tar', 'source_sha256'),
                                      ('integration.PKGBUILD', 'PKGBUILD', 'recipe_sha256')]:
         original = ROOT / 'out/integration' / filename
-        if integration.digest(original) != manifest[field]:
+        if builder.digest(original) != manifest[field]:
             raise ValueError(f'Integration build input changed: {filename}')
         shutil.copyfile(original, source / target)
     vm = VM(directory, iso.resolve(), disk)
@@ -408,212 +105,24 @@ def main():
         (directory / 'install-time-seconds').write_text(elapsed.group(1) + '\n')
         passed('Offline encrypted installation completed')
         vm.command("cryptsetup open --key-file /run/verify/key /dev/vda2 dux-root; mkdir -p /mnt/verify; mount -o subvol=@ /dev/mapper/dux-root /mnt/verify; mount /dev/vda1 /mnt/verify/boot")
-        vm.command('python /run/verify/verify-guest.py prepare /mnt/verify', timeout=300)
+        vm.command('cd /run/verify && python -m verification.boot prepare /mnt/verify', timeout=300)
         vm.command('umount -R /mnt/verify; cryptsetup close dux-root; sync')
         vm.stop()
         subprocess.run(['qemu-img', 'snapshot', '-c', 'pristine', str(disk)], check=True)
         if args.install_only:
             print('Install-only debug run complete. Full acceptance has NOT passed.', flush=True)
             return 0
-        # A CPU-readable framebuffer qualifies the real pre-login UI. A serial
-        # kernel console would force Plymouth into its details/text mode.
-        vm.start(cdrom=False, software_display=True)
-        installed_login(vm, keyboard_unlock=True, screenshot_tag='02-graphical-unlock')
-        vm.command('mkdir -p /run/verify; mount -t 9p -o trans=virtio,version=9p2000.L verify /run/verify')
-        vm.command('python /run/verify/verify-guest.py plymouth-status')
-        passed('Graphical disk unlock accepts keyboard input and retries an incorrect password')
-        vm.command('python /run/verify/verify-guest.py serial-console-enable', timeout=300)
-        vm.poweroff()
-        vm.stop()
-        vm.start(cdrom=False)
-        installed_login(vm)
-        passed('UEFI boot from encrypted disk without installation ISO')
-        vm.command('test -e /dev/mapper/dux-root; findmnt -n -o FSTYPE / | grep -x btrfs; test "$(ls /sys/class/net | tr "\\n" " ")" = "lo "')
-        vm.command('cat /proc/cmdline; ! grep -q /@snapshots/ /proc/cmdline; systemctl is-enabled greetd; systemctl is-active greetd; test -f /home/tester/.config/niri/config.kdl')
-        vm.command('systemctl is-active NetworkManager; systemctl is-enabled bluetooth; command -v nvim chromium alacritty xdg-terminal-exec yay niri dms papers snapshot')
-        vm.command('mkdir -p /run/verify; mount -t 9p -o trans=virtio,version=9p2000.L verify /run/verify || mountpoint -q /run/verify')
-        vm.command('python /run/verify/verify-guest.py plymouth-config')
-        vm.command('python /run/verify/verify-guest.py plymouth-status')
-        passed('Plymouth configuration and boot services are active')
-        graphical_login(vm)
-        vm.command('python /run/verify/verify-guest.py storage')
-        passed('No-swap installation disables hibernation' if args.swap_gib == 0 else
-               'Encrypted swap outside root snapshots; physical resume offset matches the kernel')
-        vm.command('python /run/verify/verify-guest.py desktop', timeout=180)
-        passed('Niri, Dux, terminal, Neovim and Chromium smoke checks')
-        vm.command('python /run/verify/verify-guest.py session-path', timeout=90)
-        passed('Login shells, user services and Niri spawns resolve local user executables')
-        vm.command('python /run/verify/verify-guest.py dux-components', timeout=300)
-        passed('GOP metrics, live file indexing, Calendar event create/read and Dux Files integration')
-        vm.command('python /run/verify/verify-guest.py themes', timeout=300)
-        passed('Live Dux light/dark changes reach Chromium, GTK settings, portals and Dux apps')
-        # The native first-login welcome must not cover the document/camera UI.
-        vm.command('python /run/verify/verify-guest.py onboarding-screen')
-        if click_screen_text(vm, directory / '02-onboarding.png', 'Skip'):
-            time.sleep(0.5)
-        vm.command('python /run/verify/verify-guest.py wallpaper', timeout=90)
-        passed('Bloom material wallpaper is the fresh-user default and rendered')
-        vm.command('python /run/verify/verify-guest.py wallpaper-preserved', timeout=180)
-        passed('User initialization preserved existing desktop choices')
-        vm.command('python /run/verify/verify-baseline.py cli', timeout=120)
-        passed('Manuals, archive round-trip, rsync, JSON/search and diagnostic CLI tools work')
-        vm.command('python /run/verify/verify-baseline.py prepare', timeout=300)
-        vm.command('python /run/verify/verify-baseline.py image', timeout=120)
-        vm.command('python /run/verify/verify-baseline.py text', timeout=120)
-        vm.click(0.2, 0.2)
-        time.sleep(0.2)
-        vm.command('python /run/verify/verify-baseline.py text-focused')
-        vm.chord('ctrl', 'a')
-        time.sleep(0.1)
-        vm.type_graphical('editedbyduxverification')
-        vm.chord('ctrl', 's')
-        vm.command('python /run/verify/verify-baseline.py text-saved', timeout=60)
-        vm.command('python /run/verify/verify-baseline.py calculator', timeout=120)
-        passed('Images and text open in the selected apps; text edits save; Calculator launches')
-        # Reopen video four times: first-launch success missed the original hang.
-        for kind in ('audio', 'video', 'video', 'video', 'video'):
-            vm.command('python /run/verify/verify-baseline.py open-' + kind, timeout=120)
-            vm.command('python /run/verify/verify-baseline.py capture-' + kind, timeout=30)
-            capture_file = directory / ('baseline-' + kind + '.json')
-            if not json.loads(capture_file.read_text())['tone_detected']:
-                # Some players open paused; exercise their normal play shortcut.
-                vm.key('spc')
-                vm.command('python /run/verify/verify-baseline.py capture-' + kind, timeout=30)
-            vm.command('python /run/verify/verify-baseline.py played-' + kind, timeout=60)
-        passed('Decibels audio and four Celluloid open/play/close cycles output the expected fixture tones')
-        vm.command('python /run/verify/verify-baseline.py backends', timeout=90)
-        passed('Video thumbnails, phone/camera backend loading and Dux multimedia backends')
-        vm.command('python /run/verify/verify-baseline.py printing', timeout=150)
-        passed('Driverless CUPS queue delivered a PDF to a loopback IPP printer')
-        vm.command('python /run/verify/verify-guest.py pdf', timeout=180)
-        passed('Papers is the default PDF viewer and rendered a sample document')
-        vm.command('python /run/verify/verify-guest.py files-pdf-prepare', timeout=60)
-        vm.key('f4')
-        time.sleep(1)
-        vm.chord('shift', 'equal')
-        for attempt in range(15):
-            vm.command('python /run/verify/verify-guest.py files-pdf-capture')
-            text = subprocess.check_output(['tesseract', str(directory / '02-dfiles-pdf.png'),
-                                            'stdout'], text=True, stderr=subprocess.DEVNULL)
-            if 'dux verification pdf works' in ' '.join(text.lower().split()):
-                break
-            time.sleep(1)
-        else:
-            raise RuntimeError('Dux Files PDF preview did not render the sample document text.')
-        (directory / 'files-pdf.json').write_text(json.dumps({
-            'rendered_text': text, 'method': 'Dux Files selection, F4 preview and zoom-in key',
-            'screenshot': '02-dfiles-pdf.png',
-        }, indent=2) + '\n')
-        vm.key('esc')
-        vm.command('python /run/verify/verify-guest.py files-pdf-close')
-        passed('Dux Files PDF preview rendered document content with its Qt PDF backend')
-        vm.command('python /run/verify/verify-guest.py camera', timeout=300)
-        permission_deadline = time.monotonic() + 60
-        while time.monotonic() < permission_deadline:
-            vm.command('python /run/verify/verify-guest.py camera-screen')
-            if (click_screen_text(vm, directory / '02-snapshot.png', 'Grant Access')
-                    or click_screen_text(vm, directory / '02-snapshot.png', 'GrantAccess')):
-                break
-            time.sleep(1)
-        else:
-            raise TimeoutError('Snapshot did not request camera permission on the fresh installation.')
-        time.sleep(3)
-        vm.command('python /run/verify/verify-guest.py camera-screen')
-        # Use Snapshot 51's upstream shutter shortcut to exercise its own
-        # capture path in both modes, rather than generating files separately.
-        # https://github.com/GNOME/snapshot/blob/51.0/src/application.rs
-        vm.key('t')
-        vm.command('python /run/verify/verify-guest.py camera-photo', timeout=90)
-        vm.key('t')
-        time.sleep(3)
-        vm.key('t')
-        vm.command('python /run/verify/verify-guest.py camera-video', timeout=90)
-        passed('Snapshot preview, shutter photo and video recording work with a synthetic camera')
-        vm.command('python /run/verify/verify-guest.py focus-browser')
-        vm.key('o')
-        vm.command('python /run/verify/verify-guest.py file-chooser', timeout=90)
-        vm.key('esc')
-        vm.command('python /run/verify/verify-guest.py file-chooser-cancelled', timeout=90)
-        passed('Chromium open-file request uses Dux Files and responds to cancellation')
-        vm.command('python /run/verify/verify-guest.py focus-browser')
-        vm.key('c')
-        time.sleep(1)
-        # Chromium first asks for the source type, then GNOME selects the
-        # actual screen; Chromium finally confirms that selected source.
-        source_deadline = time.monotonic() + 60
-        while time.monotonic() < source_deadline:
-            vm.command('python /run/verify/verify-guest.py capture-source')
-            if click_screen_text(vm, directory / '02-chromium-share-source.png', 'Entire screen'):
-                break
-            time.sleep(1)
-        else:
-            raise TimeoutError('Chromium did not display its Entire screen source choice.')
-        vm.command('python /run/verify/verify-guest.py capture-picker', timeout=90)
-        vm.click(0.725, 0.245)
-        time.sleep(1)
-        vm.click(0.935, 0.8)
-        vm.command('python /run/verify/verify-guest.py capture', timeout=90)
-        passed('Chromium screen sharing produced nonblank captured desktop content')
-        vm.command('python /run/verify/verify-guest.py lock')
-        vm.command('python /run/verify/verify-guest.py locked')
-        vm.screenshot('03-locked')
-        vm.type_graphical(PASSWORD)
-        vm.key('ret')
-        vm.command('for attempt in $(seq 1 30); do python /run/verify/verify-guest.py unlocked && exit 0; sleep 1; done; exit 1', timeout=60)
-        passed('Screen lock and password unlock')
-        vm.command('python /run/verify/verify-guest.py snapshots', timeout=600)
-        passed('Integration upgrade, baseline changes and personal preservation passed; recovery fixture prepared')
-        vm.command('sync')
-        vm.poweroff()
-        vm.stop()
-        vm.start(cdrom=False)
-        installed_login(vm)
-        vm.command('mkdir -p /run/verify; mount -t 9p -o trans=virtio,version=9p2000.L verify /run/verify')
-        vm.command('python /run/verify/verify-guest.py recovery', timeout=300)
-        vm.screenshot('04-recovery')
-        passed('Limine snapshot boot and restoration')
-        vm.command('sync')
-        vm.poweroff()
-        vm.stop()
-        vm.start(cdrom=False)
-        installed_login(vm)
-        vm.command('mkdir -p /run/verify; mount -t 9p -o trans=virtio,version=9p2000.L verify /run/verify')
-        vm.command('python /run/verify/verify-guest.py restored')
-        vm.screenshot('05-restored')
-        passed('Restored system rebooted normally and home was preserved')
-        # Real text-fallback path: same serial automation unlocks the disk with
-        # the splash disabled, then the graphical prompt is restored.
-        vm.command('python /run/verify/verify-guest.py serial-console-disable', timeout=300)
-        vm.command('python /run/verify/verify-guest.py splash-fallback-disable')
-        vm.command('sync')
-        vm.poweroff()
-        vm.stop()
-        vm.start(cdrom=False, software_display=True)
-        installed_login(vm, keyboard_unlock=True, screenshot_tag='06-text-fallback')
-        vm.command('mkdir -p /run/verify; mount -t 9p -o trans=virtio,version=9p2000.L verify /run/verify')
-        vm.command('grep -qw plymouth.enable=0 /proc/cmdline; python /run/verify/verify-guest.py storage')
-        passed('Text fallback unlocks the disk with the splash disabled')
-        vm.command('python /run/verify/verify-guest.py splash-fallback-enable')
-        vm.command('sync')
-        vm.poweroff()
-        vm.stop()
-        vm.start(cdrom=False, software_display=True)
-        installed_login(vm, keyboard_unlock=True, screenshot_tag='07-restored-splash')
-        vm.command('mkdir -p /run/verify; mount -t 9p -o trans=virtio,version=9p2000.L verify /run/verify')
-        vm.command('! grep -qw plymouth.enable=0 /proc/cmdline; python /run/verify/verify-guest.py plymouth-status')
-        vm.command('python /run/verify/verify-guest.py restored')
-        passed('Graphical password screen works again after text fallback')
-        vm.command('python /run/verify/verify-guest.py serial-console-enable', timeout=300)
-        vm.poweroff()
-        vm.stop()
+        boot.verify_boot(vm, passed, args.swap_gib)
+        desktop.verify(vm, passed)
+        apps.verify(vm, passed)
+        pdf.verify(vm, passed)
+        camera.verify(vm, passed)
+        browser.verify(vm, passed)
+        desktop.verify_lock(vm, passed)
+        recovery.verify(vm, passed)
+        boot.verify_fallback(vm, passed)
         if args.online_repository:
-            vm.start(cdrom=False, network=True)
-            installed_login(vm)
-            vm.command('mkdir -p /run/verify; mount -t 9p -o trans=virtio,version=9p2000.L verify /run/verify')
-            vm.command('python /run/verify/verify-guest.py published-repository', timeout=300)
-            passed('Published HTTPS repository and packages verify against offline trust and exact release hashes')
-            vm.poweroff()
-            vm.stop()
+            integration.verify_published(vm, passed)
         (directory / 'ACCEPTANCE-PASSED').write_text('All acceptance stages passed.\n')
         print(f'Acceptance passed. Evidence: {directory}', flush=True)
         return 0
@@ -621,7 +130,7 @@ def main():
         try:
             if vm.process and vm.process.poll() is None:
                 if vm.screenshot('failure') is None:
-                    vm.command('python /run/verify/verify-guest.py failure-screenshot', timeout=15)
+                    vm.command('cd /run/verify && python -m verification.desktop failure-screenshot', timeout=15)
         except Exception:
             pass
         (directory / 'FAILURE.txt').write_text(str(error) + '\n')

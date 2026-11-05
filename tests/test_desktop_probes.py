@@ -1,18 +1,11 @@
-import importlib.util
 import io
 import html
 import json
-from pathlib import Path
-import runpy
-import sys
 import unittest
 from unittest.mock import patch
 
 
-SCRIPT = Path(__file__).resolve().parents[1] / 'scripts/verify-guest.py'
-spec = importlib.util.spec_from_file_location('desktop_probe', SCRIPT)
-guest = importlib.util.module_from_spec(spec)
-spec.loader.exec_module(guest)
+from scripts.verification import browser as guest
 
 
 class DesktopProbeTests(unittest.TestCase):
@@ -48,10 +41,9 @@ class DesktopProbeTests(unittest.TestCase):
             'url': 'file:///tmp/chromium-smoke.html',
             'title': 'DUX-VERIFY ' + json.dumps({'file': 'cancelled'}),
         }]))]
-        with patch.object(sys, 'argv', [str(SCRIPT), 'file-chooser-cancelled']), \
-                patch.object(guest.urllib.request, 'urlopen', side_effect=responses), \
+        with patch.object(guest.urllib.request, 'urlopen', side_effect=responses), \
                 patch.object(guest.time, 'sleep'):
-            runpy.run_path(str(SCRIPT), run_name='__main__')
+            guest.file_chooser_cancelled()
 
 
 if __name__ == '__main__':

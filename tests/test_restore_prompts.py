@@ -1,5 +1,4 @@
 import contextlib
-import importlib.util
 import io
 import os
 from pathlib import Path
@@ -7,9 +6,7 @@ import sys
 import tempfile
 import unittest
 
-spec = importlib.util.spec_from_file_location('guest_probe', Path(__file__).resolve().parents[1] / 'scripts/verify-guest.py')
-guest = importlib.util.module_from_spec(spec)
-spec.loader.exec_module(guest)
+from scripts.verification import guest as guest
 
 
 class RestorePromptTests(unittest.TestCase):

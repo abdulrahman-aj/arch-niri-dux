@@ -1,4 +1,3 @@
-import importlib.util
 import math
 from pathlib import Path
 import struct
@@ -7,10 +6,7 @@ import unittest
 import wave
 
 
-SCRIPT = Path(__file__).resolve().parents[1] / 'scripts/verify-baseline.py'
-spec = importlib.util.spec_from_file_location('baseline_probe', SCRIPT)
-baseline = importlib.util.module_from_spec(spec)
-spec.loader.exec_module(baseline)
+from scripts.verification import apps as baseline
 
 
 class AudioEvidenceTests(unittest.TestCase):

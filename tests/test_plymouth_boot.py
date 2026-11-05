@@ -1,12 +1,9 @@
-import importlib.util
 from pathlib import Path
 import tempfile
 import unittest
 
 ROOT = Path(__file__).resolve().parents[1]
-spec = importlib.util.spec_from_file_location('plymouth_guest', ROOT / 'scripts/verify-guest.py')
-guest = importlib.util.module_from_spec(spec)
-spec.loader.exec_module(guest)
+from scripts.verification import boot as guest
 
 
 class PlymouthFallbackTests(unittest.TestCase):

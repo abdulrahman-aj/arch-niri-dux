@@ -9,7 +9,7 @@ import secrets
 
 from alongside_windows import WindowsVM, BootReports, unattended, deployment_unattended, powershell_script, DISKPART, DEPLOY, SETUP_VERIFY
 
-from verify import VM
+from verification.vm import VM
 
 
 def linux(args):

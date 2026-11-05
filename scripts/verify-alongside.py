@@ -8,7 +8,7 @@ import shlex
 import shutil
 import subprocess
 
-from verify import VM, PASSWORD, installed_login
+from verification.vm import VM, PASSWORD, installed_login, stage_probes
 from alongside_windows import WindowsVM, BootReports
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -60,7 +60,7 @@ def main():
     device = '/dev/sda' if reports else '/dev/vda'
     (directory / 'key').write_text(PASSWORD)
     (directory / 'key').chmod(0o600)
-    shutil.copyfile(Path(__file__).with_name('verify-guest.py'), directory / 'verify-guest.py')
+    stage_probes(directory)
     milestones = []
 
     def passed(message):
@@ -116,8 +116,8 @@ open('/run/verify/new-partitions.json','w').write(json.dumps(m.alongside_plan(v,
         vm.command(f'cryptsetup open --key-file /run/verify/key {encrypted} dux-root; '
                    'mkdir -p /mnt/verify; mount -o subvol=@ /dev/mapper/dux-root /mnt/verify; '
                    f'mount {esp} /mnt/verify/boot')
-        vm.command('python /run/verify/verify-guest.py prepare /mnt/verify; '
-                   'python /run/verify/verify-guest.py serial-console-enable /mnt/verify; '
+        vm.command('cd /run/verify && python -m verification.boot prepare /mnt/verify; '
+                   'cd /run/verify && python -m verification.boot serial-console-enable /mnt/verify; '
                    'arch-chroot /mnt/verify limine-mkinitcpio', timeout=300)
         vm.command('umount -R /mnt/verify; cryptsetup close dux-root; '
                    'cp /run/archiso/bootmnt/repo/linux-[0-9]*.pkg.tar.zst /run/verify/; sync')

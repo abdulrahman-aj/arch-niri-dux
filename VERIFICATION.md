@@ -479,3 +479,25 @@ their root/exclusion edge cases were fixed with regression coverage. Real packag
 builds still emit the same inventory and all 28 installed file contents as the
 VM-qualified package. The evidence JSON records the new recipe/artifact hashes;
 no further VM or ISO run was needed for this lint-only follow-up.
+
+## Verification locality — 2026-11-05
+
+Shared VM control/staging now lives under `scripts/verification/`; each scenario
+owns its host interaction, guest checks and cleanup. Recovery delegates upgrade
+fixture assertions to their owner, using recorded expectations. Production
+installer, package and desktop inputs are unchanged.
+
+Ruff, ShellCheck, actionlint, 115 source tests and 10 build tests passed. New tests
+exercise cold imports from staged probes, evidence hashes, failure cleanup and
+fixture-driven restoration checks. All 15 existing VM methods are structurally
+unchanged. Muse and GLM Flash independently reviewed the refactor with no blockers.
+
+A fresh development ISO passed all 27 offline milestones in the same order as
+the earlier acceptance run. Genuine hibernation resume retained the kernel boot
+ID and RAM token. The image is 2,742,851,584 bytes (2.55 GiB), SHA256
+`c85ef5db95465a00690de1384567764a60dea4aa4e3a098f5aa4a0ebf3f6fee4`.
+After runtime acceptance, only a redundant import was removed; all scenario/VM
+function bodies match the staged code, and final unit/lint/cold-import checks pass.
+Exact inputs, results and limits are in
+`verification/verification-locality-2026-11-05.json`; local evidence is in
+`out/verify-locality/`. No production release or laptop changes were made.
