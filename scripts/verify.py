@@ -447,9 +447,10 @@ def main():
         passed('GOP metrics, live file indexing, Calendar event create/read and Dux Files integration')
         vm.command('python /run/verify/verify-guest.py themes', timeout=300)
         passed('Live Dux light/dark changes reach Chromium, GTK settings, portals and Dux apps')
-        # Dismiss upstream's first-login What's New through its normal button.
-        vm.click(0.57, 0.92)
-        time.sleep(0.5)
+        # The native first-login welcome must not cover the document/camera UI.
+        vm.command('python /run/verify/verify-guest.py onboarding-screen')
+        if click_screen_text(vm, directory / '02-onboarding.png', 'Skip'):
+            time.sleep(0.5)
         vm.command('python /run/verify/verify-guest.py wallpaper', timeout=90)
         passed('Bloom material wallpaper is the fresh-user default and rendered')
         vm.command('python /run/verify/verify-guest.py wallpaper-preserved', timeout=180)
@@ -486,6 +487,26 @@ def main():
         passed('Driverless CUPS queue delivered a PDF to a loopback IPP printer')
         vm.command('python /run/verify/verify-guest.py pdf', timeout=180)
         passed('Papers is the default PDF viewer and rendered a sample document')
+        vm.command('python /run/verify/verify-guest.py files-pdf-prepare', timeout=60)
+        vm.key('f4')
+        time.sleep(1)
+        vm.chord('shift', 'equal')
+        for attempt in range(15):
+            vm.command('python /run/verify/verify-guest.py files-pdf-capture')
+            text = subprocess.check_output(['tesseract', str(directory / '02-dfiles-pdf.png'),
+                                            'stdout'], text=True, stderr=subprocess.DEVNULL)
+            if 'dux verification pdf works' in ' '.join(text.lower().split()):
+                break
+            time.sleep(1)
+        else:
+            raise RuntimeError('Dux Files PDF preview did not render the sample document text.')
+        (directory / 'files-pdf.json').write_text(json.dumps({
+            'rendered_text': text, 'method': 'Dux Files selection, F4 preview and zoom-in key',
+            'screenshot': '02-dfiles-pdf.png',
+        }, indent=2) + '\n')
+        vm.key('esc')
+        vm.command('python /run/verify/verify-guest.py files-pdf-close')
+        passed('Dux Files PDF preview rendered document content with its Qt PDF backend')
         vm.command('python /run/verify/verify-guest.py camera', timeout=300)
         permission_deadline = time.monotonic() + 60
         while time.monotonic() < permission_deadline:

@@ -1,6 +1,6 @@
 # Arch + Niri + Dux
 
-An offline Arch installer for x86_64 UEFI machines. Includes Niri, the Dux 2.0
+An offline Arch installer for x86_64 UEFI machines. Includes Niri, the Dux 2.1
 desktop and apps, encrypted Btrfs and snapshot recovery. Common files open in
 Papers, Loupe, GNOME Text Editor, Celluloid and Decibels. Includes Chromium,
 Alacritty, Neovim, Snapshot, Calculator, standard CLI tools, Btop and Fastfetch,

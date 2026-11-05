@@ -3,7 +3,7 @@
 `integration/PKGBUILD` builds our owning `arch-niri-dux` package and the separate
 `arch-niri-dux-baseline` metapackage. The baseline depends on `packages.target`;
 dropping it allows removing optional baseline apps while retaining integration
-updates. Existing prototype ISOs are not automatically migrated. App retirement
+updates. Dux 2.1 is the clean configuration baseline; 2.0 installations must reinstall or explicitly adopt the new Niri entrypoint. No automatic home-file migration is shipped. App retirement
 will use targeted reviewed transitions, without general orphan cleanup.
 
 `scripts/build-integration.py` prepares a deterministic local source archive and
@@ -18,7 +18,7 @@ Snapshot also come from Arch's signed packages. New entries extend the closure
 without changing existing pins unless explicitly refreshed.
 
 `aur/` contains unmodified, reviewed recipes for Dux Greeter, Search, Calendar
-and Files 2.0.0. `aur-recipes.json` records their AUR commits and file hashes.
+and Files 2.1.0. `aur-recipes.json` records their AUR commits and file hashes.
 Builds enforce the vendored file hashes; the commits record their provenance.
 Their maintainer, `bbedward`, is a Dux Labs member and upstream contributor.
 Release-asset hashes were checked against Dux's GitHub release metadata; the
