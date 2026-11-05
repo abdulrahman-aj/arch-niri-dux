@@ -8,7 +8,7 @@ import shlex
 import shutil
 import subprocess
 
-from verification._common import INSTALL_CLOSE, MIN_FREE_BYTES, Milestones, install_open, mount_verify
+from verification._common import INSTALL_CLOSE, MIN_FREE_BYTES, Milestones, digest, install_open, mount_verify
 from verification.vm import VM, PASSWORD, installed_login, stage_probes
 from alongside_windows import WindowsVM, BootReports
 
@@ -75,8 +75,8 @@ def main():
         vm.expect_root(timeout=180)
         vm.command(mount_verify())
         for filename in ('install.py', 'configure-target.sh'):
-            digest = hashlib.sha256((ROOT / 'installer' / filename).read_bytes()).hexdigest()
-            vm.command(f'test "$(sha256sum /usr/local/lib/arch-niri-dux/installer/{filename} | cut -d " " -f 1)" = {digest}')
+            expected = digest(ROOT / 'installer' / filename)
+            vm.command(f'test "$(sha256sum /usr/local/lib/arch-niri-dux/installer/{filename} | cut -d " " -f 1)" = {expected}')
         # Plan through the ISO's own read-only inventory. The fixture must have
         # exactly one eligible region and one registered Debian bootloader.
         plan_script = '''import importlib.util,json,sys
