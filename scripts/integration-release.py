@@ -16,7 +16,6 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from verification._common import COMMIT_EXPR, FINGERPRINT_EXPR, RELEASES_URL, SHA256_EXPR, check_hex, load_module
 
 build = load_module('integration_build', Path(__file__).with_name('build-integration.py'))
-RELEASES = RELEASES_URL
 
 
 def fingerprint(root):
@@ -81,7 +80,7 @@ def download(url, destination):
             output.write(chunk)
 
 
-def fetch(root, destination, base_url=RELEASES):
+def fetch(root, destination, base_url=RELEASES_URL):
     if destination.exists() and (not destination.is_dir() or any(destination.iterdir())):
         raise ValueError('Release download destination must be empty.')
     destination.mkdir(parents=True, exist_ok=True)

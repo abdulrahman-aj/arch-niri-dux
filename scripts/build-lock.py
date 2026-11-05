@@ -10,7 +10,7 @@ import tarfile
 import urllib.request
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
-from verification._common import SHA256_EXPR, check_hex, digest
+from verification._common import GEO_MIRROR, OMARCHY_MIRROR, PACKAGES_TARGET, SHA256_EXPR, check_hex, digest
 
 
 def cache_matches(path, expected):
@@ -63,7 +63,7 @@ def main():
                         fields[key.strip('%')] = values
                     metadata[fields['FILENAME'][0]] = fields
         names = set()
-        for file in ('packages/packages.target', 'archiso/packages.live'):
+        for file in (PACKAGES_TARGET, 'archiso/packages.live'):
             names.update(line.split('#')[0].strip() for line in (root / file).read_text().splitlines())
         names.discard('')
         names.difference_update(aur_names)
@@ -76,7 +76,7 @@ def main():
                 continue
             name, version, filename, repo = line.split('|')
             info = metadata[filename]
-            url = ('https://pkgs.omarchy.org/stable/x86_64/' if repo == 'omarchy' else f'https://geo.mirror.pkgbuild.com/{repo}/os/x86_64/') + filename
+            url = (f'{OMARCHY_MIRROR}/x86_64/' if repo == 'omarchy' else f'{GEO_MIRROR}/{repo}/os/x86_64/') + filename
             if 'PGPSIG' not in info:
                 signature_path = pathlib.Path('/cache') / (filename + '.sig')
                 signature = signature_path.read_bytes() if signature_path.exists() else urllib.request.urlopen(url + '.sig', timeout=60).read()
@@ -90,7 +90,7 @@ def main():
         lock.write_text(json.dumps({'schema': 1, 'requested': sorted(names), 'packages': sorted(entries, key=lambda e: e['name'])}, indent=2) + '\n')
     payload = json.loads(lock.read_text())
     requested = set()
-    for file in ('packages/packages.target', 'archiso/packages.live'):
+    for file in (PACKAGES_TARGET, 'archiso/packages.live'):
         requested.update(line.split('#')[0].strip() for line in (root / file).read_text().splitlines())
     requested.discard('')
     requested.difference_update(aur_names)

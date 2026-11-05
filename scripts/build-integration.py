@@ -14,7 +14,7 @@ import tarfile
 import tempfile
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from verification._common import FINGERPRINT_EXPR, MAKEPKG_CONFIG, check_hex, digest
+from verification._common import FINGERPRINT_EXPR, MAKEPKG_CONFIG, PACKAGES_TARGET, check_hex, digest
 
 
 NAMES = {'arch-niri-dux', 'arch-niri-dux-baseline'}
@@ -33,7 +33,7 @@ def version(root):
 
 def prepare_source(root, workspace, epoch):
     """Make a bounded, deterministic input archive, independent of Git metadata."""
-    sources = [root / 'packages/packages.target']
+    sources = [root / PACKAGES_TARGET]
     sources.extend(sorted((root / 'desktop').rglob('*')))
     signing_key = root / 'keys/integration-signing.gpg'
     if signing_key.is_file():
