@@ -25,6 +25,7 @@
     "curl",
     "dconf",
     "decibels",
+    "dnsmasq",
     "dosfstools",
     "dux-gop",
     "dux-shell",
@@ -50,6 +51,7 @@
     "gvfs-afc",
     "gvfs-gphoto2",
     "gvfs-mtp",
+    "i2c-tools",
     "intel-ucode",
     "jq",
     "kimageformats",
@@ -81,10 +83,12 @@
     "polkit",
     "power-profiles-daemon",
     "python",
+    "qt6-imageformats",
     "qt6-multimedia",
     "qt6-webengine",
     "ripgrep",
     "rsync",
+    "smartmontools",
     "snap-pac",
     "snapper",
     "snapshot",
@@ -736,6 +740,15 @@
       "url": "https://geo.mirror.pkgbuild.com/extra/os/x86_64/djvulibre-3.5.30.1-1-x86_64.pkg.tar.zst",
       "repository": "extra",
       "signature": "iQIzBAABCgAdFiEEFORv5f1p8uKH4kTbYyw8wNHJyvYFAmo1A6cACgkQYyw8wNHJyvY6RA//RXdZvba4Wb68zVRukEX9z0AcVA2SUwO896GhPcxH4e1pNjaB6VWHuFbAnObhXeWonSZxSsOagWbULAPnU6S/9eM3/VBOZhQd5vMblvtRSJQqcDSud6rub5Qf6SqT+RuFs10zkuv/007j0w8fO0dmqJ2MiDxsNkcwpzZCXLOH8YpbZeluinAzojuYsHv3ZwQ43EEQ5KHomG5wqBuYSST3ZFtRO8EDYV6/zPkPszA4brfWaDgU/mzxymmPHme1G+ToEU/f3VFpzrOCa0tXT8E6O4ULn0WPbig7LzKYKjDzfnzd1ViZBhynpElIuc7uKpNV2aIKczcSsGcddj5JPJYqDqNzj1DWCQb9VMaYE2AmZy1589TMqJ+b6g4hDYq1HFh7PNVHB3TzGrcxP+5EFLOHw8YcQgjCk0xgKdCK5i5wgQ1qDqI2pqJOtX1mlOBR9j0e08FhV1jAmyKG5R2eX7GmMHtrrnPKcwNZ0W3RM5OVitOmZ/or9zcr3tjh1Nf53W9WZzo/7X9wDhU8sm5n62tNuc1ZIA9M3K8SH0YUCmbkzcDKe2Km27x4Ddj1jcLPXtpKJMMNRC+E8EZzHXqNrbg36K4wQTQjBnoEp4mH7I0zYFTOFA/u1C81AWjKjLWvQsI9SS5otA40XlSD26wS1zOXeALKUWhz9suPOOfUyJwmEEc="
+    },
+    {
+      "name": "dnsmasq",
+      "version": "2.93-1",
+      "filename": "dnsmasq-2.93-1-x86_64.pkg.tar.zst",
+      "sha256": "443d70d2606549270b1ef52183926714e515f81413db33ff96006e23866ad790",
+      "url": "https://geo.mirror.pkgbuild.com/extra/os/x86_64/dnsmasq-2.93-1-x86_64.pkg.tar.zst",
+      "repository": "extra",
+      "signature": "iHUEABYKAB0WIQQEKYl95fO9rFN6MGltQr3RFuAGjwUCaiFzkQAKCRBtQr3RFuAGj3HAAQCjimCKIAmSFRq8sHtn9mxxNNNTP6YF2cA/f7/kSHW95gD/X/J04JsRa+OyVL9/nfGMMho13QCRkOYkH0KINTVWywo="
     },
     {
       "name": "dnssec-anchors",
@@ -1827,6 +1840,15 @@
       "signature": "iQEzBAABCgAdFiEEW34/txt/EDKaHAOrdx32Yn7faB8FAmrCI70ACgkQdx32Yn7faB9scAf+KE0KTzmsJZZ0kB97m0v/2sHNnCwyS2uL1SPY7gs62XxhcD6e0sSNUVfujFWrmfPc52G/fAieSe+5U0w0U1+DU+V72coSqGk5fuBdiSxXDgHsIXC4ZkUxF/DjfQ2gV/vnTQF4LhUXuX/ebwNE7s6fe7i6hwlAaP/21YSBtXBnG3apxoLyOEeknz7SgxlK6D4quCgCNnQCPpeyXb+5jgKukU5903fN8M98yC5o1FUqDOdNJWVca5BfdkARzUyQW/0cmSWp2b+K0TCR0lbSZF6Dp2r8oF9JOLmOiszfJLnROH0Oo/+X4X/jZwNHxb6VN/F1k1THEnjTvFt77drmoqmBJQ=="
     },
     {
+      "name": "i2c-tools",
+      "version": "4.4-4",
+      "filename": "i2c-tools-4.4-4-x86_64.pkg.tar.zst",
+      "sha256": "0bf5b396a1fe87b7b10c82887f2dde427b8f4bf33f04b4f3d10d81c803540d7f",
+      "url": "https://geo.mirror.pkgbuild.com/extra/os/x86_64/i2c-tools-4.4-4-x86_64.pkg.tar.zst",
+      "repository": "extra",
+      "signature": "iQEzBAABCgAdFiEE5JnHn1PJalTlcv7hwGCGM3xQdz4FAmk+vb0ACgkQwGCGM3xQdz4U9wgAiasYK/cTMiVa2ijLbbHV9TJapNi4llMZTSvkC75Xa0Lc2COjS8jWQZbrJPzW+E6JqLa54p0rLnEIlndozpNjYMEgbIgthSoiTfsZH1iLYVcH3Wi5b4Y/vFAsRAjaOrAkkBdzjkCuL07NhHVbqMfOk8Lp5UW4Obvy90o7vu+mG/I4MaoWVJkrKQ+AW5tAXkXMY3h4foqUlAnU0FYMmLqb+yXmIY1RKnDyblZJgAoSmZ+dkS1BNNDcl8sig9llYZQ2Nbbc5nSqsEEEPsbbC5bk9ZHU56T89+N/oTnrknaKZttoLxUyjDtoIRm7zdZ3eF8mQYxETut4iJjlg0eMowEyLQ=="
+    },
+    {
       "name": "iana-etc",
       "version": "20260617-1",
       "filename": "iana-etc-20260617-1-any.pkg.tar.zst",
@@ -1933,6 +1955,15 @@
       "url": "https://geo.mirror.pkgbuild.com/core/os/x86_64/jansson-2.15.1-1-x86_64.pkg.tar.zst",
       "repository": "core",
       "signature": "iNUEABYKAH0WIQQFx3danouXdAf+COadTFqhVCbaCgUCakViv18UgAAAAAAuAChpc3N1ZXItZnByQG5vdGF0aW9ucy5vcGVucGdwLmZpZnRoaG9yc2VtYW4ubmV0MDVDNzc3NUE5RThCOTc3NDA3RkUwOEU2OUQ0QzVBQTE1NDI2REEwQQAKCRCdTFqhVCbaCl75AQDW4c2CgkWBRDXiTrxPwT0iSukIpxP8hmmJHSMY8P5AYQD/T/Hd2YBSL5IeECsYebY1Ob35zEKvA9urPqzgSY+nZgQ="
+    },
+    {
+      "name": "jasper",
+      "version": "4.2.9-1",
+      "filename": "jasper-4.2.9-1-x86_64.pkg.tar.zst",
+      "sha256": "de413717cf274894de2a4bbbc8c85be727f313fb3bbc2ed30fe316cfc773a6b1",
+      "url": "https://geo.mirror.pkgbuild.com/extra/os/x86_64/jasper-4.2.9-1-x86_64.pkg.tar.zst",
+      "repository": "extra",
+      "signature": "iQIzBAABCgAdFiEE4kC1fixGMLp2ji8m/BtUfI2BcsgFAmnKqVQACgkQ/BtUfI2Bcshyfw/+OD/MenZhQlIyo3CoJzGrxDxT7CVyATHRh7hJXErNLi5dLoQyyYhMUnze54V+IFGnHkXYkuDP1YGjgxLm27O4NjgPG3u0sQ0uA745moUvjdegmxscvpt82+dDlFQ6L5l4O7PIOuF5EJ6kscztV4+HYXHVhs3eh8otB8bKjISFn4hD9O8hXuM5Y/pbM/aD8fa4b7TnFE4Kt1mraO/MS3TCHsFwDsah9zuek1uCvam1noFOVIrs4OxxAMCVb4iOJ+ZWx7Eq/BLg2/0PAIKqDrGykrfCukX5fdqL51fdQtqa/yv2lvA0XEl8nipsYhBC3Kj9/JchKWxK1GuDmpeA96wAKX3P/SAxlZEacjY8GK9hCmHSNXAepWwBeF6iM13VlrIByYnu8Wt2WJ/4AixByUX5bYlcpjSRraeyMn8QJztbu6z7n+Y4gwGcWB5w5MXt6csZ3OMYL5joxH6NZnrwKYdL5ulhhAvoNLWgIASWLURpm6VDO4+P3I6siQWseDZ643km4pr+O18N3HO7/zgBt1wI8cNZfc2FxWTvpbkjJ+eSxCucueVT811kDxzTaXRHRAvke3C4Yvw4my0YT4IXypIzlcfsSeTmsK8DOdw2T8hDZ0XQkLEMRFzvVTOM3PdYbtohVWOByVoFXcnKncyBXkueaYfwrXmXRtOo7JNNkrfHwwE="
     },
     {
       "name": "jbig2dec",
@@ -3013,6 +3044,15 @@
       "url": "https://geo.mirror.pkgbuild.com/extra/os/x86_64/libmms-0.6.4-6-x86_64.pkg.tar.zst",
       "repository": "extra",
       "signature": "iHUEABYKAB0WIQTnXNSBSnetlDx6taPglZ/qi1UFOQUCaWdJIgAKCRDglZ/qi1UFOUBlAP4iLw/1LGmK56APmxjJhXtKgsvY/HGvLJ6nifn1fLzuxgD/RnWjhlNec9qoFw0gISqLazn4tZ8hiYR8TTF4NoS2QA8="
+    },
+    {
+      "name": "libmng",
+      "version": "2.0.3-4",
+      "filename": "libmng-2.0.3-4-x86_64.pkg.tar.zst",
+      "sha256": "d72b54a4d4aef58770b19737427b00e98aa412702078fea2b8d40cad4c474b84",
+      "url": "https://geo.mirror.pkgbuild.com/extra/os/x86_64/libmng-2.0.3-4-x86_64.pkg.tar.zst",
+      "repository": "extra",
+      "signature": "iQEzBAABCAAdFiEEFRnVq6Zb9vwrc8dWek52CV2KUuQFAmaHCKcACgkQek52CV2KUuT3CwgAmy1YfphQVsGnOAn+C6+DJpYByZVjRyd6WwQ6l+xp2hss+30qrtSpc5q4O+HXYZywFr1vj1Yzrct7UZ60ZOPe7x0aHxIt9YX7GnecSmP0FXFi9BgdJC9XIPuoJqKY/0yMTeDYKUMzmgQ9hvr9ENu/s3HBdc+JYSNkL/AyTv6+YSpcfURSGXiGN67D2c/mtUuZN9fzd2oM+A7UdSvTggqw8z4JkUvshyeWxg0MYApinA6W2X7ak7+tL3QYnbkkBvj1EKAgRImd7ylNuSddgeWnNvrvJ2H95XJJqtTt2JiVpZgUFCI3wuEzINA3f0Ec6sKVJZttTBgq38mYN/0/ZfU4Mg=="
     },
     {
       "name": "libmnl",
@@ -5220,6 +5260,15 @@
       "signature": "iQEzBAABCgAdFiEEFRnVq6Zb9vwrc8dWek52CV2KUuQFAmrnm7wACgkQek52CV2KUuTBxAf7Bf0hd5OfrlNP5gVROMbb9YKFkfd9D1vg08ta6tnGKFEKJ53coGZg01OOMuow9PKFkb+px4DVoYT4DIzDqQt+zqxraIBQRSUtfxlfIkta0J2TUNBNNjuz7rbUPZhKXOwDyu4/V3qkLgNr0wG0R+78Yy9wOn9eU/bgnjMCxEM8T1AtOrBG2F3DvR0WmfRkF93K9HWlm1UenjGAPN+AM+OHfwpmHB1tUeZJwTossc6pIJ8YaasMoDFXWYQi3G5BqOFWUY/jcCC7hZkid/ocJALRfyYYHo/mzlTXvrepQalfrNz7bTxg1Z02cNbC36FarD4bOtXAhYD/eBnm74MlCQNGjA=="
     },
     {
+      "name": "qt6-imageformats",
+      "version": "6.12.0-1",
+      "filename": "qt6-imageformats-6.12.0-1-x86_64.pkg.tar.zst",
+      "sha256": "9851283acbd350badb3e289149ae8d6664296f61ac8172f7bc86c6be8f487cbf",
+      "url": "https://geo.mirror.pkgbuild.com/extra/os/x86_64/qt6-imageformats-6.12.0-1-x86_64.pkg.tar.zst",
+      "repository": "extra",
+      "signature": "iQEzBAABCgAdFiEEFRnVq6Zb9vwrc8dWek52CV2KUuQFAmq+p5UACgkQek52CV2KUuSRMQgAnU9W5zQev1FdjQVgJZBR9+IjxulAMKnCpULiwW2sN0UQxDgbr9O8wavw21QAYG0V+G3Z2G4+LLZwnFI+WRP9C1R+ewGHgiFSHfnZwdY9h9K0WC73pQ0kQTjrJOijN6Sz9D/HjHwZDqS14cN4Xzf8OuZmI3wiuZzwADuvX/UbFD1H+/KTQ27Zi+S7wapVULrGha3nBiyM2XF/KW9SmQwTJ6iMa5K4efWMI5nG5XOYSJofwVyz9Lw+ZXZP5TBhZz54HjA7vGtXpD9pkyLGeeN5VZrxjrTrNzWl2DU7WsySL83s64LFsN34SOXi1nU2weVudknwn2UXf3ZXkHoTuM+eZA=="
+    },
+    {
       "name": "qt6-multimedia",
       "version": "6.12.0-1",
       "filename": "qt6-multimedia-6.12.0-1-x86_64.pkg.tar.zst",
@@ -5452,6 +5501,15 @@
       "url": "https://geo.mirror.pkgbuild.com/extra/os/x86_64/slang-2.3.3-4-x86_64.pkg.tar.zst",
       "repository": "extra",
       "signature": "iQEzBAABCgAdFiEE5JnHn1PJalTlcv7hwGCGM3xQdz4FAmiE1iwACgkQwGCGM3xQdz5gYQgAr1LngdMbxVl2oy/hyRosKL7d63W+BaroFrhlBcUSufpZF86o9FJFWA4yPCW1TnQtHhVUEk0H3an5M0/IJTu7ofxmnMLE+xB5Htb4G3rMX2RH2Pjc+E/D4EU1JiOtcjiCpCAC1CcKXLIJZE3P27NTksvie/D1+coUMjYzGWOKCNiXrXRTP2gsPOW5FprCsZqaZNAD+F6Sdkd4MREPHkiBQHGA0i9FDiYM0wOp03SurMlhVGptlnRrS/In3XDZD2wRXzL42MpY1C4L6AKdvIBwdLaR09kBCyQtudM/j9MpBAGbcaUGcWKki7QpIkHXBHvppQYl+FJhUO2hyJlKU+sSow=="
+    },
+    {
+      "name": "smartmontools",
+      "version": "7.5-2",
+      "filename": "smartmontools-7.5-2-x86_64.pkg.tar.zst",
+      "sha256": "9aa4f3961955f4806a2fb9d2a6a6bac719c628f2457b05288ee1b650ca84d7fa",
+      "url": "https://geo.mirror.pkgbuild.com/extra/os/x86_64/smartmontools-7.5-2-x86_64.pkg.tar.zst",
+      "repository": "extra",
+      "signature": "iHUEABYKAB0WIQRME/VVPC2HrSMiCgc+wuNU9hrJ9gUCasgOkAAKCRA+wuNU9hrJ9vDiAPoDTYMI5AfljxUvrTPIFyl7CqAzhPLu0mqqfBhZ4TD+rwEAulngX3cVFaH1CY+Bd8z1XfEJc7NLSE79qK9kO28NYgQ="
     },
     {
       "name": "snap-pac",

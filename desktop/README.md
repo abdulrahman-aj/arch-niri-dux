@@ -40,13 +40,21 @@ survive reruns. GNOME Calculator is installed standalone.
 `org.gnome.Snapshot.desktop`. Qt PDF support in `qt6-webengine` enables PDF preview inside Dux
 Files, while Papers remains the default document app. These apps come from
 signed Arch packages. `kimageformats` adds AVIF, HEIF and JPEG XL decoding for Qt
-apps. `fprintd` supplies the fingerprint backend; enrollment and authentication
-require supported hardware and user setup. The live ISO remains terminal-only.
+apps. `qt6-imageformats` supplies WebP, TIFF and other Qt decoders.
+`smartmontools` supports System Monitor's drive-health view. `fprintd` supplies
+the fingerprint backend; enrollment and authentication require supported hardware and user setup. The live ISO remains terminal-only.
 
 CUPS and Avahi start for Dux's native driverless printer settings. CUPS keeps
 its stock localhost-only listeners. GVFS supplies Android, Apple-device
 and camera file access. SMB shares remain an optional install. Qt Multimedia
 and cava support Dux's own effects without changing its settings.
+
+Dux controls external-monitor brightness through I2C/DDC. `i2c-tools` loads
+`i2c-dev` at boot. A udev rule grants the active local session access to I2C
+buses under display controllers. Reboot after installing this update; monitor
+and connection support still determine whether DDC works.
+NetworkManager uses `dnsmasq` for hotspot sharing. The standalone dnsmasq service
+is not enabled.
 
 Matugen supplies Dux's colors and system light/dark preference. A first-login
 service applies upstream's GTK integration and selects the matching GTK theme

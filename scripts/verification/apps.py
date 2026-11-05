@@ -26,6 +26,21 @@ def record(name, value):
     (EVIDENCE / (name + '.json')).write_text(json.dumps(value, indent=2) + '\n')
 
 
+def daemon_request(method):
+    session = Path('/run/user') / str(pwd.getpwnam('tester').pw_uid)
+    api = next(session.glob('dms*.sock'))
+    with socket.socket(socket.AF_UNIX) as connection:
+        connection.settimeout(15)
+        connection.connect(str(api))
+        stream = connection.makefile('rwb')
+        json.loads(stream.readline())  # Initial capabilities greeting.
+        stream.write((json.dumps({'id': 1, 'method': method}) + '\n').encode())
+        stream.flush()
+        response = json.loads(stream.readline())
+    assert not response.get('error'), response
+    return response['result']
+
+
 def app_window(name):
     return next((window for window in guest.windows()
                  if name.lower() in (window.get('app_id') or '').lower()), None)
@@ -232,6 +247,28 @@ def media_played(kind):
     close_app(application)
 
 
+def shared_connection():
+    # Veth peers exercise NetworkManager's hotspot DHCP helper without a Wi-Fi radio.
+    guest.run('ip', 'link', 'add', 'dv-share', 'type', 'veth', 'peer', 'name', 'dv-client')
+    try:
+        for interface, method in [('dv-share', 'shared'), ('dv-client', 'auto')]:
+            guest.run('nmcli', 'device', 'set', interface, 'managed', 'yes')
+            guest.run('nmcli', 'connection', 'add', 'type', 'ethernet', 'ifname', interface,
+                      'con-name', interface, 'connection.autoconnect', 'no',
+                      'ipv4.method', method, 'ipv4.never-default', 'yes', 'ipv6.method', 'disabled')
+        for interface in ('dv-share', 'dv-client'):
+            guest.run('nmcli', '--wait', '20', 'connection', 'up', interface)
+        address = guest.run('nmcli', '--get-values', 'IP4.ADDRESS', 'device', 'show', 'dv-client',
+                            stdout=subprocess.PIPE).stdout.strip()
+        assert address.startswith('10.42.'), address
+        return address
+    finally:
+        for interface in ('dv-client', 'dv-share'):
+            subprocess.run(['nmcli', 'connection', 'delete', interface], check=False,
+                           stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        subprocess.run(['ip', 'link', 'delete', 'dv-share'], check=False)
+
+
 def backends():
     for package, executable in [('gvfs-mtp', 'gvfsd-mtp'), ('gvfs-afc', 'gvfsd-afc'),
                                 ('gvfs-gphoto2', 'gvfsd-gphoto2')]:
@@ -249,26 +286,37 @@ def backends():
     assert 'DUX_MULTIMEDIA_OK' in result.stdout, result.stdout
     guest.user_command('cava', '-v', capture=True, timeout=10)
     # Exercise Qt's decoder, not Loupe's separate image stack or plugin filenames.
-    avif = FILES / 'baseline-image.avif'
-    guest.user_command('ffmpeg', '-nostdin', '-loglevel', 'error', '-y',
-                       '-i', str(FILES / 'baseline-image.png'), '-frames:v', '1',
-                       '-c:v', 'libaom-av1', '-still-picture', '1', str(avif), timeout=60)
-    # A synchronous decode can finish before Quickshell connects its quit handler.
-    qml.write_text('import QtQuick\nimport Quickshell\nScope {\n'
-                   'Image { id: image; source: "' + avif.as_uri() + '" }\n'
-                   'Timer { interval: 100; running: true; repeat: true; onTriggered: {\n'
-                   'if (image.status === Image.Ready) { console.log("DUX_AVIF_OK"); Qt.quit(); }\n'
-                   'if (image.status === Image.Error) Qt.exit(1); } } }\n')
-    result = guest.user_command('bash', '-c', f'quickshell -p {qml} 2>&1', capture=True, timeout=30)
-    assert 'DUX_AVIF_OK' in result.stdout, result.stdout
+    for extension, codec_options in [('avif', ['-c:v', 'libaom-av1', '-still-picture', '1']),
+                                      ('webp', ['-c:v', 'libwebp'])]:
+        image = FILES / ('baseline-image.' + extension)
+        guest.user_command('ffmpeg', '-nostdin', '-loglevel', 'error', '-y',
+                           '-i', str(FILES / 'baseline-image.png'), '-frames:v', '1',
+                           *codec_options, str(image), timeout=60)
+        # A synchronous decode can finish before Quickshell connects its quit handler.
+        qml.write_text('import QtQuick\nimport Quickshell\nScope {\n'
+                       'Image { id: image; source: "' + image.as_uri() + '" }\n'
+                       'Timer { interval: 100; running: true; repeat: true; onTriggered: {\n'
+                       'if (image.status === Image.Ready) { console.log("DUX_IMAGE_OK"); Qt.quit(); }\n'
+                       'if (image.status === Image.Error) Qt.exit(1); } } }\n')
+        result = guest.user_command('bash', '-c', f'quickshell -p {qml} 2>&1', capture=True, timeout=30)
+        assert 'DUX_IMAGE_OK' in result.stdout, (extension, result.stdout)
     fingerprint = json.loads(guest.run(
         'busctl', '--system', '--json=short', 'call', 'net.reactivated.Fprint',
         '/net/reactivated/Fprint/Manager', 'net.reactivated.Fprint.Manager', 'GetDevices',
         stdout=subprocess.PIPE).stdout)
     assert fingerprint['type'] == 'ao', fingerprint
+    smart = json.loads(guest.run('smartctl', '--json', '--scan', stdout=subprocess.PIPE).stdout)
+    assert smart['smartctl']['exit_status'] == 0, smart
+    drives = daemon_request('drives.list')
+    assert Path(drives['smartctl']).name == 'smartctl', drives
+    guest.run('dnsmasq', '--test')
+    shared_address = shared_connection()
+    guest.run('udevadm', 'verify', '/usr/lib/udev/rules.d/60-arch-niri-dux-ddc.rules')
+    assert Path('/sys/module/i2c_dev').is_dir(), 'i2c-tools did not load i2c-dev at boot'
     record('baseline-backends', {'phone_camera_binaries_load': True, 'qt_multimedia_import': True,
-                                  'cava_available': True, 'qt_avif_decoded': True, 'fingerprint_backend_responded': True,
-                                  'note': 'Physical phone/camera access and fingerprint enrollment/authentication are not qualified by this VM check.'})
+                                  'cava_available': True, 'qt_avif_decoded': True, 'qt_webp_decoded': True, 'fingerprint_backend_responded': True, 'smartctl_discovered_by_dux': drives['smartctl'],
+                                  'shared_connection_client_address': shared_address, 'i2c_module_loaded': True,
+                                  'note': 'Physical phone/camera access, fingerprint authentication and drive S.M.A.R.T. health data, external-monitor DDC and Wi-Fi hotspot operation are not qualified by this VM check.'})
 
 
 def printing():
@@ -302,18 +350,8 @@ def printing():
             guest.wait_until('Virtual IPP printer', ready, timeout=30)
             guest.run('lpadmin', '-p', 'DuxProbe', '-E', '-v', uri, '-m', 'everywhere')
             assert Path('/etc/cups/ppd/DuxProbe.ppd').is_file()
-            session = Path('/run/user') / str(pwd.getpwnam('tester').pw_uid)
-            api = next(session.glob('dms*.sock'))
-            with socket.socket(socket.AF_UNIX) as connection:
-                connection.settimeout(15)
-                connection.connect(str(api))
-                stream = connection.makefile('rwb')
-                json.loads(stream.readline())  # Initial capabilities greeting.
-                stream.write(b'{"id":1,"method":"cups.getPrinters"}\n')
-                stream.flush()
-                response = json.loads(stream.readline())
-            assert not response.get('error'), response
-            assert any(printer['name'] == 'DuxProbe' for printer in response['result']), response
+            printers = daemon_request('cups.getPrinters')
+            assert any(printer['name'] == 'DuxProbe' for printer in printers), printers
             document = FILES / 'print-test.pdf'
             document.write_bytes(sample_pdf_bytes())
             document.chmod(0o644)
@@ -327,7 +365,7 @@ def printing():
                 return files if files and not pending.strip() else None
 
             documents = guest.wait_until('PDF delivered through driverless CUPS queue', completed, timeout=60)
-            record('baseline-printing', {'driverless_queue': True, 'dux_printers': response['result'],
+            record('baseline-printing', {'driverless_queue': True, 'dux_printers': printers,
                                         'submitted': result.stdout.strip(),
                                         'received_pdf_bytes': [path.stat().st_size for path in documents],
                                         'note': 'Loopback IPP emulator; physical printers and LAN discovery untested.'})
@@ -366,7 +404,7 @@ def verify(vm, passed):
         vm.probe('apps', 'played-' + kind, timeout=60)
     passed('Decibels audio and four Celluloid open/play/close cycles output the expected fixture tones')
     vm.probe('apps', 'backends', timeout=90)
-    passed('Video thumbnails, phone/camera backend loading and Dux multimedia backends')
+    passed('Dux discovers drive tools; Qt images, shared networking and desktop backends work')
     vm.probe('apps', 'printing', timeout=150)
     passed('Driverless CUPS queue delivered a PDF to a loopback IPP printer')
 
