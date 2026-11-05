@@ -253,10 +253,12 @@ def backends():
     guest.user_command('ffmpeg', '-nostdin', '-loglevel', 'error', '-y',
                        '-i', str(FILES / 'baseline-image.png'), '-frames:v', '1',
                        '-c:v', 'libaom-av1', '-still-picture', '1', str(avif), timeout=60)
+    # A synchronous decode can finish before Quickshell connects its quit handler.
     qml.write_text('import QtQuick\nimport Quickshell\nScope {\n'
-                   'Image { source: "' + avif.as_uri() + '"; onStatusChanged: {\n'
-                   'if (status === Image.Ready) { console.log("DUX_AVIF_OK"); Qt.quit(); }\n'
-                   'if (status === Image.Error) Qt.exit(1); } } }\n')
+                   'Image { id: image; source: "' + avif.as_uri() + '" }\n'
+                   'Timer { interval: 100; running: true; repeat: true; onTriggered: {\n'
+                   'if (image.status === Image.Ready) { console.log("DUX_AVIF_OK"); Qt.quit(); }\n'
+                   'if (image.status === Image.Error) Qt.exit(1); } } }\n')
     result = guest.user_command('bash', '-c', f'quickshell -p {qml} 2>&1', capture=True, timeout=30)
     assert 'DUX_AVIF_OK' in result.stdout, result.stdout
     fingerprint = json.loads(guest.run(
