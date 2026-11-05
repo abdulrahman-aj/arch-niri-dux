@@ -26,8 +26,9 @@ are excluded. Recipe checks account for makepkg's metadata and supplied variable
 
 Acceptance scenarios live in `scripts/verification/`, with each behavior's host
 interaction, guest probes and cleanup together. Accepted machine-readable evidence
-lives in `verification/`; disposable logs, screenshots and VM disks stay in
-untracked `out/` directories. `scripts/verify.py` orders those
+lives in `verification/`; logs, screenshots and VM disks stay in disposable
+workspaces (`/tmp` by default, or an explicit `out/` subdirectory).
+`scripts/verify.py` orders those
 scenarios. Alongside installation and hibernation reuse the same VM control and
 probe staging; the upgrade fixture owns its restoration expectations.
 
