@@ -12,11 +12,8 @@ import urllib.request
 
 
 def digest(path):
-    h = hashlib.sha256()
     with path.open('rb') as stream:
-        for block in iter(lambda: stream.read(1024 * 1024), b''):
-            h.update(block)
-    return h.hexdigest()
+        return hashlib.file_digest(stream, 'sha256').hexdigest()
 
 
 def cache_matches(path, expected):
@@ -55,6 +52,11 @@ def main():
     for source in json.loads((root / 'packages/desktop-sources.json').read_text()):
         if digest(root / source['path']) != source['sha256']:
             raise ValueError(f"Upstream desktop asset changed: {source['path']}")
+    requested = set()
+    for file in ('packages/packages.target', 'archiso/packages.live'):
+        requested.update(line.split('#')[0].strip() for line in (root / file).read_text().splitlines())
+    requested.discard('')
+    requested.difference_update(aur_names)
     lock = root / 'packages/closure.lock.json'
     if not lock.exists():
         metadata = {}
@@ -69,14 +71,9 @@ def main():
                         key, *values = section.splitlines()
                         fields[key.strip('%')] = values
                     metadata[fields['FILENAME'][0]] = fields
-        names = set()
-        for file in ('packages/packages.target', 'archiso/packages.live'):
-            names.update(line.split('#')[0].strip() for line in (root / file).read_text().splitlines())
-        names.discard('')
-        names.difference_update(aur_names)
         subprocess.run(['mkdir', '-p', '/build/resolve/local', '/build/resolve/sync'], check=True)
         subprocess.run(['cp', '-a', '/var/lib/pacman/sync/.', '/build/resolve/sync/'], check=True)
-        result = subprocess.check_output(['pacman', '-Sp', '--noconfirm', '--dbpath', '/build/resolve', '--print-format', '%n|%v|%f|%r', *sorted(names)], text=True)
+        result = subprocess.check_output(['pacman', '-Sp', '--noconfirm', '--dbpath', '/build/resolve', '--print-format', '%n|%v|%f|%r', *sorted(requested)], text=True)
         entries = []
         for line in result.splitlines():
             if line.count('|') != 3:
@@ -89,18 +86,13 @@ def main():
                 signature = signature_path.read_bytes() if signature_path.exists() else urllib.request.urlopen(url + '.sig', timeout=60).read()
                 info['PGPSIG'] = [base64.b64encode(signature).decode()]
             entries.append(dict(name=name, version=version, filename=filename, sha256=info['SHA256SUM'][0], url=url, repository=repo, signature=info['PGPSIG'][0]))
-        if not names.issubset({e['name'] for e in entries}):
+        if not requested.issubset({e['name'] for e in entries}):
             raise ValueError('Incomplete resolution')
         dux = next(e for e in entries if e['name'] == 'dux-shell')
         if int(subprocess.check_output(['vercmp', dux['version'], '2.0.0'])) < 0:
             raise ValueError('Dux must be >= 2.0.0')
-        lock.write_text(json.dumps({'schema': 1, 'requested': sorted(names), 'packages': sorted(entries, key=lambda e: e['name'])}, indent=2) + '\n')
+        lock.write_text(json.dumps({'schema': 1, 'requested': sorted(requested), 'packages': sorted(entries, key=lambda e: e['name'])}, indent=2) + '\n')
     payload = json.loads(lock.read_text())
-    requested = set()
-    for file in ('packages/packages.target', 'archiso/packages.live'):
-        requested.update(line.split('#')[0].strip() for line in (root / file).read_text().splitlines())
-    requested.discard('')
-    requested.difference_update(aur_names)
     if sorted(requested) != payload['requested']:
         raise ValueError('Package lists changed; explicitly refresh the closure lock')
     dest.mkdir(parents=True, exist_ok=True)

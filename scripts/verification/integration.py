@@ -198,7 +198,7 @@ def published_repository():
 def verify_published(vm, passed):
     vm.start(cdrom=False, network=True)
     installed_login(vm)
-    vm.command('mkdir -p /run/verify; mount -t 9p -o trans=virtio,version=9p2000.L verify /run/verify')
+    vm.mount_probes()
     vm.probe('integration', 'published-repository', timeout=300)
     passed('Published HTTPS repository and packages verify against offline trust and exact release hashes')
     vm.poweroff()

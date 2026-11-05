@@ -78,7 +78,7 @@ def main():
         passed(f'Real existing {args.os} boots before installation and sentinel is intact')
         vm.start()
         vm.expect(r'root@archiso[^\n]*#', timeout=180)
-        vm.command('mkdir -p /run/verify; mount -t 9p -o trans=virtio,version=9p2000.L verify /run/verify')
+        vm.mount_probes()
         for filename in ('install.py', 'configure-target.sh'):
             digest = hashlib.sha256((ROOT / 'installer' / filename).read_bytes()).hexdigest()
             vm.command(f'test "$(sha256sum /usr/local/lib/arch-niri-dux/installer/{filename} | cut -d " " -f 1)" = {digest}')
@@ -88,7 +88,7 @@ def main():
 p='/usr/local/lib/arch-niri-dux/installer/install.py'
 s=importlib.util.spec_from_file_location('installer',p); m=importlib.util.module_from_spec(s);sys.modules[s.name]=m;s.loader.exec_module(m)
 v=m.Settings('DEVICE','tester','alongside','UTC','us','vm-verification-only','vm-verification-only',swap_gib=0,mode='alongside')
-t=m.alongside_snapshot(v)
+t=m.alongside_snapshot(v.disk)
 assert len(t['regions'])==1
 boots=[n for n,b in t['boots'].items() if 'BOOTPATH' in b['path'].lower()]
 assert boots and len({(t['boots'][n]['guid'],t['boots'][n]['path'].lower()) for n in boots})==1
@@ -128,7 +128,7 @@ open('/run/verify/new-partitions.json','w').write(json.dumps(m.alongside_plan(v,
         passed('Default firmware path boots the new encrypted installation')
         # Reinstall the pinned kernel: exercise actual package hooks and
         # snapshot generation rather than only editing the menu in place.
-        vm.command('mkdir -p /run/verify; mount -t 9p -o trans=virtio,version=9p2000.L verify /run/verify')
+        vm.mount_probes()
         vm.command('pacman -U --noconfirm /run/verify/linux-[0-9]*.pkg.tar.zst', timeout=600)
         vm.command('grep -A2 "^/Existing OS" /boot/limine.conf > /run/verify/chainload-after-update.txt; '
                    'grep -q "path: guid(" /run/verify/chainload-after-update.txt; '

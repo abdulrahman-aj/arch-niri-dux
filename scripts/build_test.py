@@ -18,25 +18,16 @@ class PayloadTests(unittest.TestCase):
         self.entry = dict(filename='base-1-any.pkg.tar.zst', sha256='a' * 64,
                           url='https://example.org/base-1-any.pkg.tar.zst', signature='abc')
 
-    def test_unsigned_rejected(self):
-        self.entry['signature'] = ''
-        with self.assertRaises(ValueError):
-            module.validate_entry(self.entry)
-
-    def test_traversal_rejected(self):
-        self.entry['filename'] = '../base.pkg.tar.zst'
-        with self.assertRaises(ValueError):
-            module.validate_entry(self.entry)
-
-    def test_insecure_source_rejected(self):
-        self.entry['url'] = 'http://example.org/base'
-        with self.assertRaises(ValueError):
-            module.validate_entry(self.entry)
-
-    def test_invalid_hash_rejected(self):
-        self.entry['sha256'] = 'invalid'
-        with self.assertRaises(ValueError):
-            module.validate_entry(self.entry)
+    def test_invalid_fields_rejected(self):
+        invalid = {'signature': '', 'filename': '../base.pkg.tar.zst',
+                   'url': 'http://example.org/base', 'sha256': 'invalid'}
+        for field, value in invalid.items():
+            # Each case rebuilds the valid entry so the mutations stay independent.
+            with self.subTest(field=field):
+                entry = self.entry.copy()
+                entry[field] = value
+                with self.assertRaises(ValueError):
+                    module.validate_entry(entry)
 
     def test_payload_hash_changes_on_corruption(self):
         with tempfile.TemporaryDirectory() as directory:
