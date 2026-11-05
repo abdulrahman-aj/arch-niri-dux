@@ -4,11 +4,11 @@ import json
 import html
 from pathlib import Path
 import re
-import sys
 import time
 import urllib.error
 import urllib.request
-from .guest import wait_until, user_command, windows, screenshot
+from . import dispatch
+from .guest import wait_until, focus_window, windows, screenshot
 from .vm import click_screen_text
 
 
@@ -24,7 +24,7 @@ def browser_state():
 
 def focus_browser():
     browser = next(window for window in windows() if window.get('app_id', '').lower().startswith('chromium'))
-    user_command('niri', 'msg', 'action', 'focus-window', '--id', str(browser['id']))
+    focus_window(browser['id'])
     assert browser_state(), 'The graphical verification page is unavailable.'
 
 
@@ -159,22 +159,19 @@ def file_chooser_cancelled():
                (state := browser_state()) is not None and state['file'] == 'cancelled')
 
 
+def capture_picker():
+    wait_until('GNOME screen-sharing source chooser', lambda: any(
+        'portal' in window.get('app_id', '').lower() and window.get('title') == 'Share Screen'
+        for window in windows()))
+    screenshot('02-screen-share-picker.png')
+
+
 if __name__ == '__main__':
-    action = sys.argv[1]
-    if action == 'focus-browser':
-        focus_browser()
-    elif action == 'file-chooser':
-        file_chooser()
-    elif action == 'file-chooser-cancelled':
-        file_chooser_cancelled()
-    elif action == 'capture':
-        capture()
-    elif action == 'capture-source':
-        screenshot('02-chromium-share-source.png')
-    elif action == 'capture-picker':
-        wait_until('GNOME screen-sharing source chooser', lambda: any(
-            'portal' in window.get('app_id', '').lower() and window.get('title') == 'Share Screen'
-            for window in windows()))
-        screenshot('02-screen-share-picker.png')
-    else:
-        raise SystemExit('Unknown browser probe')
+    dispatch('browser', {
+        'focus-browser': focus_browser,
+        'file-chooser': file_chooser,
+        'file-chooser-cancelled': file_chooser_cancelled,
+        'capture': capture,
+        'capture-source': lambda: screenshot('02-chromium-share-source.png'),
+        'capture-picker': capture_picker,
+    })

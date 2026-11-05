@@ -7,6 +7,7 @@ import secrets
 import stat
 import subprocess
 import sys
+from . import dispatch
 from .guest import run
 from .vm import installed_login, graphical_login
 
@@ -232,24 +233,14 @@ def verify_fallback(vm, passed):
 
 
 if __name__ == '__main__':
-    action = sys.argv[1]
-    if action == 'prepare':
-        prepare(Path(sys.argv[2]))
-    elif action == 'storage':
-        storage()
-    elif action == 'plymouth-config':
-        plymouth_config(sys.argv[2] if len(sys.argv) > 2 else '/')
-    elif action == 'plymouth-status':
-        plymouth_status()
-    elif action == 'prepare-hibernate':
-        prepare_hibernate()
-    elif action == 'serial-console-enable':
-        serial_console(True, sys.argv[2] if len(sys.argv) > 2 else '/')
-    elif action == 'serial-console-disable':
-        serial_console(False, sys.argv[2] if len(sys.argv) > 2 else '/')
-    elif action == 'splash-fallback-disable':
-        splash_fallback(True)
-    elif action == 'splash-fallback-enable':
-        splash_fallback(False)
-    else:
-        raise SystemExit('Unknown boot probe')
+    dispatch('boot', {
+        'prepare': lambda: prepare(Path(sys.argv[2])),
+        'storage': storage,
+        'plymouth-config': lambda: plymouth_config(sys.argv[2] if len(sys.argv) > 2 else '/'),
+        'plymouth-status': plymouth_status,
+        'prepare-hibernate': prepare_hibernate,
+        'serial-console-enable': lambda: serial_console(True, sys.argv[2] if len(sys.argv) > 2 else '/'),
+        'serial-console-disable': lambda: serial_console(False, sys.argv[2] if len(sys.argv) > 2 else '/'),
+        'splash-fallback-disable': lambda: splash_fallback(True),
+        'splash-fallback-enable': lambda: splash_fallback(False),
+    })

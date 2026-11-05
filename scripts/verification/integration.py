@@ -9,6 +9,7 @@ import re
 import subprocess
 import tempfile
 
+from . import dispatch
 from .guest import run
 from .vm import installed_login
 
@@ -206,10 +207,7 @@ def verify_published(vm, passed):
 
 
 if __name__ == '__main__':
-    import sys
-    if sys.argv[1] == 'published-repository':
-        published_repository()
-    elif sys.argv[1] == 'upgrade':
-        verify_upgrade()
-    else:
-        raise SystemExit('Unknown integration probe')
+    dispatch('integration', {
+        'published-repository': published_repository,
+        'upgrade': verify_upgrade,
+    })

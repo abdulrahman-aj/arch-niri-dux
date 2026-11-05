@@ -93,12 +93,20 @@ def windows():
     return json.loads(user_command('niri', 'msg', '--json', 'windows', capture=True).stdout)
 
 
+def focus_window(window_id):
+    user_command('niri', 'msg', 'action', 'focus-window', '--id', str(window_id))
+
+
+def png_ready(path):
+    # Niri writes asynchronously; existence alone can expose a partial screenshot.
+    return path.is_file() and path.read_bytes().endswith(b'\x00\x00\x00\x00IEND\xaeB\x60\x82')
+
+
 def screenshot(name):
     path = Path('/run/verify') / name
     path.unlink(missing_ok=True)
     user_command('niri', 'msg', 'action', 'screenshot-screen', '--path', str(path))
-    wait_until('Desktop screenshot', lambda: path.is_file() and
-               path.read_bytes().endswith(b'\x00\x00\x00\x00IEND\xaeB\x60\x82'), timeout=10)
+    wait_until('Desktop screenshot', lambda: png_ready(path), timeout=10)
 
 
 def png_dimensions(path):

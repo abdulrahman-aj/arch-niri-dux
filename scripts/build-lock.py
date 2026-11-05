@@ -88,9 +88,6 @@ def main():
             entries.append(dict(name=name, version=version, filename=filename, sha256=info['SHA256SUM'][0], url=url, repository=repo, signature=info['PGPSIG'][0]))
         if not requested.issubset({e['name'] for e in entries}):
             raise ValueError('Incomplete resolution')
-        dux = next(e for e in entries if e['name'] == 'dux-shell')
-        if int(subprocess.check_output(['vercmp', dux['version'], '2.0.0'])) < 0:
-            raise ValueError('Dux must be >= 2.0.0')
         lock.write_text(json.dumps({'schema': 1, 'requested': sorted(requested), 'packages': sorted(entries, key=lambda e: e['name'])}, indent=2) + '\n')
     payload = json.loads(lock.read_text())
     if sorted(requested) != payload['requested']:

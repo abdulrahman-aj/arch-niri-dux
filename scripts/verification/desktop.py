@@ -6,9 +6,9 @@ import pwd
 import re
 import shutil
 import subprocess
-import sys
 import time
-from .guest import wait_until, run, user_command, ipc, windows, screenshot, png_dimensions
+from . import dispatch
+from .guest import wait_until, run, user_command, ipc, windows, screenshot, png_dimensions, png_ready
 from .browser import BROWSER_PAGE, browser_state
 from .vm import PASSWORD, click_screen_text
 
@@ -21,8 +21,7 @@ def greeter():
     path.unlink(missing_ok=True)
     run('runuser', '-u', 'greeter', '--', 'env', f'XDG_RUNTIME_DIR={runtime}',
         f'NIRI_SOCKET={socket}', 'niri', 'msg', 'action', 'screenshot-screen', '--path', str(path))
-    wait_until('Rendered graphical greeter', lambda: path.is_file() and
-               path.read_bytes().endswith(b'\x00\x00\x00\x00IEND\xaeB\x60\x82'), timeout=10)
+    wait_until('Rendered graphical greeter', lambda: png_ready(path), timeout=10)
     shutil.copyfile(path, '/run/verify/01-greeter.png')
 
 
@@ -390,33 +389,24 @@ def verify_lock(vm, passed):
     passed('Screen lock and password unlock')
 
 
+def assert_locked(locked):
+    state = user_command('dms', 'ipc', 'call', 'lock', 'isLocked', capture=True).stdout.lower()
+    assert str(locked).lower() in state
+
+
 if __name__ == '__main__':
-    action = sys.argv[1]
-    if action == 'desktop':
-        desktop()
-    elif action == 'greeter':
-        greeter()
-    elif action == 'fonts':
-        fonts()
-    elif action == 'dux-components':
-        dux_components()
-    elif action == 'themes':
-        themes()
-    elif action == 'wallpaper':
-        wallpaper()
-    elif action == 'wallpaper-preserved':
-        wallpaper_preserved()
-    elif action == 'session-path':
-        session_path()
-    elif action == 'onboarding-screen':
-        screenshot('02-onboarding.png')
-    elif action == 'failure-screenshot':
-        screenshot('failure.png')
-    elif action == 'lock':
-        user_command('dms', 'ipc', 'call', 'lock', 'lock')
-    elif action == 'locked':
-        assert 'true' in user_command('dms', 'ipc', 'call', 'lock', 'isLocked', capture=True).stdout.lower()
-    elif action == 'unlocked':
-        assert 'false' in user_command('dms', 'ipc', 'call', 'lock', 'isLocked', capture=True).stdout.lower()
-    else:
-        raise SystemExit('Unknown desktop probe')
+    dispatch('desktop', {
+        'desktop': desktop,
+        'greeter': greeter,
+        'fonts': fonts,
+        'dux-components': dux_components,
+        'themes': themes,
+        'wallpaper': wallpaper,
+        'wallpaper-preserved': wallpaper_preserved,
+        'session-path': session_path,
+        'onboarding-screen': lambda: screenshot('02-onboarding.png'),
+        'failure-screenshot': lambda: screenshot('failure.png'),
+        'lock': lambda: user_command('dms', 'ipc', 'call', 'lock', 'lock'),
+        'locked': lambda: assert_locked(True),
+        'unlocked': lambda: assert_locked(False),
+    })
