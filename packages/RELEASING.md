@@ -1,11 +1,12 @@
 # Integration releases
 
-Installed systems get `arch-niri-dux` and `arch-niri-dux-baseline` through
-ordinary full pacman/Dux/Yay updates. Arch and Dux keep their existing
+Full system updates through pacman, Dux or Yay update `arch-niri-dux` and
+`arch-niri-dux-baseline`. Arch and Dux keep their existing
 sources. Our repository contains only our two packages, with required
-package and database signatures. Personal files are absent-only seeds. Editable
-system files use pacman's `backup`/`.pacnew` behavior. Removing the baseline
-metapackage opts out of its future app additions, without removing integration.
+package and database signatures. User initialization creates missing personal
+defaults. Pacman preserves local system-file edits through its `backup`/`.pacnew`
+behavior. Removing the baseline metapackage opts out of its future app additions
+without removing integration.
 
 ## Publish
 
@@ -33,8 +34,8 @@ be retried. The publisher reuses the published release's package bytes. Publishe
 versioned packages remain available for clients with older cached databases.
 Do not replace release assets or force-move published tags. Make a new version.
 
-ISO builders must start from a trusted checkout. Its public identity bootstraps
-release verification. Installed systems trust the keyring provisioned offline
+Build ISOs from a trusted checkout. Its public key provides the initial release
+verification. Installed systems trust the keyring provisioned offline
 by their ISO. Retrying publication preserves package bytes. Signatures and
 repository metadata are regenerated. Signatures do not prevent a server replaying an
 older signed repository. Release CI runs unit tests and makepkg, not graphical

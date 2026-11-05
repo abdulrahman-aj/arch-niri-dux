@@ -8,17 +8,16 @@ The `arch-niri-dux` package owns these system files. The installer enables the
 Dux services and runs `/usr/lib/arch-niri-dux/initialize-user` as the desktop
 user to seed only missing settings. Package upgrades never replay account or
 user initialization. Dux Greeter starts Niri. Dux creates its own shell settings.
-The Greetd service selects our `/etc/greetd/dux.toml`; Arch retains ownership of
+The Greetd service selects our `/etc/greetd/dux.toml`. Arch retains ownership of
 its separate stock `config.toml`. Pacman preserves local edits to `dux.toml`.
 
-Niri's stock configuration and terminal-resolved bindings are exposed as
-`/usr/share/arch-niri-dux/niri/defaults.kdl`, generated during package construction.
-The user entrypoint includes these
+Package construction generates Niri's stock configuration and terminal-resolved
+bindings in `/usr/share/arch-niri-dux/niri/defaults.kdl`. The user entrypoint includes these
 defaults before local `dms/*.kdl` files. `dms/binds.kdl` starts empty and holds
-only overrides. Dux generates `dms/binds-next.kdl` for the installed Niri; the
+only overrides. Dux generates `dms/binds-next.kdl` for the installed Niri. The
 entrypoint includes it before personal bindings. Keep that generated file local.
 Later bindings replace earlier ones, so a disabled shortcut
-can override its stock action with `spawn "true"` (this still consumes the key).
+can override its stock action with `spawn "true"`. This still consumes the key.
 An optional `recent-windows.kdl` loads before `dms/binds.kdl` for hand-managed
 MRU preferences. This avoids [Dux's shortcut-save bugs, still present in 2.1](https://github.com/abdulrahman-aj/arch-niri-dux/issues/33)
 until a fixed package is available. Generated `dms/alttab.kdl` controls appearance.
@@ -28,20 +27,19 @@ layout/input files remain local, so Dux settings continue to control them.
 New users start on Dux's upstream "bloom" material preset. The seed lives in
 `~/.local/state/dms/session.json` and is only created when absent. Existing
 `session.json` files are never overwritten, so chosen wallpapers are preserved.
-The preset assets remain owned by upstream Dux; no vendored Niri files are
-edited for this default.
+Dux provides the preset assets. The installer does not edit the vendored Niri
+files for this default.
 
-Papers (`org.gnome.Papers.desktop`) is the default PDF viewer from the factory
+Papers uses `org.gnome.Papers.desktop` and is the default PDF viewer in the factory
 `/etc/xdg/mimeapps.list`. Fresh users also get Loupe for common images,
 GNOME Text Editor for plain text and Markdown, Celluloid for common video,
 Decibels for common audio, Chromium for the browser and Dux Files for folders.
 User initialization preserves `~/.config/mimeapps.list`, so user choices
 survive reruns. GNOME Calculator is installed standalone.
-`EDITOR`/`VISUAL` remain `nvim`. Snapshot (`org.gnome.Snapshot.desktop`) is the
-camera app. Qt PDF support (`qt6-webengine`) enables PDF preview inside Dux
+`EDITOR`/`VISUAL` remain `nvim`. Snapshot is the camera app and uses
+`org.gnome.Snapshot.desktop`. Qt PDF support in `qt6-webengine` enables PDF preview inside Dux
 Files, while Papers remains the default document app. These apps come from
-signed Arch packages. The live ISO remains
-terminal-only.
+signed Arch packages. The live ISO remains terminal-only.
 
 CUPS and Avahi start for Dux's native driverless printer settings. CUPS keeps
 its stock localhost-only listeners. GVFS supplies Android, Apple-device
@@ -63,9 +61,9 @@ controls the built-in panel according to the lid switch. Intermittent wakeups
 still need physical laptop evidence: `journalctl -b -u systemd-logind -u
 systemd-suspend` and `systemd-inhibit --list` show sleep events and inhibitors.
 
-Session PATH: `~/.local/bin` resolves in POSIX login shells
-(`/etc/profile.d/dux-localbin.sh`), systemd user services
-(`/usr/lib/environment.d/90-dux.conf`, with per-user overrides) and Niri spawns.
+The session adds `~/.local/bin` to PATH for POSIX login shells, systemd user
+services and Niri spawns. Login shells read `/etc/profile.d/dux-localbin.sh`.
+User services read `/usr/lib/environment.d/90-dux.conf` and per-user overrides.
 Greetd's default profile sourcing passes the login PATH to the user session.
 The greeter still uses its supported `--command niri` compositor selector.
 Each context preserves system and Nix PATH entries. No mise shims are added.

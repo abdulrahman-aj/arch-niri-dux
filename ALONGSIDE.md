@@ -6,7 +6,7 @@ already-unallocated region of at least 32 GiB. Auto swap can require more space.
 Select the disk, full aligned free extent and an existing firmware boot entry.
 The final summary lists the exact partition numbers, inclusive sectors, byte
 counts and types. Automation uses `mode: "alongside"`, `free_region: [first,last]`
-and `existing_boot: "0001"` in addition to the normal private JSON settings;
+and `existing_boot: "0001"` in addition to the normal private JSON settings.
 `--confirm-disk` must still match exactly. Sector numbers use the disk's logical
 sector size. Never use these examples on a physical disk for verification.
 
@@ -14,15 +14,15 @@ The installer appends a dedicated 4 GiB ESP and encrypted Btrfs partition using
 unused GPT slots with `sfdisk --append --wipe never --wipe-partitions never`
 and a nonblocking device lock. `sgdisk --verify` stays a read-only check.
 On a real virtual SATA block device, the previous sgdisk writer zeroed Windows
-disk-ID bytes 440 through 443; sfdisk preserved them. The installer performs
+disk-ID bytes 440 through 443. Sfdisk preserved them. The installer performs
 no write-after-the-fact restoration. It never shrinks, moves or formats
-existing partitions.
-The installer mounts existing ESPs read-only only to validate the selected x86-64 PE EFI
-application. Their size does not matter and their fallback files stay intact.
+existing partitions. It mounts existing ESPs read-only to validate the selected
+x86-64 PE EFI application. Their size does not matter and their fallback files
+stay intact.
 The old OS entry chainloads the original EFI path by its original GPT partition
 GUID, retaining adjacent GRUB/shim/BCD resources on the original ESP.
 
-The installer compares disk identity, both GPT copies (including unused slots),
+The installer compares disk identity, both GPT copies including unused slots,
 protective MBR, free extents and firmware entries/order immediately before
 partition creation. It verifies the saved partition entries afterward and the
 kernel's new partition geometry before formatting. It also runs `sgdisk --verify`
@@ -31,8 +31,9 @@ entry byte, and the original protective-MBR bootstrap/disk-signature bytes.
 Limine's documented `SKIP_UEFI` setting covers every initial package and kernel
 hook until configuration completes. The installer then
 checks the new EFI binary exists and registers it with `efibootmgr --create-only`.
-It checks that its entry is active and resolves to the new ESP GUID/path, and it prepends the new entry while
-retaining existing entries and order. Erase mode retains its prior wipe path.
+It checks that the entry is active and resolves to the new ESP GUID/path.
+It prepends the new entry while retaining existing entries and their order.
+Erase mode erases the selected disk.
 
 Unsupported: BIOS/MBR, hybrid MBR, damaged/relocated GPT metadata, nonstandard
 GPT entry counts, mounted/active disks, bootloaders without a matching registered
@@ -41,8 +42,9 @@ and free space spread across smaller extents. There is no partition resizing,
 ESP expansion/reuse, BitLocker unlocking, Secure Boot work, RAID/LDM migration or
 firmware repair. TPM-bound Windows installations can request recovery after a
 boot-chain change, so the Windows acceptance fixture must have BitLocker/device
-encryption disabled. The installer rejects detected BitLocker/device encryption and Windows dynamic disks
-before mutation. Qualification uses disposable VMs. Secure Boot remains deferred.
+encryption disabled. The installer rejects detected BitLocker/device encryption
+and Windows dynamic disks before mutation. Qualification uses disposable VMs.
+Secure Boot remains deferred.
 
 An external partition editor must not run during installation. Revalidation
 closes the long confirmation/package-preflight window. It cannot make GPT edits
@@ -86,16 +88,17 @@ partition, leaving the rest unallocated. Microsoft WinPE reads
 an unattended answer file from a seed DVD and deploys the official image using
 DISM `/Apply-Image /Compact` and BCDBoot, with an emulated TPM2. The standard
 Setup hardware eligibility screen rejected this VM. WinPE deployment changes
-no Secure Boot state or firmware keys. Device
-encryption and hibernation are disabled inside this disposable fixture. A local
+no Secure Boot state or firmware keys. Device encryption and hibernation are
+disabled inside this disposable fixture. A local
 test account and boot task report the running Windows product, build and sentinel
-over QEMU user networking to a random-token route on localhost:18769;
-no host listener is exposed on external interfaces. Windows then shuts down.
+over QEMU user networking to a random-token route on localhost:18769.
+No host listener is exposed on external interfaces. Windows then shuts down.
 The reporter rejects old builds, missing sentinels and invalid routes.
 
 Acceptance uses a backing overlay and a copy of the fixture's firmware. It
 boots the original OS first and hashes every byte of every original partition
-while offline. It then installs into the selected region and compares those hashes. It boots
+while offline. It then installs into the selected region and compares those
+hashes. It boots
 the new encrypted Arch installation by default, reinstalls the pinned kernel
 package to exercise actual package/snapshot hooks, and verifies the existing OS
 entry survives. It reboots updated Arch and chainloads the original OS by its
@@ -111,15 +114,18 @@ all six milestones on implementation source `73139365d6c8ce44dd0dcfd27f77b624447
 See [the verified inputs and review dispositions](VERIFICATION.md#verified-alongside-installation-2026-11-02)
 and [the exact input hashes](verification/alongside-2026-11-02.json).
 
-Keep at least 8 GiB host headroom. Guest waits and Windows report waits stop at a 9 GiB threshold to protect
-the headroom. Media downloads reserve it before writing. Monitor
+Keep at least 8 GiB host headroom. Guest waits and Windows report waits stop at a
+9 GiB threshold to protect that headroom. Media downloads reserve it before writing. Monitor
 `df -h .` as concurrent root work can consume space. After preserving evidence,
 remove only this task's disposable failed/finished VM overlays or downloaded
 Windows ISO when no longer needed. Retain input hashes, logs and reports. Do not
 run broad Nix GC or delete unrelated user/cache files.
 
-Interrupted Windows provisioning can resume without recreating its disk. Resume with
-`make provision-alongside ARGS="--os windows --finish-windows --iso /absolute/new.iso --directory /absolute/windows-fixture"`. This requires the saved successful Windows OS report and verifies the qcow2 before firmware registration. The TPM emulator restarts for each QEMU run with its original state preserved.
+Interrupted Windows provisioning can resume without recreating its disk. Run
+`make provision-alongside ARGS="--os windows --finish-windows --iso /absolute/new.iso --directory /absolute/windows-fixture"`.
+This requires the saved successful Windows OS report and verifies the qcow2
+before firmware registration. The TPM emulator restarts for each QEMU run with
+its original state preserved.
 
 The earlier EBUSY failure came from forcing a second full kernel table reread
 after sgdisk had already updated the partition nodes. The installer now waits

@@ -20,7 +20,8 @@ home, logs, package cache, and snapshots subvolumes keep recovery away from home
 Upstream Limine tools manage the kernel and initramfs. Snapshot boot
 uses their systemd Btrfs overlay hook, and restoration uses their `replace` method.
 
-Swap choices are Auto (RAM rounded up to GiB plus 2 GiB), a custom size, or none.
+Swap choices are Auto, a custom size, or none. Auto uses RAM rounded up to GiB
+plus 2 GiB.
 An enabled swapfile lives in its own `@swap` subvolume inside the encrypted
 filesystem. Btrfs computes its physical resume offset. Recovery entries use
 `noresume` and block hibernation so an old snapshot cannot resume a different
@@ -38,7 +39,7 @@ plain console prompt, append `plymouth.enable=0` to the kernel cmdline.
 Acceptance after rebuilding with `make iso`:
 
 - `make test` runs source and build tests, including fallback-setting preservation.
-- `make verify ARGS='--directory out/verify-plymouth'` runs a full VM run:
+- `make verify ARGS='--directory out/verify-plymouth'` runs full VM acceptance:
   keyboard unlock and wrong-passphrase retry with `02-graphical-unlock-*` screenshots,
   `plymouth-config`/`plymouth-status` probes, snapshot recovery, and a
   serial-free, screenshot-qualified `plymouth.enable=0` text-fallback roundtrip
@@ -56,6 +57,6 @@ engine as the wizard. Never include real personal passwords in fixtures or logs.
 The optional `swap_gib` field accepts `null` for Auto, `0` for disabled, or a
 positive integer. Both modes check capacity before erasing. The interactive
 wizard shows the resolved size and defaults its final erase confirmation to
-Cancel. Completion time starts at that final confirmation.
+Cancel. Installation timing starts when `install()` begins.
 Auto swap needs roughly RAM plus 31 GiB of disk space. Smaller disks can use a
 custom size or disable swap, while the base installation requires 32 GiB.
