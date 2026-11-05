@@ -5,8 +5,8 @@ from pathlib import Path
 import subprocess
 import tempfile
 import unittest
-from tests.helpers import ROOT
 
+ROOT = Path(__file__).resolve().parents[1]
 SCRIPT = ROOT / 'desktop/usr/lib/arch-niri-dux/initialize-application-themes'
 
 

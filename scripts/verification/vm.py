@@ -137,9 +137,6 @@ class VM:
                     raise RuntimeError('QEMU exited; inspect serial.log and qemu.log.')
         raise TimeoutError(f'VM did not produce {pattern!r}; inspect serial.log.')
 
-    def expect_root(self, timeout=180):
-        return self.expect(r'root@archiso[^\n]*#', timeout=timeout)
-
     def command(self, command, timeout=120):
         marker = '__VERIFY_' + secrets.token_hex(8) + '__'
         payload = f"(\nset -e\n{command}\n)\nverify_status=$?; printf '\\n{marker}:%s\\n' \"$verify_status\""
@@ -148,6 +145,9 @@ class VM:
         if match.group(1) != '0':
             raise RuntimeError(f'Guest command failed ({match.group(1)}): {command}\n{output[-3000:]}')
         return output
+
+    def mount_probes(self):
+        self.command('mkdir -p /run/verify; mount -t 9p -o trans=virtio,version=9p2000.L verify /run/verify')
 
     def probe(self, module, *arguments, timeout=120):
         command = ['python', '-m', 'verification.' + module, *map(str, arguments)]

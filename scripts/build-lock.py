@@ -2,6 +2,7 @@
 """Freeze a pacman-resolved closure and validate every payload before ISO assembly."""
 import base64
 import concurrent.futures
+import hashlib
 import json
 import pathlib
 import subprocess
@@ -9,8 +10,10 @@ import sys
 import tarfile
 import urllib.request
 
-sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
-from verification._common import GEO_MIRROR, OMARCHY_MIRROR, PACKAGES_TARGET, SHA256_EXPR, check_hex, digest
+
+def digest(path):
+    with path.open('rb') as stream:
+        return hashlib.file_digest(stream, 'sha256').hexdigest()
 
 
 def cache_matches(path, expected):
@@ -24,7 +27,8 @@ def cache_matches(path, expected):
 def validate_entry(entry):
     if pathlib.Path(entry['filename']).name != entry['filename']:
         raise ValueError('Unsafe package filename')
-    check_hex(entry['sha256'], SHA256_EXPR, 'Invalid package digest')
+    if len(entry['sha256']) != 64 or any(c not in '0123456789abcdef' for c in entry['sha256']):
+        raise ValueError('Invalid package digest')
     if not entry['url'].startswith('https://'):
         raise ValueError('Package source must use HTTPS')
     if not entry['signature']:
@@ -48,6 +52,11 @@ def main():
     for source in json.loads((root / 'packages/desktop-sources.json').read_text()):
         if digest(root / source['path']) != source['sha256']:
             raise ValueError(f"Upstream desktop asset changed: {source['path']}")
+    requested = set()
+    for file in ('packages/packages.target', 'archiso/packages.live'):
+        requested.update(line.split('#')[0].strip() for line in (root / file).read_text().splitlines())
+    requested.discard('')
+    requested.difference_update(aur_names)
     lock = root / 'packages/closure.lock.json'
     if not lock.exists():
         metadata = {}
@@ -62,38 +71,28 @@ def main():
                         key, *values = section.splitlines()
                         fields[key.strip('%')] = values
                     metadata[fields['FILENAME'][0]] = fields
-        names = set()
-        for file in (PACKAGES_TARGET, 'archiso/packages.live'):
-            names.update(line.split('#')[0].strip() for line in (root / file).read_text().splitlines())
-        names.discard('')
-        names.difference_update(aur_names)
         subprocess.run(['mkdir', '-p', '/build/resolve/local', '/build/resolve/sync'], check=True)
         subprocess.run(['cp', '-a', '/var/lib/pacman/sync/.', '/build/resolve/sync/'], check=True)
-        result = subprocess.check_output(['pacman', '-Sp', '--noconfirm', '--dbpath', '/build/resolve', '--print-format', '%n|%v|%f|%r', *sorted(names)], text=True)
+        result = subprocess.check_output(['pacman', '-Sp', '--noconfirm', '--dbpath', '/build/resolve', '--print-format', '%n|%v|%f|%r', *sorted(requested)], text=True)
         entries = []
         for line in result.splitlines():
             if line.count('|') != 3:
                 continue
             name, version, filename, repo = line.split('|')
             info = metadata[filename]
-            url = (f'{OMARCHY_MIRROR}/x86_64/' if repo == 'omarchy' else f'{GEO_MIRROR}/{repo}/os/x86_64/') + filename
+            url = ('https://pkgs.omarchy.org/stable/x86_64/' if repo == 'omarchy' else f'https://geo.mirror.pkgbuild.com/{repo}/os/x86_64/') + filename
             if 'PGPSIG' not in info:
                 signature_path = pathlib.Path('/cache') / (filename + '.sig')
                 signature = signature_path.read_bytes() if signature_path.exists() else urllib.request.urlopen(url + '.sig', timeout=60).read()
                 info['PGPSIG'] = [base64.b64encode(signature).decode()]
             entries.append(dict(name=name, version=version, filename=filename, sha256=info['SHA256SUM'][0], url=url, repository=repo, signature=info['PGPSIG'][0]))
-        if not names.issubset({e['name'] for e in entries}):
+        if not requested.issubset({e['name'] for e in entries}):
             raise ValueError('Incomplete resolution')
         dux = next(e for e in entries if e['name'] == 'dux-shell')
         if int(subprocess.check_output(['vercmp', dux['version'], '2.0.0'])) < 0:
             raise ValueError('Dux must be >= 2.0.0')
-        lock.write_text(json.dumps({'schema': 1, 'requested': sorted(names), 'packages': sorted(entries, key=lambda e: e['name'])}, indent=2) + '\n')
+        lock.write_text(json.dumps({'schema': 1, 'requested': sorted(requested), 'packages': sorted(entries, key=lambda e: e['name'])}, indent=2) + '\n')
     payload = json.loads(lock.read_text())
-    requested = set()
-    for file in (PACKAGES_TARGET, 'archiso/packages.live'):
-        requested.update(line.split('#')[0].strip() for line in (root / file).read_text().splitlines())
-    requested.discard('')
-    requested.difference_update(aur_names)
     if sorted(requested) != payload['requested']:
         raise ValueError('Package lists changed; explicitly refresh the closure lock')
     dest.mkdir(parents=True, exist_ok=True)

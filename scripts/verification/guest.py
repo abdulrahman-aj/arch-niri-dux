@@ -2,6 +2,7 @@
 
 import json
 import os
+import struct
 from pathlib import Path
 import pwd
 import selectors
@@ -10,8 +11,6 @@ import stat
 import subprocess
 import time
 import urllib.error
-
-from ._common import png_dimensions as png_dimensions, png_ready
 
 
 def wait_until(description, check, timeout=60):
@@ -94,6 +93,15 @@ def windows():
     return json.loads(user_command('niri', 'msg', '--json', 'windows', capture=True).stdout)
 
 
+def focus_window(window_id):
+    user_command('niri', 'msg', 'action', 'focus-window', '--id', str(window_id))
+
+
+def png_ready(path):
+    # Niri writes asynchronously; existence alone can expose a partial screenshot.
+    return path.is_file() and path.read_bytes().endswith(b'\x00\x00\x00\x00IEND\xaeB\x60\x82')
+
+
 def screenshot(name):
     path = Path('/run/verify') / name
     path.unlink(missing_ok=True)
@@ -101,5 +109,10 @@ def screenshot(name):
     wait_until('Desktop screenshot', lambda: png_ready(path), timeout=10)
 
 
-def focus_window(window_id):
-    user_command('niri', 'msg', 'action', 'focus-window', '--id', str(window_id))
+def png_dimensions(path):
+    data = path.read_bytes()
+    assert data[:8] == b'\x89PNG\r\n\x1a\n', 'Not a PNG screenshot.'
+    assert data[12:16] == b'IHDR', 'Screenshot PNG has no IHDR.'
+    width, height = struct.unpack('>II', data[16:24])
+    assert width > 0 and height > 0, 'Rendered screenshot has no dimensions.'
+    return width, height

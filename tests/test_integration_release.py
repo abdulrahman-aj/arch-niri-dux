@@ -1,3 +1,4 @@
+import importlib.util
 import json
 import os
 from pathlib import Path
@@ -7,9 +8,11 @@ import tarfile
 import tempfile
 import unittest
 
-from tests.helpers import ROOT, load_script
 
-release = load_script('release', ROOT / 'scripts/integration-release.py')
+ROOT = Path(__file__).resolve().parents[1]
+spec = importlib.util.spec_from_file_location('release', ROOT / 'scripts/integration-release.py')
+release = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(release)
 
 
 class SignedReleaseTests(unittest.TestCase):

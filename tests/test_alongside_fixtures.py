@@ -1,6 +1,8 @@
 """Acceptance fixture contracts: fail closed on a boot without OS evidence."""
+import importlib.util
 import json
 from pathlib import Path
+import sys
 import tempfile
 import unittest
 import urllib.error
@@ -8,9 +10,10 @@ import urllib.request
 from unittest.mock import patch
 import xml.etree.ElementTree as ET
 
-from tests.helpers import ROOT, load_script
-
-windows = load_script('alongside_windows', ROOT / 'scripts/alongside_windows.py')
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'scripts'))
+spec = importlib.util.spec_from_file_location('alongside_windows', Path(__file__).resolve().parents[1] / 'scripts/alongside_windows.py')
+windows = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(windows)
 
 
 class WindowsFixtureTests(unittest.TestCase):

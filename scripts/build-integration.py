@@ -2,6 +2,7 @@
 """Build our owning integration and baseline packages with Arch's makepkg."""
 
 import argparse
+import hashlib
 import io
 import json
 import os
@@ -9,12 +10,8 @@ from pathlib import Path
 import re
 import shutil
 import subprocess
-import sys
 import tarfile
 import tempfile
-
-sys.path.insert(0, str(Path(__file__).resolve().parent))
-from verification._common import FINGERPRINT_EXPR, MAKEPKG_CONFIG, PACKAGES_TARGET, check_hex, digest
 
 
 NAMES = {'arch-niri-dux', 'arch-niri-dux-baseline'}
@@ -31,14 +28,20 @@ def version(root):
     return '-'.join(values)
 
 
+def digest(path):
+    with path.open('rb') as stream:
+        return hashlib.file_digest(stream, 'sha256').hexdigest()
+
+
 def prepare_source(root, workspace, epoch):
     """Make a bounded, deterministic input archive, independent of Git metadata."""
-    sources = [root / PACKAGES_TARGET]
+    sources = [root / 'packages/packages.target']
     sources.extend(sorted((root / 'desktop').rglob('*')))
     signing_key = root / 'keys/integration-signing.gpg'
     if signing_key.is_file():
         fingerprint = (root / 'keys/integration-signing.fingerprint').read_text().strip()
-        check_hex(fingerprint, FINGERPRINT_EXPR, 'Invalid integration signing fingerprint.')
+        if not re.fullmatch(r'[A-F0-9]{40}', fingerprint):
+            raise ValueError('Invalid integration signing fingerprint.')
         sources.append(signing_key)
     archive = workspace / 'integration.tar'
     with tarfile.open(archive, 'w') as output:
@@ -77,7 +80,7 @@ def build_packages(root, workspace, destination, epoch):
     archive = prepare_source(root, workspace, epoch)
     environment = os.environ | {'PKGDEST': str(destination), 'SOURCE_DATE_EPOCH': str(epoch)}
     config = workspace / 'makepkg.conf'
-    config.write_text(MAKEPKG_CONFIG)
+    config.write_text('source /etc/makepkg.conf\nOPTIONS+=(!debug)\n')
     command = ['makepkg', '--config', str(config)]
     # Only local text/config inputs; dependencies are installed by pacstrap from
     # the ISO's verified repository, not fetched during this build.

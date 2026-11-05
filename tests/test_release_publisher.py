@@ -4,9 +4,9 @@ import shutil
 import subprocess
 import tempfile
 import unittest
-from tests.helpers import ROOT
 
 
+ROOT = Path(__file__).resolve().parents[1]
 
 
 class PublisherCheckoutTests(unittest.TestCase):

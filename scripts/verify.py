@@ -3,6 +3,7 @@
 
 import argparse
 import hashlib
+import importlib.util
 import json
 import os
 from pathlib import Path
@@ -13,7 +14,6 @@ import sys
 import tempfile
 
 from verification import apps, boot, browser, camera, desktop, integration, pdf, recovery
-from verification._common import INSTALL_CLOSE, Milestones, install_open, load_module, mount_verify
 from verification.vm import VM, PASSWORD, stage_probes
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -61,12 +61,16 @@ def main():
     }, indent=2) + '\n')
     (directory / 'key').write_text(PASSWORD)
     (directory / 'key').chmod(0o600)
-    builder = load_module('integration_builder', ROOT / 'scripts/build-integration.py')
+    spec = importlib.util.spec_from_file_location('integration_builder', ROOT / 'scripts/build-integration.py')
+    builder = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(builder)
     source = directory / 'integration-input'
     source.mkdir()
     manifest = json.loads((ROOT / 'out/packages.manifest.json').read_text())['integration']
     (directory / 'release-manifest.json').write_text(json.dumps(manifest, indent=2) + '\n')
-    release = load_module('integration_release', ROOT / 'scripts/integration-release.py')
+    release_spec = importlib.util.spec_from_file_location('integration_release', ROOT / 'scripts/integration-release.py')
+    release = importlib.util.module_from_spec(release_spec)
+    release_spec.loader.exec_module(release)
     release.validate_manifest(ROOT, ROOT / 'out/integration')
     for filename, target, field in [('integration.tar', 'integration.tar', 'source_sha256'),
                                      ('integration.PKGBUILD', 'PKGBUILD', 'recipe_sha256')]:
@@ -75,15 +79,19 @@ def main():
             raise ValueError(f'Integration build input changed: {filename}')
         shutil.copyfile(original, source / target)
     vm = VM(directory, iso.resolve(), disk)
-    passed = Milestones(directory).passed
+    milestones = []
+    def passed(name):
+        milestones.append(name)
+        (directory / 'milestones.json').write_text(json.dumps(milestones, indent=2))
+        print('PASS: ' + name, flush=True)
     try:
         print(f'VM evidence: {directory}', flush=True)
         vm.start()
-        vm.expect_root(timeout=180)
+        vm.expect(r'root@archiso[^\n]*#', timeout=180)
         # USB boot with enough RAM reproduces archiso's automatic-copy path.
         # The payload must stay on mounted media instead of disappearing.
         vm.command('grep -qw copytoram=n /proc/cmdline; mountpoint -q /run/archiso/bootmnt; test ! -e /run/archiso/copytoram/airootfs.sfs')
-        vm.command(mount_verify())
+        vm.mount_probes()
         vm.command('fastfetch --logo none --structure OS:Kernel')
         vm.command('test "$(ls /sys/class/net | tr "\\n" " ")" = "lo "')
         vm.command(f'test "$(sha256sum /run/archiso/bootmnt/packages.manifest.json | cut -d " " -f 1)" = {package_digest}')
@@ -96,9 +104,9 @@ def main():
             raise RuntimeError('Installer did not report its elapsed completion time.')
         (directory / 'install-time-seconds').write_text(elapsed.group(1) + '\n')
         passed('Offline encrypted installation completed')
-        vm.command(install_open('/dev/vda2', '/dev/vda1'))
-        vm.command('cd /run/verify && python -m verification.boot prepare /mnt/verify', timeout=300)
-        vm.command(INSTALL_CLOSE + '; sync')
+        vm.command("cryptsetup open --key-file /run/verify/key /dev/vda2 dux-root; mkdir -p /mnt/verify; mount -o subvol=@ /dev/mapper/dux-root /mnt/verify; mount /dev/vda1 /mnt/verify/boot")
+        vm.probe('boot', 'prepare', '/mnt/verify', timeout=300)
+        vm.command('umount -R /mnt/verify; cryptsetup close dux-root; sync')
         vm.stop()
         subprocess.run(['qemu-img', 'snapshot', '-c', 'pristine', str(disk)], check=True)
         if args.install_only:
@@ -122,7 +130,7 @@ def main():
         try:
             if vm.process and vm.process.poll() is None:
                 if vm.screenshot('failure') is None:
-                    vm.command('cd /run/verify && python -m verification.desktop failure-screenshot', timeout=15)
+                    vm.probe('desktop', 'failure-screenshot', timeout=15)
         except Exception:
             pass
         (directory / 'FAILURE.txt').write_text(str(error) + '\n')

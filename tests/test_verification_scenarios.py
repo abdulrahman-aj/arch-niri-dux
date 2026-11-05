@@ -1,5 +1,6 @@
 """Exercise the boundaries most likely to break when moving acceptance code."""
 
+import base64
 import hashlib
 import json
 import os
@@ -11,7 +12,7 @@ from types import SimpleNamespace
 import unittest
 from unittest.mock import patch
 
-from scripts.verification import camera, integration, pdf, vm
+from scripts.verification import camera, guest, integration, pdf, vm
 
 
 class ProbeStagingTests(unittest.TestCase):
@@ -25,6 +26,20 @@ class ProbeStagingTests(unittest.TestCase):
                             'from verification import apps, boot, browser, camera, desktop, '
                             'guest, integration, pdf, recovery, vm'],
                            cwd=root, env=os.environ | {'PYTHONPATH': ''}, check=True)
+
+
+class ScreenshotReadinessTests(unittest.TestCase):
+    def test_screenshot_is_not_ready_until_the_png_write_is_complete(self):
+        image = base64.b64decode(
+            'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8A'
+            'AwMCAO+/a9sAAAAASUVORK5CYII=')
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / 'screenshot.png'
+            self.assertFalse(guest.png_ready(path))
+            for content, ready in ((image[:8], False), (image[:-1], False), (image, True)):
+                with self.subTest(bytes_written=len(content)):
+                    path.write_bytes(content)
+                    self.assertEqual(guest.png_ready(path), ready)
 
 
 class ScenarioCleanupTests(unittest.TestCase):

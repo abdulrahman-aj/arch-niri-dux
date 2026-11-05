@@ -11,7 +11,6 @@ import tempfile
 
 from .guest import run
 from .vm import installed_login
-from ._common import MAKEPKG_CONFIG, dispatch, mount_verify
 
 
 def output(*args, **kwargs):
@@ -68,7 +67,7 @@ def verify_upgrade():
             f'pkgname={fake_name}\npkgver=1\npkgrel=1\narch=(any)\n'
             'pkgdesc="Disposable dependency fixture"\n'
             'package() { install -Dm644 /dev/null "$pkgdir/usr/share/dux-verification-app"; }\n')
-        (fake / 'makepkg.conf').write_text(MAKEPKG_CONFIG)
+        (fake / 'makepkg.conf').write_text('source /etc/makepkg.conf\nOPTIONS+=(!debug)\n')
         output('chown', '-R', f'{user.pw_uid}:{user.pw_gid}', str(work))
         packages = work / 'packages'
         output(*prefix, 'python', str(evidence / 'build-integration.py'), str(source), str(work / 'build'),
@@ -199,7 +198,7 @@ def published_repository():
 def verify_published(vm, passed):
     vm.start(cdrom=False, network=True)
     installed_login(vm)
-    vm.command(mount_verify())
+    vm.mount_probes()
     vm.probe('integration', 'published-repository', timeout=300)
     passed('Published HTTPS repository and packages verify against offline trust and exact release hashes')
     vm.poweroff()
@@ -207,7 +206,10 @@ def verify_published(vm, passed):
 
 
 if __name__ == '__main__':
-    dispatch('integration', {
-        'published-repository': published_repository,
-        'upgrade': verify_upgrade,
-    })
+    import sys
+    if sys.argv[1] == 'published-repository':
+        published_repository()
+    elif sys.argv[1] == 'upgrade':
+        verify_upgrade()
+    else:
+        raise SystemExit('Unknown integration probe')

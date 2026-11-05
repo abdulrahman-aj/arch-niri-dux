@@ -5,8 +5,8 @@ import shutil
 import subprocess
 import tempfile
 import unittest
-from tests.helpers import ROOT
 
+ROOT = Path(__file__).resolve().parents[1]
 PROFILE = ROOT / 'desktop/etc/profile.d/dux-localbin.sh'
 ENVIRONMENT = ROOT / 'desktop/usr/lib/environment.d/90-dux.conf'
 GENERATOR = Path('/usr/lib/systemd/user-environment-generators/30-systemd-environment-d-generator')

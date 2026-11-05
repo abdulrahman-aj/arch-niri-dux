@@ -9,7 +9,6 @@ import re
 import subprocess
 import sys
 
-from verification._common import mount_verify
 from verification.vm import VM, PASSWORD, installed_login, stage_probes
 
 
@@ -36,7 +35,7 @@ def main():
     try:
         vm.start(cdrom=False)
         installed_login(vm)
-        vm.command(mount_verify())
+        vm.mount_probes()
         vm.command('cd /run/verify && python -m verification.boot prepare-hibernate')
         expected = json.loads((directory / 'hibernate-expected.json').read_text())
         # The installation has no 9p share. Detach this test instrument before

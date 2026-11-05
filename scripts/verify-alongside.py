@@ -8,7 +8,6 @@ import shlex
 import shutil
 import subprocess
 
-from verification._common import INSTALL_CLOSE, MIN_FREE_BYTES, Milestones, digest, install_open, mount_verify
 from verification.vm import VM, PASSWORD, installed_login, stage_probes
 from alongside_windows import WindowsVM, BootReports
 
@@ -57,12 +56,18 @@ def main():
         reports = BootReports(directory, args.windows_token.read_text().strip())
     else:
         vm = VM(directory, args.iso.resolve(), disk)
-    vm.min_free_bytes = MIN_FREE_BYTES
+    vm.min_free_bytes = 9 * 1024**3
     device = '/dev/sda' if reports else '/dev/vda'
     (directory / 'key').write_text(PASSWORD)
     (directory / 'key').chmod(0o600)
     stage_probes(directory)
-    passed = Milestones(directory).passed
+    milestones = []
+
+    def passed(message):
+        milestones.append(message)
+        (directory / 'milestones.json').write_text(json.dumps(milestones, indent=2))
+        print('PASS: ' + message, flush=True)
+
     try:
         vm.start(cdrom=False, network=bool(reports))
         if reports:
@@ -72,18 +77,18 @@ def main():
             vm.poweroff()
         passed(f'Real existing {args.os} boots before installation and sentinel is intact')
         vm.start()
-        vm.expect_root(timeout=180)
-        vm.command(mount_verify())
+        vm.expect(r'root@archiso[^\n]*#', timeout=180)
+        vm.mount_probes()
         for filename in ('install.py', 'configure-target.sh'):
-            expected = digest(ROOT / 'installer' / filename)
-            vm.command(f'test "$(sha256sum /usr/local/lib/arch-niri-dux/installer/{filename} | cut -d " " -f 1)" = {expected}')
+            digest = hashlib.sha256((ROOT / 'installer' / filename).read_bytes()).hexdigest()
+            vm.command(f'test "$(sha256sum /usr/local/lib/arch-niri-dux/installer/{filename} | cut -d " " -f 1)" = {digest}')
         # Plan through the ISO's own read-only inventory. The fixture must have
         # exactly one eligible region and one registered Debian bootloader.
         plan_script = '''import importlib.util,json,sys
 p='/usr/local/lib/arch-niri-dux/installer/install.py'
 s=importlib.util.spec_from_file_location('installer',p); m=importlib.util.module_from_spec(s);sys.modules[s.name]=m;s.loader.exec_module(m)
 v=m.Settings('DEVICE','tester','alongside','UTC','us','vm-verification-only','vm-verification-only',swap_gib=0,mode='alongside')
-t=m.alongside_snapshot(v)
+t=m.alongside_snapshot(v.disk)
 assert len(t['regions'])==1
 boots=[n for n,b in t['boots'].items() if 'BOOTPATH' in b['path'].lower()]
 assert boots and len({(t['boots'][n]['guid'],t['boots'][n]['path'].lower()) for n in boots})==1
@@ -108,11 +113,13 @@ open('/run/verify/new-partitions.json','w').write(json.dumps(m.alongside_plan(v,
         plan = json.loads((directory / 'new-partitions.json').read_text())
         separator = 'p' if device[-1].isdigit() else ''
         esp, encrypted = [device + separator + str(part[0]) for part in plan]
-        vm.command(install_open(encrypted, esp))
+        vm.command(f'cryptsetup open --key-file /run/verify/key {encrypted} dux-root; '
+                   'mkdir -p /mnt/verify; mount -o subvol=@ /dev/mapper/dux-root /mnt/verify; '
+                   f'mount {esp} /mnt/verify/boot')
         vm.command('cd /run/verify && python -m verification.boot prepare /mnt/verify; '
                    'cd /run/verify && python -m verification.boot serial-console-enable /mnt/verify; '
                    'arch-chroot /mnt/verify limine-mkinitcpio', timeout=300)
-        vm.command(INSTALL_CLOSE + '; '
+        vm.command('umount -R /mnt/verify; cryptsetup close dux-root; '
                    'cp /run/archiso/bootmnt/repo/linux-[0-9]*.pkg.tar.zst /run/verify/; sync')
         vm.poweroff()
         vm.start(cdrom=False)
@@ -121,7 +128,7 @@ open('/run/verify/new-partitions.json','w').write(json.dumps(m.alongside_plan(v,
         passed('Default firmware path boots the new encrypted installation')
         # Reinstall the pinned kernel: exercise actual package hooks and
         # snapshot generation rather than only editing the menu in place.
-        vm.command(mount_verify())
+        vm.mount_probes()
         vm.command('pacman -U --noconfirm /run/verify/linux-[0-9]*.pkg.tar.zst', timeout=600)
         vm.command('grep -A2 "^/Existing OS" /boot/limine.conf > /run/verify/chainload-after-update.txt; '
                    'grep -q "path: guid(" /run/verify/chainload-after-update.txt; '

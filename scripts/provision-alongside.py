@@ -10,7 +10,6 @@ import secrets
 from alongside_windows import WindowsVM, BootReports, unattended, deployment_unattended, powershell_script, DISKPART, DEPLOY, SETUP_VERIFY
 
 from verification.vm import VM
-from verification._common import MIN_FREE_BYTES
 
 
 def linux(args):
@@ -20,10 +19,10 @@ def linux(args):
     subprocess.run(['qemu-img', 'convert', '-O', 'qcow2', str(args.media), str(disk)], check=True)
     subprocess.run(['qemu-img', 'resize', str(disk), '64G'], check=True)
     vm = VM(directory, args.iso.resolve(), disk)
-    vm.min_free_bytes = MIN_FREE_BYTES
+    vm.min_free_bytes = 9 * 1024**3
     try:
         vm.start()
-        vm.expect_root(timeout=180)
+        vm.expect(r'root@archiso[^\n]*#', timeout=180)
         vm.command('sgdisk -e /dev/vda')  # fixture preparation only, not installer
         vm.command('mkdir -p /run/debian; mount /dev/vda1 /run/debian; mount /dev/vda15 /run/debian/boot/efi; test -f /run/debian/etc/debian_version')
         vm.command('arch-chroot /run/debian /usr/sbin/useradd -m -G sudo -s /bin/bash tester; '
@@ -82,7 +81,7 @@ def finish_windows(args):
     vm = WindowsVM(directory, args.iso.resolve(), disk)
     try:
         vm.start()
-        vm.expect_root(timeout=180)
+        vm.expect(r'root@archiso[^\n]*#', timeout=180)
         vm.command(r"efibootmgr --create --disk /dev/sda --part 1 --label 'Windows Boot Manager' --loader '\EFI\Microsoft\Boot\bootmgfw.efi'")
         vm.poweroff()
         (directory / 'READY').write_text('Real Windows 11 Enterprise LTSC evaluation; 100 MiB existing ESP\n')
