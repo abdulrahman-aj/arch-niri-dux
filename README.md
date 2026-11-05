@@ -24,6 +24,11 @@ It runs Ruff, ShellCheck and actionlint; generated output and vendored AUR recip
 are excluded. Recipe checks account for makepkg's metadata and supplied variables.
 `make test` includes lint and remains the CI gate.
 
+Acceptance scenarios live in `scripts/verification/`, with each behavior's host
+interaction, guest probes and cleanup together. `scripts/verify.py` orders those
+scenarios. Alongside installation and hibernation reuse the same VM control and
+probe staging; the upgrade fixture owns its restoration expectations.
+
 `make iso` uses the recipe version's signed release packages. For unreleased
 integration changes, use `make iso-development` instead. See [release maintenance](packages/RELEASING.md).
 

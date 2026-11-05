@@ -1,13 +1,10 @@
-import importlib.util
 from pathlib import Path
 import re
 import subprocess
 import tempfile
 import unittest
 
-spec = importlib.util.spec_from_file_location('verify_vm', Path(__file__).resolve().parents[1] / 'scripts/verify.py')
-verify = importlib.util.module_from_spec(spec)
-spec.loader.exec_module(verify)
+from scripts.verification import vm as verify
 
 
 class VMCommandTests(unittest.TestCase):

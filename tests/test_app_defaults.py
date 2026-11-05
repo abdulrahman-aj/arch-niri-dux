@@ -1,5 +1,4 @@
 import configparser
-import importlib.util
 import os
 import shutil
 import subprocess
@@ -8,10 +7,7 @@ from pathlib import Path
 import unittest
 
 
-SCRIPT = Path(__file__).resolve().parents[1] / 'scripts/verify-guest.py'
-spec = importlib.util.spec_from_file_location('app_defaults_probe', SCRIPT)
-guest = importlib.util.module_from_spec(spec)
-spec.loader.exec_module(guest)
+from scripts.verification.pdf import sample_pdf_bytes
 
 ROOT = Path(__file__).resolve().parents[1]
 FACTORY = ROOT / 'desktop/etc/xdg/mimeapps.list'
@@ -45,7 +41,7 @@ def read_factory_defaults():
 
 class SamplePdfTests(unittest.TestCase):
     def test_generated_pdf_xref_offsets_are_valid(self):
-        data = guest.sample_pdf_bytes()
+        data = sample_pdf_bytes()
         self.assertTrue(data.startswith(b'%PDF-1.4\n'))
         self.assertIn(b'Dux verification PDF works', data)
         self.assertTrue(data.rstrip().endswith(b'%%EOF'))

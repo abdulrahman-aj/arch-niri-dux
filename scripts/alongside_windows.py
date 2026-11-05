@@ -7,7 +7,7 @@ import time
 import shutil
 import subprocess
 
-from verify import VM
+from verification.vm import VM
 from xml.sax.saxutils import escape
 
 PORT = 18769

@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 """Fresh-desktop acceptance; run only inside the disposable verification guest."""
 
-import importlib.util
 import json
 import math
 from pathlib import Path
@@ -16,9 +15,8 @@ import time
 import wave
 import zlib
 
-spec = importlib.util.spec_from_file_location('desktop_guest', Path(__file__).with_name('verify-guest.py'))
-guest = importlib.util.module_from_spec(spec)
-spec.loader.exec_module(guest)
+from . import guest
+from .pdf import sample_pdf_bytes
 
 FILES = Path('/tmp/dux-baseline-files')
 EVIDENCE = Path('/run/verify')
@@ -299,7 +297,7 @@ def printing():
             assert not response.get('error'), response
             assert any(printer['name'] == 'DuxProbe' for printer in response['result']), response
             document = FILES / 'print-test.pdf'
-            document.write_bytes(guest.sample_pdf_bytes())
+            document.write_bytes(sample_pdf_bytes())
             document.chmod(0o644)
             result = guest.run('lp', '-d', 'DuxProbe', str(document),
                                stdout=subprocess.PIPE)
@@ -321,6 +319,40 @@ def printing():
             printer.wait(timeout=10)
 
 
+
+def verify(vm, passed):
+    vm.probe('apps', 'cli', timeout=120)
+    passed('Manuals, archive round-trip, rsync, JSON/search and diagnostic CLI tools work')
+    vm.probe('apps', 'prepare', timeout=300)
+    vm.probe('apps', 'image', timeout=120)
+    vm.probe('apps', 'text', timeout=120)
+    vm.click(0.2, 0.2)
+    time.sleep(0.2)
+    vm.probe('apps', 'text-focused')
+    vm.chord('ctrl', 'a')
+    time.sleep(0.1)
+    vm.type_graphical('editedbyduxverification')
+    vm.chord('ctrl', 's')
+    vm.probe('apps', 'text-saved', timeout=60)
+    vm.probe('apps', 'calculator', timeout=120)
+    passed('Images and text open in the selected apps; text edits save; Calculator launches')
+    # Reopen video four times: first-launch success missed the original hang.
+    for kind in ('audio', 'video', 'video', 'video', 'video'):
+        vm.probe('apps', 'open-' + kind, timeout=120)
+        vm.probe('apps', 'capture-' + kind, timeout=30)
+        capture_file = vm.directory / ('baseline-' + kind + '.json')
+        if not json.loads(capture_file.read_text())['tone_detected']:
+            # Some players open paused; exercise their normal play shortcut.
+            vm.key('spc')
+            vm.probe('apps', 'capture-' + kind, timeout=30)
+        vm.probe('apps', 'played-' + kind, timeout=60)
+    passed('Decibels audio and four Celluloid open/play/close cycles output the expected fixture tones')
+    vm.probe('apps', 'backends', timeout=90)
+    passed('Video thumbnails, phone/camera backend loading and Dux multimedia backends')
+    vm.probe('apps', 'printing', timeout=150)
+    passed('Driverless CUPS queue delivered a PDF to a loopback IPP printer')
+
+
 if __name__ == '__main__':
     if not (EVIDENCE / 'install.json').is_file() or subprocess.run(
             ['systemd-detect-virt', '--vm', '--quiet']).returncode != 0:
@@ -338,3 +370,4 @@ if __name__ == '__main__':
         media_played(action.removeprefix('played-'))
     else:
         raise SystemExit('Unknown baseline probe')
+

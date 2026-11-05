@@ -6,11 +6,10 @@ import hashlib
 import json
 from pathlib import Path
 import re
-import shutil
 import subprocess
 import sys
 
-from verify import VM, PASSWORD, installed_login
+from verification.vm import VM, PASSWORD, installed_login, stage_probes
 
 
 def main():
@@ -31,13 +30,13 @@ def main():
         parser.error('The workspace must contain the accepted qcow2 with its pristine snapshot.')
     for name in ('HIBERNATE-RESUME-PASSED', 'HIBERNATE-FAILURE.txt'):
         (directory / name).unlink(missing_ok=True)
-    shutil.copyfile(Path(__file__).with_name('verify-guest.py'), directory / 'verify-guest.py')
+    stage_probes(directory)
     vm = VM(directory, iso, disk)
     try:
         vm.start(cdrom=False)
         installed_login(vm)
         vm.command('mkdir -p /run/verify; mount -t 9p -o trans=virtio,version=9p2000.L verify /run/verify')
-        vm.command('python /run/verify/verify-guest.py prepare-hibernate')
+        vm.command('cd /run/verify && python -m verification.boot prepare-hibernate')
         expected = json.loads((directory / 'hibernate-expected.json').read_text())
         # The installation has no 9p share. Detach this test instrument before
         # sleep so a fresh QEMU server need not recover the old client's FIDs.

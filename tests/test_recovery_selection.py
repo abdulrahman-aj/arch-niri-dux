@@ -1,10 +1,6 @@
-import importlib.util
-from pathlib import Path
 import unittest
 
-spec = importlib.util.spec_from_file_location('verify_guest', Path(__file__).resolve().parents[1] / 'scripts/verify-guest.py')
-guest = importlib.util.module_from_spec(spec)
-spec.loader.exec_module(guest)
+from scripts.verification import recovery as guest
 
 MENU = '''timeout: 5
 default_entry: 2
