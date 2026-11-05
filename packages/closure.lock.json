@@ -51,6 +51,7 @@
     "gvfs-mtp",
     "intel-ucode",
     "jq",
+    "kimageformats",
     "less",
     "limine",
     "limine-mkinitcpio-hook",
@@ -2003,6 +2004,15 @@
       "url": "https://geo.mirror.pkgbuild.com/core/os/x86_64/keyutils-1.6.3-4-x86_64.pkg.tar.zst",
       "repository": "core",
       "signature": "iHUEABYKAB0WIQQEKYl95fO9rFN6MGltQr3RFuAGjwUCadv/5wAKCRBtQr3RFuAGj9lQAP0Uz/j+0ETOfZHsL6opVmYoaPk/Uekio4QFY8E9moGgWwD9Fm2u1NAsAGE7uQcwJZMueI5mZE8ckIWiu/WrVj7YjwA="
+    },
+    {
+      "name": "kimageformats",
+      "version": "6.31.0-1",
+      "filename": "kimageformats-6.31.0-1-x86_64.pkg.tar.zst",
+      "sha256": "e6edc2df85466b7c4fb8db669814703dbd15e11b982cf30cf22736c0e7d4acbc",
+      "url": "https://geo.mirror.pkgbuild.com/extra/os/x86_64/kimageformats-6.31.0-1-x86_64.pkg.tar.zst",
+      "repository": "extra",
+      "signature": "iQEzBAABCgAdFiEEFRnVq6Zb9vwrc8dWek52CV2KUuQFAmrMm9QACgkQek52CV2KUuRTiAgAhPYbnnhf9ncRzsS2RX5+f/HtaOdAxQXGySTE/ioZ2TFGSWoq8EE6Va1KrywfMijhBXYcVTrYKJL9RH74rVGw/mAZfI7mjSrSu/9IJ3Qg0NNXyXJ7QeF3CfRn9xNOmGjP95v2Jzy1W+GSyV9P3P7quTtuatQ53TGOSxaIC6xlNllvIry5PwqtG+1UpK2xK8EvQ/KW3/fuwxSzxQkp9tBi8R/XqzRChUjZtRwZu2UR6no7TS/uRuUUH+1eCPionTlMvKMmXHsUJ4elQ2SPmuA5Z0xVZU+2hsoQnMEB9qgVKAYYiZ3s9PWrmasvnCqUS7l7dQ31jRJxR0Jv2RoANv+6Dw=="
     },
     {
       "name": "kmod",
