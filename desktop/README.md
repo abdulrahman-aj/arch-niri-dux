@@ -21,7 +21,7 @@ can override its stock action with `spawn "true"`. This still consumes the key.
 An optional `recent-windows.kdl` loads before `dms/binds.kdl` for hand-managed
 MRU preferences. This avoids [Dux's shortcut-save bugs, still present in 2.1](https://github.com/abdulrahman-aj/arch-niri-dux/issues/33)
 until a fixed package is available. Generated `dms/alttab.kdl` controls appearance.
-Configuring another time preserves existing user Niri files. Generated
+Rerunning user initialization preserves existing user Niri files. Generated
 layout/input files remain local, so Dux settings continue to control them.
 
 New users start on Dux's upstream "bloom" material preset. The seed lives in
