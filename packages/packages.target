@@ -100,3 +100,7 @@ btop
 qt6-webengine
 kimageformats
 fprintd
+smartmontools
+dnsmasq
+i2c-tools
+qt6-imageformats

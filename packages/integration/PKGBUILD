@@ -2,7 +2,7 @@
 pkgbase='arch-niri-dux'
 pkgname=(arch-niri-dux arch-niri-dux-baseline)
 pkgver=0.2.0
-pkgrel=3
+pkgrel=4
 pkgdesc='Arch Niri Dux desktop integration'
 arch=(any)
 url='https://github.com/abdulrahman-aj/arch-niri-dux'
