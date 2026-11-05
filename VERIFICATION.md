@@ -494,3 +494,20 @@ function bodies match the staged code, and final unit/lint/cold-import checks
 passed. Exact inputs, results and limits are in
 `verification/verification-locality-2026-11-05.json`; local evidence is in
 `out/verify-locality/`. No production release or laptop changes were made.
+
+## Qt image and fingerprint backends. 2026-11-05
+
+The `0.2.0-3` development image adds signed `kimageformats`, `fprintd`,
+`libfprint` and `libgusb` packages. All 693 earlier sync pins remain unchanged.
+Lint, 123 source tests and 7 build tests passed. Fresh offline VM acceptance
+passed all 27 stages, including Qt AVIF decoding, D-Bus activation of fprintd,
+package-upgrade preservation, snapshot restoration and both disk-unlock paths.
+
+The image probe defers its status check until Quickshell startup completes;
+synchronous image loading can otherwise emit quit before a handler is connected.
+An isolated before/after reproduction and the full VM run verified the correction.
+Fingerprint enrollment and authentication require hardware testing. No login or
+sudo policy changed, and the laptop was untouched. This development-image run
+does not qualify the later signed release or its HTTPS delivery. Inputs, hashes
+and results are in `verification/optional-backends-2026-11-05.json`; local
+evidence is in `out/verify-optional-backends-fixed/`.
