@@ -3,8 +3,8 @@
 `integration/PKGBUILD` builds our owning `arch-niri-dux` package and the separate
 `arch-niri-dux-baseline` metapackage. The baseline depends on `packages.target`;
 dropping it allows removing optional baseline apps while retaining integration
-updates. Dux 2.1 is the clean configuration baseline; 2.0 installations must reinstall or explicitly adopt the new Niri entrypoint. No automatic home-file migration is shipped. App retirement
-will use targeted reviewed transitions, without general orphan cleanup.
+updates. App retirement will use targeted reviewed transitions, without general
+orphan cleanup.
 
 `scripts/build-integration.py` prepares a deterministic local source archive and
 records its checksum for makepkg. Release ISOs fetch the exact signed release

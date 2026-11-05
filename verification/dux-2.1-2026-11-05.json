@@ -132,7 +132,6 @@
   "iso_bytes": 2742853632,
   "limits": [
     "Unpublished local development packages 0.2.0-1; exact CI-signed production artifacts and real HTTPS 0.2.0 delivery await an approved merge/release.",
-    "No automatic 2.0 configuration migration; reinstall or explicitly adopt the 2.1 entrypoint.",
     "Existing update architecture qualified with disposable signed upgrade fixture; no networked full Arch/AUR update or Dux/Yay UI upgrade was performed.",
     "Physical devices, printer paper output, LAN discovery and laptop behavior are not qualified by this VM.",
     "No new alongside-OS or hibernation acceptance; installer disk/boot logic and kernel pins are unchanged.",

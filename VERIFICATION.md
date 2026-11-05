@@ -353,8 +353,8 @@ passed again afterward.
 
 Sol implemented the refactor; Muse and GLM reviewed YAGNI/correctness. Production
 signing/repository delivery remains a separate implementation gate; this local
-upgrade fixture is deliberately unsigned. No prototype-ISO migration or laptop
-changes were performed. Hashes and results are in
+upgrade fixture is deliberately unsigned. No laptop changes were performed.
+Hashes and results are in
 `verification/packaged-integration-2026-11-04.json`; local evidence is in
 `out/verify-packaged-integration-qualified/`.
 
@@ -415,7 +415,7 @@ contents and the signed integration release are unchanged. Exact inputs and
 limits are in `verification/iso-payload-2026-11-04.json`; local diagnostics are
 in `out/verify-iso-payload/`. No laptop changes were made.
 
-## Dux 2.1 clean baseline — 2026-11-05
+## Dux 2.1 qualification — 2026-11-05
 
 Shell, GOP, Greeter, Search, Calendar and Files are all 2.1.0. The lock retains
 687 existing signed pins unchanged, updates Shell/GOP and adds four PDF-preview
@@ -444,9 +444,9 @@ keyboard/idle settings and lock privacy/power settings loaded without a base
 
 This is an unpublished `0.2.0-1` development build. Qualification of exact
 CI-signed 0.2.0 artifacts and production HTTPS delivery requires a later approved
-merge/release. No automatic 2.0 home-config migration is supported. The laptop
-was untouched; physical device, printer and LAN tests are not claimed. Exact
-inputs, results and limits are in `verification/dux-2.1-2026-11-05.json`; local
+merge/release. The laptop was untouched; physical device, printer and LAN tests
+are not claimed. Exact inputs, results and limits are in
+`verification/dux-2.1-2026-11-05.json`; local
 evidence is in `out/verify-dux21-accepted/`.
 
 ## Dead-code cleanup and lint gate — 2026-11-05
