@@ -16,8 +16,10 @@ against the source distribution's public keyring before adding their public keys
 
 `integration-signing.gpg` is our public release key, and
 `integration-signing.fingerprint` pins its primary identity. CI receives only
-the signing subkey. Key rotation and encrypted offline recovery are documented
-in [release maintenance](../packages/RELEASING.md#signing-and-recovery).
+the signing subkey. The [release-key guide](RECOVERY.md) covers what to back up,
+how to inspect and access both private keys, CI secret restoration, and the
+remaining rotation and revocation limitations. See
+[release maintenance](../packages/RELEASING.md) for ordinary publication.
 
 The added signing subkey `4C13F5553C2D87AD23220A073EC2E354F61AC9F6`
 belongs to Hyacinthe Cartiaux's primary key
