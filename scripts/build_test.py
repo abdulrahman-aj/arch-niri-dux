@@ -24,8 +24,7 @@ class PayloadTests(unittest.TestCase):
         for field, value in invalid.items():
             # Each case rebuilds the valid entry so the mutations stay independent.
             with self.subTest(field=field):
-                entry = dict(filename='base-1-any.pkg.tar.zst', sha256='a' * 64,
-                             url='https://example.org/base-1-any.pkg.tar.zst', signature='abc')
+                entry = self.entry.copy()
                 entry[field] = value
                 with self.assertRaises(ValueError):
                     module.validate_entry(entry)

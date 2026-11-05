@@ -110,6 +110,24 @@ class InstallerSafetyTests(unittest.TestCase):
                     installer.install(settings())
                 run.assert_not_called()
 
+    def test_missing_repository_database_prevents_disk_mutation(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / 'packages.target').write_text('base\n')
+            package = root / 'base.pkg.tar.zst'
+            package.write_bytes(b'package')
+            checksum = hashlib.sha256(package.read_bytes()).hexdigest()
+            (root / 'SHA256SUMS').write_text(f'{checksum}  {package.name}\n')
+            with patch.object(installer, 'SHARE', root), patch.object(installer, 'REPO', root), \
+                    patch.object(installer, 'TARGET', root / 'target'), \
+                    patch.object(installer, 'require_disk', return_value=1), \
+                    patch.object(installer, 'run') as run:
+                value = settings()
+                with self.assertRaisesRegex(ValueError, 'repository database'):
+                    installer.install(value)
+                run.assert_not_called()
+                self.assertFalse(value.installation_started)
+
     def test_disk_replacement_after_wizard_confirmation_is_rejected(self):
         value = settings()
         value.confirmed_device = (1, 2, 64 * 1024**3)
