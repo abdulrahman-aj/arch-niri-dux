@@ -43,30 +43,18 @@ VM acceptance. Keep the candidate's local VM evidence with the PR.
 
 ## Signing and recovery
 
+The [release-key guide](../keys/RECOVERY.md) explains the master and signing keys,
+the encrypted backup, inspection, access to each key, and restoring the GitHub
+signing secret. **Keep the full encrypted backup off-machine and its password
+separately.** GitHub stores only the working signing subkey.
+
 Initial provisioning uses `scripts/setup-release-key.py --passphrase-file PATH`.
-It uploads only a signing subkey to GitHub's `integration-release` environment
-as `PACKAGE_SIGNING_KEY`, writes the public identity to `keys/`, and saves the
-full private certification/signing key as `out/integration-recovery.gpg`, encrypted
-with the supplied recovery password. Private keys are never source inputs.
+Ordinary releases use the existing CI secret. The helper's `--restore` operation
+replaces that live secret; it does not rotate or renew keys.
 
-**Store that recovery file off this machine, and its password separately.**
-GitHub's copy keeps existing CI releases working after a laptop reinstall. The
-encrypted recovery copy also lets you restore the CI secret if it is lost:
-
-```sh
-python3 scripts/setup-release-key.py --passphrase-file PATH --restore RECOVERY.gpg
-```
-
-The checked-in fingerprint must match the recovery identity. The signing subkey
-expires after two years. Before expiry, use the recovered certification key to
-renew it or certify a replacement signing subkey under the same primary identity.
-Retain the historical public subkeys. Ship the updated public keyring
-in a release signed by the still-trusted subkey, then replace the CI secret.
-Historical package verification accepts expired public subkeys retained under
-that primary. Fetched releases require an unexpired signing subkey. Devices left
-offline past the trust overlap may need a manual keyring refresh.
-Loss or compromise without a trusted overlap requires manual trust recovery.
-Ordinary signatures cannot bootstrap a new identity.
-
-ISOs install the public keyring offline and enable the repository. Updating
-the keyring package refreshes that trust through a pacman hook.
+ISOs provision the public certificate offline. Integration-package upgrades
+refresh it through a pacman hook. That hook cannot bootstrap a client that
+already rejects the repository's new signer. Compromised-key recovery and
+clients that skip a signing-key transition still need end-to-end qualification.
+Their failure paths and required evidence are tracked in
+[issue #52](https://github.com/abdulrahman-aj/arch-niri-dux/issues/52).
