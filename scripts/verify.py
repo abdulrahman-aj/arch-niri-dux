@@ -91,7 +91,7 @@ def main():
         # USB boot with enough RAM reproduces archiso's automatic-copy path.
         # The payload must stay on mounted media instead of disappearing.
         vm.command('grep -qw copytoram=n /proc/cmdline; mountpoint -q /run/archiso/bootmnt; test ! -e /run/archiso/copytoram/airootfs.sfs')
-        vm.command('mkdir -p /run/verify; mount -t 9p -o trans=virtio,version=9p2000.L verify /run/verify')
+        vm.mount_probes()
         vm.command('fastfetch --logo none --structure OS:Kernel')
         vm.command('test "$(ls /sys/class/net | tr "\\n" " ")" = "lo "')
         vm.command(f'test "$(sha256sum /run/archiso/bootmnt/packages.manifest.json | cut -d " " -f 1)" = {package_digest}')
@@ -105,7 +105,7 @@ def main():
         (directory / 'install-time-seconds').write_text(elapsed.group(1) + '\n')
         passed('Offline encrypted installation completed')
         vm.command("cryptsetup open --key-file /run/verify/key /dev/vda2 dux-root; mkdir -p /mnt/verify; mount -o subvol=@ /dev/mapper/dux-root /mnt/verify; mount /dev/vda1 /mnt/verify/boot")
-        vm.command('cd /run/verify && python -m verification.boot prepare /mnt/verify', timeout=300)
+        vm.probe('boot', 'prepare', '/mnt/verify', timeout=300)
         vm.command('umount -R /mnt/verify; cryptsetup close dux-root; sync')
         vm.stop()
         subprocess.run(['qemu-img', 'snapshot', '-c', 'pristine', str(disk)], check=True)
@@ -130,7 +130,7 @@ def main():
         try:
             if vm.process and vm.process.poll() is None:
                 if vm.screenshot('failure') is None:
-                    vm.command('cd /run/verify && python -m verification.desktop failure-screenshot', timeout=15)
+                    vm.probe('desktop', 'failure-screenshot', timeout=15)
         except Exception:
             pass
         (directory / 'FAILURE.txt').write_text(str(error) + '\n')

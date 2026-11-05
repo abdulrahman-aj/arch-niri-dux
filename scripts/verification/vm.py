@@ -146,6 +146,9 @@ class VM:
             raise RuntimeError(f'Guest command failed ({match.group(1)}): {command}\n{output[-3000:]}')
         return output
 
+    def mount_probes(self):
+        self.command('mkdir -p /run/verify; mount -t 9p -o trans=virtio,version=9p2000.L verify /run/verify')
+
     def probe(self, module, *arguments, timeout=120):
         command = ['python', '-m', 'verification.' + module, *map(str, arguments)]
         return self.command('cd /run/verify && ' + shlex.join(command), timeout=timeout)
