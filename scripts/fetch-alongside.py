@@ -30,13 +30,9 @@ def main():
         if not args.verify_existing and shutil.disk_usage(args.directory).free < size + 8 * 1024**3:
             parser.error('Download would leave less than 8 GiB host headroom.')
         resolved = response.url
-        if args.verify_existing:
-            chunks = ()
-        else:
-            chunks = iter(lambda: response.read(4 * 1024**2), b'')
         if not args.verify_existing:
             with destination.open('xb') as stream:
-                for chunk in chunks:
+                while chunk := response.read(4 * 1024**2):
                     if shutil.disk_usage(args.directory).free < 8 * 1024**3 + len(chunk):
                         raise RuntimeError('Concurrent disk use exhausted the reserved download budget.')
                     stream.write(chunk)
