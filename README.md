@@ -18,6 +18,10 @@ make iso
 make verify
 ```
 
+`make lint` runs Ruff's correctness/unused-code checks, ShellCheck on our shell
+scripts and actionlint on CI workflows. `make test` includes these checks; it is
+also the CI gate. Vendored AUR recipes are kept unmodified.
+
 `make iso` uses the recipe version's signed release packages. For unreleased
 integration changes, use `make iso-development` instead. See [release maintenance](packages/RELEASING.md).
 

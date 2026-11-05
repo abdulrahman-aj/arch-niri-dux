@@ -337,7 +337,7 @@ class AlongsideRegistrationTests(unittest.TestCase):
                     return 'test-uuid'
                 return '' if kwargs.get('capture') else None
 
-            def final_registration(*args):
+            def final_registration(*_args):
                 self.assertIn('SKIP_UEFI=yes', (target / 'etc/default/limine').read_text())
 
             temporary_directory = tempfile.TemporaryDirectory
@@ -393,7 +393,7 @@ class FirmwareRegistrationTests(unittest.TestCase):
 
     def finish(self, outputs, path=None):
         outputs = iter(outputs)
-        def command(*args, **kwargs):
+        def command(*args, **_kwargs):
             self.commands.append(args)
             if args[0] == 'blkid':
                 return self.guid

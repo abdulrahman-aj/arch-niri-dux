@@ -6,7 +6,7 @@
     devShells.x86_64-linux.default = let
       pkgs = import nixpkgs { system = "x86_64-linux"; };
     in pkgs.mkShell {
-      packages = with pkgs; [ actionlint curl fakeroot git gnumake gnupg libarchive pacman python3 qemu xorriso swtpm gptfdisk util-linux squashfsTools tesseract xdg-utils xdg-terminal-exec OVMF.fd ];
+      packages = with pkgs; [ actionlint curl fakeroot git gnumake gnupg libarchive pacman python3 ruff shellcheck qemu xorriso swtpm gptfdisk util-linux squashfsTools tesseract xdg-utils xdg-terminal-exec OVMF.fd ];
       OVMF_DIR = "${pkgs.OVMF.fd}/FV";
       GBM_BACKENDS_PATH = "${pkgs.mesa}/lib/gbm";
       LIBGL_DRIVERS_PATH = "${pkgs.mesa}/lib/dri";

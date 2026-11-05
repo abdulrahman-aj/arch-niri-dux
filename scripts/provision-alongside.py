@@ -9,7 +9,7 @@ import secrets
 
 from alongside_windows import WindowsVM, BootReports, unattended, deployment_unattended, powershell_script, DISKPART, DEPLOY, SETUP_VERIFY
 
-from verify import VM, PASSWORD
+from verify import VM
 
 
 def linux(args):
@@ -50,7 +50,7 @@ def windows(args):
     token = secrets.token_hex(16)
     (directory / 'report-token').write_text(token)
     (seed / 'Autounattend.xml').write_text(deployment_unattended())
-    (seed / 'installed-unattend.xml').write_text(unattended(token))
+    (seed / 'installed-unattend.xml').write_text(unattended())
     (seed / 'diskpart.txt').write_text(DISKPART)
     (seed / 'deploy.cmd').write_text(DEPLOY)
     (seed / 'setup-verify.cmd').write_text(SETUP_VERIFY)

@@ -1,7 +1,6 @@
 """Windows fixture guest reporting over QEMU's host-only user network."""
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import json
-from pathlib import Path
 import queue
 import threading
 import time
@@ -142,7 +141,7 @@ exit 1
 '''
 
 
-def unattended(token):
+def unattended():
     command = r'cmd /c C:\setup-verify.cmd'
     return f'''<?xml version="1.0" encoding="utf-8"?>
 <unattend xmlns="urn:schemas-microsoft-com:unattend" xmlns:wcm="http://schemas.microsoft.com/WMIConfig/2002/State">
