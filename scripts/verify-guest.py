@@ -1115,6 +1115,8 @@ if __name__ == '__main__':
         files_pdf_prepare()
     elif action == 'files-pdf-capture':
         screenshot('02-dfiles-pdf.png')
+    elif action == 'files-pdf-close':
+        ipc('dfiles', 'ui.hide')
     elif action == 'onboarding-screen':
         screenshot('02-onboarding.png')
     elif action == 'camera':

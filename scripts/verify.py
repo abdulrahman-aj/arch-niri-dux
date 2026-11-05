@@ -505,7 +505,7 @@ def main():
             'screenshot': '02-dfiles-pdf.png',
         }, indent=2) + '\n')
         vm.key('esc')
-        vm.command('runuser -u tester -- dfiles ipc ui.hide')
+        vm.command('python /run/verify/verify-guest.py files-pdf-close')
         passed('Dux Files PDF preview rendered document content with its Qt PDF backend')
         vm.command('python /run/verify/verify-guest.py camera', timeout=300)
         permission_deadline = time.monotonic() + 60

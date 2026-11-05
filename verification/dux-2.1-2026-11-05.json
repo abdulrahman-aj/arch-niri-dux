@@ -1,0 +1,457 @@
+{
+  "aur_recipes": [
+    {
+      "commit": "98e69e446ca43e5c39371424050124bc1a738e09",
+      "files": {
+        ".SRCINFO": "4fc9989db6e2f79dbf10f5ffa06595c090e3e793c56f63024991c85940be12f4",
+        "PKGBUILD": "3498ede7be1bf4b85bfbd38b21d4833085dfbab47aec9e4a55b1c9f661ea89e5",
+        "dux-greeter.install": "1f93e096453193c7842ad9599e8ab7ff89ff3da2549800e790fceb8c712773f6"
+      },
+      "name": "dux-greeter-bin",
+      "source_date_epoch": 1793756880,
+      "url": "https://aur.archlinux.org/dux-greeter-bin.git"
+    },
+    {
+      "commit": "419840e0c9d9fd30a78237406afe8d397b222168",
+      "files": {
+        ".SRCINFO": "eaee2c3f99a442fc1b943a42e66f5cdcfbf6c86a8a285609d91e19dd93dd611a",
+        "PKGBUILD": "ae25b029de82a01ef2b60b8a08fa802f596bc12435426ca05579581a527302fd",
+        "dsearch.service": "4203149be986e77617da42b0c7297e268b5daf89bf796ecbc41263e7746b031d"
+      },
+      "name": "dux-search-bin",
+      "source_date_epoch": 1793756886,
+      "url": "https://aur.archlinux.org/dux-search-bin.git"
+    },
+    {
+      "commit": "a2f08b95939281835f8105b085c03f05975ddf63",
+      "files": {
+        ".SRCINFO": "0aa44fb959096b61ed2e094533be14109b93bd6bd0537cc724bf83a59d47bf28",
+        "PKGBUILD": "ca94b48c4337305081c34493b45af9c159d1e4fee6a827e0afa4a3431fa9d486"
+      },
+      "name": "dux-calendar-bin",
+      "source_date_epoch": 1793756868,
+      "url": "https://aur.archlinux.org/dux-calendar-bin.git"
+    },
+    {
+      "commit": "11e7ec6338873d6a7f805a79f460ac00f0364e05",
+      "files": {
+        ".SRCINFO": "67f61326fe1f96ecba780af61af55a54784129e34fe064765d99c3e9afc4a260",
+        "PKGBUILD": "218c63836f6a56b8a4bb027059118621ac1ce8f101ea3820c4f1d4ae56e49c0e"
+      },
+      "name": "dux-files-bin",
+      "source_date_epoch": 1793756874,
+      "url": "https://aur.archlinux.org/dux-files-bin.git"
+    }
+  ],
+  "build_command": "make iso-development (candidate renamed to avoid selecting an older ISO)",
+  "checks": {
+    "actionlint": "passed",
+    "build_tests": 10,
+    "source_tests": 105,
+    "test_log_sha256": "676603bd3eddfbf59e0d2f5bb228efa2bba3868598f9d3fed43c25f28b473c7e"
+  },
+  "date": "2026-11-05",
+  "dotfiles_fixture": {
+    "git_changes": [
+      "dms/config.d/preferences.json",
+      "niri/dms/binds.kdl"
+    ],
+    "inherited_alt_f4_closed_window": true,
+    "input": {
+      "commit": "193cd7f7e3c7cefb476f86221cb093ea0ac76f6a",
+      "files": {
+        "dms/config.d/bar.json": "c2ebebd54135099d25cdc3bd54df06c97c44798a46295426c22a3d3968f877c2",
+        "dms/config.d/controlcenter.json": "ff6723b4712e52003193d3d3074779a7e3ae99b82ce87d78bb2c3a82adf5c834",
+        "dms/config.d/lock.json": "721f8b68961e03fcc52f138065277fd1c673bad36270de3d8881bbd41f11b8e1",
+        "dms/config.d/preferences.json": "f53cc94382fd3435a16db629047aa6635e3e8c18b13a37598455ea85dfd77ec8",
+        "niri/dms/binds.kdl": "7745bc63ef15b504d0f1a3b3f2148ad8d22effa57ef9237e2b70114f19d1dd9b",
+        "niri/dms/windowrules.kdl": "3645b7139a1a2c79edebd48fbf69d60f02ace0843567587fbd4f09ec3be948a2",
+        "niri/recent-windows.kdl": "266567f0ceaf37842dbb435dc1e4824d6dc1fa73275222e083902734c9b6f41f"
+      },
+      "repository": "https://github.com/abdulrahman-aj/dotfiles"
+    },
+    "island": true,
+    "links_preserved": true,
+    "loaded_settings": true,
+    "lock_media_hidden": true,
+    "lock_notifications_absent": true,
+    "lock_power_enabled": true,
+    "native_writers_used": true,
+    "personal_super_w_closed_window": true,
+    "restart_preserved": true,
+    "super_q_noop": true,
+    "unversioned_fragments_without_base_settings": true,
+    "window_id": 2
+  },
+  "dotfiles_test": {
+    "method": "Seven actual dotfiles deployed as file symlinks in an offline disposable overlay of the accepted disk; QMP keypresses and native Dux settings/keybind writers. No public-repository or laptop edits.",
+    "passed": true,
+    "screenshot": "out/verify-dux21-stow/stowed-island.png",
+    "screenshot_sha256": "d41a38c960fc82814b8b1e959b5bca7e3e3ea867826429ac271ce139ab8e5dfc",
+    "scripts_sha256": {
+      "dux21-stow-driver.py": "097bd76df42bb9134850d7aa77d8731b23ca3959b1d1d98b7dcb02119de2e154",
+      "dux21-stow-guest.py": "1759e0d5e9bccc5adbf20d05daa870f300bf4eccbb6730a0cfcb1774f2077da8"
+    },
+    "terminal_probe": "Alacritty --class dux-bind-probe (explicit test-only window identity)"
+  },
+  "implementation_commit": "32fb511496bcc6d0a2836a2272037318ed860211",
+  "independent_review": {
+    "disposition": "No outstanding source blockers; GTK startup-race finding fixed with behavioral regression coverage; runtime qualification completed afterward.",
+    "family": "Muse"
+  },
+  "inputs": {
+    "iso": "/home/abdulrahman/Work/arch-niri-dux/out/arch-niri-dux-2.1-candidate-x86_64.iso",
+    "iso_sha256": "19b23401dc7305ab6857460ca7e50349145daf3a6ebda9c6f3fc92a48c879c3d",
+    "package_manifest_sha256": "f89e4147d2efc6ad25458daa281182304c4a44d5a63939ea16a0c00be3ae5edc",
+    "verification_scripts": {
+      "build-integration.py": "d7a4786bbf3c5147f51f5f714cd619f47cc9f376da5b3d2a818180ff6df090a2",
+      "verify-baseline.py": "c3c9b4488f4225e8121c26411cd913c2de0f917f7d99517254b70b63d267a96d",
+      "verify-guest.py": "2f64e015b308a46b58c982c7f870a08623f16a462d96ec55b495c6233fcd1d9e",
+      "verify-integration.py": "6d076bdd0916940568700514ef5b643ecb217aa59dcd63eacb5bd6dda5bf17e4",
+      "verify.py": "9816e1607d82ebdd2ea594520f767651f3f3d41c14316c862a53157dd99b9a49"
+    }
+  },
+  "integration_build": {
+    "packages": [
+      {
+        "filename": "arch-niri-dux-0.2.0-1-any.pkg.tar.zst",
+        "name": "arch-niri-dux",
+        "sha256": "2f023a76fe91692818221e5bc3a69f2fa7152e797130dfdd92a7594ea3931a3d"
+      },
+      {
+        "filename": "arch-niri-dux-baseline-0.2.0-1-any.pkg.tar.zst",
+        "name": "arch-niri-dux-baseline",
+        "sha256": "7103b3ae94e56d215a5954291abca098a42310611a72bdae787333c7d1c3fa67"
+      }
+    ],
+    "recipe_sha256": "bcdbde80b2ff16ece33d7cdd0d013911c69f94b148d131723af27f2266d71c32",
+    "source_date_epoch": 1793822162,
+    "source_sha256": "df55d679658272e6121f4da53b5752cdbfe877e2131a979a2f4d2a3d9404504b",
+    "version": "0.2.0-1"
+  },
+  "iso_bytes": 2742853632,
+  "limits": [
+    "Unpublished local development packages 0.2.0-1; exact CI-signed production artifacts and real HTTPS 0.2.0 delivery await an approved merge/release.",
+    "No automatic 2.0 configuration migration; reinstall or explicitly adopt the 2.1 entrypoint.",
+    "Existing update architecture qualified with disposable signed upgrade fixture; no networked full Arch/AUR update or Dux/Yay UI upgrade was performed.",
+    "Physical devices, printer paper output, LAN discovery and laptop behavior are not qualified by this VM.",
+    "No new alongside-OS or hibernation acceptance; installer disk/boot logic and kernel pins are unchanged.",
+    "Actual dotfiles fixture uses Stow-style file symlinks; it does not execute the full personal bootstrap."
+  ],
+  "lock_changes": {
+    "added": {
+      "qt6-positioning": "6.12.0-1",
+      "qt6-webchannel": "6.12.0-1",
+      "qt6-webengine": "6.11.3-2",
+      "re2": "2:2025.11.05-6"
+    },
+    "removed": [],
+    "unchanged_existing": 687,
+    "updated": {
+      "dux-gop": "2.1.0-1",
+      "dux-shell": "2.1.0-1"
+    }
+  },
+  "milestones": [
+    "Offline encrypted installation completed",
+    "Graphical disk unlock accepts keyboard input and retries an incorrect password",
+    "UEFI boot from encrypted disk without installation ISO",
+    "Plymouth configuration and boot services are active",
+    "Encrypted swap outside root snapshots; physical resume offset matches the kernel",
+    "Niri, Dux, terminal, Neovim and Chromium smoke checks",
+    "Login shells, user services and Niri spawns resolve local user executables",
+    "GOP metrics, live file indexing, Calendar event create/read and Dux Files integration",
+    "Live Dux light/dark changes reach Chromium, GTK settings, portals and Dux apps",
+    "Bloom material wallpaper is the fresh-user default and rendered",
+    "User initialization preserved existing desktop choices",
+    "Manuals, archive round-trip, rsync, JSON/search and diagnostic CLI tools work",
+    "Images and text open in the selected apps; text edits save; Calculator launches",
+    "Decibels audio and four Celluloid open/play/close cycles output the expected fixture tones",
+    "Video thumbnails, phone/camera backend loading and Dux multimedia backends",
+    "Driverless CUPS queue delivered a PDF to a loopback IPP printer",
+    "Papers is the default PDF viewer and rendered a sample document",
+    "Dux Files PDF preview rendered document content with its Qt PDF backend",
+    "Snapshot preview, shutter photo and video recording work with a synthetic camera",
+    "Chromium open-file request uses Dux Files and responds to cancellation",
+    "Chromium screen sharing produced nonblank captured desktop content",
+    "Screen lock and password unlock",
+    "Integration upgrade, baseline changes and personal preservation passed; recovery fixture prepared",
+    "Limine snapshot boot and restoration",
+    "Restored system rebooted normally and home was preserved",
+    "Text fallback unlocks the disk with the splash disabled",
+    "Graphical password screen works again after text fallback"
+  ],
+  "package_counts": {
+    "aur": 4,
+    "integration": 2,
+    "sync": 693
+  },
+  "payload_signature_verification": {
+    "aur_release_asset_digests_match_recipes": true,
+    "existing_trusted_keys_only": true,
+    "log_sha256": "fd6eb89cfb989f33a855166c51c51c9788790230e4d88ed7c7524923958937d7",
+    "new_or_replaced_signed_payloads": 6
+  },
+  "results": {
+    "baseline-printing": {
+      "driverless_queue": true,
+      "dux_printers": [
+        {
+          "accepting": true,
+          "info": "DuxProbe",
+          "jobs": null,
+          "location": "",
+          "makeModel": "Printer - IPP Everywhere",
+          "name": "DuxProbe",
+          "state": "idle",
+          "stateReason": "none",
+          "uri": "ipp://localhost:631/printers/DuxProbe"
+        }
+      ],
+      "note": "Loopback IPP emulator; physical printers and LAN discovery untested.",
+      "received_pdf_bytes": [
+        10039
+      ],
+      "submitted": "request id is DuxProbe-1 (1 file(s))"
+    },
+    "camera": {
+      "before": [],
+      "height": 800,
+      "photo": {
+        "bytes": 9803,
+        "path": "/home/tester/Pictures/Camera/Photo from 2026-11-04 22-21-42.534944.jpeg"
+      },
+      "source": "DuxTestCamera",
+      "synthetic": true,
+      "video": {
+        "bytes": 8944,
+        "path": "/home/tester/Videos/Camera/Recording from 2026-11-04 22-21-42.680612.webm"
+      },
+      "width": 1280
+    },
+    "dux-components": {
+      "calendar_event_created_and_read": "a69f56ba-efb7-404b-920b-36c8c4a4513b",
+      "file_manager": {
+        "available": true,
+        "enabled": true,
+        "owned": true,
+        "owner": "",
+        "queued": false
+      },
+      "gop_metrics": {
+        "available": 6424764,
+        "buffers": 7716,
+        "cached": 1659548,
+        "commitLimit": 14544580,
+        "committed": 6184592,
+        "free": 5273584,
+        "gpuActive": 0,
+        "gpuReclaim": 0,
+        "shared": 224892,
+        "sreclaimable": 27560,
+        "swapDevices": [
+          {
+            "kind": "file",
+            "name": "/swap/swapfile",
+            "size": 10485756,
+            "used": 0
+          }
+        ],
+        "swapfree": 10485756,
+        "swaptotal": 10485756,
+        "total": 8117648,
+        "used": 1374132,
+        "usedPercent": 16.927711080845093,
+        "zfsArcSize": 0
+      },
+      "gtk_theme": "'adw-gtk3-dark'",
+      "indexed_file": "/home/tester/dux-verification-document.txt",
+      "mode": "dark",
+      "portal": {
+        "active": true,
+        "available": true,
+        "backend": {
+          "enabled": true,
+          "owned": true
+        },
+        "config": {
+          "backends": null,
+          "effective": "dfiles",
+          "exists": false,
+          "path": "/home/tester/.config/xdg-desktop-portal/niri-portals.conf"
+        },
+        "frontend": {
+          "pid": 1998,
+          "restartNeeded": false,
+          "running": true,
+          "unitKnown": true
+        },
+        "managed": false,
+        "portalFile": {
+          "found": true,
+          "path": "/usr/share/xdg-desktop-portal/portals/dfiles.portal",
+          "user": false
+        },
+        "resident": true,
+        "service": {
+          "found": true,
+          "path": "/usr/share/dbus-1/services/org.freedesktop.impl.portal.desktop.dfiles.service",
+          "user": false
+        },
+        "systemManaged": false
+      },
+      "search_http_listener_absent": true,
+      "versions": [
+        "dux-shell 2.1.0-1",
+        "dux-gop 2.1.0-1",
+        "dux-greeter-bin 2.1.0-1",
+        "dux-search-bin 2.1.0-1",
+        "dux-calendar-bin 2.1.0-1",
+        "dux-files-bin 2.1.0-1"
+      ]
+    },
+    "files-pdf": {
+      "method": "Dux Files selection, F4 preview and zoom-in key",
+      "rendered_text": "- \u2122 Fies - Home 0ZIPM - Wed4 % \u2014C \u00ae 0 o5 BO% 0 0 N9\n\nv @ DUX-VERIFY {\"scheme X +\n\ni now\nC  OFile /tmp/chromium-smoke.html * ) dux-preview.pdf Screenshot captured\nYou can paste the image from the clipboard.\nN Clear\n\nOffline Dux verification Dux verification PDF works\n\n{\"scheme\":\"dark\",\"changes\":4,\"capture\":\"idle\",\"frames\":(\n\nShare a screen or window (C)\n\nQ 2% & O D G\n\n \u2014\n\n",
+      "screenshot": "02-dfiles-pdf.png"
+    },
+    "integration-upgrade": {
+      "after": [
+        "arch-niri-dux 0.2.0-2",
+        "arch-niri-dux-baseline 0.2.0-2"
+      ],
+      "baseline_addition_installed": true,
+      "baseline_can_be_removed_independently": true,
+      "before": [
+        "arch-niri-dux 0.2.0-1",
+        "arch-niri-dux-baseline 0.2.0-1"
+      ],
+      "installed_keyring_refresh_hook_ran": true,
+      "owned_file_added_and_removed": true,
+      "personal_sha256": {
+        "/home/tester/.config/niri/config.kdl": "5fe73e67f8900c5a89c217fa6321b4a04db0cb758796d1b44c1a3ccd1dcde880",
+        "/home/tester/.config/niri/dms/binds.kdl": "a29186a7b16c6218fe4bee14dd0be53d7e7d5223bb04f6cbe54b174d5a57b408",
+        "/home/tester/.config/xdg-terminals.list": "d63b322123983f24343609ca7ae5402b435a7002f49b13e4164ddd862ee38d9e"
+      },
+      "signed_packages_and_database": true,
+      "tampered_database_rejected": true
+    },
+    "niri-overrides": {
+      "alt_f4_inherited": true,
+      "manual_mru_preserved": true,
+      "native_binds_next_included": {
+        "exists": true,
+        "included": true
+      },
+      "override_effective": true,
+      "reset_restores_stock": true,
+      "stock_inherited": true,
+      "tracked_override_link_preserved": true
+    },
+    "pdf": {
+      "default": "org.gnome.Papers.desktop",
+      "height": 800,
+      "method": "xdg-open",
+      "note": "Parent reviews 02-papers.png for document content vs an error page.",
+      "sample": "/tmp/dux-verification.pdf",
+      "sample_size": 599,
+      "width": 1280
+    },
+    "screen-sharing": {
+      "capture": "passed",
+      "changes": 4,
+      "file": "cancelled",
+      "frames": 3,
+      "height": 800,
+      "pixels": {
+        "colors": 31,
+        "maximum": 650,
+        "minimum": 51,
+        "nonBlack": 237
+      },
+      "scheme": "dark",
+      "width": 1280
+    },
+    "theme-evidence": [
+      {
+        "capture": "idle",
+        "changes": 1,
+        "file": "idle",
+        "frames": 0,
+        "height": 0,
+        "scheme": "light",
+        "width": 0
+      },
+      {
+        "capture": "idle",
+        "changes": 2,
+        "file": "idle",
+        "frames": 0,
+        "height": 0,
+        "scheme": "dark",
+        "width": 0
+      },
+      {
+        "capture": "idle",
+        "changes": 3,
+        "file": "idle",
+        "frames": 0,
+        "height": 0,
+        "scheme": "light",
+        "width": 0
+      },
+      {
+        "capture": "idle",
+        "changes": 4,
+        "file": "idle",
+        "frames": 0,
+        "height": 0,
+        "scheme": "dark",
+        "width": 0
+      }
+    ],
+    "wallpaper-preserved": {
+      "fresh_account_initialized": true,
+      "mime_preserved": true,
+      "niri_preserved": true,
+      "preserved": true,
+      "preset": "orbit",
+      "terminal_preserved": true,
+      "user": "dux-preserve-check"
+    }
+  },
+  "stock_sources": [
+    {
+      "path": "desktop/usr/share/arch-niri-dux/niri/config.kdl",
+      "sha256": "463306783e07028c9a53f99d58ef6027d18135f621c492b5e9aad2c563ecf5da",
+      "url": "https://raw.githubusercontent.com/duxlabs-dev/dux-shell/v2.1.0/core/internal/config/embedded/niri.kdl"
+    },
+    {
+      "path": "desktop/usr/share/arch-niri-dux/niri/dms/binds.kdl",
+      "sha256": "36b56dc41e95360ce7ae2009bab938392f874ca2580dca0fff5a3c52fe26219b",
+      "url": "https://raw.githubusercontent.com/duxlabs-dev/dux-shell/v2.1.0/core/internal/config/embedded/niri-binds.kdl"
+    },
+    {
+      "path": "desktop/usr/share/arch-niri-dux/niri/dms/colors.kdl",
+      "sha256": "c7c47fb7baffe685d84db3f42ad498b68d4a592efa4ceff38b1c18c29a9796ba",
+      "url": "https://raw.githubusercontent.com/duxlabs-dev/dux-shell/v2.1.0/core/internal/config/embedded/niri-colors.kdl"
+    },
+    {
+      "path": "desktop/usr/share/arch-niri-dux/niri/dms/layout.kdl",
+      "sha256": "2763377736dd59229ef0d563688cf4c50fabf87daf6a7117ab6990051afafbfd",
+      "url": "https://raw.githubusercontent.com/duxlabs-dev/dux-shell/v2.1.0/core/internal/config/embedded/niri-layout.kdl"
+    },
+    {
+      "path": "desktop/usr/share/arch-niri-dux/niri/dms/alttab.kdl",
+      "sha256": "220cbc69932f20e7c53f3f747078980e2a3381d1f844a43e73c5f0c2471bdc27",
+      "url": "https://raw.githubusercontent.com/duxlabs-dev/dux-shell/v2.1.0/core/internal/config/embedded/niri-alttab.kdl"
+    },
+    {
+      "path": "desktop/usr/share/arch-niri-dux/niri/dms/input.kdl",
+      "sha256": "eac60a08f0cbfcf40221e7630778c11ace87650025526a4ab7f139cc0850420f",
+      "url": "https://raw.githubusercontent.com/duxlabs-dev/dux-shell/v2.1.0/core/internal/config/embedded/niri-input.kdl"
+    }
+  ],
+  "uninterrupted_offline_acceptance": true,
+  "verification_command": "make verify ARGS='--iso out/arch-niri-dux-2.1-candidate-x86_64.iso --directory out/verify-dux21-accepted'"
+}

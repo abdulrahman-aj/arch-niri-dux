@@ -414,3 +414,37 @@ preflight, encrypted installation and guest preparation. This was an
 contents and the signed integration release are unchanged. Exact inputs and
 limits are in `verification/iso-payload-2026-11-04.json`; local diagnostics are
 in `out/verify-iso-payload/`. No laptop changes were made.
+
+## Dux 2.1 clean baseline — 2026-11-05
+
+Shell, GOP, Greeter, Search, Calendar and Files are all 2.1.0. The lock retains
+687 existing signed pins unchanged, updates Shell/GOP and adds four PDF-preview
+packages. All six new/replaced signed payloads verified with existing keys;
+the four unmodified AUR recipes match their upstream release asset digests.
+Actionlint, 105 source tests and 10 build tests passed. Independent Muse review
+found no outstanding source blockers after the GTK startup race was fixed and
+regression-tested.
+
+The development ISO is 2,742,853,632 bytes (2.55 GiB), SHA256
+`19b23401dc7305ab6857460ca7e50349145daf3a6ebda9c6f3fc92a48c879c3d`.
+A fresh offline VM passed all 27 acceptance milestones without continuation.
+This includes the native generated Niri bindings and inherited Alt+F4, live
+GTK/Chromium appearance changes, fresh-account initialization and preservation,
+real Dux Files PDF rendering, Papers remaining the PDF default, media, synthetic
+camera capture, file dialogs, screen sharing, locking, signed integration
+upgrade/baseline opt-out, snapshot restoration and both disk-unlock paths.
+
+A disposable overlay loaded the seven actual dotfiles from commit
+`193cd7f7e3c7cefb476f86221cb093ea0ac76f6a` as file symlinks. Native settings and
+shortcut writes changed the owning Git files without replacing their links;
+changes survived a Dux restart. Real keypresses confirmed inherited Alt+F4 and
+personal Super+W close windows, while Super+Q remains a no-op. Island styling,
+keyboard/idle settings and lock privacy/power settings loaded without a base
+`settings.json`. This did not run the full personal bootstrap or edit dotfiles.
+
+This is an unpublished `0.2.0-1` development build. Qualification of exact
+CI-signed 0.2.0 artifacts and production HTTPS delivery requires a later approved
+merge/release. No automatic 2.0 home-config migration is supported. The laptop
+was untouched; physical device, printer and LAN tests are not claimed. Exact
+inputs, results and limits are in `verification/dux-2.1-2026-11-05.json`; local
+evidence is in `out/verify-dux21-accepted/`.
