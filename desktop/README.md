@@ -24,9 +24,9 @@ MRU preferences. This avoids [Dux's shortcut-save bugs, still present in 2.1](ht
 until a fixed package is available; generated `dms/alttab.kdl` controls appearance.
 Existing user Niri files are preserved when configuring another time. Generated
 layout/input files remain local, so Dux settings continue to control them.
-Dux 2.1 starts a clean configuration baseline. Existing 2.0 installations must
-reinstall or explicitly adopt the new entrypoint; no automatic migration changes
-user files. Package updates from the 2.1 baseline remain supported.
+Dux 2.1 starts a clean configuration baseline; the 2.0 reinstall-or-adopt rule
+lives with the release policy in [RELEASING.md](../packages/RELEASING.md).
+Package updates from the 2.1 baseline remain supported.
 
 New users start on Dux's upstream "bloom" material preset. The seed lives in
 `~/.local/state/dms/session.json` and is only created when absent; existing

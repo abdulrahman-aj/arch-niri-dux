@@ -9,7 +9,8 @@ also available on the live ISO.
 
 ## Build and test
 
-Requires Linux, Nix, Make and KVM access. Allow 24 GiB of build space, 8 GiB of
+Requires Linux, Nix, Make and KVM access. Allow about 48 GiB of build space
+(40 GiB builder disk plus ISO, cache and VM overlays), 8 GiB of
 RAM and about 2.5 GiB for the ISO. Build cache goes in
 `~/.cache/arch-niri-dux-build`; `BUILD_STATE=/path/with/space make iso` overrides it.
 
@@ -69,7 +70,9 @@ stays untouched.
 ## Status
 
 [VM verification](VERIFICATION.md) covers installation, desktop, updates, recovery
-and hibernation. Laptop hibernate/resume also passed; the intermittent lid symptom
+and hibernation. Laptop hibernate/resume passed on the Zenbook with a recorded
+speaker-amplifier resume warning; full-device resume is not established, and the
+intermittent lid symptom
 and docked display behavior remain hardware checks.
 Secure Boot is outside v1; planned features are in [TODO.md](TODO.md).
 

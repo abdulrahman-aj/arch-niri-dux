@@ -9,7 +9,7 @@ grep -qw 'archisolabel=ARCH_202610' /proc/cmdline
 if ! blkid /dev/vda; then
     mkfs.ext4 -F /dev/vda
 else
-    e2fsck -p /dev/vda || [[ $? == 1 ]]
+    e2fsck -p /dev/vda || [[ $? -eq 1 ]]
 fi
 mkdir -p /build
 mount /dev/vda /build

@@ -115,8 +115,7 @@ that reserve; media downloads reserve it before writing. Monitor
 `df -h .` as concurrent root work can consume space. After preserving evidence,
 remove only this task's disposable failed/finished VM overlays or downloaded
 Windows ISO when no longer needed. Retain input hashes, logs and reports. Do not
-run broad Nix GC or delete unrelated user/cache files. Keep TODO.md listed until
-independent review and both real OS scenarios pass.
+run broad Nix GC or delete unrelated user/cache files.
 
 Interrupted Windows provisioning can resume without recreating its disk using
 `make provision-alongside ARGS="--os windows --finish-windows --iso /absolute/new.iso --directory /absolute/windows-fixture"`. This requires the saved successful Windows OS report and verifies the qcow2 before firmware registration. The TPM emulator restarts for each QEMU run with its original state preserved.
