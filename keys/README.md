@@ -7,9 +7,9 @@ Arch/Omarchy package keyring after the initial signature-verified build.
 
 The build uses this repository keyring, so it does not require Omarchy or a
 previously initialized host pacman keyring. No private key material is included.
-Distribution packages are checked against both hashes and signatures. The four
-Dux AUR packages use reviewed recipes and pinned upstream source hashes instead;
-their build provenance is recorded separately in the output manifest.
+The build checks distribution packages against both hashes and signatures. The four
+Dux AUR packages use reviewed recipes and pinned upstream source hashes instead.
+Their build provenance is recorded separately in the output manifest.
 
 When intentionally updating the package lock, check new signing fingerprints
 against the source distribution's public keyring before adding their public keys.
