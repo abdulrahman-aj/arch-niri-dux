@@ -3,7 +3,7 @@
 from pathlib import Path
 import re
 import subprocess
-import sys
+from . import dispatch
 from .guest import run, run_interactive
 from .boot import storage
 from . import integration
@@ -124,12 +124,8 @@ def verify(vm, passed):
 
 
 if __name__ == '__main__':
-    action = sys.argv[1]
-    if action == 'snapshots':
-        snapshots()
-    elif action == 'recovery':
-        recovery()
-    elif action == 'restored':
-        restored()
-    else:
-        raise SystemExit('Unknown recovery probe')
+    dispatch('recovery', {
+        'snapshots': snapshots,
+        'recovery': recovery,
+        'restored': restored,
+    })

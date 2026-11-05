@@ -4,8 +4,8 @@ import json
 from pathlib import Path
 import shutil
 import subprocess
-import sys
 import time
+from . import dispatch
 from .guest import wait_until, user_command, windows, screenshot, png_dimensions, focus_window
 from .vm import click_screen_text
 
@@ -137,16 +137,10 @@ def verify(vm, passed):
 
 
 if __name__ == '__main__':
-    action = sys.argv[1]
-    if action == 'camera':
-        camera()
-    elif action == 'camera-photo':
-        camera_media()
-    elif action == 'camera-video':
-        camera_media(video=True)
-    elif action == 'camera-screen':
-        screenshot('02-snapshot.png')
-    elif action == 'camera-cleanup':
-        camera_cleanup()
-    else:
-        raise SystemExit('Unknown camera probe')
+    dispatch('camera', {
+        'camera': camera,
+        'camera-photo': camera_media,
+        'camera-video': lambda: camera_media(video=True),
+        'camera-screen': lambda: screenshot('02-snapshot.png'),
+        'camera-cleanup': camera_cleanup,
+    })

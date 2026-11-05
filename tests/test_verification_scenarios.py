@@ -10,9 +10,35 @@ import sys
 import tempfile
 from types import SimpleNamespace
 import unittest
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
-from scripts.verification import camera, guest, integration, pdf, vm
+from scripts.verification import camera, dispatch, guest, integration, pdf, vm
+
+
+class ProbeDispatchTests(unittest.TestCase):
+    def test_only_the_selected_handler_runs_without_consuming_its_arguments(self):
+        selected, other = Mock(), Mock()
+        arguments = ['probe', 'selected', '/custom/root']
+        with patch.object(sys, 'argv', arguments.copy()):
+            dispatch('sample', {'selected': selected, 'other': other})
+            self.assertEqual(sys.argv, arguments)
+        selected.assert_called_once_with()
+        other.assert_not_called()
+
+    def test_unknown_action_reports_the_probe_name_without_running_a_handler(self):
+        handler = Mock()
+        with patch.object(sys, 'argv', ['probe', 'unknown']):
+            with self.assertRaises(SystemExit) as error:
+                dispatch('sample', {'known': handler})
+        self.assertEqual(error.exception.code, 'Unknown sample probe')
+        handler.assert_not_called()
+
+    def test_handler_key_errors_are_not_misreported_as_unknown_actions(self):
+        failure = KeyError('handler failure')
+        with patch.object(sys, 'argv', ['probe', 'known']):
+            with self.assertRaises(KeyError) as error:
+                dispatch('sample', {'known': Mock(side_effect=failure)})
+        self.assertIs(error.exception, failure)
 
 
 class ProbeStagingTests(unittest.TestCase):
@@ -26,6 +52,13 @@ class ProbeStagingTests(unittest.TestCase):
                             'from verification import apps, boot, browser, camera, desktop, '
                             'guest, integration, pdf, recovery, vm'],
                            cwd=root, env=os.environ | {'PYTHONPATH': ''}, check=True)
+            for name in ('boot', 'desktop', 'browser', 'camera', 'pdf', 'recovery', 'integration'):
+                with self.subTest(probe=name):
+                    result = subprocess.run([sys.executable, '-m', f'verification.{name}', 'unknown'],
+                                            cwd=root, env=os.environ | {'PYTHONPATH': ''},
+                                            capture_output=True, text=True)
+                    self.assertEqual(result.returncode, 1)
+                    self.assertEqual(result.stderr.strip(), f'Unknown {name} probe')
 
 
 class ScreenshotReadinessTests(unittest.TestCase):

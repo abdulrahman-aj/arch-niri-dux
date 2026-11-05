@@ -3,8 +3,8 @@
 import json
 from pathlib import Path
 import subprocess
-import sys
 import time
+from . import dispatch
 from .guest import wait_until, user_command, ipc, windows, screenshot, png_dimensions, focus_window
 
 
@@ -97,14 +97,9 @@ def verify(vm, passed):
 
 
 if __name__ == '__main__':
-    action = sys.argv[1]
-    if action == 'pdf':
-        pdf()
-    elif action == 'files-pdf-prepare':
-        files_pdf_prepare()
-    elif action == 'files-pdf-capture':
-        screenshot('02-dfiles-pdf.png')
-    elif action == 'files-pdf-close':
-        ipc('dfiles', 'ui.hide')
-    else:
-        raise SystemExit('Unknown pdf probe')
+    dispatch('pdf', {
+        'pdf': pdf,
+        'files-pdf-prepare': files_pdf_prepare,
+        'files-pdf-capture': lambda: screenshot('02-dfiles-pdf.png'),
+        'files-pdf-close': lambda: ipc('dfiles', 'ui.hide'),
+    })
