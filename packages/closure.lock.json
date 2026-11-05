@@ -34,6 +34,7 @@
     "fastfetch",
     "fd",
     "ffmpegthumbnailer",
+    "fprintd",
     "fzf",
     "git",
     "github-cli",
@@ -996,6 +997,15 @@
       "url": "https://geo.mirror.pkgbuild.com/extra/os/x86_64/fontconfig-2:2.18.3-2-x86_64.pkg.tar.zst",
       "repository": "extra",
       "signature": "iHUEABYKAB0WIQSDvIiJNRtd67toQW64rAhgDxCM3wUCaosNYQAKCRC4rAhgDxCM3yA7AP9qy1kU95WVVRHVvhX065AETWiL1UmcCDrgpjXPSBzuBgD/QL7vsMSTE3jYCxEbu8Ya3Jzo1KvuzD24VR0h/1As8Ak="
+    },
+    {
+      "name": "fprintd",
+      "version": "1.94.5-2",
+      "filename": "fprintd-1.94.5-2-x86_64.pkg.tar.zst",
+      "sha256": "f95ebba56a53be578f6e03d34aa9448e38b3e4d538e6f318112f5eebab1a58db",
+      "url": "https://geo.mirror.pkgbuild.com/extra/os/x86_64/fprintd-1.94.5-2-x86_64.pkg.tar.zst",
+      "repository": "extra",
+      "signature": "iQIzBAABCgAdFiEEtZcfLFwQqaCMYAMPeGxj8zDXy5IFAmnGvvcACgkQeGxj8zDXy5KOVA//Zjdkcbk7xM89Mx4M2fMDLBmJi84MnzAToxXtToIjdRiSeFBxYJVyyU12gaQoH1uv8yZlSdPMzTmfqpGWY/tuhnHUpEuLN0U/8BGiuqpZmfNRTGpdpHI4TRySQKBqKhhlJr1bSRq5VUJpTG7hyVtxl3aQlmli9UJr8PEqFhn3tNhyrKTbR3/fxfBxF+rpXHL4FI1pdiS03CSio41DuTzmwvmBMiC/pbVXEJmzmS91JJ52xrjZnAvrQuJ4aNDJ4CkqolvlXSwU43vPHaz9QrRWY5LMrMx9b0XGSwAMzQQkfNtGgeTvUWnMOakgbpqoi3g5JvOpr5GHAS0/hVdiKY82eMCRCyqLKb9LNe9bTKp7J7Seb9OETa74+HimIpaokbQTUU8Zs99SVqrkjttJVtPSIgbwhAtmDDPKSntLdEeyHB63Cnh1XahAuKWpgEIXbQcwy8M/bLCXRYTRB3koWJEMVyFqeZ1qHUISYvEacRFHKx4Vl059AETV4wlL0RJT8wmXl6ZT/3uQkVTJkBjQmmwPKEr0HCSpy9nZ0wXL0MaGuUIYoEsGBhLzkSrGekvvE6nqvS1Vu6MsRnGtlfQcowxmBpbQF0Kbh/8TOXkYdCrdpGs54LIGthyxCUyOQUoBVAafpVcyz+O8r/woIKWI0jQIYZQn8eUg/ewttDW8VQL8mXI="
     },
     {
       "name": "freeglut",
@@ -2609,6 +2619,15 @@
       "signature": "iQEzBAABCgAdFiEErcih/MFeAdRTEEGelGV6sg8qCSsFAmmITYMACgkQlGV6sg8qCSvO1Af/b4GNBFxhqIEz25um/QnU1id2UROvopjeGLeNkpQAq9Nuq9T5/xNkmx0TolnW5L3APsLMmNx5V3AtmTD9hHNp0gW533qCGvxD0Q2SEEN6ddIOZKsYg39idoRuF/6qqOaNQ1oBB+6IUY1q/FoVgYPKJooMsOemQsEyjsF0ba31hFCvBmFC0WEtXMswlh3QYRNPd0pLG1k7H8zmLt/W5v1f04uS3scZFGWUT+X5dbkIQNee/c4AUkQtzdX53yhprkwQmJLHO5cEOxfdxUDLdCnhT7LVntN4SgSrbeL+0Bl2Q+H+UdZvjl5jepn/KVH7sp/nMUkONHUBAB/pKgTiaSA0yA=="
     },
     {
+      "name": "libfprint",
+      "version": "1.94.100-1",
+      "filename": "libfprint-1.94.100-1-x86_64.pkg.tar.zst",
+      "sha256": "08f5505d915930cfd9c280642fc857ea61686b3c9ae5f0dc3773a3b5f58ee81f",
+      "url": "https://geo.mirror.pkgbuild.com/extra/os/x86_64/libfprint-1.94.100-1-x86_64.pkg.tar.zst",
+      "repository": "extra",
+      "signature": "iHUEABYKAB0WIQSDvIiJNRtd67toQW64rAhgDxCM3wUCamValAAKCRC4rAhgDxCM37pKAQC6DQvdLTGmuNLiW6csZrHyCQbyVVSsfhXw0EFFO4T6NAD5Acb06mULUnBqiiWeVkfB/O6zn1q/Jlsw+OcVtv8OPAA="
+    },
+    {
       "name": "libfreeaptx",
       "version": "0.2.2-1",
       "filename": "libfreeaptx-0.2.2-1-x86_64.pkg.tar.zst",
@@ -2715,6 +2734,15 @@
       "url": "https://geo.mirror.pkgbuild.com/extra/os/x86_64/libgudev-238-4-x86_64.pkg.tar.zst",
       "repository": "extra",
       "signature": "iHUEABYKAB0WIQSDvIiJNRtd67toQW64rAhgDxCM3wUCatUhdgAKCRC4rAhgDxCM3ws4AP92r9CJmP8cAe/w6E/nvlJcfoXCIackG0s9ZQ2x3dTnIgD/TQjYiAWMjjE35BMmsYGym0GSJXif419nrKdDY9UcLww="
+    },
+    {
+      "name": "libgusb",
+      "version": "0.4.9-2",
+      "filename": "libgusb-0.4.9-2-x86_64.pkg.tar.zst",
+      "sha256": "433495cbfe5d8b7b0b6f8b7ee09cc308461a2fdfd66edee0227d1a4b02d31a3b",
+      "url": "https://geo.mirror.pkgbuild.com/extra/os/x86_64/libgusb-0.4.9-2-x86_64.pkg.tar.zst",
+      "repository": "extra",
+      "signature": "iQIzBAABCAAdFiEEFORv5f1p8uKH4kTbYyw8wNHJyvYFAmfpj1QACgkQYyw8wNHJyvYUVg/9HEdQ7N7IWymhRxQb8tPo1a4VrGhztrzDTudBOVp4qICY83iq5FS5XMJ46kB99WNF9fmpHtMZsswweEE8hGsXwHrkZGETvo/M2yyELjvhZiN4kPSm3/MtyFA4NxHh4hCowLKJGcBhXFZQ1a6mrvJb9sotwaVqiZ3Lub6Bbo1RixncwCPA/SpzwPIPt610dKkGnBTOT3/k+NiCLmfJwUjO87DYIYpvaODjTMgEywY2KON20W3UcRhFaqRtqQIClSKqysOmijczIHWn2xysaKpZmbbXedTtDXJRTtCjPmBuWNEngH2xPb+7B5nD4KLFsvZR8q7AsdlR0IuIv+iaW56X7uxaCYAJhvZVzprscv2f45YQEMU6ERQpkFv9mYe8kXTcsaTbRjZLM/6u8k9blXlKA6r1mKwQ6cCtuomHuxO4BugBoItvI8YFXhVY3tF+OkwusKPdhnO/DVCOSjIAGAmlNUYZ5A9cIqpgOuUOqt/62lcjgvfG9+QSanAjJza10hypzznuuqV+7NecI+uufiH2l2Be9hW67/NYPKvez65LjyxkGdkcLpiQp2QliuAbNJdS5dke4bVtk9225JP3RBp1UiMeTB7w8qCiqCg8JfMzu6xP6wyR91sl5QnOBcal6m/Miayp8z9c3oKAlp4N0xOeKZbIlDr2gitUjaBeS9/kLU4="
     },
     {
       "name": "libgweather-4",

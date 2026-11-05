@@ -259,9 +259,14 @@ def backends():
                    'if (status === Image.Error) Qt.exit(1); } } }\n')
     result = guest.user_command('bash', '-c', f'quickshell -p {qml} 2>&1', capture=True, timeout=30)
     assert 'DUX_AVIF_OK' in result.stdout, result.stdout
+    fingerprint = json.loads(guest.run(
+        'busctl', '--system', '--json=short', 'call', 'net.reactivated.Fprint',
+        '/net/reactivated/Fprint/Manager', 'net.reactivated.Fprint.Manager', 'GetDevices',
+        stdout=subprocess.PIPE).stdout)
+    assert fingerprint['type'] == 'ao', fingerprint
     record('baseline-backends', {'phone_camera_binaries_load': True, 'qt_multimedia_import': True,
-                                  'cava_available': True, 'qt_avif_decoded': True,
-                                  'note': 'Physical phone/camera access is not qualified by this VM check.'})
+                                  'cava_available': True, 'qt_avif_decoded': True, 'fingerprint_backend_responded': True,
+                                  'note': 'Physical phone/camera access and fingerprint enrollment/authentication are not qualified by this VM check.'})
 
 
 def printing():
