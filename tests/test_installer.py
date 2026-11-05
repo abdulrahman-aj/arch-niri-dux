@@ -26,6 +26,35 @@ def disk(**changes):
 
 
 class InstallerSafetyTests(unittest.TestCase):
+    def test_firmware_guards_stop_unsupported_boots_before_installation(self):
+        with tempfile.TemporaryDirectory() as directory:
+            variable = Path(directory) / 'SecureBoot-fixture'
+            for uefi, secure_boot, message in ((False, False, 'Boot the ISO in UEFI mode'),
+                                               (True, True, 'Disable Secure Boot'),
+                                               (True, False, None)):
+                variable.write_bytes(b'\x06\x00\x00\x00' + bytes([secure_boot]))
+                output = io.StringIO()
+                with self.subTest(uefi=uefi, secure_boot=secure_boot), \
+                        patch.object(sys, 'argv', ['arch-niri-install']), \
+                        patch.object(installer.os, 'geteuid', return_value=0), \
+                        patch.object(Path, 'exists', return_value=uefi), \
+                        patch.object(Path, 'glob', return_value=[variable]), \
+                        patch.object(installer, 'wizard', return_value=settings()) as wizard, \
+                        patch.object(installer, 'install') as installation, \
+                        patch.object(installer, 'run') as commands, patch('sys.stderr', output):
+                    if message is None:
+                        self.assertEqual(installer.main(), 0)
+                        wizard.assert_called_once_with()
+                        installation.assert_called_once_with(wizard.return_value)
+                    else:
+                        with self.assertRaises(SystemExit) as stopped:
+                            installer.main()
+                        self.assertEqual(stopped.exception.code, 2)
+                        self.assertIn(message, output.getvalue())
+                        wizard.assert_not_called()
+                        installation.assert_not_called()
+                    commands.assert_not_called()
+
     def test_malformed_automation_config_stops_cleanly_without_installing(self):
         with tempfile.TemporaryDirectory() as directory:
             config = Path(directory) / 'invalid.json'
@@ -199,7 +228,7 @@ class InstallerSafetyTests(unittest.TestCase):
             with self.subTest(value=value), self.assertRaises(ValueError):
                 settings(swap_gib=value).validate()
 
-    def test_install_creates_isolated_swap_and_passes_physical_resume_offset(self):
+    def test_erase_install_formats_luks2_and_creates_isolated_swap(self):
         for size in (0, 8):
             with self.subTest(swap_gib=size), tempfile.TemporaryDirectory() as directory:
                 root = Path(directory)
@@ -235,6 +264,14 @@ class InstallerSafetyTests(unittest.TestCase):
                         patch('sys.stdout', output):
                     installer.install(value)
                 commands = [call.args for call in run.call_args_list]
+                formatted = next(call for call in run.call_args_list if call.args[:2] == ('cryptsetup', 'luksFormat'))
+                opened = next(call for call in run.call_args_list if call.args[:2] == ('cryptsetup', 'open'))
+                self.assertEqual(formatted.args, ('cryptsetup', 'luksFormat', '--batch-mode', '--type', 'luks2',
+                                                 '--pbkdf-memory', '262144', '--key-file', '-', '/dev/vda2'))
+                self.assertEqual(opened.args, ('cryptsetup', 'open', '--key-file', '-', '/dev/vda2', 'dux-root'))
+                self.assertEqual(formatted.kwargs['data'], value.passphrase)
+                self.assertEqual(opened.kwargs['data'], value.passphrase)
+                self.assertLess(commands.index(formatted.args), commands.index(opened.args))
                 swap_created = ('btrfs', 'subvolume', 'create', str(target / '@swap'))
                 swap_setup = [call for call in commands if call[:3] == ('btrfs', 'filesystem', 'mkswapfile')]
                 configure = next(call for call in commands if '/root/configure-target.sh' in call)

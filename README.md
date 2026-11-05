@@ -25,7 +25,9 @@ are excluded. Recipe checks account for makepkg's metadata and supplied variable
 `make test` includes lint and remains the CI gate.
 
 Acceptance scenarios live in `scripts/verification/`, with each behavior's host
-interaction, guest probes and cleanup together. `scripts/verify.py` orders those
+interaction, guest probes and cleanup together. Accepted machine-readable evidence
+lives in `verification/`; disposable logs, screenshots and VM disks stay in
+untracked `out/` directories. `scripts/verify.py` orders those
 scenarios. Alongside installation and hibernation reuse the same VM control and
 probe staging; the upgrade fixture owns its restoration expectations.
 
@@ -65,6 +67,11 @@ sudo limine-snapper-restore
 
 Restore and reboot into the normal entry. `/home`, including personal config,
 stays untouched.
+
+`snap-pac` creates snapshots around package transactions. Recovery entries use
+`noresume` to prevent resuming a normal-root hibernation image over an older
+snapshot. Timeline snapshots are disabled; number cleanup uses limits of 5
+regular and 5 important snapshots, with `snapper-cleanup.timer` enabled.
 
 ## Status
 

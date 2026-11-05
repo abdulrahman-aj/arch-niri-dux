@@ -32,6 +32,22 @@ def digest_range(path, start, size):
     return digest.hexdigest()
 
 
+class GPTMetadataTests(unittest.TestCase):
+    def test_short_mbr_and_either_header_are_rejected_cleanly(self):
+        with tempfile.TemporaryDirectory() as directory:
+            disk = Path(directory) / 'gpt.img'
+            with disk.open('wb') as stream:
+                stream.truncate(1024 * 1024)
+            subprocess.run(['sgdisk', '--clear', str(disk)], check=True, stdout=subprocess.DEVNULL)
+            original = disk.read_bytes()
+            self.assertEqual(installer.read_gpt_metadata(disk, 512)[0], original[:512])
+            for length in (0, 511, 512 + 88, 1023, len(original) - 512 + 79, len(original) - 1):
+                with self.subTest(bytes_available=length):
+                    disk.write_bytes(original[:length])
+                    with self.assertRaisesRegex(ValueError, 'Truncated GPT metadata'):
+                        installer.read_gpt_metadata(disk, 512)
+
+
 class AlongsideDiskTests(unittest.TestCase):
     def setUp(self):
         if not shutil.which('sgdisk') or not shutil.which('sfdisk'):

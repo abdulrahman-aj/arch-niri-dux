@@ -47,5 +47,51 @@ class PublisherCheckoutTests(unittest.TestCase):
             self.assertTrue((root / 'reached-release-api').is_file())
 
 
+class PublisherScratchTests(unittest.TestCase):
+    def test_retry_scratch_is_cleaned_on_success_and_failure_without_removing_input(self):
+        for stage, expected in (('', 0), ('fetch', 23), ('publish', 24)):
+            with self.subTest(failure_stage=stage), tempfile.TemporaryDirectory() as directory:
+                root = Path(directory)
+                commands, scratch, packages = root / 'bin', root / 'scratch', root / 'packages'
+                for path in (commands, scratch, packages):
+                    path.mkdir()
+                (packages / 'keep').write_text('original input')
+                # Exercise the real scratch lifecycle while GitHub and signing stay stubbed.
+                stubs = {
+                    'git': 'exit 0\n',
+                    'gh': '''[[ $1 == api ]] || exit 81
+printf '%s\\n' '[[{"tag_name":"integration-v0.1.0-2","draft":false}]]'
+''',
+                    'python': '''case "$2" in
+    fetch)
+        mkdir -p "$4"
+        touch "$4/reused"
+        [[ $FAIL_STAGE != fetch ]] || exit 23
+        ;;
+    publish)
+        test -f "$4/reused"
+        [[ $FAIL_STAGE != publish ]] || exit 24
+        ;;
+    *) exit 82 ;;
+esac
+''',
+                }
+                for name, body in stubs.items():
+                    path = commands / name
+                    path.write_text(f'#!{shutil.which("bash")}\nset -eu\n' + body)
+                    path.chmod(0o755)
+                environment = os.environ | {
+                    'PATH': str(commands) + ':' + os.environ['PATH'], 'TMPDIR': str(scratch),
+                    'GITHUB_REF_NAME': 'integration-v0.1.0-2', 'GITHUB_SHA': 'a' * 40,
+                    'GITHUB_REPOSITORY': 'abdulrahman-aj/arch-niri-dux', 'FAIL_STAGE': stage,
+                }
+                result = subprocess.run(['bash', str(ROOT / 'scripts/publish-integration'),
+                                         str(root), str(packages), str(root / 'history'), str(root / 'output')],
+                                        env=environment, capture_output=True, text=True)
+                self.assertEqual(result.returncode, expected, result.stderr)
+                self.assertEqual(list(scratch.iterdir()), [])
+                self.assertEqual((packages / 'keep').read_text(), 'original input')
+
+
 if __name__ == '__main__':
     unittest.main()

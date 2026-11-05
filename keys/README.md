@@ -14,6 +14,11 @@ their build provenance is recorded separately in the output manifest.
 When intentionally updating the package lock, check new signing fingerprints
 against the source distribution's public keyring before adding their public keys.
 
+`integration-signing.gpg` is our public release key, and
+`integration-signing.fingerprint` pins its primary identity. CI receives only
+the signing subkey. Key rotation and encrypted offline recovery are documented
+in [release maintenance](../packages/RELEASING.md#signing-and-recovery).
+
 The added signing subkey `4C13F5553C2D87AD23220A073EC2E354F61AC9F6`
 belongs to Hyacinthe Cartiaux's primary key
 `DB310957BB30360A67311D87886D7ACFED689539`, published in Arch's
