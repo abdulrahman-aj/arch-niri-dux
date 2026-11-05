@@ -3,9 +3,9 @@
 import json
 from pathlib import Path
 import subprocess
-import sys
 import time
-from .guest import wait_until, user_command, ipc, windows, screenshot, png_dimensions
+from .guest import focus_window, ipc, png_dimensions, screenshot, user_command, wait_until, windows
+from ._common import dispatch
 
 
 def sample_pdf_bytes():
@@ -66,8 +66,7 @@ def files_pdf_prepare():
     ipc('dfiles', 'ui.open', f'path={sample}')
     window = wait_until('Dux Files PDF selection', lambda: next(
         (item for item in windows() if item.get('app_id') == 'dev.duxlabs.files'), None))
-    user_command('niri', 'msg', 'action', 'focus-window', '--id', str(window['id']))
-
+    focus_window(window['id'])
 
 def verify(vm, passed):
     vm.probe('pdf', 'pdf', timeout=180)
@@ -97,14 +96,9 @@ def verify(vm, passed):
 
 
 if __name__ == '__main__':
-    action = sys.argv[1]
-    if action == 'pdf':
-        pdf()
-    elif action == 'files-pdf-prepare':
-        files_pdf_prepare()
-    elif action == 'files-pdf-capture':
-        screenshot('02-dfiles-pdf.png')
-    elif action == 'files-pdf-close':
-        ipc('dfiles', 'ui.hide')
-    else:
-        raise SystemExit('Unknown pdf probe')
+    dispatch('pdf', {
+        'pdf': pdf,
+        'files-pdf-prepare': files_pdf_prepare,
+        'files-pdf-capture': lambda: screenshot('02-dfiles-pdf.png'),
+        'files-pdf-close': lambda: ipc('dfiles', 'ui.hide'),
+    })

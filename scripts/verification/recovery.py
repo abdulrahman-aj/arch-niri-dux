@@ -3,11 +3,11 @@
 from pathlib import Path
 import re
 import subprocess
-import sys
 from .guest import run, run_interactive
 from .boot import storage
 from . import integration
 from .vm import installed_login
+from ._common import dispatch, mount_verify
 
 
 def boot_entry_path(text, snapshot=None):
@@ -108,7 +108,7 @@ def verify(vm, passed):
     vm.stop()
     vm.start(cdrom=False)
     installed_login(vm)
-    vm.command('mkdir -p /run/verify; mount -t 9p -o trans=virtio,version=9p2000.L verify /run/verify')
+    vm.command(mount_verify())
     vm.probe('recovery', 'recovery', timeout=300)
     vm.screenshot('04-recovery')
     passed('Limine snapshot boot and restoration')
@@ -117,19 +117,15 @@ def verify(vm, passed):
     vm.stop()
     vm.start(cdrom=False)
     installed_login(vm)
-    vm.command('mkdir -p /run/verify; mount -t 9p -o trans=virtio,version=9p2000.L verify /run/verify')
+    vm.command(mount_verify())
     vm.probe('recovery', 'restored')
     vm.screenshot('05-restored')
     passed('Restored system rebooted normally and home was preserved')
 
 
 if __name__ == '__main__':
-    action = sys.argv[1]
-    if action == 'snapshots':
-        snapshots()
-    elif action == 'recovery':
-        recovery()
-    elif action == 'restored':
-        restored()
-    else:
-        raise SystemExit('Unknown recovery probe')
+    dispatch('recovery', {
+        'snapshots': snapshots,
+        'recovery': recovery,
+        'restored': restored,
+    })

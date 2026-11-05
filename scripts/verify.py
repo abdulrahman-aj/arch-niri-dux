@@ -3,7 +3,6 @@
 
 import argparse
 import hashlib
-import importlib.util
 import json
 import os
 from pathlib import Path
@@ -14,6 +13,7 @@ import sys
 import tempfile
 
 from verification import apps, boot, browser, camera, desktop, integration, pdf, recovery
+from verification._common import Milestones, load_module, mount_verify
 from verification.vm import VM, PASSWORD, stage_probes
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -61,16 +61,12 @@ def main():
     }, indent=2) + '\n')
     (directory / 'key').write_text(PASSWORD)
     (directory / 'key').chmod(0o600)
-    spec = importlib.util.spec_from_file_location('integration_builder', ROOT / 'scripts/build-integration.py')
-    builder = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(builder)
+    builder = load_module('integration_builder', ROOT / 'scripts/build-integration.py')
     source = directory / 'integration-input'
     source.mkdir()
     manifest = json.loads((ROOT / 'out/packages.manifest.json').read_text())['integration']
     (directory / 'release-manifest.json').write_text(json.dumps(manifest, indent=2) + '\n')
-    release_spec = importlib.util.spec_from_file_location('integration_release', ROOT / 'scripts/integration-release.py')
-    release = importlib.util.module_from_spec(release_spec)
-    release_spec.loader.exec_module(release)
+    release = load_module('integration_release', ROOT / 'scripts/integration-release.py')
     release.validate_manifest(ROOT, ROOT / 'out/integration')
     for filename, target, field in [('integration.tar', 'integration.tar', 'source_sha256'),
                                      ('integration.PKGBUILD', 'PKGBUILD', 'recipe_sha256')]:
@@ -79,11 +75,7 @@ def main():
             raise ValueError(f'Integration build input changed: {filename}')
         shutil.copyfile(original, source / target)
     vm = VM(directory, iso.resolve(), disk)
-    milestones = []
-    def passed(name):
-        milestones.append(name)
-        (directory / 'milestones.json').write_text(json.dumps(milestones, indent=2))
-        print('PASS: ' + name, flush=True)
+    passed = Milestones(directory).passed
     try:
         print(f'VM evidence: {directory}', flush=True)
         vm.start()
@@ -91,7 +83,7 @@ def main():
         # USB boot with enough RAM reproduces archiso's automatic-copy path.
         # The payload must stay on mounted media instead of disappearing.
         vm.command('grep -qw copytoram=n /proc/cmdline; mountpoint -q /run/archiso/bootmnt; test ! -e /run/archiso/copytoram/airootfs.sfs')
-        vm.command('mkdir -p /run/verify; mount -t 9p -o trans=virtio,version=9p2000.L verify /run/verify')
+        vm.command(mount_verify())
         vm.command('fastfetch --logo none --structure OS:Kernel')
         vm.command('test "$(ls /sys/class/net | tr "\\n" " ")" = "lo "')
         vm.command(f'test "$(sha256sum /run/archiso/bootmnt/packages.manifest.json | cut -d " " -f 1)" = {package_digest}')

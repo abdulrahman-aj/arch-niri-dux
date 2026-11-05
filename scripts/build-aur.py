@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 """Build the reviewed binary-only AUR recipes inside the disposable builder."""
 
-import hashlib
 import json
 import os
 from pathlib import Path
@@ -10,10 +9,8 @@ import shutil
 import subprocess
 import sys
 
-
-def digest(path):
-    with path.open('rb') as stream:
-        return hashlib.file_digest(stream, 'sha256').hexdigest()
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from verification._common import COMMIT_EXPR, MAKEPKG_CONFIG, check_hex, digest
 
 
 def validate_recipe(root, recipe):
@@ -21,8 +18,7 @@ def validate_recipe(root, recipe):
     if not re.fullmatch(r'[a-z0-9][a-z0-9+_.-]*', name):
         raise ValueError('Invalid AUR package name')
     source = root / 'packages/aur' / name
-    if not re.fullmatch(r'[a-f0-9]{40}', recipe['commit']):
-        raise ValueError('Invalid pinned AUR commit')
+    check_hex(recipe['commit'], COMMIT_EXPR, 'Invalid pinned AUR commit')
     if not {'PKGBUILD', '.SRCINFO'}.issubset(recipe['files']):
         raise ValueError('Recipe is missing its build or dependency metadata')
     for name, expected in recipe['files'].items():
@@ -41,7 +37,7 @@ def main():
     artifacts.mkdir(parents=True, exist_ok=True)
     config = workspace / 'makepkg.conf'
     # Binary-only recipes do not need Arch's default split debug packages.
-    config.write_text('source /etc/makepkg.conf\nOPTIONS+=(!debug)\n')
+    config.write_text(MAKEPKG_CONFIG)
     subprocess.run(['chown', 'nobody:nobody', str(artifacts)], check=True)
     packages = []
     for recipe in json.loads((root / 'packages/aur-recipes.json').read_text()):

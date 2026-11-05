@@ -1,16 +1,13 @@
-import importlib.util
-from pathlib import Path
 import tempfile
 import unittest
+from pathlib import Path
 from unittest.mock import patch
 
-spec = importlib.util.spec_from_file_location('build_lock', Path(__file__).with_name('build-lock.py'))
-module = importlib.util.module_from_spec(spec)
-spec.loader.exec_module(module)
+from verification._common import load_module
 
-aur_spec = importlib.util.spec_from_file_location('build_aur', Path(__file__).with_name('build-aur.py'))
-aur = importlib.util.module_from_spec(aur_spec)
-aur_spec.loader.exec_module(aur)
+module = load_module('build_lock', Path(__file__).with_name('build-lock.py'))
+
+aur = load_module('build_aur', Path(__file__).with_name('build-aur.py'))
 
 
 class PayloadTests(unittest.TestCase):

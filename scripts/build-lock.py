@@ -2,7 +2,6 @@
 """Freeze a pacman-resolved closure and validate every payload before ISO assembly."""
 import base64
 import concurrent.futures
-import hashlib
 import json
 import pathlib
 import subprocess
@@ -10,13 +9,8 @@ import sys
 import tarfile
 import urllib.request
 
-
-def digest(path):
-    h = hashlib.sha256()
-    with path.open('rb') as stream:
-        for block in iter(lambda: stream.read(1024 * 1024), b''):
-            h.update(block)
-    return h.hexdigest()
+sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
+from verification._common import SHA256_EXPR, check_hex, digest
 
 
 def cache_matches(path, expected):
@@ -30,8 +24,7 @@ def cache_matches(path, expected):
 def validate_entry(entry):
     if pathlib.Path(entry['filename']).name != entry['filename']:
         raise ValueError('Unsafe package filename')
-    if len(entry['sha256']) != 64 or any(c not in '0123456789abcdef' for c in entry['sha256']):
-        raise ValueError('Invalid package digest')
+    check_hex(entry['sha256'], SHA256_EXPR, 'Invalid package digest')
     if not entry['url'].startswith('https://'):
         raise ValueError('Package source must use HTTPS')
     if not entry['signature']:

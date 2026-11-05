@@ -9,6 +9,7 @@ import subprocess
 import sys
 from .guest import run
 from .vm import installed_login, graphical_login
+from ._common import dispatch, mount_verify
 
 
 def prepare(root):
@@ -181,7 +182,7 @@ def verify_boot(vm, passed, swap_gib):
     # kernel console would force Plymouth into its details/text mode.
     vm.start(cdrom=False, software_display=True)
     installed_login(vm, keyboard_unlock=True, screenshot_tag='02-graphical-unlock')
-    vm.command('mkdir -p /run/verify; mount -t 9p -o trans=virtio,version=9p2000.L verify /run/verify')
+    vm.command(mount_verify())
     vm.probe('boot', 'plymouth-status')
     passed('Graphical disk unlock accepts keyboard input and retries an incorrect password')
     vm.probe('boot', 'serial-console-enable', timeout=300)
@@ -193,7 +194,7 @@ def verify_boot(vm, passed, swap_gib):
     vm.command('test -e /dev/mapper/dux-root; findmnt -n -o FSTYPE / | grep -x btrfs; test "$(ls /sys/class/net | tr "\\n" " ")" = "lo "')
     vm.command('cat /proc/cmdline; ! grep -q /@snapshots/ /proc/cmdline; systemctl is-enabled greetd; systemctl is-active greetd; test -f /home/tester/.config/niri/config.kdl')
     vm.command('systemctl is-active NetworkManager; systemctl is-enabled bluetooth; command -v nvim chromium alacritty xdg-terminal-exec yay niri dms papers snapshot')
-    vm.command('mkdir -p /run/verify; mount -t 9p -o trans=virtio,version=9p2000.L verify /run/verify || mountpoint -q /run/verify')
+    vm.command(mount_verify(tolerant=True))
     vm.probe('boot', 'plymouth-config')
     vm.probe('boot', 'plymouth-status')
     passed('Plymouth configuration and boot services are active')
@@ -213,7 +214,7 @@ def verify_fallback(vm, passed):
     vm.stop()
     vm.start(cdrom=False, software_display=True)
     installed_login(vm, keyboard_unlock=True, screenshot_tag='06-text-fallback')
-    vm.command('mkdir -p /run/verify; mount -t 9p -o trans=virtio,version=9p2000.L verify /run/verify')
+    vm.command(mount_verify())
     vm.command('grep -qw plymouth.enable=0 /proc/cmdline; cd /run/verify && python -m verification.boot storage')
     passed('Text fallback unlocks the disk with the splash disabled')
     vm.probe('boot', 'splash-fallback-enable')
@@ -222,7 +223,7 @@ def verify_fallback(vm, passed):
     vm.stop()
     vm.start(cdrom=False, software_display=True)
     installed_login(vm, keyboard_unlock=True, screenshot_tag='07-restored-splash')
-    vm.command('mkdir -p /run/verify; mount -t 9p -o trans=virtio,version=9p2000.L verify /run/verify')
+    vm.command(mount_verify())
     vm.command('! grep -qw plymouth.enable=0 /proc/cmdline; cd /run/verify && python -m verification.boot plymouth-status')
     vm.probe('recovery', 'restored')
     passed('Graphical password screen works again after text fallback')
@@ -232,24 +233,14 @@ def verify_fallback(vm, passed):
 
 
 if __name__ == '__main__':
-    action = sys.argv[1]
-    if action == 'prepare':
-        prepare(Path(sys.argv[2]))
-    elif action == 'storage':
-        storage()
-    elif action == 'plymouth-config':
-        plymouth_config(sys.argv[2] if len(sys.argv) > 2 else '/')
-    elif action == 'plymouth-status':
-        plymouth_status()
-    elif action == 'prepare-hibernate':
-        prepare_hibernate()
-    elif action == 'serial-console-enable':
-        serial_console(True, sys.argv[2] if len(sys.argv) > 2 else '/')
-    elif action == 'serial-console-disable':
-        serial_console(False, sys.argv[2] if len(sys.argv) > 2 else '/')
-    elif action == 'splash-fallback-disable':
-        splash_fallback(True)
-    elif action == 'splash-fallback-enable':
-        splash_fallback(False)
-    else:
-        raise SystemExit('Unknown boot probe')
+    dispatch('boot', {
+        'prepare': lambda: prepare(Path(sys.argv[2])),
+        'storage': storage,
+        'plymouth-config': lambda: plymouth_config(sys.argv[2] if len(sys.argv) > 2 else '/'),
+        'plymouth-status': plymouth_status,
+        'prepare-hibernate': prepare_hibernate,
+        'serial-console-enable': lambda: serial_console(True, sys.argv[2] if len(sys.argv) > 2 else '/'),
+        'serial-console-disable': lambda: serial_console(False, sys.argv[2] if len(sys.argv) > 2 else '/'),
+        'splash-fallback-disable': lambda: splash_fallback(True),
+        'splash-fallback-enable': lambda: splash_fallback(False),
+    })

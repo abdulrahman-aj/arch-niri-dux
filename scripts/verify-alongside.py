@@ -8,6 +8,7 @@ import shlex
 import shutil
 import subprocess
 
+from verification._common import Milestones, mount_verify
 from verification.vm import VM, PASSWORD, installed_login, stage_probes
 from alongside_windows import WindowsVM, BootReports
 
@@ -61,13 +62,7 @@ def main():
     (directory / 'key').write_text(PASSWORD)
     (directory / 'key').chmod(0o600)
     stage_probes(directory)
-    milestones = []
-
-    def passed(message):
-        milestones.append(message)
-        (directory / 'milestones.json').write_text(json.dumps(milestones, indent=2))
-        print('PASS: ' + message, flush=True)
-
+    passed = Milestones(directory).passed
     try:
         vm.start(cdrom=False, network=bool(reports))
         if reports:
@@ -78,7 +73,7 @@ def main():
         passed(f'Real existing {args.os} boots before installation and sentinel is intact')
         vm.start()
         vm.expect(r'root@archiso[^\n]*#', timeout=180)
-        vm.command('mkdir -p /run/verify; mount -t 9p -o trans=virtio,version=9p2000.L verify /run/verify')
+        vm.command(mount_verify())
         for filename in ('install.py', 'configure-target.sh'):
             digest = hashlib.sha256((ROOT / 'installer' / filename).read_bytes()).hexdigest()
             vm.command(f'test "$(sha256sum /usr/local/lib/arch-niri-dux/installer/{filename} | cut -d " " -f 1)" = {digest}')
@@ -128,7 +123,7 @@ open('/run/verify/new-partitions.json','w').write(json.dumps(m.alongside_plan(v,
         passed('Default firmware path boots the new encrypted installation')
         # Reinstall the pinned kernel: exercise actual package hooks and
         # snapshot generation rather than only editing the menu in place.
-        vm.command('mkdir -p /run/verify; mount -t 9p -o trans=virtio,version=9p2000.L verify /run/verify')
+        vm.command(mount_verify())
         vm.command('pacman -U --noconfirm /run/verify/linux-[0-9]*.pkg.tar.zst', timeout=600)
         vm.command('grep -A2 "^/Existing OS" /boot/limine.conf > /run/verify/chainload-after-update.txt; '
                    'grep -q "path: guid(" /run/verify/chainload-after-update.txt; '

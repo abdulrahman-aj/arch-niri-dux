@@ -4,9 +4,9 @@ import json
 from pathlib import Path
 import shutil
 import subprocess
-import sys
 import time
-from .guest import wait_until, user_command, windows, screenshot, png_dimensions
+from .guest import focus_window, png_dimensions, screenshot, user_command, wait_until, windows
+from ._common import dispatch
 from .vm import click_screen_text
 
 
@@ -33,7 +33,7 @@ def pipewire_video_sources():
 def focus_camera():
     window = next(window for window in windows()
                   if 'snapshot' in (window.get('app_id') or '').lower())
-    user_command('niri', 'msg', 'action', 'focus-window', '--id', str(window['id']))
+    focus_window(window['id'])
 
 
 def camera_cleanup():
@@ -137,16 +137,10 @@ def verify(vm, passed):
 
 
 if __name__ == '__main__':
-    action = sys.argv[1]
-    if action == 'camera':
-        camera()
-    elif action == 'camera-photo':
-        camera_media()
-    elif action == 'camera-video':
-        camera_media(video=True)
-    elif action == 'camera-screen':
-        screenshot('02-snapshot.png')
-    elif action == 'camera-cleanup':
-        camera_cleanup()
-    else:
-        raise SystemExit('Unknown camera probe')
+    dispatch('camera', {
+        'camera': camera,
+        'camera-photo': camera_media,
+        'camera-video': lambda: camera_media(video=True),
+        'camera-screen': lambda: screenshot('02-snapshot.png'),
+        'camera-cleanup': camera_cleanup,
+    })

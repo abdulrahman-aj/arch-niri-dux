@@ -38,7 +38,7 @@ def focus_app(name):
         record('baseline-missing-' + name.lower(), {'windows': guest.windows()})
         guest.screenshot('baseline-missing-' + name.lower() + '.png')
         raise
-    guest.user_command('niri', 'msg', 'action', 'focus-window', '--id', str(window['id']))
+    guest.focus_window(window['id'])
     guest.wait_until(name + ' focused', lambda: (app_window(name) or {}).get('is_focused'))
     return window
 

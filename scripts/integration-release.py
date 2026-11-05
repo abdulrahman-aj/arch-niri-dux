@@ -2,26 +2,26 @@
 """Sign the integration repository or fetch an authenticated release for an ISO."""
 
 import argparse
-import importlib.util
 import json
 import os
 from pathlib import Path
 import re
 import shutil
 import subprocess
+import sys
 import tempfile
 import urllib.request
 
-spec = importlib.util.spec_from_file_location('integration_build', Path(__file__).with_name('build-integration.py'))
-build = importlib.util.module_from_spec(spec)
-spec.loader.exec_module(build)
-RELEASES = 'https://github.com/abdulrahman-aj/arch-niri-dux/releases/download'
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from verification._common import COMMIT_EXPR, FINGERPRINT_EXPR, RELEASES_URL, SHA256_EXPR, check_hex, load_module
+
+build = load_module('integration_build', Path(__file__).with_name('build-integration.py'))
+RELEASES = RELEASES_URL
 
 
 def fingerprint(root):
     value = (root / 'keys/integration-signing.fingerprint').read_text().strip()
-    if not re.fullmatch(r'[A-F0-9]{40}', value):
-        raise ValueError('Invalid release key fingerprint.')
+    check_hex(value, FINGERPRINT_EXPR, 'Invalid release key fingerprint.')
     return value
 
 
@@ -51,8 +51,7 @@ def validate_manifest(root, directory):
     for entry in entries:
         if entry['filename'] != f'{entry["name"]}-{version}-any.pkg.tar.zst':
             raise ValueError('Unexpected release package filename or version.')
-        if not re.fullmatch(r'[a-f0-9]{64}', entry['sha256']):
-            raise ValueError('Invalid package checksum.')
+        check_hex(entry['sha256'], SHA256_EXPR, 'Invalid package checksum.')
         if build.digest(directory / entry['filename']) != entry['sha256']:
             raise ValueError('Release package checksum mismatch.')
     for name, field in [('integration.tar', 'source_sha256'), ('integration.PKGBUILD', 'recipe_sha256')]:
@@ -111,8 +110,9 @@ def sign(root, path):
 
 def publish(root, packages, history, destination, tag, commit):
     version = build.version(root)
-    if tag != f'integration-v{version}' or not re.fullmatch(r'[a-f0-9]{40}', commit):
+    if tag != f'integration-v{version}':
         raise ValueError('Release tag/commit must identify this package version.')
+    check_hex(commit, COMMIT_EXPR, 'Release tag/commit must identify this package version.')
     if not os.environ.get('GNUPGHOME'):
         raise ValueError('Signing requires a dedicated GNUPGHOME.')
     manifest = validate_manifest(root, packages)
