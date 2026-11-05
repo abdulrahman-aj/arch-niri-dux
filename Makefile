@@ -1,4 +1,4 @@
-.PHONY: iso iso-development verify verify-release verify-hibernate test build-test verify-alongside provision-alongside fetch-alongside
+.PHONY: iso iso-development verify verify-release verify-hibernate lint test build-test verify-alongside provision-alongside fetch-alongside
 iso:
 	./scripts/build-in-dev ./scripts/build-iso
 iso-development:
@@ -11,8 +11,11 @@ verify-hibernate:
 	./scripts/build-in-dev python3 scripts/verify-hibernate.py $(ARGS)
 build-test:
 	./scripts/build-in-dev python3 -m unittest discover -s scripts -p 'build_test.py'
-test:
+lint:
 	./scripts/build-in-dev actionlint
+	./scripts/build-in-dev ruff check .
+	./scripts/build-in-dev python3 scripts/lint-shell.py
+test: lint
 	./scripts/build-in-dev bash -c 'python3 -m unittest discover -s tests && python3 -m unittest discover -s scripts -p build_test.py'
 verify-alongside:
 	./scripts/build-in-dev python3 scripts/verify-alongside.py $(ARGS)

@@ -18,6 +18,12 @@ make iso
 make verify
 ```
 
+`make lint` discovers Python sources throughout the repository, shell files by
+extension or shebang (including untracked scripts), and our `PKGBUILD` recipes.
+It runs Ruff, ShellCheck and actionlint; generated output and vendored AUR recipes
+are excluded. Recipe checks account for makepkg's metadata and supplied variables.
+`make test` includes lint and remains the CI gate.
+
 `make iso` uses the recipe version's signed release packages. For unreleased
 integration changes, use `make iso-development` instead. See [release maintenance](packages/RELEASING.md).
 

@@ -76,12 +76,12 @@ def main():
         names.difference_update(aur_names)
         subprocess.run(['mkdir', '-p', '/build/resolve/local', '/build/resolve/sync'], check=True)
         subprocess.run(['cp', '-a', '/var/lib/pacman/sync/.', '/build/resolve/sync/'], check=True)
-        result = subprocess.check_output(['pacman', '-Sp', '--noconfirm', '--dbpath', '/build/resolve', '--print-format', '%n|%v|%f|%h|%l|%r', *sorted(names)], text=True)
+        result = subprocess.check_output(['pacman', '-Sp', '--noconfirm', '--dbpath', '/build/resolve', '--print-format', '%n|%v|%f|%r', *sorted(names)], text=True)
         entries = []
         for line in result.splitlines():
-            if line.count('|') != 5:
+            if line.count('|') != 3:
                 continue
-            name, version, filename, sha256, url, repo = line.split('|')
+            name, version, filename, repo = line.split('|')
             info = metadata[filename]
             url = ('https://pkgs.omarchy.org/stable/x86_64/' if repo == 'omarchy' else f'https://geo.mirror.pkgbuild.com/{repo}/os/x86_64/') + filename
             if 'PGPSIG' not in info:

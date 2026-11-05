@@ -1,0 +1,6 @@
+target-version = "py313"
+extend-exclude = ["out/**", "packages/aur"]
+
+[lint]
+# Correctness and unused code, without imposing a formatting/style rewrite.
+select = ["F", "ARG001", "RUF059"]

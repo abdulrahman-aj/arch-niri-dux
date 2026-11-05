@@ -1,8 +1,8 @@
 # scripts/build-integration.py supplies the local source archive and its checksum.
-pkgbase=arch-niri-dux
+pkgbase='arch-niri-dux'
 pkgname=(arch-niri-dux arch-niri-dux-baseline)
 pkgver=0.2.0
-pkgrel=1
+pkgrel=2
 pkgdesc='Arch Niri Dux desktop integration'
 arch=(any)
 url='https://github.com/abdulrahman-aj/arch-niri-dux'
@@ -32,6 +32,10 @@ package_arch-niri-dux() {
         "$pkgdir/usr/lib/arch-niri-dux/initialize-application-themes"
     install -Dm644 "$srcdir/desktop/usr/share/arch-niri-dux/DUX-LICENSE" \
         "$pkgdir/usr/share/licenses/$pkgname/DUX-LICENSE"
+    # Originals remain pinned source inputs; sessions load the generated files.
+    rm "$pkgdir/usr/share/arch-niri-dux/niri/config.kdl" \
+        "$pkgdir/usr/share/arch-niri-dux/niri/dms/binds.kdl" \
+        "$pkgdir/usr/share/arch-niri-dux/DUX-LICENSE"
 }
 
 package_arch-niri-dux-baseline() {

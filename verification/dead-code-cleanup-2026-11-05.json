@@ -1,0 +1,143 @@
+{
+  "date": "2026-11-05",
+  "base_commit": "64b5ce4840fc4b0cbdd3a4023c005cb0ee97a3f6",
+  "integration_build": {
+    "version": "0.2.0-2",
+    "source_sha256": "b7aa885ea4c0a370f4fd5a01ef707b6e0d2d99e3ad18a1f0f2ebbe210f67793f",
+    "recipe_sha256": "02aa07fa3dddd8471f4ff866ae54e7064b52728761b196216493fa5492ea02d3",
+    "source_date_epoch": 1793822162,
+    "packages": [
+      {
+        "name": "arch-niri-dux",
+        "filename": "arch-niri-dux-0.2.0-2-any.pkg.tar.zst",
+        "sha256": "5be78355bcfe836af7854a8378315366a8b31ceee5bfac9e32c8f7bb5e2755c7"
+      },
+      {
+        "name": "arch-niri-dux-baseline",
+        "filename": "arch-niri-dux-baseline-0.2.0-2-any.pkg.tar.zst",
+        "sha256": "8a866f7069743f90def9a1b62f01104d5fdeb294f5685ee301a26425f2c50aaf"
+      }
+    ]
+  },
+  "removed_installed_paths": [
+    "usr/share/arch-niri-dux/DUX-LICENSE",
+    "usr/share/arch-niri-dux/niri/config.kdl",
+    "usr/share/arch-niri-dux/niri/dms/binds.kdl"
+  ],
+  "added_installed_paths": [],
+  "source_originals_preserved": true,
+  "checks": {
+    "actionlint": "passed",
+    "ruff": "passed",
+    "shellcheck": "passed",
+    "source_tests": 106,
+    "build_tests": 10,
+    "test_log_sha256": "9453448b2d384ee325fe584dc691325340fc8fde57a2786bbd87fe5489e9e43a"
+  },
+  "runtime": {
+    "accepted_base": {
+      "iso": "/home/abdulrahman/Work/arch-niri-dux/out/arch-niri-dux-2.1-candidate-x86_64.iso",
+      "iso_sha256": "19b23401dc7305ab6857460ca7e50349145daf3a6ebda9c6f3fc92a48c879c3d",
+      "package_manifest_sha256": "f89e4147d2efc6ad25458daa281182304c4a44d5a63939ea16a0c00be3ae5edc",
+      "verification_scripts": {
+        "verify.py": "9816e1607d82ebdd2ea594520f767651f3f3d41c14316c862a53157dd99b9a49",
+        "verify-guest.py": "2f64e015b308a46b58c982c7f870a08623f16a462d96ec55b495c6233fcd1d9e",
+        "verify-baseline.py": "c3c9b4488f4225e8121c26411cd913c2de0f917f7d99517254b70b63d267a96d",
+        "build-integration.py": "d7a4786bbf3c5147f51f5f714cd619f47cc9f376da5b3d2a818180ff6df090a2",
+        "verify-integration.py": "6d076bdd0916940568700514ef5b643ecb217aa59dcd63eacb5bd6dda5bf17e4"
+      }
+    },
+    "method": "Offline disposable qcow2 overlay of the accepted Dux 2.1 VM; install both candidate packages, validate actual Niri config, execute existing signed upgrade/baseline-opt-out/snapshot recovery probes, then validate restored Niri config.",
+    "results": {
+      "before": [
+        "arch-niri-dux 0.2.0-2",
+        "arch-niri-dux-baseline 0.2.0-2"
+      ],
+      "after": [
+        "arch-niri-dux 0.2.0-3",
+        "arch-niri-dux-baseline 0.2.0-3"
+      ],
+      "personal_sha256": {
+        "/home/tester/.config/niri/config.kdl": "5fe73e67f8900c5a89c217fa6321b4a04db0cb758796d1b44c1a3ccd1dcde880",
+        "/home/tester/.config/niri/dms/binds.kdl": "a29186a7b16c6218fe4bee14dd0be53d7e7d5223bb04f6cbe54b174d5a57b408",
+        "/home/tester/.config/xdg-terminals.list": "d63b322123983f24343609ca7ae5402b435a7002f49b13e4164ddd862ee38d9e"
+      },
+      "owned_file_added_and_removed": true,
+      "baseline_addition_installed": true,
+      "baseline_can_be_removed_independently": true,
+      "signed_packages_and_database": true,
+      "tampered_database_rejected": true,
+      "installed_keyring_refresh_hook_ran": true
+    },
+    "candidate_install_and_pruned_paths": "passed",
+    "snapshot_boot_restore_and_normal_reboot": "passed",
+    "restored_package_versions": "0.2.0-2",
+    "restored_niri_validation": "passed",
+    "private_fixture_cache_avoids_stale_signatures": "passed against previously accepted disk retaining old fakeapp cache"
+  },
+  "probe_sha256": {
+    "verify.py": "9816e1607d82ebdd2ea594520f767651f3f3d41c14316c862a53157dd99b9a49",
+    "verify-guest.py": "4fdd7b9c0b85049e141d74b3e2f4c201d2c8f956a592e5039ebd9ca82f1b3796",
+    "verify-integration.py": "a0aaff41d1872a4f0cdff16ed86bbd0773e119d3f415f4bc30843d2567cdb3b0",
+    "build-integration.py": "d7a4786bbf3c5147f51f5f714cd619f47cc9f376da5b3d2a818180ff6df090a2"
+  },
+  "tools": {
+    "ruff": "ruff 0.15.14",
+    "shellcheck": "ShellCheck - shell script analysis tool\nversion: 0.11.0\nlicense: GNU General Public License, version 3\nwebsite: https://www.shellcheck.net"
+  },
+  "review": {
+    "family": "Muse",
+    "disposition": "No blockers; targeted package and VM qualification is proportionate."
+  },
+  "limits": [
+    "No new ISO or full fresh-install acceptance run; package payload changed without installer/boot logic or dependency changes.",
+    "Candidate artifacts are local development builds; nothing signed with the production key or published.",
+    "No host package installation, laptop change, dotfiles change or physical device test."
+  ],
+  "lint_discovery_follow_up": {
+    "changes": [
+      "Ruff discovers repository-wide Python sources.",
+      "ShellCheck discovers tracked/untracked shell sources and first-party PKGBUILD recipes; generated/vendor paths, deleted files and symlinks are excluded."
+    ],
+    "checks": {
+      "source_tests": 111,
+      "build_tests": 10,
+      "actionlint": "passed",
+      "ruff": "passed",
+      "shellcheck": "passed",
+      "real_discovery_regression_tests": 5
+    },
+    "test_log_sha256": "62d12636f9db175b4828d0f3c1ab5b3096d6ffcd24f46b1cd16a04309cd2f042",
+    "integration_build": {
+      "version": "0.2.0-2",
+      "source_sha256": "b7aa885ea4c0a370f4fd5a01ef707b6e0d2d99e3ad18a1f0f2ebbe210f67793f",
+      "recipe_sha256": "726588d3578e9cb1b028e2a29dc65b3d5acbab11fdb9cc714185e8f7d8adaf7a",
+      "source_date_epoch": 1793822162,
+      "packages": [
+        {
+          "name": "arch-niri-dux",
+          "filename": "arch-niri-dux-0.2.0-2-any.pkg.tar.zst",
+          "sha256": "d027ef035197cab5e17290a60d3327629b4029af4c85b6fe9c8c82c910fb77d9"
+        },
+        {
+          "name": "arch-niri-dux-baseline",
+          "filename": "arch-niri-dux-baseline-0.2.0-2-any.pkg.tar.zst",
+          "sha256": "0865848bfc37565bd3557dd8fc81715c101d07598399fd5a5edc70bbd8222420"
+        }
+      ]
+    },
+    "installed_file_inventory_and_28_file_contents_match_vm_qualified_package": true,
+    "limits": [
+      "Package recipe change only quotes an equivalent pkgbase literal; installed file contents remain identical, so the previous targeted VM qualification is retained."
+    ],
+    "review": {
+      "models": [
+        "Muse Spark 1.3 Contributor (xhigh)",
+        "GLM 5.3 Flash (high)"
+      ],
+      "disposition": "Both independent reviews found no blockers. Root fixed subdirectory invocation and top-level output exclusion consistency, with regression coverage."
+    },
+    "discovery_script_sha256": "d8b775a6a2cc7c1bd98894d5192cb7037ed01295b6c044d7a0b7f4b26ac69132",
+    "recipe_quote_rationale": "Equivalent quoted pkgbase avoids the ShellCheck SC2100 arithmetic heuristic."
+  }
+}

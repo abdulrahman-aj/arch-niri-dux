@@ -1,3 +1,4 @@
+# shellcheck shell=sh
 # arch-niri-dux: session-wide ~/.local/bin for POSIX login shells.
 # Appends, so system binaries keep precedence. Preserves any existing PATH,
 # including Nix profiles, and never uses a static list. systemd user services

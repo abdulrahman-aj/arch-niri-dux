@@ -687,7 +687,7 @@ def restored():
     expected = json.loads(Path('/run/verify/integration-upgrade.json').read_text())['before']
     actual = run('pacman', '-Q', 'arch-niri-dux', 'arch-niri-dux-baseline', stdout=subprocess.PIPE).stdout.splitlines()
     assert actual == expected, (actual, expected)
-    assert Path('/usr/share/arch-niri-dux/niri/config.kdl').is_file()
+    assert Path('/usr/share/arch-niri-dux/niri/dms/layout.kdl').is_file()
     assert not Path('/usr/share/arch-niri-dux/upgrade-fixture').exists()
     assert subprocess.run(['pacman', '-Q', 'dux-verification-app'], stdout=subprocess.DEVNULL,
                           stderr=subprocess.DEVNULL).returncode != 0

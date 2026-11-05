@@ -18,7 +18,7 @@ spec.loader.exec_module(windows)
 
 class WindowsFixtureTests(unittest.TestCase):
     def test_unattended_install_keeps_a_small_esp_and_unallocated_region(self):
-        root = ET.fromstring(windows.unattended('fixture-token'))
+        root = ET.fromstring(windows.unattended())
         ns = {'u': 'urn:schemas-microsoft-com:unattend'}
         self.assertIn('create partition efi size=100', windows.DISKPART)
         self.assertIn('create partition primary size=24576', windows.DISKPART)
@@ -63,7 +63,8 @@ class WindowsTPMRestartTests(unittest.TestCase):
             sentinel.write_text('retain fixture state')
             pids = []
 
-            def boot(instance, cdrom=True, network=False, software_display=False):
+            # Match the keyword interface of VM.start in this test double.
+            def boot(instance, cdrom=True, network=False, software_display=False):  # noqa: ARG001
                 connection = socket.socket(socket.AF_UNIX)
                 try:
                     connection.connect(str(root / 'tpm.sock'))

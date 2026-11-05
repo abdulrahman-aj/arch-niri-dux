@@ -30,7 +30,7 @@ def main():
     personal = [Path(user.pw_dir) / '.config' / name for name in
                 ('niri/config.kdl', 'niri/dms/binds.kdl', 'xdg-terminals.list')]
     before = {str(path): hashlib.sha256(path.read_bytes()).hexdigest() for path in personal}
-    old_file = Path('/usr/share/arch-niri-dux/niri/config.kdl')
+    old_file = Path('/usr/share/arch-niri-dux/niri/dms/layout.kdl')
     new_file = Path('/usr/share/arch-niri-dux/upgrade-fixture')
     assert old_file.is_file() and not new_file.exists()
     with tempfile.TemporaryDirectory(prefix='dux-upgrade-', dir='/tmp') as directory:
@@ -42,11 +42,11 @@ def main():
         recipe, changes = re.subn(r'^pkgrel=(\d+)$', lambda match: f'pkgrel={int(match[1]) + 1}',
                                  recipe, flags=re.MULTILINE)
         assert changes == 1
-        # A test-only release exercises removal of an obsolete owned file after
-        # prepare() has generated the effective defaults from it.
+        # Remove a seed template only in this disposable release. The running
+        # session uses its user-owned copy, so deletion cannot break recovery.
         entrypoint = 'package_arch-niri-dux() {'
         assert recipe.count(entrypoint) == 1
-        recipe = recipe.replace(entrypoint, entrypoint + '\n    rm "$srcdir/desktop/usr/share/arch-niri-dux/niri/config.kdl"')
+        recipe = recipe.replace(entrypoint, entrypoint + '\n    rm "$srcdir/desktop/usr/share/arch-niri-dux/niri/dms/layout.kdl"')
         recipe_path = source / 'packages/integration/PKGBUILD'
         recipe_path.parent.mkdir(parents=True)
         recipe_path.write_text(recipe)
@@ -90,10 +90,13 @@ def main():
         run(*gpg, '--detach-sign', str(database))
         (packages / 'upgrade.db.sig').symlink_to('upgrade.db.tar.gz.sig')
         configuration = work / 'pacman.conf'
+        cache = work / 'cache'
+        cache.mkdir()
         # The disposable signing identity never touches installed trust. The ISO's
         # production keyring bootstrap and refresh hook are exercised separately.
+        # Keep fixture signatures out of the system cache, which survives restore.
         configuration.write_text('[options]\nArchitecture = auto\nSigLevel = Required TrustedOnly\n'
-                                 f'GPGDir = {keyring}\n'
+                                 f'GPGDir = {keyring}\nCacheDir = {cache}\n'
                                  f'[upgrade]\nServer = file://{packages}\n')
         original = database.read_bytes()
         database.write_bytes(original + b'tampered')

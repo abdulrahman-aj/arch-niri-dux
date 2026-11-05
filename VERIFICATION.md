@@ -448,3 +448,34 @@ merge/release. No automatic 2.0 home-config migration is supported. The laptop
 was untouched; physical device, printer and LAN tests are not claimed. Exact
 inputs, results and limits are in `verification/dux-2.1-2026-11-05.json`; local
 evidence is in `out/verify-dux21-accepted/`.
+
+## Dead-code cleanup and lint gate — 2026-11-05
+
+`make test` passed Ruff, ShellCheck, actionlint, 106 source tests and 10 build
+tests. A package-output regression test executes the real packaging functions:
+generated defaults and user seeds remain, build-only originals are not installed,
+and the standard license copy is preserved. Both real makepkg outputs built as
+`0.2.0-2`; their file inventories lose exactly the three redundant paths.
+
+An offline disposable overlay of the accepted 2.1 disk installed both candidate
+packages and validated Niri with the trimmed payload. The signed upgrade fixture
+then exercised owned-file deletion, baseline additions/opt-out and personal-file
+preservation. Snapshot boot, restoration, the normal reboot and restored Niri
+validation passed. The fixture now uses a private package cache because old
+disposable signatures survive root restoration in `@cache`.
+
+Independent Muse review found no blockers. No ISO rebuild, full fresh-install
+rerun, production publication or laptop changes were performed. Exact package
+hashes, probe hashes and limits are in
+`verification/dead-code-cleanup-2026-11-05.json`; local evidence is in
+`out/verify-dead-code-cleanup-qualified/`.
+
+Lint discovery follow-up: Python is checked repository-wide; shell sources and
+first-party recipes are discovered from tracked and untracked files at the Git
+root. Five real-tool tests cover new paths, exclusions, recipe context and
+subdirectory invocation. Ruff, ShellCheck, actionlint, 111 source tests and
+10 build tests passed. Muse and GLM Flash independently reviewed the change;
+their root/exclusion edge cases were fixed with regression coverage. Real package
+builds still emit the same inventory and all 28 installed file contents as the
+VM-qualified package. The evidence JSON records the new recipe/artifact hashes;
+no further VM or ISO run was needed for this lint-only follow-up.

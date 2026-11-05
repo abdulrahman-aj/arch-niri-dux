@@ -46,7 +46,8 @@ class VMCommandTests(unittest.TestCase):
                 result = subprocess.run(['bash', '-c', value], text=True, stdout=subprocess.PIPE,
                                         stderr=subprocess.STDOUT, check=False)
                 output.append(result.stdout)
-            def expect(pattern, timeout):
+            # VM.command supplies timeout by keyword; the test responds immediately.
+            def expect(pattern, timeout):  # noqa: ARG001
                 result = ''.join(output)
                 match = re.search(pattern, result)
                 if match is None:

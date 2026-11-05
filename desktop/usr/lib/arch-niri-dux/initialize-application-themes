@@ -13,7 +13,7 @@ gtk_scripts=("${XDG_RUNTIME_DIR:?}/dms-shell/"*/scripts/gtk.sh)
 
 # Dux generates colors asynchronously. Query its actual mode: before GTK is
 # opted in, the portal's preference need not match the shell yet.
-for attempt in {1..90}; do
+for _ in {1..90}; do
     # Re-read while waiting so a theme selected during startup stays selected.
     gtk_theme=$(gsettings get org.gnome.desktop.interface gtk-theme)
     case "$gtk_theme" in
