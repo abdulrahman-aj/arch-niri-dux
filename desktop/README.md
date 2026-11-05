@@ -58,7 +58,7 @@ GNOME portal handles screen sharing. Nautilus remains its Arch dependency.
 
 Logind suspends on lid-close when undocked and permits docked use. Niri already
 controls the built-in panel according to the lid switch. Intermittent wakeups
-still need physical laptop evidence: `journalctl -b -u systemd-logind -u
+still need [physical laptop evidence](https://github.com/abdulrahman-aj/arch-niri-dux/issues/48): `journalctl -b -u systemd-logind -u
 systemd-suspend` and `systemd-inhibit --list` show sleep events and inhibitors.
 
 The session adds `~/.local/bin` to PATH for POSIX login shells, systemd user

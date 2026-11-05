@@ -44,7 +44,8 @@ firmware repair. TPM-bound Windows installations can request recovery after a
 boot-chain change, so the Windows acceptance fixture must have BitLocker/device
 encryption disabled. The installer rejects detected BitLocker/device encryption
 and Windows dynamic disks before mutation. Qualification uses disposable VMs.
-Secure Boot remains deferred.
+Secure Boot remains deferred pending
+[a separate design](https://github.com/abdulrahman-aj/arch-niri-dux/issues/49).
 
 An external partition editor must not run during installation. Revalidation
 closes the long confirmation/package-preflight window. It cannot make GPT edits

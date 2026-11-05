@@ -82,4 +82,5 @@ regular and 5 important snapshots, with `snapper-cleanup.timer` enabled.
 [VM verification](VERIFICATION.md) covers installation, desktop, updates, recovery
 and hibernation. Laptop hibernate/resume also passed. The intermittent lid symptom
 and docked display behavior still need checks on physical hardware.
-Secure Boot is deferred. See [TODO.md](TODO.md) for the remaining work.
+Secure Boot is deferred. Track remaining work in
+[GitHub issues](https://github.com/abdulrahman-aj/arch-niri-dux/issues).

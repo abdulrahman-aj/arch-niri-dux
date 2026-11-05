@@ -33,5 +33,5 @@ With no AUR recipes the finalizer needs no AUR result file.
 
 The manifest records the signed closure and locally built packages with their
 hashes and recipe provenance. Yay or Dux's system updater updates installed AUR
-packages. Recipe changes require review. Replacing these AUR sources is tracked
-in TODO.md.
+packages. Recipe changes require review. Replacing these AUR sources is tracked in
+[issue #47](https://github.com/abdulrahman-aj/arch-niri-dux/issues/47).
