@@ -12,6 +12,8 @@ import tempfile
 from . import dispatch
 from .guest import run
 from .vm import installed_login
+from . import migrations
+from .guest import wait_until
 
 
 def output(*args, **kwargs):
@@ -71,7 +73,21 @@ def verify_upgrade():
         (fake / 'makepkg.conf').write_text('source /etc/makepkg.conf\nOPTIONS+=(!debug)\n')
         output('chown', '-R', f'{user.pw_uid}:{user.pw_gid}', str(work))
         packages = work / 'packages'
+        fixture_root = source / 'desktop/usr/lib/arch-niri-dux/migrations'
+        system_effect = '/var/lib/arch-niri-dux/upgrade-migration-effects'
+        user_effect = '"$HOME/.local/state/upgrade-migration-effects"'
+        for scope, effect in [('system', system_effect), ('user', user_effect)]:
+            migrations.fixture(fixture_root, scope, 20,
+                               'test ! -e /var/lib/pacman/db.lck\n' + migrations.effect(effect, 'first'))
+        # Build the skipped candidate, then retain its script in the next one.
         output(*prefix, 'python', str(evidence / 'build-integration.py'), str(source), str(work / 'build'),
+            str(work / 'skipped-candidate'), '--epoch', '1234')
+        recipe_path.write_text(re.sub(r'^pkgrel=(\d+)$', lambda match: f'pkgrel={int(match[1]) + 1}',
+                                     recipe_path.read_text(), flags=re.MULTILINE))
+        for scope, effect in [('system', system_effect), ('user', user_effect)]:
+            migrations.fixture(fixture_root, scope, 21,
+                               'test ! -e /var/lib/pacman/db.lck\n' + migrations.effect(effect, 'second'))
+        output(*prefix, 'python', str(evidence / 'build-integration.py'), str(source), str(work / 'build-next'),
             str(packages), '--epoch', '1234')
         output(*prefix, 'env', f'PKGDEST={packages}', 'makepkg', '--config', str(fake / 'makepkg.conf'),
             '--nodeps', '--noconfirm', cwd=fake)
@@ -115,6 +131,11 @@ def verify_upgrade():
         assert 'Refreshing Arch Niri Dux release signing keys' in upgrade_output, upgrade_output
         updated = output('pacman', '-Q', 'arch-niri-dux', 'arch-niri-dux-baseline')
         assert updated != versions
+        wait_until('Direct upgrade system migrations', lambda: Path(system_effect).exists()
+                   and Path(system_effect).read_text().splitlines() == ['first', 'second'])
+        user_effect_path = Path(user.pw_dir) / '.local/state/upgrade-migration-effects'
+        wait_until('Direct upgrade user migrations', lambda: user_effect_path.exists()
+                   and user_effect_path.read_text().splitlines() == ['first', 'second'])
         assert new_file.read_text() == 'Integration upgrade verified\n' and not old_file.exists()
         assert 'Verified package update' in Path('/usr/share/arch-niri-dux/session.kdl').read_text()
         output('pacman', '-Q', fake_name)
@@ -134,6 +155,8 @@ def verify_upgrade():
             'baseline_addition_installed': True, 'baseline_can_be_removed_independently': True,
             'signed_packages_and_database': True, 'tampered_database_rejected': True,
             'installed_keyring_refresh_hook_ran': True,
+            'direct_upgrade_across_two_migration_candidates': True,
+            'migrations_executed_after_transaction_lock_released': True,
             'restoration': {'files_present': [str(old_file)], 'files_absent': [str(new_file)],
                             'packages_absent': [fake_name]},
         }, indent=2) + '\n')

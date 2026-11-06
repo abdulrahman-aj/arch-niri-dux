@@ -10,6 +10,18 @@ user to seed only missing settings. Package upgrades never replay account or
 user initialization. Changing a service preset requires an explicit migration for
 existing systems ([#54](https://github.com/abdulrahman-aj/arch-niri-dux/issues/54));
 upgrades do not reapply presets. Dux Greeter starts Niri. Dux creates its own shell settings.
+
+Package migrations run offline after pacman releases its database lock, and at
+boot. System and user queues keep separate completion records. The desktop
+continues starting if a migration fails; inspect `arch-niri-dux-migrate status`
+and retry with `arch-niri-dux-migrate run`. Use sudo for the system queue.
+Logs are in `journalctl -u arch-niri-dux-migrate.service` and
+`journalctl --user -u arch-niri-dux-migrate.service`; user-session failures also
+send a desktop notification. Completion records include intentional skip reasons.
+System records roll back with root snapshots; user records stay with home.
+Downgrades ignore unknown records and never reverse changes. Authoring and
+release qualification are covered in [the migrations skill](../.agents/skills/migrations/SKILL.md).
+
 The Greetd service selects our `/etc/greetd/dux.toml`. Arch retains ownership of
 its separate stock `config.toml`. Pacman preserves local edits to `dux.toml`.
 

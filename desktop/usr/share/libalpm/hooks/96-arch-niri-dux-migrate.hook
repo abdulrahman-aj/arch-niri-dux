@@ -1,0 +1,10 @@
+[Trigger]
+Operation = Install
+Operation = Upgrade
+Type = Package
+Target = arch-niri-dux
+
+[Action]
+Description = Queue Arch Niri Dux migrations after the transaction
+When = PostTransaction
+Exec = /usr/bin/systemctl --no-block start arch-niri-dux-migrate.service

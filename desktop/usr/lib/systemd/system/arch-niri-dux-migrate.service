@@ -1,0 +1,18 @@
+[Unit]
+# Run after the enabling target without making that target wait for this queue.
+DefaultDependencies=no
+# Successive package transactions and failure recovery can arrive in a burst.
+StartLimitIntervalSec=0
+Conflicts=shutdown.target
+Before=shutdown.target
+Description=Apply Arch Niri Dux system migrations
+After=local-fs.target multi-user.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/arch-niri-dux-migrate run
+TimeoutStartSec=infinity
+UMask=0022
+
+[Install]
+WantedBy=multi-user.target
