@@ -1,81 +1,87 @@
 # Verification
 
-`make test` runs Ruff, ShellCheck, actionlint and source/build tests in the Nix
-shell. `make iso-development` builds candidate integration packages and the ISO.
-`make verify` qualifies a fresh offline encrypted UEFI install, desktop apps,
-Dux bindings, package upgrades, snapshot boot/restore and disk unlock. Full
-acceptance remains required for installer changes and releases. A development
-image does not qualify later signed release bytes or production HTTPS delivery.
+## Targets
+
+`make lint` runs Ruff, ShellCheck and actionlint in the Nix dev shell. It
+discovers Python sources, shell files by extension or shebang, and our
+PKGBUILDs, including untracked scripts. Generated output and vendored Dux app
+recipes are excluded. `make test` adds source and build tests. CI runs these
+checks without graphical VM acceptance.
+
+`make iso-development` builds candidate integration packages and the ISO. `make
+verify` qualifies a fresh offline encrypted UEFI install, graphical unlock and
+wrong-passphrase retry, desktop apps, Dux bindings, package upgrades,
+migrations, snapshot boot/restore and the `plymouth.enable=0` text fallback.
+`make verify-hibernate` checks encrypted swap hibernate/resume separately. Full
+acceptance is required for installer changes and releases. A development image
+does not qualify signed release bytes or production HTTPS delivery. Follow
+[release maintenance](packages/RELEASING.md) for `make iso` and `make
+verify-release`.
 
 `make verify-fast ARGS="--fixture out/accepted/disk.qcow2 --directory out/fast"`
 builds current integration packages inside a disposable overlay of a completed
-`make verify` image. Keep `ACCEPTANCE-PASSED`, `install.json` and `OVMF_VARS.fd`
-next to the fixture. Use an accepted 0.3+ fixture: older installer-owned policy
-requires manual repair, and this target performs no migration. It verifies ALPM regenerated the active Limine initramfs and boot menu,
-without manually invoking the rebuild tool, then checks Niri
-validation, the Dux shortcut editor/cheatsheet, enabled units and presets, greetd
-login, unlocked GNOME Keyring, and loaded vendor systemd drop-ins. It does not
-replace fresh installation or snapshot/alongside qualification.
-Pass `--kernel-package PATH` to include a local kernel archive in the same
-transaction and exercise both boot rebuild hooks.
+`make verify` image. Use an accepted 0.3+ fixture. Keep `ACCEPTANCE-PASSED`,
+`install.json`, `inputs.json` and `OVMF_VARS.fd` next to it. It checks ALPM
+regeneration of the active Limine initramfs and boot menu without a manual
+rebuild, Niri validation, Dux shortcut editing/cheatsheet, enabled units and
+presets, greetd login, unlocked GNOME Keyring, loaded vendor systemd drop-ins
+and migration behavior. It does not replace fresh installation or snapshot and
+alongside qualification. Pass `--kernel-package PATH` to reinstall a local
+kernel archive in the same transaction and exercise both boot rebuild hooks.
 
-The current [0.3.0-1 qualification](verification/package-owned-policy-2026-11-06.json)
-passed all 28 fresh offline acceptance stages and the fast package tier, with
-123 source tests and seven build tests. The one-line shim failed Dux 2.1's real
-manual-MRU cheatsheet check, so the qualified configuration uses relative home
-includes, package-owned defaults/session tail and `overrides.kdl` last. Policy
-ownership, both user preset cases, greetd/keyring, snapshot restoration and
-recovery `noresume` passed. Raw evidence is under
-`out/verify-package-owned-hybrid/` and `out/verify-package-owned-fast-2/`.
+Acceptance scenarios live in `scripts/verification/`. `scripts/verify.py` runs
+them in order. Alongside and hibernation tests reuse the VM control and probes.
+Accepted machine-readable evidence lives in `verification/`; logs, screenshots
+and VM disks stay in disposable workspaces. The default full-acceptance
+workspace is under `/tmp`. Use `--directory` to select a fresh location. Run VMs
+on `msi-dux`. The runner waits for 10 GiB available host RAM before starting an
+8 GiB guest. VM tests require KVM and a GPU render node with virtio 3D
+acceleration; `QEMU_RENDER_NODE` defaults to `/dev/dri/renderD128`.
 
-The [0.3.0-2 boot-policy upgrade qualification](verification/boot-policy-upgrade-2026-11-06.json)
-passed the fast tier twice: a policy-only package upgrade, and the same upgrade
-with a pinned-kernel reinstall exercising ALPM's Upgrade trigger. The newly
-shipped hook ran in its first installation transaction. Both active initramfs
-and `limine.conf` mtimes/hashes changed without a manual rebuild. In the combined
-transaction the native and policy hooks rebuilt sequentially; reboot, greetd,
-keyring, Niri/Dux and loaded-policy checks passed afterward. Full fresh
-0.3.0-2 ISO/install qualification remains required before release; the fresh
-and alongside results below/above qualify the 0.3.0-1 fixture.
+## Accepted software paths
 
-The [dux-apps signed-repo qualification](verification/dux-apps-signed-repo-2026-11-07.json)
-passed all 28 fresh offline acceptance stages plus the fast package tier on a
-development ISO built from the rebased branch (PR #59 onto main, AUR origin
-fields removed from the recipes). It delivers the four Dux apps (2.1.0-1)
-through the signed integration repository and drops yay from the baseline.
-Manual overlay probes show `pacman -Q yay` failing with the package not found,
-the apps listed from the extracted offline repo database, the pinned release
-key in the guest keyring with `Required TrustedOnly` enforcement, and
-`pacman-conf --repo-list` showing core, extra, omarchy, arch-niri-dux. It
-completes the fresh 0.3.0-2 qualification for this branch. Raw evidence is under
-`out/verify-pr59-rebased/`, `out/verify-pr59-rebased-fast/`,
-`out/verify-pr59-rebased-manual/` and `out/verify-pr59-rebased-probes/`.
+- [Package-owned policy](verification/package-owned-policy-final-2026-11-07.json)
+  passed the fast tier for a policy-only upgrade and a combined kernel transaction.
+  ALPM regenerated the active initramfs and Limine menu; reboot, greetd/keyring,
+  Niri/Dux and loaded-policy checks passed. Repository-resolution probes confirmed
+  the [configured sources](packages/README.md#repositories).
+- [Signed Dux apps](verification/dux-apps-signed-repo-2026-11-07.json) passed all
+  28 fresh offline acceptance stages and the fast tier on a 0.3.0-2 development
+  ISO. All four apps came from our signed repository. Guest probes confirmed yay
+  was absent and the pinned release key enforced `Required TrustedOnly`.
+- [Migrations](verification/migration-core-2026-11-07.json) passed full acceptance
+  on the package-policy base and fast qualification after the signed-app rebase,
+  plus 134 source tests and seven build tests. Fixtures covered skipped-version
+  upgrades, ordered retry, failure notification/recovery, active-session and
+  next-session activation, fresh-account baselines, custom files/symlinks and
+  system-record rollback with surviving user records. The 120-second stale
+  pacman-lock timeout and recovery passed. No production migrations ship.
+  Full ISO acceptance was not repeated after that rebase.
+
+These records qualify the commits and artifacts they name. They do not qualify
+later signed release bytes or hardware behavior.
 
 ## Alongside acceptance
 
-The [current alongside qualification](verification/alongside-2026-11-06.json)
-passed all six stages for both Debian 13 and Windows 11 Enterprise LTSC Evaluation
-(build 26100). Every original partition byte survived installation. The new
-Arch system booted by default, kernel/snapshot hooks retained the old-OS entry,
-and both original systems booted through Limine afterward with their sentinels.
-Fresh official fixtures were provisioned for this run. Raw evidence is under
-`out/alongside/linux-policy/` and `out/alongside/windows-policy/`.
+The [alongside qualification](verification/alongside-2026-11-06.json) passed all
+six stages on the 0.3.0-1 development ISO for Debian 13 and Windows 11
+Enterprise LTSC Evaluation, build 26100. Every original partition byte survived
+installation. The new Arch system booted by default, kernel/snapshot hooks
+retained the old-OS entry, and both original systems booted through Limine with
+their sentinels.
 
-Fetch and provision official fixtures with `make fetch-alongside` and
-`make provision-alongside`, then run `make verify-alongside` with the candidate
-ISO, fixture disk and its firmware. Run Debian first, then Windows, sequentially.
-[ALONGSIDE.md](ALONGSIDE.md#automated-provisioning-and-acceptance) contains the
-commands and fixture contracts. These tools reserve at least 8 GiB of host disk
-space; they use the normal 8 GiB guest RAM allocation.
+[ALONGSIDE.md](ALONGSIDE.md#automated-provisioning-and-acceptance) owns the
+commands, fixture contracts and disk-space safeguards. Run Debian first, then
+Windows, sequentially.
 
 ## Known limits and hardware gaps
 
-- Secure Boot remains deferred. Alongside fixtures used 512-byte sectors;
-  4K-sector layouts are unqualified.
+- Secure Boot remains [deferred](https://github.com/abdulrahman-aj/arch-niri-dux/issues/49).
+  Alongside fixtures used 512-byte sectors; 4K-sector layouts are unqualified.
 - Physical fingerprint enrollment, monitor DDC, drive-health readings, Wi-Fi
   hotspots, USB device access, LAN printer discovery and paper output need
   hardware checks.
-- Plymouth firmware-logo/backlight behavior and intermittent lid-close wakeups
+- Plymouth firmware-logo/backlight behavior and [intermittent lid-close wakeups](https://github.com/abdulrahman-aj/arch-niri-dux/issues/48)
   need physical laptop evidence. VM hibernation does not qualify every device.
 - Synthetic audio, camera, network and printer checks qualify software paths.
-  No physical machine changes are part of package or ISO verification.
+  Package and ISO verification do not change physical machines.
