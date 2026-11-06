@@ -75,3 +75,10 @@ fragment. This does not change the installer's offline `file://` repository.
 For mkinitcpio overrides, use a later-sorting drop-in, as described in
 [desktop integration](../desktop/README.md). There is no migration from older
 installer-owned policy; existing pre-0.3 systems require manual repair.
+
+The integration boot-policy ALPM hook runs on upgrades only. Fresh installation
+uses `configure-target.sh`'s explicit `limine-mkinitcpio` after writing UUIDs,
+kernel arguments and any `SKIP_UEFI=yes` deferral. In alongside mode, `install.py`
+already mounts the new ESP and writes `ESP_PATH=/boot` plus deferral before the
+first pacstrap, protecting the upstream EFI/kernel hooks too. Final firmware
+verification/registration precedes removal of deferral.

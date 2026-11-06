@@ -1,5 +1,5 @@
+# Fresh installs rebuild explicitly after machine settings and EFI deferral exist.
 [Trigger]
-Operation = Install
 Operation = Upgrade
 Type = Path
 Target = etc/mkinitcpio.conf.d/arch-niri-dux.conf

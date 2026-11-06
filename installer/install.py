@@ -743,7 +743,7 @@ def install(settings):
                 if not re.fullmatch(r'[0-9]+', resume_offset):
                     raise ValueError('Btrfs returned an invalid swap resume offset.')
             print('\n[3/6] Installing packages from the USB…', flush=True)
-            # Install transaction hooks only after Snapper and boot are configured.
+            # Delay snap-pac until Snapper and a bootable baseline exist.
             base_packages = [package for package in packages if package != 'snap-pac'] + ['arch-niri-dux']
             if snapshot:
                 # Both EFI deployment and kernel hooks may invoke limine-install.
