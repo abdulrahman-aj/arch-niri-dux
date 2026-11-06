@@ -142,7 +142,6 @@ def check():
         wait_until('Next graphical login migration', lambda: later.read_text().splitlines() == ['first', 'second', 'third'])
     finally:
         run('loginctl', 'disable-linger', account.pw_name)
-        run('loginctl', 'terminate-user', account.pw_name)
         run('systemctl', 'stop', f'user@{account.pw_uid}.service')
         wait_until('Second user processes stopped', lambda: subprocess.run(
             ['pgrep', '-u', str(account.pw_uid)], stdout=subprocess.DEVNULL).returncode == 1)
