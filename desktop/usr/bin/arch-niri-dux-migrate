@@ -102,13 +102,16 @@ def notify(message, state):
                             'Desktop migration failed', message], check=False, timeout=10)
         except (OSError, subprocess.TimeoutExpired):
             pass
-        write(marker, message)
+        try:
+            write(marker, message)
+        except OSError:
+            pass
 
 
 def process(action, scope, state):
     if action == 'status':
         print(json.dumps({'scope': scope, 'pending': [p.name for p in pending(scripts(scope), state)],
-                          'failure': (state / 'failure').read_text() if (state / 'failure').exists() else None,
+                          'failure': (state / 'failure').read_text().strip() if (state / 'failure').exists() else None,
                           'system_ready': system_ready()}))
         return
     if scope == 'system':
@@ -116,7 +119,7 @@ def process(action, scope, state):
         deadline = time.monotonic() + TRANSACTION_WAIT
         while PACMAN_LOCK.exists():
             if time.monotonic() >= deadline:
-                raise RuntimeError('Pacman lock still present after two minutes; check package transactions before retrying')
+                raise RuntimeError(f'Pacman lock still present after {TRANSACTION_WAIT} seconds; check package transactions before retrying')
             time.sleep(1)
         execute(scripts(scope), state, action == 'baseline')
         # A user-only release must wake existing sessions too.
@@ -127,7 +130,7 @@ def process(action, scope, state):
             write(state / 'generation', generation)
     else:
         with lock(SYSTEM, shared=True):
-            if not system_ready():
+            if action != 'baseline' and not system_ready():
                 failure = SYSTEM / 'failure'
                 detail = failure.read_text().strip() if failure.exists() else 'System queue pending'
                 raise RuntimeError(f'{detail}; inspect sudo arch-niri-dux-migrate status and retry sudo arch-niri-dux-migrate run')
@@ -152,14 +155,15 @@ def main():
         with lock(state):
             try:
                 process(args.action, scope, state)
+                (state / 'notified').unlink(missing_ok=True)
             except (OSError, RuntimeError) as error:
                 # Publish failure before releasing the queue, so a successful
                 # concurrent retry cannot be overwritten by a stale failure.
                 failure = state / 'failure'
                 if not failure.exists() or failure.read_text().strip() != str(error):
                     write(failure, str(error))
-                raise
-        (state / 'notified').unlink(missing_ok=True)
+                notify(str(error), state)
+                return 1
         return 0
     except (OSError, RuntimeError) as error:
         notify(str(error), state)

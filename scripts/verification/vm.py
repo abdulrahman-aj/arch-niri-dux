@@ -20,7 +20,8 @@ PASSWORD = 'vm-verification-only'
 
 def wait_for_memory():
     # Build and verification streams share the host, including recovery boots.
-    while True:
+    deadline = time.monotonic() + 600
+    while time.monotonic() < deadline:
         subprocess.run(['free', '-g'], check=True)
         available = next(int(line.split()[1]) for line in Path('/proc/meminfo').read_text().splitlines()
                          if line.startswith('MemAvailable:'))
@@ -28,6 +29,7 @@ def wait_for_memory():
             return
         print('Waiting for 10 GiB available before starting a VM.', flush=True)
         time.sleep(30)
+    raise TimeoutError('Less than 10 GiB available for ten minutes; VM not started')
 
 
 class VM:

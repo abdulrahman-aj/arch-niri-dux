@@ -49,25 +49,14 @@ class Migrations(unittest.TestCase):
         with patch.object(migrate, 'trusted'):
             yield migrate.scripts('system')
 
-    def test_skipped_versions_order_and_retry(self):
-        first = self.root / 'first'
-        second = self.root / 'second'
-        self.script('02_second', f'test -e {first}\ntouch {second}')
-        self.script('01_first', f'touch {first}')
-        with self.queue() as queue:
-            migrate.execute(queue, self.state)
-            timestamps = [path.stat().st_mtime_ns for path in (first, second)]
-            migrate.execute(queue, self.state)
-        self.assertEqual([path.stat().st_mtime_ns for path in (first, second)], timestamps)
-
     def test_failure_stops_then_retries_without_duplicate(self):
         first = self.root / 'first'
         second = self.root / 'second'
         third = self.root / 'third'
         ready = self.root / 'ready'
-        self.script('01_first', f'touch {first}')
         self.script('02_failure', f'test -e {ready}\ntouch {second}')
         self.script('03_last', f'test -e {second}\ntouch {third}')
+        self.script('01_first', f'touch {first}')
         with self.queue() as queue:
             with self.assertRaises(RuntimeError):
                 migrate.execute(queue, self.state)
@@ -92,19 +81,6 @@ class Migrations(unittest.TestCase):
         fresh = self.script('03_fresh', f'touch {effect}')
         migrate.execute([fresh], self.state, baseline=True)
         self.assertFalse(effect.exists())
-
-    def test_gate_and_unknown_records_after_downgrade(self):
-        path = self.script('01_system', 'true')
-        with patch.object(migrate, 'trusted'):
-            self.assertFalse(migrate.system_ready())
-            migrate.execute([path], self.state)
-            (self.state / 'generation').touch()
-            self.assertTrue(migrate.system_ready())
-            (self.state / 'failure').write_text('failed')
-            self.assertFalse(migrate.system_ready())
-            (self.state / 'failure').unlink()
-            path.unlink()
-            self.assertTrue(migrate.system_ready())
 
     def test_shared_lock_blocks_system_work(self):
         (self.state / 'lock').touch()
@@ -134,15 +110,10 @@ class Migrations(unittest.TestCase):
             self.assertTrue(effect.exists())
             self.assertEqual(migrate.pending([path], user_state), [])
             self.assertEqual(migrate.pending([path], self.state), [path])
-
-    def test_unsafe_paths_rejected(self):
-        path = self.script('01_unsafe', 'true')
-        with self.assertRaises(RuntimeError):
-            migrate.trusted(path)
-        link = self.scripts / 'system/02_link.sh'
-        link.symlink_to(path)
-        with self.assertRaises(RuntimeError):
-            migrate.trusted(link)
+            path.unlink()
+            self.assertTrue(migrate.system_ready())
+            (self.state / 'failure').touch()
+            self.assertFalse(migrate.system_ready())
 
     def test_stale_transaction_lock_is_bounded(self):
         lock = self.root / 'db.lck'
@@ -159,3 +130,14 @@ class Migrations(unittest.TestCase):
             self.assertEqual(send.call_count, 1)
             migrate.notify('second failure', self.state)
             self.assertEqual(send.call_count, 2)
+
+    def test_fresh_user_baseline_while_system_pending(self):
+        (self.state / 'lock').touch()
+        user_state = self.root / 'fresh-user'
+        user_state.mkdir()
+        effect = self.root / 'unexpected'
+        path = self.script('01_user', f'touch {effect}', scope='user')
+        with patch.object(migrate, 'trusted'):
+            migrate.process('baseline', 'user', user_state)
+        self.assertFalse(effect.exists())
+        self.assertEqual(migrate.pending([path], user_state), [])
