@@ -67,7 +67,7 @@ class WindowsTPMRestartTests(unittest.TestCase):
             def boot(instance, cdrom=True, network=False, software_display=False):  # noqa: ARG001
                 connection = socket.socket(socket.AF_UNIX)
                 try:
-                    connection.connect(str(root / 'tpm.sock'))
+                    connection.connect(str(instance.control_path('tpm.sock')))
                     pids.append(instance.tpm_process.pid)
                 finally:
                     connection.close()

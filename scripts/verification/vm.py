@@ -13,6 +13,7 @@ import socket
 import subprocess
 import struct
 import time
+import tempfile
 
 PASSWORD = 'vm-verification-only'
 
@@ -29,6 +30,7 @@ class VM:
         self.extra_args = []
         self.allow_reboot = False
         self.min_free_bytes = 0
+        self.socket_directory = None
         self.process = None
         self.serial = None
         self.qmp = None
@@ -36,8 +38,14 @@ class VM:
         self.read_cursor = 0
         self.log = (directory / 'serial.log').open('a')
 
+    def control_path(self, name):
+        # Linux limits Unix socket paths to 107 bytes, including deep worktrees.
+        if self.socket_directory is None:
+            self.socket_directory = tempfile.TemporaryDirectory(prefix='dux-vm-')
+        return Path(self.socket_directory.name) / name
+
     def connect(self, name):
-        path = self.directory / name
+        path = self.control_path(name)
         deadline = time.monotonic() + 60
         while time.monotonic() < deadline:
             try:
@@ -53,8 +61,7 @@ class VM:
         raise TimeoutError(f'QEMU socket did not appear: {path}')
 
     def start(self, cdrom=True, network=False, software_display=False):
-        for name in ('serial.sock', 'qmp.sock'):
-            (self.directory / name).unlink(missing_ok=True)
+        sockets = self.control_path('serial.sock').parent
         firmware = Path(os.environ.get('OVMF_DIR', '/usr/share/edk2/x64'))
         pairs = [('OVMF_CODE.4m.fd', 'OVMF_VARS.4m.fd'), ('OVMF_CODE.fd', 'OVMF_VARS.fd')]
         pair = next(((firmware / code, firmware / variables) for code, variables in pairs
@@ -79,8 +86,8 @@ class VM:
                                else 'ide-hd,drive=target-disk,bus=ide.0,bootindex=2'),
                    '-nic', f'user,model={self.network_model}' if network else 'none',
                    '-virtfs', f'local,path={self.directory},mount_tag=verify,security_model=none,id=verify',
-                   '-serial', f'unix:{self.directory}/serial.sock,server=on,wait=off',
-                   '-qmp', f'unix:{self.directory}/qmp.sock,server=on,wait=off']
+                   '-serial', f'unix:{sockets}/serial.sock,server=on,wait=off',
+                   '-qmp', f'unix:{sockets}/qmp.sock,server=on,wait=off']
         if not self.allow_reboot:
             command += ['-no-reboot']
         if cdrom:
@@ -227,6 +234,9 @@ class VM:
             self.serial.close()
         if self.qmp:
             self.qmp.close()
+        if self.socket_directory is not None:
+            self.socket_directory.cleanup()
+            self.socket_directory = None
         if self.process is not None and self.process.returncode not in (None, 0):
             raise RuntimeError(f'QEMU exited abnormally: {self.process.returncode}')
 

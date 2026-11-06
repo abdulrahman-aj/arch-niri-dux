@@ -1,5 +1,7 @@
 from pathlib import Path
 import re
+import socket
+import secrets
 import subprocess
 import tempfile
 import unittest
@@ -8,6 +10,30 @@ from scripts.verification import vm as verify
 
 
 class VMCommandTests(unittest.TestCase):
+    def test_control_transport_works_with_deep_evidence_paths_and_cleans_up(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            evidence = Path(temporary) / ('deep-worktree-' * 10)
+            evidence.mkdir()
+            machine = verify.VM(evidence, None, evidence / 'unused.qcow2')
+            address = machine.control_path('test.sock')
+            try:
+                with socket.socket(socket.AF_UNIX) as server, socket.socket(socket.AF_UNIX) as client:
+                    server.bind(str(address))
+                    server.listen(1)
+                    client.connect(str(address))
+                    connection, _ = server.accept()
+                    with connection:
+                        payload = secrets.token_bytes(16)
+                        connection.sendall(payload)
+                        self.assertEqual(client.recv(len(payload)), payload)
+                machine.stop()
+                with socket.socket(socket.AF_UNIX) as client:
+                    with self.assertRaises(FileNotFoundError):
+                        client.connect(str(address))
+            finally:
+                machine.stop()
+                machine.log.close()
+
     def test_login_waits_for_terminal_input_before_commands_and_sudo_shell(self):
         class LoginTerminal:
             ready = False
