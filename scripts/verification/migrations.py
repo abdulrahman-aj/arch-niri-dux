@@ -60,9 +60,8 @@ def check():
         assert not system_effect.exists()
     finally:
         lock.unlink()
-    wait_until('Logged-in user path migration', user_effect.exists)
+    wait_until('Logged-in user path migration', lambda: user_effect.read_text().splitlines() == ['first', 'second'])
     assert system_effect.read_text().splitlines() == ['first', 'second']
-    assert user_effect.read_text().splitlines() == ['first', 'second']
     run(COMMAND, 'run')
     user_command(COMMAND, 'run')
     assert system_effect.read_text().splitlines() == ['first', 'second']
@@ -140,8 +139,7 @@ def check():
         target.write_text('[Unit]\nRequires=graphical-session.target\nAfter=graphical-session.target\n')
         run(*prefix, 'systemctl', '--user', 'daemon-reload')
         run(*prefix, 'systemctl', '--user', 'start', 'migration-verification.target')
-        wait_until('Next graphical login migration', later.exists)
-        assert later.read_text().splitlines() == ['first', 'second', 'third']
+        wait_until('Next graphical login migration', lambda: later.read_text().splitlines() == ['first', 'second', 'third'])
     finally:
         run('loginctl', 'disable-linger', account.pw_name)
         run('loginctl', 'terminate-user', account.pw_name)
