@@ -20,17 +20,17 @@ class PayloadFinalizationTests(unittest.TestCase):
         (self.root / 'packages').mkdir()
         (self.root / 'out').mkdir()
         self.output = self.root / 'out/packages.manifest.json'
-        self.receipt = self.root / 'aur.manifest.json'
         base = self.package('base')
         self.lock = dict(schema=1, requested=['base'], packages=[base | {'version': '1-1',
             'url': 'https://example.invalid/' + base['filename'], 'repository': 'core', 'signature': 'producer-verified',
         }])
         own = [self.package(name) for name in ('arch-niri-dux', 'arch-niri-dux-baseline')]
+        self.recipe = dict(name='example-bin', source_date_epoch=1234,
+                           files={'PKGBUILD': 'e' * 64, '.SRCINFO': 'f' * 64})
+        self.apps = [self.package('example-bin') | {'version': '1-1', 'recipe': self.recipe}]
         self.integration = dict(version='1-1', source_sha256='a' * 64, recipe_sha256='b' * 64,
-                                source_date_epoch=1234, packages=own, tag='integration-v1-1', source_commit='c' * 40)
-        self.recipe = dict(name='example-bin', url='https://example.invalid/recipe', commit='d' * 40,
-                           source_date_epoch=1234, files={'PKGBUILD': 'e' * 64, '.SRCINFO': 'f' * 64})
-        self.aur = [self.package('example-bin') | {'recipe': self.recipe}]
+                                source_date_epoch=1234, packages=own, apps=self.apps,
+                                tag='integration-v1-1', source_commit='c' * 40)
         self.save()
 
     def package(self, name, directory=None):
@@ -48,14 +48,13 @@ class PayloadFinalizationTests(unittest.TestCase):
     def save(self):
         for path, value in [(self.root / 'packages/closure.lock.json', self.lock),
                             (self.root / 'packages/aur-recipes.json', [self.recipe]),
-                            (self.repository / 'integration.manifest.json', self.integration),
-                            (self.receipt, self.aur)]:
+                            (self.repository / 'integration.manifest.json', self.integration)]:
             path.write_text(json.dumps(value))
 
-    def rejected(self, message, receipt=True):
+    def rejected(self, message):
         self.output.write_text('Previous complete manifest\n')
         with self.assertRaisesRegex(ValueError, message):
-            iso_payload.finalize(self.root, self.repository, self.receipt if receipt else None)
+            iso_payload.finalize(self.root, self.repository)
         self.assertEqual(self.output.read_text(), 'Previous complete manifest\n')
         self.assertFalse((self.repository / 'SHA256SUMS').exists())
 
@@ -64,9 +63,9 @@ class PayloadFinalizationTests(unittest.TestCase):
         subprocess.run(['repo-add', str(self.repository / 'offline.db.tar.gz'),
                         str(self.root / 'old' / obsolete['filename'])], check=True, stdout=subprocess.DEVNULL)
         (self.repository / 'offline.db.tar.gz.old').write_text('Old bootstrap database')
-        iso_payload.finalize(self.root, self.repository, self.receipt)
+        iso_payload.finalize(self.root, self.repository)
         combined = json.loads(self.output.read_text())
-        self.assertEqual(combined, self.lock | {'integration': self.integration, 'aur_packages': self.aur})
+        self.assertEqual(combined, self.lock | {'integration': self.integration})
         verify_repository(self.repository)
         with tarfile.open(self.repository / 'offline.db') as database:
             descriptions = [database.extractfile(member).read().decode()
@@ -76,14 +75,6 @@ class PayloadFinalizationTests(unittest.TestCase):
         self.assertFalse((self.repository / 'offline.db.tar.gz.old').exists())
         listed = {line.split()[1] for line in (self.repository / 'SHA256SUMS').read_text().splitlines()}
         self.assertEqual(listed, {p.name for p in self.repository.glob('*.pkg.tar.zst')} | {'offline.db'})
-
-    def test_zero_aur_needs_no_aur_producer_receipt(self):
-        (self.root / 'packages/aur-recipes.json').write_text('[]\n')
-        (self.repository / self.aur[0]['filename']).unlink()
-        self.receipt.unlink()
-        iso_payload.finalize(self.root, self.repository)
-        self.assertEqual(json.loads(self.output.read_text())['aur_packages'], [])
-        verify_repository(self.repository)
 
     def test_missing_package_stops_without_replacing_manifest(self):
         (self.repository / self.lock['packages'][0]['filename']).unlink()
@@ -119,13 +110,15 @@ class PayloadFinalizationTests(unittest.TestCase):
         self.save()
         self.rejected('Duplicate package filename')
 
-    def test_missing_aur_receipt_is_rejected_when_recipes_exist(self):
-        self.rejected('AUR inventory', receipt=False)
-
-    def test_stale_aur_provenance_is_rejected(self):
-        self.aur[0]['recipe'] = self.recipe | {'commit': 'a' * 40}
+    def test_missing_app_is_rejected_when_recipes_exist(self):
+        self.integration['apps'] = []
         self.save()
-        self.rejected('AUR provenance')
+        self.rejected('Dux app inventory')
+
+    def test_stale_app_provenance_is_rejected(self):
+        self.apps[0]['recipe'] = self.recipe | {'files': {'PKGBUILD': 'a' * 64, '.SRCINFO': 'f' * 64}}
+        self.save()
+        self.rejected('Dux app provenance')
 
     def test_unsafe_package_filename_is_rejected(self):
         self.lock['packages'][0]['filename'] = '../escape.pkg.tar.zst'

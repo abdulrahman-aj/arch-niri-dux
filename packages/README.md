@@ -18,25 +18,30 @@ repositories inherit `Required DatabaseOptional`. Papers and
 Snapshot also come from Arch's signed packages. New entries extend the closure.
 A lock refresh can change existing pins.
 
-`aur/` contains unmodified, reviewed recipes for Dux Greeter, Search, Calendar
-and Files 2.1.0. `aur-recipes.json` records their AUR commits and file hashes.
-Builds enforce the vendored file hashes. The commits record their provenance.
-Their maintainer, `bbedward`, is a Dux Labs member and upstream contributor.
-Release-asset hashes were checked against Dux's GitHub release metadata. The
-recipes also verify every source through `makepkg`. The disposable builder builds
-these packages as an unprivileged user. The offline installer uses the resulting
-packages. They do not carry Arch package signatures.
+`aur/` contains reviewed recipes for Dux Greeter, Search, Calendar and Files.
+Their maintainer, `bbedward`, is a Dux Labs member. `aur-recipes.json` pins
+every recipe file's hash, and builds refuse changed files. `scripts/build-dux-apps.py` builds them as an
+unprivileged user, and `makepkg` verifies every upstream source checksum.
+Integration releases sign and publish them in our repository, like our own
+packages. Installed systems never use the AUR.
+
+The scheduled `dux-apps.yml` workflow tracks upstream GitHub releases rather
+than the AUR, so updates do not wait for or trust it. When Dux tags a
+release, `scripts/bump-dux-apps.py` changes only `pkgver`, `pkgrel`, checksums,
+recipe hashes and `source_date_epoch`. Release-asset checksums must equal
+GitHub's published digests. Repository files at the release tag have no
+published digest. The workflow opens a PR and never merges or publishes.
 
 `scripts/iso_payload.py` finalizes the ISO repository, checksums and combined
 `out/packages.manifest.json` after the package producers finish. It rejects
 missing, unexpected or mismatched packages and checks the generated database
-against their declared inventory. The AUR builder reports only its own results.
-With no AUR recipes the finalizer needs no AUR result file.
+against their declared inventory.
 
-The manifest records the signed closure and locally built packages with their
-hashes and recipe provenance. Yay or Dux's system updater updates installed AUR
-packages. Recipe changes require review. Replacing these AUR sources is tracked in
-[issue #47](https://github.com/abdulrahman-aj/arch-niri-dux/issues/47).
+The manifest records the signed closure and our packages with their hashes and
+recipe provenance. Dux's system updater or `pacman -Syu` updates everything from
+signed repositories. `base-devel` stays: it provides `sudo`, which the installer
+configures for `wheel`, and `fakeroot`, which Dux's updater uses to check for
+updates without root.
 
 Every integration package upgrade rebuilds boot artifacts through its ALPM hook.
 See [boot policy and first-install ordering](../desktop/README.md#packaged-desktop-integration)

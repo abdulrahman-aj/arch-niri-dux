@@ -107,7 +107,6 @@
     "xdg-terminal-exec",
     "xdg-utils",
     "xwayland-satellite",
-    "yay",
     "zip"
   ],
   "packages": [
@@ -6356,15 +6355,6 @@
       "url": "https://geo.mirror.pkgbuild.com/core/os/x86_64/xz-5.8.4-1-x86_64.pkg.tar.zst",
       "repository": "core",
       "signature": "iHUEABYKAB0WIQQEKYl95fO9rFN6MGltQr3RFuAGjwUCaqGcgAAKCRBtQr3RFuAGj8PUAP9FV+wniQPnGjbiXU9RIoxXHT+3LDwEIV47h/bVuzhvZQEA3o/5VKwR1JbUeZ38rx7MpPf6jcdAczPPD9HoIUSNFgo="
-    },
-    {
-      "name": "yay",
-      "version": "13.0.1-1",
-      "filename": "yay-13.0.1-1-x86_64.pkg.tar.zst",
-      "sha256": "da6083bb2fac220c2f0f968e83d7faa95213670b76e001364b1c01a74b5a919e",
-      "url": "https://pkgs.omarchy.org/stable/x86_64/yay-13.0.1-1-x86_64.pkg.tar.zst",
-      "repository": "omarchy",
-      "signature": "iHUEABYKAB0WIQRA37Yw/0K8/7BHBGzwE07mgMrFcQUCamaq3QAKCRDwE07mgMrFcaJDAQC2F/ZLov1+oaGaH8Zet/ijX8aqLW+6VZzxPRL0b0H11QEApg8GlUNa9sVHHOgdkBzzYmNhk3gAqruvoyraA1mknwY="
     },
     {
       "name": "yyjson",

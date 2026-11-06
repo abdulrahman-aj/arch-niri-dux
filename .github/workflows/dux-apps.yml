@@ -1,0 +1,55 @@
+name: Dux app updates
+
+on:
+  schedule:
+    - cron: '23 5 * * *'
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  group: dux-apps-bump
+
+jobs:
+  propose:
+    runs-on: ubuntu-24.04
+    container: archlinux:base-devel@sha256:767de6eaa40dcfeda5263a48737ea03a782caabdf3a403b6e6a203c7fd333681
+    # Opens a pull request only. Merging, tagging and publishing stay manual.
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - run: pacman -Syu --noconfirm --needed python git github-cli
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+      - name: Update recipes from upstream releases
+        id: bump
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          summary=$(python scripts/bump-dux-apps.py "$GITHUB_WORKSPACE")
+          printf 'summary=%s\n' "$summary" >>"$GITHUB_OUTPUT"
+      - name: Open a pull request for review
+        if: steps.bump.outputs.summary != ''
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SUMMARY: ${{ steps.bump.outputs.summary }}
+        run: |
+          git config --global --add safe.directory "$GITHUB_WORKSPACE"
+          branch="dux-apps/$(printf '%s' "$SUMMARY" | tr -c 'a-z0-9.\n' '-')"
+          # A previous run already proposed these exact versions.
+          if git ls-remote --exit-code "https://github.com/$GITHUB_REPOSITORY" "refs/heads/$branch"; then
+              exit 0
+          fi
+          gh auth setup-git
+          git switch -c "$branch"
+          git -c user.name='github-actions[bot]' \
+              -c user.email='41898282+github-actions[bot]@users.noreply.github.com' \
+              commit -am "Update Dux apps: $SUMMARY"
+          git push "https://github.com/$GITHUB_REPOSITORY" "$branch"
+          gh pr create --repo "$GITHUB_REPOSITORY" --base main --head "$branch" \
+            --title "Update Dux apps: $SUMMARY" \
+            --body "Upstream release bump. Release-asset checksums match GitHub's published digests. Close and reopen this PR to run CI, then review the recipe diff. Publishing needs an integration release (packages/RELEASING.md)."

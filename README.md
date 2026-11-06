@@ -20,7 +20,7 @@ make verify
 
 `make lint` runs Ruff, ShellCheck and actionlint. It discovers Python sources,
 shell files by extension or shebang, and our `PKGBUILD` recipes, including
-untracked scripts. Generated output and vendored AUR recipes are excluded.
+untracked scripts. Generated output and vendored Dux app recipes are excluded.
 `make test` runs lint, source tests and build tests in CI.
 
 Acceptance scenarios live in `scripts/verification/`. Each scenario keeps its
@@ -39,7 +39,7 @@ integration changes, use `make iso-development` instead. See [release maintenanc
 The build writes the ISO and checksums to `out/`. VM tests need a GPU render node
 and virtio 3D acceleration. `QEMU_RENDER_NODE` defaults to `/dev/dri/renderD128`.
 
-Signed binary packages and reviewed Dux AUR recipes use separate pins. See
+Signed binary packages and reviewed Dux app recipes use separate pins. See
 [package inputs](packages/README.md). Desktop configuration comes from upstream
 Dux. Rebuilds use the same inputs, but are not byte-identical.
 
@@ -56,7 +56,7 @@ Dux. Rebuilds use the same inputs, but are not byte-identical.
 Super+Return opens a terminal, Super+Space opens the launcher, and Super+Alt+L
 locks the screen.
 
-Use Dux's system updater or `yay` for repository and AUR updates.
+Use Dux's system updater or `sudo pacman -Syu` for updates.
 The installer offers automatic/custom encrypted swap or no hibernation.
 With swap enabled, use `systemctl hibernate`. Closing the lid suspends when
 undocked and allows continued use on an external display when docked.

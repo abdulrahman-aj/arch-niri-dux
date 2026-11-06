@@ -1,8 +1,6 @@
 [
   {
     "name": "dux-greeter-bin",
-    "url": "https://aur.archlinux.org/dux-greeter-bin.git",
-    "commit": "98e69e446ca43e5c39371424050124bc1a738e09",
     "source_date_epoch": 1793756880,
     "files": {
       ".SRCINFO": "4fc9989db6e2f79dbf10f5ffa06595c090e3e793c56f63024991c85940be12f4",
@@ -12,8 +10,6 @@
   },
   {
     "name": "dux-search-bin",
-    "url": "https://aur.archlinux.org/dux-search-bin.git",
-    "commit": "419840e0c9d9fd30a78237406afe8d397b222168",
     "source_date_epoch": 1793756886,
     "files": {
       ".SRCINFO": "eaee2c3f99a442fc1b943a42e66f5cdcfbf6c86a8a285609d91e19dd93dd611a",
@@ -23,8 +19,6 @@
   },
   {
     "name": "dux-calendar-bin",
-    "url": "https://aur.archlinux.org/dux-calendar-bin.git",
-    "commit": "a2f08b95939281835f8105b085c03f05975ddf63",
     "source_date_epoch": 1793756868,
     "files": {
       ".SRCINFO": "0aa44fb959096b61ed2e094533be14109b93bd6bd0537cc724bf83a59d47bf28",
@@ -33,8 +27,6 @@
   },
   {
     "name": "dux-files-bin",
-    "url": "https://aur.archlinux.org/dux-files-bin.git",
-    "commit": "11e7ec6338873d6a7f805a79f460ac00f0364e05",
     "source_date_epoch": 1793756874,
     "files": {
       ".SRCINFO": "67f61326fe1f96ecba780af61af55a54784129e34fe064765d99c3e9afc4a260",

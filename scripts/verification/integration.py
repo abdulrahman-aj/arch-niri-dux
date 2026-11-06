@@ -181,9 +181,10 @@ def published_repository():
         run('pacman', '--config', str(configuration), '-Syyu', '--noconfirm')
         # Force downloads into an empty cache even when this ISO already has
         # the current version. Package identity must match the signed ISO input.
+        packages = manifest['packages'] + manifest['apps']
         run('pacman', '--config', str(configuration), '-S', '--noconfirm',
-            'arch-niri-dux', 'arch-niri-dux-baseline')
-        for package in manifest['packages']:
+            *(package['name'] for package in packages))
+        for package in packages:
             payload = cache / package['filename']
             hashes[package['name']] = hashlib.sha256(payload.read_bytes()).hexdigest()
             assert hashes[package['name']] == package['sha256'], package['name']

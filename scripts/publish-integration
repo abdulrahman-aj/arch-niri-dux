@@ -33,8 +33,10 @@ fi
 mkdir -p "$history"
 while IFS= read -r previous; do
     [[ $previous =~ ^integration-v[0-9]+(\.[0-9]+)*-[0-9]+(\.[0-9]+)*$ ]]
-    gh release download "$previous" --repo "$repository" --dir "$history" \
-        --pattern 'arch-niri-dux-*.pkg.tar.zst' --pattern 'arch-niri-dux-*.pkg.tar.zst.sig'
+    # Releases repeat unchanged Dux app versions with identical bytes.
+    gh release download "$previous" --repo "$repository" --dir "$history" --skip-existing \
+        --pattern 'arch-niri-dux-*.pkg.tar.zst' --pattern 'arch-niri-dux-*.pkg.tar.zst.sig' \
+        --pattern 'dux-*.pkg.tar.zst' --pattern 'dux-*.pkg.tar.zst.sig'
 done < <(jq -r --arg tag "$tag" '.[][] | select((.draft or .prerelease) | not) |
           .tag_name | select(startswith("integration-v") and . != $tag)' "$releases")
 python "$root/scripts/integration-release.py" publish "$root" "$packages" "$history" "$output" \
@@ -43,7 +45,7 @@ if [[ $published == false ]]; then
     assets=()
     while IFS= read -r name; do
         assets+=("$output/$name" "$output/$name.sig")
-    done < <(jq -r '.packages[].filename' "$output/integration.manifest.json")
+    done < <(jq -r '.packages[].filename, .apps[].filename' "$output/integration.manifest.json")
     assets+=("$output/integration.manifest.json" "$output/integration.manifest.json.sig"
              "$output/integration.tar" "$output/integration.PKGBUILD")
     gh release create "$tag" --repo "$repository" --draft --target "$commit" \

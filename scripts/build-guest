@@ -63,6 +63,8 @@ else
     integration_epoch=$(cat /state/integration-epoch)
     runuser -u nobody -- python /source/scripts/build-integration.py /source \
         /build/integration-work /build/integration-packages --epoch "$integration_epoch"
+    runuser -u nobody -- python /source/scripts/build-dux-apps.py /source \
+        /build/integration-work /build/integration-packages
 fi
 cp /build/integration-packages/*.pkg.tar.zst /build/payload/repo/
 cp /build/integration-packages/integration.manifest.json /build/payload/repo/
@@ -71,11 +73,10 @@ if compgen -G '/build/integration-packages/*.pkg.tar.zst.sig' >/dev/null; then
 fi
 rm -rf /source/out/integration
 cp -r /build/integration-packages /source/out/integration
-python /source/scripts/build-aur.py /source /build/payload/repo /build/aur.manifest.json
 # The verified payload is authoritative; the builder's download cache is redundant.
 rm -f /build/cache/*.pkg.tar.*
 fstrim /build || true
-python /source/scripts/iso_payload.py /source /build/payload/repo --aur-manifest /build/aur.manifest.json
+python /source/scripts/iso_payload.py /source /build/payload/repo
 cp /state/trusted-packagers.gpg /source/out/trusted-packagers.gpg
 cp -a /usr/share/archiso/configs/releng /build/profile-new
 rm -rf /build/profile
