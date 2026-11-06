@@ -43,9 +43,9 @@ class Migrations(unittest.TestCase):
         second = self.root / 'second'
         third = self.root / 'third'
         ready = self.root / 'ready'
-        self.script('02_failure', f'test -e {ready}\ntouch {second}')
-        self.script('03_last', f'test -e {second}\ntouch {third}')
-        self.script('01_first', f'touch {first}')
+        self.script('20261106_02_failure', f'test -e {ready}\ntouch {second}')
+        self.script('20261106_03_last', f'test -e {second}\ntouch {third}')
+        self.script('20261106_01_first', f'touch {first}')
         with patch.object(migrate, 'trusted'):
             queue = migrate.scripts('system')
             with self.assertRaises(RuntimeError):
@@ -59,14 +59,23 @@ class Migrations(unittest.TestCase):
         self.assertTrue(third.exists())
 
     def test_skip_requires_reason(self):
-        path = self.script('01_skip', 'echo customized; exit 77')
+        path = self.script('20261106_01_skip', 'echo customized; exit 77')
         migrate.execute([path], self.state)
         record = json.loads((self.state / (path.name + '.json')).read_text())
         self.assertEqual(record['outcome'], 'skip')
         self.assertTrue(record['reason'])
-        bad = self.script('02_bad', 'exit 77')
+        bad = self.script('20261106_02_bad', 'exit 77')
         with self.assertRaises(RuntimeError):
             migrate.execute([bad], self.state)
+
+    def test_unsortable_name_rejected(self):
+        self.script('20261106_01_valid', 'true')
+        self.script('9_fix', 'true')
+        with patch.object(migrate, 'trusted'):
+            with self.assertRaises(RuntimeError):
+                migrate.scripts('system')
+            (self.scripts / 'system' / '9_fix.sh').unlink()
+            self.assertEqual(len(migrate.scripts('system')), 1)
 
     def test_shared_lock_blocks_system_work(self):
         (self.state / 'lock').touch()
@@ -94,7 +103,7 @@ class Migrations(unittest.TestCase):
         user_state = self.root / 'fresh-user'
         user_state.mkdir()
         effect = self.root / 'unexpected'
-        path = self.script('01_user', f'touch {effect}', scope='user')
+        path = self.script('20261106_01_user', f'touch {effect}', scope='user')
         with patch.object(migrate, 'trusted'):
             migrate.process('baseline', 'user', user_state)
         self.assertFalse(effect.exists())
