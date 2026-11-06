@@ -1,0 +1,156 @@
+#!/usr/bin/python3
+"""Offline, forward-only package migrations. Exit 77 with stdout for a skip."""
+
+import argparse
+from contextlib import contextmanager
+import fcntl
+import hashlib
+import json
+import os
+from pathlib import Path
+import re
+import stat
+import subprocess
+import sys
+import syslog
+import time
+
+SCRIPTS = Path('/usr/lib/arch-niri-dux/migrations')
+SYSTEM = Path('/var/lib/arch-niri-dux/migrations')
+
+
+def trusted(path):
+    """Check every ancestor: a safe file in a replaceable directory is unsafe."""
+    for item in [*reversed(path.parents), path]:
+        info = item.lstat()
+        if info.st_uid != 0 or info.st_mode & 0o022 or stat.S_ISLNK(info.st_mode):
+            raise RuntimeError(f'Unsafe migration path: {item}')
+
+
+def scripts(scope):
+    directory = SCRIPTS / scope
+    trusted(directory)
+    result = sorted(directory.iterdir())
+    for path in result:
+        trusted(path)
+        if not re.fullmatch(r'[0-9][a-zA-Z0-9_-]*\.sh', path.name) or not path.is_file():
+            raise RuntimeError(f'Invalid migration: {path}')
+    return result
+
+
+def write(path, value):
+    temporary = path.with_name(path.name + '.tmp')
+    with temporary.open('w') as stream:
+        stream.write(value + '\n')
+        stream.flush()
+        os.fsync(stream.fileno())
+    temporary.replace(path)
+    descriptor = os.open(path.parent, os.O_RDONLY | os.O_DIRECTORY)
+    try:
+        os.fsync(descriptor)
+    finally:
+        os.close(descriptor)
+
+
+@contextmanager
+def lock(state, shared=False):
+    with (state / 'lock').open('r' if shared else 'a') as stream:
+        fcntl.flock(stream, fcntl.LOCK_SH if shared else fcntl.LOCK_EX)
+        yield
+
+
+def pending(queue, state):
+    return [path for path in queue if not (state / (path.name + '.json')).is_file()]
+
+
+def system_ready():
+    return (SYSTEM / 'generation').is_file() and not (SYSTEM / 'failure').exists() and not pending(scripts('system'), SYSTEM)
+
+
+def execute(queue, state, baseline=False):
+    for path in pending(queue, state):
+        if baseline:
+            outcome = {'outcome': 'baseline', 'reason': 'Fresh installation'}
+        else:
+            # Preserve stderr in the journal; stdout is also the skip-reason channel.
+            result = subprocess.run(['/bin/bash', str(path)], text=True, stdout=subprocess.PIPE)
+            print(result.stdout, end='', flush=True)
+            if result.returncode == 0:
+                outcome = {'outcome': 'success'}
+            elif result.returncode == 77 and result.stdout.strip():
+                outcome = {'outcome': 'skip', 'reason': result.stdout.strip()}
+            else:
+                raise RuntimeError(f'{path.name} failed (exit {result.returncode}); retry with arch-niri-dux-migrate run')
+        write(state / (path.name + '.json'), json.dumps(outcome))
+    (state / 'failure').unlink(missing_ok=True)
+
+
+def notify(message):
+    print(message, file=sys.stderr, flush=True)
+    # Manual CLI retries need journal entries too; services already capture stderr.
+    if not os.environ.get('JOURNAL_STREAM'):
+        syslog.openlog('arch-niri-dux-migrate')
+        syslog.syslog(syslog.LOG_ERR, message)
+    if os.geteuid() != 0:
+        try:
+            subprocess.run(['notify-send', '--app-name=Arch Niri Dux',
+                            'Desktop migration failed', message], check=False, timeout=10)
+        except (OSError, subprocess.TimeoutExpired):
+            pass
+
+
+def process(action, scope, state):
+    if action == 'status':
+        print(json.dumps({'scope': scope, 'pending': [p.name for p in pending(scripts(scope), state)],
+                          'failure': (state / 'failure').read_text() if (state / 'failure').exists() else None,
+                          'system_ready': system_ready()}))
+        return
+    if scope == 'system':
+        # ALPM only schedules this service. Never overlap its transaction.
+        while Path('/var/lib/pacman/db.lck').exists():
+            time.sleep(1)
+        execute(scripts(scope), state, action == 'baseline')
+        # A user-only release must wake existing sessions too.
+        generation = hashlib.sha256('\n'.join(
+            f'{kind}/{p.name}' for kind in ('system', 'user') for p in scripts(kind)
+        ).encode()).hexdigest()
+        if not (state / 'generation').exists() or (state / 'generation').read_text().strip() != generation:
+            write(state / 'generation', generation)
+    else:
+        with lock(SYSTEM, shared=True):
+            if not system_ready():
+                raise RuntimeError('System migrations incomplete; inspect sudo arch-niri-dux-migrate status and retry sudo arch-niri-dux-migrate run')
+            execute(scripts(scope), state, action == 'baseline')
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('action', choices=['run', 'status', 'baseline'])
+    args = parser.parse_args()
+    scope = 'system' if os.geteuid() == 0 else 'user'
+    if scope == 'system':
+        os.umask(0o022)
+    state = SYSTEM if scope == 'system' else Path(os.environ.get('XDG_STATE_HOME', str(Path.home() / '.local/state'))) / 'arch-niri-dux/migrations'
+    try:
+        state.mkdir(parents=True, exist_ok=True)
+        if scope == 'system':
+            trusted(state)
+        if args.action == 'status':
+            process(args.action, scope, state)
+            return 0
+        with lock(state):
+            try:
+                process(args.action, scope, state)
+            except (OSError, RuntimeError) as error:
+                # Publish failure before releasing the queue, so a successful
+                # concurrent retry cannot be overwritten by a stale failure.
+                write(state / 'failure', str(error))
+                raise
+        return 0
+    except (OSError, RuntimeError) as error:
+        notify(str(error))
+        return 1
+
+
+if __name__ == '__main__':
+    sys.exit(main())

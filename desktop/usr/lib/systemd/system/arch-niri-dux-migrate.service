@@ -1,0 +1,12 @@
+[Unit]
+Description=Apply Arch Niri Dux system migrations
+After=local-fs.target multi-user.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/arch-niri-dux-migrate run
+TimeoutStartSec=infinity
+UMask=0022
+
+[Install]
+WantedBy=multi-user.target

@@ -79,6 +79,7 @@ def main():
         vm.probe('boot', 'plymouth-config')
         vm.probe('policy', 'check', timeout=180)
         vm.probe('desktop', 'niri-overrides', timeout=180)
+        vm.probe('migrations', 'check', timeout=180)
         vm.poweroff()
         (directory / 'FAST-PASSED').write_text(json.dumps({
             'fixture': str(fixture), 'source_sha256': builder.digest(source / 'integration.tar'),

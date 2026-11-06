@@ -18,6 +18,18 @@ import tempfile
 PASSWORD = 'vm-verification-only'
 
 
+def wait_for_memory():
+    # Build and verification streams share the host, including recovery boots.
+    while True:
+        subprocess.run(['free', '-g'], check=True)
+        available = next(int(line.split()[1]) for line in Path('/proc/meminfo').read_text().splitlines()
+                         if line.startswith('MemAvailable:'))
+        if available >= 10 * 1024**2:
+            return
+        print('Waiting for 10 GiB available before starting a VM.', flush=True)
+        time.sleep(30)
+
+
 class VM:
     def __init__(self, directory, iso, disk):
         self.directory = directory
@@ -61,6 +73,7 @@ class VM:
         raise TimeoutError(f'QEMU socket did not appear: {path}')
 
     def start(self, cdrom=True, network=False, software_display=False):
+        wait_for_memory()
         sockets = self.control_path('serial.sock').parent
         firmware = Path(os.environ.get('OVMF_DIR', '/usr/share/edk2/x64'))
         pairs = [('OVMF_CODE.4m.fd', 'OVMF_VARS.4m.fd'), ('OVMF_CODE.fd', 'OVMF_VARS.fd')]
@@ -339,3 +352,7 @@ def stage_probes(directory):
     paths = sorted(source.glob('*.py')) + [builder]
     return {str(path.relative_to(source.parent)): hashlib.sha256(path.read_bytes()).hexdigest()
             for path in paths}
+
+
+if __name__ == '__main__':
+    wait_for_memory()

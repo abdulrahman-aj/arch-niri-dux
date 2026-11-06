@@ -1,0 +1,12 @@
+[Unit]
+Description=Apply Arch Niri Dux user migrations
+After=graphical-session.target dms.service
+PartOf=graphical-session.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/arch-niri-dux-migrate run
+TimeoutStartSec=infinity
+
+[Install]
+WantedBy=graphical-session.target

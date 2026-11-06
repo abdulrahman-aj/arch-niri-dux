@@ -68,6 +68,7 @@ if ! grep -Eq '^[[:space:]]*hosts:.*mdns' /etc/nsswitch.conf 2>/dev/null; then
 fi
 
 # Account initialization is separate from package updates and system policy.
+arch-niri-dux-migrate baseline
 runuser -u "$dux_user" -- env -u XDG_CONFIG_HOME -u XDG_STATE_HOME -u XDG_DATA_HOME \
     bash /usr/lib/arch-niri-dux/initialize-user
 systemctl --global preset dms.service dsearch.service dcal.service dfiles.service dux-application-themes.service

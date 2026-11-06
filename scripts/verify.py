@@ -121,6 +121,8 @@ def main():
         camera.verify(vm, passed)
         browser.verify(vm, passed)
         desktop.verify_lock(vm, passed)
+        vm.probe('migrations', 'check', timeout=180)
+        passed('Migration ordering, retries, session triggers and new-account baseline')
         recovery.verify(vm, passed)
         boot.verify_fallback(vm, passed)
         if args.online_repository:

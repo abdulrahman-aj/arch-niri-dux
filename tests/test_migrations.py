@@ -1,0 +1,145 @@
+"""Behavioral regression coverage; fixtures are never packaged."""
+
+from contextlib import contextmanager
+import importlib.machinery
+import importlib.util
+import json
+import multiprocessing
+from pathlib import Path
+import tempfile
+import unittest
+from unittest.mock import patch
+
+RUNNER = Path(__file__).resolve().parents[1] / 'desktop/usr/bin/arch-niri-dux-migrate'
+loader = importlib.machinery.SourceFileLoader('migrate', str(RUNNER))
+spec = importlib.util.spec_from_loader(loader.name, loader)
+migrate = importlib.util.module_from_spec(spec)
+loader.exec_module(migrate)
+
+
+def acquire(state, connection):
+    with migrate.lock(state):
+        connection.send(True)
+    connection.close()
+
+
+class Migrations(unittest.TestCase):
+    def setUp(self):
+        self.temporary = tempfile.TemporaryDirectory()
+        self.addCleanup(self.temporary.cleanup)
+        self.root = Path(self.temporary.name)
+        self.state = self.root / 'state'
+        self.state.mkdir()
+        self.scripts = self.root / 'scripts'
+        for scope in ('system', 'user'):
+            (self.scripts / scope).mkdir(parents=True)
+        self.addCleanup(patch.stopall)
+        patch.object(migrate, 'SCRIPTS', self.scripts).start()
+        patch.object(migrate, 'SYSTEM', self.state).start()
+
+    def script(self, name, body, scope='system'):
+        path = self.scripts / scope / (name + '.sh')
+        path.write_text('set -eu\n' + body + '\n')
+        return path
+
+    @contextmanager
+    def queue(self):
+        # Host fixtures are user-owned; production ownership rejection is tested
+        # separately. Execute actual scripts and persist actual records here.
+        with patch.object(migrate, 'trusted'):
+            yield migrate.scripts('system')
+
+    def test_skipped_versions_order_and_retry(self):
+        first = self.root / 'first'
+        second = self.root / 'second'
+        self.script('02_second', f'test -e {first}\ntouch {second}')
+        self.script('01_first', f'touch {first}')
+        with self.queue() as queue:
+            migrate.execute(queue, self.state)
+            timestamps = [path.stat().st_mtime_ns for path in (first, second)]
+            migrate.execute(queue, self.state)
+        self.assertEqual([path.stat().st_mtime_ns for path in (first, second)], timestamps)
+
+    def test_failure_stops_then_retries_without_duplicate(self):
+        first = self.root / 'first'
+        second = self.root / 'second'
+        third = self.root / 'third'
+        ready = self.root / 'ready'
+        self.script('01_first', f'touch {first}')
+        self.script('02_failure', f'test -e {ready}\ntouch {second}')
+        self.script('03_last', f'test -e {second}\ntouch {third}')
+        with self.queue() as queue:
+            with self.assertRaises(RuntimeError):
+                migrate.execute(queue, self.state)
+            self.assertEqual(len(migrate.pending(queue, self.state)), 2)
+            timestamp = first.stat().st_mtime_ns
+            self.assertFalse(third.exists())
+            ready.touch()
+            migrate.execute(queue, self.state)
+        self.assertEqual(first.stat().st_mtime_ns, timestamp)
+        self.assertTrue(third.exists())
+
+    def test_skip_requires_reason_and_baseline_has_no_effects(self):
+        path = self.script('01_skip', 'echo customized; exit 77')
+        migrate.execute([path], self.state)
+        record = json.loads((self.state / (path.name + '.json')).read_text())
+        self.assertEqual(record['outcome'], 'skip')
+        self.assertTrue(record['reason'])
+        bad = self.script('02_bad', 'exit 77')
+        with self.assertRaises(RuntimeError):
+            migrate.execute([bad], self.state)
+        effect = self.root / 'unexpected'
+        fresh = self.script('03_fresh', f'touch {effect}')
+        migrate.execute([fresh], self.state, baseline=True)
+        self.assertFalse(effect.exists())
+
+    def test_gate_and_unknown_records_after_downgrade(self):
+        path = self.script('01_system', 'true')
+        with patch.object(migrate, 'trusted'):
+            self.assertFalse(migrate.system_ready())
+            migrate.execute([path], self.state)
+            (self.state / 'generation').touch()
+            self.assertTrue(migrate.system_ready())
+            (self.state / 'failure').write_text('failed')
+            self.assertFalse(migrate.system_ready())
+            (self.state / 'failure').unlink()
+            path.unlink()
+            self.assertTrue(migrate.system_ready())
+
+    def test_shared_lock_blocks_system_work(self):
+        (self.state / 'lock').touch()
+        context = multiprocessing.get_context('spawn')
+        receive, send = context.Pipe(duplex=False)
+        with migrate.lock(self.state, shared=True):
+            process = context.Process(target=acquire, args=(self.state, send))
+            process.start()
+            self.addCleanup(lambda: process.kill() if process.is_alive() else None)
+            self.assertFalse(receive.poll(0.2))
+        self.assertTrue(receive.poll(3))
+        process.join(3)
+        self.assertEqual(process.exitcode, 0)
+
+    def test_user_execution_is_gated_and_records_are_separate(self):
+        (self.state / 'lock').touch()
+        user_state = self.root / 'user-state'
+        user_state.mkdir()
+        effect = self.root / 'user-effect'
+        path = self.script('01_user', f'touch {effect}', scope='user')
+        with patch.object(migrate, 'trusted'):
+            with self.assertRaises(RuntimeError):
+                migrate.process('run', 'user', user_state)
+            self.assertFalse(effect.exists())
+            (self.state / 'generation').touch()
+            migrate.process('run', 'user', user_state)
+            self.assertTrue(effect.exists())
+            self.assertEqual(migrate.pending([path], user_state), [])
+            self.assertEqual(migrate.pending([path], self.state), [path])
+
+    def test_unsafe_paths_rejected(self):
+        path = self.script('01_unsafe', 'true')
+        with self.assertRaises(RuntimeError):
+            migrate.trusted(path)
+        link = self.scripts / 'system/02_link.sh'
+        link.symlink_to(path)
+        with self.assertRaises(RuntimeError):
+            migrate.trusted(link)
