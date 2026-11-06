@@ -160,9 +160,10 @@ def published_repository():
     evidence = Path('/run/verify')
     assert (evidence / 'install.json').is_file(), 'Requires the disposable installation fixture.'
     run('systemd-detect-virt', '--vm')
-    repository = Path('/etc/pacman.d/arch-niri-dux.conf').read_text()
-    assert 'SigLevel = Required TrustedOnly' in repository
-    assert 'Server = https://abdulrahman-aj.github.io/arch-niri-dux/x86_64' in repository
+    server = output('pacman-conf', '--repo', 'arch-niri-dux', 'Server')
+    signature = output('pacman-conf', '--repo', 'arch-niri-dux', 'SigLevel')
+    assert 'PackageRequired' in signature and 'PackageTrustedOnly' in signature, signature
+    repository = f'[arch-niri-dux]\nSigLevel = Required TrustedOnly\nServer = {server}\n'
     personal = [Path('/home/tester/.config') / name for name in
                 ('niri/config.kdl', 'niri/dms/binds.kdl', 'xdg-terminals.list')]
     before = {str(path): hashlib.sha256(path.read_bytes()).hexdigest() for path in personal}

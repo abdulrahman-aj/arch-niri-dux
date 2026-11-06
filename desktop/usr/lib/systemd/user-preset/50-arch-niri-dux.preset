@@ -1,0 +1,5 @@
+enable dms.service
+enable dsearch.service
+enable dcal.service
+enable dfiles.service
+enable dux-application-themes.service

@@ -4,7 +4,7 @@
 vendored verbatim. `packages/desktop-sources.json` records source URLs and hashes.
 The upstream license is included. No personal dotfiles are used.
 
-The `arch-niri-dux` package owns these system files. The installer enables the
+The `arch-niri-dux` package owns these system files. The installer applies vendor presets for the
 Dux services and runs `/usr/lib/arch-niri-dux/initialize-user` as the desktop
 user to seed only missing settings. Package upgrades never replay account or
 user initialization. Dux Greeter starts Niri. Dux creates its own shell settings.
@@ -12,8 +12,14 @@ The Greetd service selects our `/etc/greetd/dux.toml`. Arch retains ownership of
 its separate stock `config.toml`. Pacman preserves local edits to `dux.toml`.
 
 Package construction generates Niri's stock configuration and terminal-resolved
-bindings in `/usr/share/arch-niri-dux/niri/defaults.kdl`. The user entrypoint includes these
-defaults before local `dms/*.kdl` files. `dms/binds.kdl` starts empty and holds
+bindings in `/usr/share/arch-niri-dux/niri/defaults.kdl`. The home entrypoint uses a hybrid include list: package defaults, relative
+optional `dms/*.kdl` and `recent-windows.kdl` includes, package-owned `tail.kdl`
+(session environment and file-dialog rules), then optional `overrides.kdl` last.
+Dux 2.1 silently ignores `~` includes: the one-line shim failed the real
+cheatsheet/manual-MRU check. Relative home includes preserve shortcut editing.
+Put personal Niri settings in `~/.config/niri/overrides.kdl`; initialization
+seeds comments only and preserves existing files and symlinks. Package updates
+can change defaults and session policy without editing home. `dms/binds.kdl` starts empty and holds
 only overrides. Dux generates `dms/binds-next.kdl` for the installed Niri. The
 entrypoint includes it before personal bindings. Keep that generated file local.
 Later bindings replace earlier ones, so a disabled shortcut
@@ -79,3 +85,15 @@ The greeter still uses its supported `--command niri` compositor selector.
 Each context preserves system and Nix PATH entries. No mise shims are added.
 The `session-path` stage of `make verify` checks the user-service environment,
 login shell and a real Niri-spawned wrapper without personal dotfiles.
+
+System policy belongs to the integration package: mkinitcpio's complete MODULES
+and HOOKS arrays, Limine defaults, the root Snapper config, service presets,
+Plymouth/recovery service drop-ins, and the greetd PAM service. To override
+mkinitcpio policy, use a later-sorting `/etc/mkinitcpio.conf.d/*.conf` drop-in
+and rebuild the initramfs. Pacman backs up the shipped mkinitcpio and Snapper
+configs. Systemd overrides belong under `/etc/systemd/`, ahead of vendor files.
+
+Greetd selects `/usr/lib/pam.d/arch-niri-dux` for authentication, including the
+stock local-login stack and GNOME Keyring password/session integration. Its
+greeter session uses the same stack. `/etc/pacman.d/arch-niri-dux.conf` owns the
+online repository order and servers; the installer retains only pacman options.

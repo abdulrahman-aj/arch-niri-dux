@@ -11,8 +11,10 @@ records its checksum for makepkg. Release ISOs fetch the exact signed release
 artifacts. Development ISOs build the local recipe. The installer installs the
 packages, and pacman tracks their files.
 
-`closure.lock.json` pins the signed Arch/Omarchy binary packages. Arch's official
-repositories take precedence over Omarchy on the installed system. Papers and
+`closure.lock.json` pins the signed Arch/Omarchy binary packages. The installed repository order follows Omarchy: Omarchy first, then
+core and extra through `stable-mirror.omarchy.org`, then our signed integration
+repository. The integration repository retains `Required TrustedOnly`; other
+repositories inherit `Required DatabaseOptional`. Papers and
 Snapshot also come from Arch's signed packages. New entries extend the closure.
 A lock refresh can change existing pins.
 

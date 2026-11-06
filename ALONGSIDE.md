@@ -112,7 +112,7 @@ list. Only a full run writes `SUCCESS`. Never treat a screenshot or a loader
 stub as proof of a successful old-OS boot. Both fresh real-OS scenarios passed
 all six milestones on implementation source `73139365d6c8ce44dd0dcfd27f77b624447b6935`, including main
 `0320799`. Their shared final ISO SHA256 is `591fc771dadeaaf5306cf1db00127dc422ff033b325873667eafdf6f2fb27bd9`.
-See [the verified inputs and review dispositions](VERIFICATION.md#verified-alongside-installation-2026-11-02)
+See [the verified inputs and review dispositions](VERIFICATION.md)
 and [the exact input hashes](verification/alongside-2026-11-02.json).
 
 Keep at least 8 GiB host headroom. Guest waits and Windows report waits stop at a

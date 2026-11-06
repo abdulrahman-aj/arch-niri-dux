@@ -26,6 +26,15 @@ def disk(**changes):
 
 
 class InstallerSafetyTests(unittest.TestCase):
+    def setUp(self):
+        # The host may itself use Dux's mapper name. These disposable installer
+        # fixtures must not inherit the host's occupied-device state.
+        exists = Path.exists
+        patcher = patch.object(Path, 'exists', lambda path:
+                               path != Path('/dev/mapper/dux-root') and exists(path))
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
     def test_firmware_guards_stop_unsupported_boots_before_installation(self):
         with tempfile.TemporaryDirectory() as directory:
             variable = Path(directory) / 'SecureBoot-fixture'

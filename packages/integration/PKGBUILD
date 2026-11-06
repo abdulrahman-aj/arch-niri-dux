@@ -1,8 +1,8 @@
 # scripts/build-integration.py supplies the local source archive and its checksum.
 pkgbase='arch-niri-dux'
 pkgname=(arch-niri-dux arch-niri-dux-baseline)
-pkgver=0.2.0
-pkgrel=4
+pkgver=0.3.0
+pkgrel=1
 pkgdesc='Arch Niri Dux desktop integration'
 arch=(any)
 url='https://github.com/abdulrahman-aj/arch-niri-dux'
@@ -13,7 +13,7 @@ prepare() {
     local defaults="$srcdir/desktop/usr/share/arch-niri-dux/niri"
     # Keep pinned upstream files intact; user includes resolve in the user's home.
     sed '/^include /d' "$defaults/config.kdl" >"$defaults/defaults.kdl"
-    printf '\ninclude "binds.kdl"\ninclude "../session.kdl"\n' >>"$defaults/defaults.kdl"
+    printf '\ninclude "binds.kdl"\n' >>"$defaults/defaults.kdl"
     sed 's/{{TERMINAL_COMMAND}}/xdg-terminal-exec/g' "$defaults/dms/binds.kdl" >"$defaults/binds.kdl"
 }
 
@@ -21,7 +21,8 @@ package_arch-niri-dux() {
     depends=(bash systemd pacman niri 'dux-shell>=2.1.0' dux-greeter-bin dux-search-bin dux-calendar-bin
              dux-files-bin greetd gnome-keyring matugen adw-gtk-theme gtk3
              xdg-desktop-portal-gnome xdg-desktop-portal-gtk xdg-terminal-exec xdg-utils)
-    backup=(etc/fonts/conf.d/50-arabic.conf etc/greetd/dux.toml
+    backup=(etc/snapper/configs/root etc/mkinitcpio.conf.d/arch-niri-dux.conf
+            etc/fonts/conf.d/50-arabic.conf etc/greetd/dux.toml
             etc/profile.d/dux-localbin.sh etc/profile.d/dux-editor.sh
             etc/pacman.d/arch-niri-dux.conf
             etc/systemd/logind.conf.d/30-lid.conf

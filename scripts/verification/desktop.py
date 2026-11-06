@@ -397,6 +397,7 @@ def assert_locked(locked):
 if __name__ == '__main__':
     dispatch('desktop', {
         'desktop': desktop,
+        'niri-overrides': niri_overrides,
         'greeter': greeter,
         'fonts': fonts,
         'dux-components': dux_components,

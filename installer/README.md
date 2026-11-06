@@ -12,7 +12,7 @@ The live ISO must provide `fzf` for selection menus, plus:
   owns the shared desktop integration. The baseline tracks the selected package
   list. It installs after initial boot setup so `snap-pac` starts with a bootable
   system. `/usr/lib/arch-niri-dux/initialize-user` runs as the new desktop user
-  to seed absent settings. Machine initialization and service enablement remain
+  to seed absent settings. Machine initialization and application of package-owned service presets remain
   in `configure-target.sh`. None of these steps downloads anything.
 
 Partitioning uses a 4 GiB FAT32 ESP and a LUKS2 Btrfs root. Independent root,
@@ -60,3 +60,18 @@ wizard shows the resolved size and defaults its final erase confirmation to
 Cancel. Installation timing starts when `install()` begins.
 Auto swap needs roughly RAM plus 31 GiB of disk space. Smaller disks can use a
 custom size or disable swap, while the base installation requires 32 GiB.
+
+The package owns mkinitcpio, Limine defaults, Snapper root policy, PAM, service
+presets and vendor systemd drop-ins. The installer supplies account/locale data,
+UUIDs, kernel arguments and resume offset, EFI deferral, and the per-machine
+no-hibernation choice. `SNAPSHOT_KERNEL_PARAMETERS+=noresume` stays in
+`/etc/default/limine` because snapper sync does not read entry-tool drop-ins.
+It also sets `SNAPPER_CONFIGS` in Snapper's config and adjusts NSS for mDNS;
+neither has a suitable independent drop-in. It never edits greetd's PAM file or
+limine-snapper-sync's backup config.
+
+The target's minimal pacman options include the package-owned repository
+fragment. This does not change the installer's offline `file://` repository.
+For mkinitcpio overrides, use a later-sorting drop-in, as described in
+[desktop integration](../desktop/README.md). There is no migration from older
+installer-owned policy; existing pre-0.3 systems require manual repair.
