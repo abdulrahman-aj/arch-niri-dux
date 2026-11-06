@@ -49,8 +49,8 @@ printf 'SNAPPER_CONFIGS="root"\n' >/etc/conf.d/snapper
 # disablehooks=plymouth restores the plain console prompt.
 plymouth-set-default-theme bgrt
 # Fresh installs use this explicit rebuild after machine settings and EFI
-# deferral are ready; the integration ALPM hook handles upgrades only.
-# Bootstrap a bootable baseline before snap-pac creates recovery snapshots.
+# deferral are ready, before snap-pac creates recovery snapshots. The integration
+# ALPM hook handles upgrades only.
 limine-install --fallback
 limine-mkinitcpio
 

@@ -1,8 +1,8 @@
 {
   "schema": 1,
   "date": "2026-11-06",
-  "source_commit": "9ac6ce28adad9aa0cf47974e2d55901df384f6e2",
-  "integration_version": "0.3.0-1",
+  "source_commit": "74efae8d6f79baccdb003bbf01c4e725c766a95f",
+  "integration_version": "0.3.0-2",
   "build_mode": "development",
   "checks": {
     "lint": [
@@ -15,24 +15,25 @@
   },
   "full_acceptance": {
     "passed": true,
-    "evidence": "/home/abdulrahman/.t3/worktrees/arch-niri-dux/package-owned-policy/out/verify-package-owned-hybrid",
+    "machine": "zenbook-arch-dux",
+    "evidence": "/home/abdulrahman/.t3/worktrees/arch-niri-dux/package-owned-policy/out/verify-boot-policy-fresh",
     "inputs": {
       "iso": "/home/abdulrahman/.t3/worktrees/arch-niri-dux/package-owned-policy/out/arch-niri-dux-2026.11.06-x86_64.iso",
-      "iso_sha256": "160a1d089750bdd35a26ef70d5fd8cf5c12b6c824e646faf6eba35907db3a2bd",
-      "package_manifest_sha256": "2201f9cf472f332ae08dfbd9e5a64fbbb3b903e5d35448ec01c7e32050855f70",
+      "iso_sha256": "76893bdf6ebe1004ae14cd98ce4a0774a7d0323dd3d664eed1e09cff68d4731f",
+      "package_manifest_sha256": "f3d077873a40ad25f6117fa13d5de3383e67ffd8c177770a40c54f2a187ed104",
       "verification_scripts": {
         "verification/__init__.py": "adcf5ec1deba87cdcad5c9b7e0929c54d08529d2638943965b59ed506b1b95ea",
         "verification/apps.py": "82f9eccc5c962c7e4eb160306270dd2b1530ccf785718878a5c192bfb50310d7",
-        "verification/boot.py": "0d327d9f710a4e8d1ad699c4837bdbd7e522671116288329c8d61bf8653959bf",
+        "verification/boot.py": "2282f8d867d2a1062b41ccc61d1c85e9b04b1e43f5f867672992a36dba5fda8a",
         "verification/browser.py": "e4f0142ac5adf5795177c623018dec2582d639e6aa0b72a23e9e3d9967b0a9a9",
         "verification/camera.py": "2bb0b484f2719196937cd892d47d8fdc94b1d00ef35fc3184207c53891c11ddb",
         "verification/desktop.py": "dd63598825cb552f2b9bd65305675154fed1476a7f9345de547af9acd5677521",
         "verification/guest.py": "1c7edbd26a95c68ec130bbdaebdf57cec944c1012f0940af294a5618e541f938",
         "verification/integration.py": "b1aa75c688270e9c0cc3a4acc7ce5d725fd0a0649bc7c6a02cb23718da20d973",
         "verification/pdf.py": "7d4ffad5738c183c12665335aea1a9a345e17e4a03ef35f1594164f27ef87e6d",
-        "verification/policy.py": "e7196c3a74a90a655446182dab6831a74785967e6225f846d7bc24d128d34e7e",
+        "verification/policy.py": "e31a6ab4a4e015259cd994715a96cbe7bfefaccba5b8b046c8e5903247bd6e68",
         "verification/recovery.py": "d2dd5a3be623a941097ff806b1417507332a18dba53ee443d8cf633cba19ae3a",
-        "verification/vm.py": "c2ed048f7a4fab6b003c2ed2db24fe6a76cee28ebc48414ec08a669b9e5f9924",
+        "verification/vm.py": "450eee11e6ec2cfa6067f6ece04cae852163128d09e22b60b1da1716879f1a3f",
         "build-integration.py": "d7a4786bbf3c5147f51f5f714cd619f47cc9f376da5b3d2a818180ff6df090a2",
         "verify.py": "8e115cc364c12b290ed496dba1d440ac75b73839761bb5c6f11b21ee2af1e214"
       }
@@ -69,20 +70,20 @@
     ]
   },
   "integration": {
-    "version": "0.3.0-1",
-    "source_sha256": "f72e6cbac4f4994edd260a0062c96fd0fe84a0719807ffa7a6ec10028e513735",
-    "recipe_sha256": "76b9f570016fb06703b357aaadc238da56ad3d61948ff80d01bf111b6099201b",
-    "source_date_epoch": 1793914624,
+    "version": "0.3.0-2",
+    "source_sha256": "ffd4dd1ee32c4c9ecdaef65a4310b629f64d8d4aba62ca0500dccf9108c5b815",
+    "recipe_sha256": "7abca9eafd8a71bccea465cd0c74d8ab4030aa89157757d4d151ea8c2d7e634a",
+    "source_date_epoch": 1793989314,
     "packages": [
       {
         "name": "arch-niri-dux",
-        "filename": "arch-niri-dux-0.3.0-1-any.pkg.tar.zst",
-        "sha256": "2263ea6105480315570bc1ba970aa7b76ce1acc4711db32a3d321377ae5f9005"
+        "filename": "arch-niri-dux-0.3.0-2-any.pkg.tar.zst",
+        "sha256": "f9dbb458d6b9702c135eb310bb8e3f024560f25a46b040688ff2e9ea9f26d0ff"
       },
       {
         "name": "arch-niri-dux-baseline",
-        "filename": "arch-niri-dux-baseline-0.3.0-1-any.pkg.tar.zst",
-        "sha256": "04e82b58573dc8211be5c2e06b9da2e09436f6e4b5489754f1d273e62678c0b4"
+        "filename": "arch-niri-dux-baseline-0.3.0-2-any.pkg.tar.zst",
+        "sha256": "cc43def414adaeb24c8a32f6ebdb7f2365fc87d3b89714e475737f50e6fe852e"
       }
     ]
   },
@@ -90,6 +91,7 @@
     "package_owned_policy": [
       "/etc/mkinitcpio.conf.d/arch-niri-dux.conf",
       "/etc/snapper/configs/root",
+      "/usr/share/libalpm/hooks/95-arch-niri-dux-boot-policy.hook",
       "/usr/lib/pam.d/arch-niri-dux",
       "/usr/share/limine-entry-tool.d/arch-niri-dux.conf",
       "/usr/lib/systemd/system-preset/50-arch-niri-dux.preset",
@@ -122,14 +124,14 @@
     "new_and_existing_user_presets": true,
     "snapper_timeline_disabled": true,
     "greetd_after": [
-      "systemd-journald.socket",
       "system.slice",
       "getty@tty1.service",
       "plymouth-quit-wait.service",
+      "systemd-journald.socket",
+      "plymouth-quit.service",
       "systemd-user-sessions.service",
       "basic.target",
-      "sysinit.target",
-      "plymouth-quit.service"
+      "sysinit.target"
     ],
     "recovery_conditions": {
       "systemd-hibernate.service": [
@@ -187,8 +189,9 @@
   },
   "fast_acceptance": {
     "passed": true,
-    "evidence": "/home/abdulrahman/.t3/worktrees/arch-niri-dux/package-owned-policy/out/verify-package-owned-fast-2",
+    "evidence": "/home/abdulrahman/.t3/worktrees/arch-niri-dux/package-owned-policy/out/verify-boot-policy-upgrade-74ef",
     "inputs": {
+      "kernel_sha256": null,
       "fixture": "/home/abdulrahman/.t3/worktrees/arch-niri-dux/package-owned-policy/out/verify-package-owned-hybrid/disk.qcow2",
       "accepted_inputs": {
         "iso": "/home/abdulrahman/.t3/worktrees/arch-niri-dux/package-owned-policy/out/arch-niri-dux-2026.11.06-x86_64.iso",
@@ -211,28 +214,30 @@
           "verify.py": "8e115cc364c12b290ed496dba1d440ac75b73839761bb5c6f11b21ee2af1e214"
         }
       },
-      "source_sha256": "5660a4a3e1e7eb7e8f6bd87bd84b0ef957574669406601d011e19cc640c2556d",
+      "source_sha256": "ffd4dd1ee32c4c9ecdaef65a4310b629f64d8d4aba62ca0500dccf9108c5b815",
       "verification_scripts": {
         "verification/__init__.py": "adcf5ec1deba87cdcad5c9b7e0929c54d08529d2638943965b59ed506b1b95ea",
         "verification/apps.py": "82f9eccc5c962c7e4eb160306270dd2b1530ccf785718878a5c192bfb50310d7",
-        "verification/boot.py": "0d327d9f710a4e8d1ad699c4837bdbd7e522671116288329c8d61bf8653959bf",
+        "verification/boot.py": "2282f8d867d2a1062b41ccc61d1c85e9b04b1e43f5f867672992a36dba5fda8a",
         "verification/browser.py": "e4f0142ac5adf5795177c623018dec2582d639e6aa0b72a23e9e3d9967b0a9a9",
         "verification/camera.py": "2bb0b484f2719196937cd892d47d8fdc94b1d00ef35fc3184207c53891c11ddb",
         "verification/desktop.py": "dd63598825cb552f2b9bd65305675154fed1476a7f9345de547af9acd5677521",
         "verification/guest.py": "1c7edbd26a95c68ec130bbdaebdf57cec944c1012f0940af294a5618e541f938",
         "verification/integration.py": "b1aa75c688270e9c0cc3a4acc7ce5d725fd0a0649bc7c6a02cb23718da20d973",
         "verification/pdf.py": "7d4ffad5738c183c12665335aea1a9a345e17e4a03ef35f1594164f27ef87e6d",
-        "verification/policy.py": "e7196c3a74a90a655446182dab6831a74785967e6225f846d7bc24d128d34e7e",
+        "verification/policy.py": "e31a6ab4a4e015259cd994715a96cbe7bfefaccba5b8b046c8e5903247bd6e68",
         "verification/recovery.py": "d2dd5a3be623a941097ff806b1417507332a18dba53ee443d8cf633cba19ae3a",
-        "verification/vm.py": "c639bbaf830d179e8e943996ecbc1b0119a14eb0709404417519a7b56fb5e2b8",
+        "verification/vm.py": "450eee11e6ec2cfa6067f6ece04cae852163128d09e22b60b1da1716879f1a3f",
         "build-integration.py": "d7a4786bbf3c5147f51f5f714cd619f47cc9f376da5b3d2a818180ff6df090a2",
-        "verify-fast.py": "66563c19bcf93550f300d9764d584791d1b3496df45e54e59c5c4c9bb7bdbcac"
+        "verify-fast.py": "748d3fb4b7591aa8d31bbe139d81da257763f76246f35bb8bd54a05330d916dc"
       }
     },
     "result": {
       "fixture": "/home/abdulrahman/.t3/worktrees/arch-niri-dux/package-owned-policy/out/verify-package-owned-hybrid/disk.qcow2",
-      "source_sha256": "5660a4a3e1e7eb7e8f6bd87bd84b0ef957574669406601d011e19cc640c2556d",
+      "source_sha256": "ffd4dd1ee32c4c9ecdaef65a4310b629f64d8d4aba62ca0500dccf9108c5b815",
+      "kernel_in_transaction": false,
       "checks": [
+        "ALPM boot policy regeneration",
         "package upgrade",
         "Niri and Dux bindings",
         "presets",
@@ -244,20 +249,16 @@
   "review": {
     "model": "opencode-go/glm-5.3-flash",
     "effort": "high",
-    "verdict": "Approve with recommendations; moved-file package ownership checks added, compression inheritance documented, fast-tier provenance added.",
-    "later_transport_fix": "Real Unix socket and swtpm restart tests passed. Debian and Windows alongside each completed six stages with staged vm.py SHA256 identical to the final committed implementation.",
-    "final_verdict": "Approved, no blockers; final hybrid, fast-tier and socket lifecycle reviewed at 9ac6ce2.",
-    "provenance_keys": "Full and fast embedded inputs exactly match saved inputs.json; both use verification/vm.py."
+    "verdict": "Approved, no blockers; upgrade-only trigger and complete EFI deferral ordering inspected at 74efae8."
   },
   "limits": [
     "Development artifacts only; no production signing or HTTPS delivery qualification.",
-    "No physical machine changes or hardware qualification.",
-    "Full and fast input records retain exact transport/probe hashes; the subsequent shared short-socket helper is covered by tests and alongside runs."
+    "No physical-machine or hardware qualification."
   ],
   "policy_source_sha256": {
     "desktop/etc/fonts/conf.d/50-arabic.conf": "90cd1ae8176627853fd183f9ebb0e0593c12fd2af89f512f8ade9c1f9f7d593b",
     "desktop/etc/greetd/dux.toml": "2e78dbf017454ba8ae4f2cc114b81684bbedbb3a24df13bd171c0b1b6774f3cb",
-    "desktop/etc/mkinitcpio.conf.d/arch-niri-dux.conf": "bcf6ea4d0c31507f1d770a7d0d21c027a2425f7ece407b3e961d6f1f35a5d1fa",
+    "desktop/etc/mkinitcpio.conf.d/arch-niri-dux.conf": "a564b8eb0642391637d32eff15c6491411f84e47f3cef927d84372e454797526",
     "desktop/etc/pacman.d/arch-niri-dux.conf": "0bcae9d002ca02df5b2d3896f64b4e0ba89e0def9305586f0616eab6bba97c20",
     "desktop/etc/profile.d/dux-editor.sh": "ef2ec828f349a68c3c76814f4eba9a5b57978c9fc845924571d3177defa1ee7a",
     "desktop/etc/profile.d/dux-localbin.sh": "c6b8b07f8aea861d33d1cb32358e258874464855b234360c72f2b5eb5a3d1c35",
@@ -291,16 +292,67 @@
     "desktop/usr/share/arch-niri-dux/niri-user.kdl": "940cf55ba44bfe6a86157d03ec2384d62485e9cae122bcfffc6bcba4204c8b4a",
     "desktop/usr/share/arch-niri-dux/session.kdl": "1e0b1334ecf9a58729a4d0deb490d221ceba634c9da2eb8890ceddf49338066f",
     "desktop/usr/share/libalpm/hooks/25-arch-niri-dux-keyring.hook": "c3f25b8111645cf7c6fa272e660e14f6fd64da83ca3a6682d5f56017b0913631",
-    "desktop/usr/share/limine-entry-tool.d/arch-niri-dux.conf": "8a83614bc1a7ffb928c56dbdc094cfc60c5e37fee1f503d59d28fc5e972c9255",
+    "desktop/usr/share/libalpm/hooks/95-arch-niri-dux-boot-policy.hook": "0c7d894274b2660a063917d14763202d4edeb8f2d13924ad619442d37cecc6da",
+    "desktop/usr/share/limine-entry-tool.d/arch-niri-dux.conf": "484911ea1fdb992faac26278aef3a2d4588c29df4b8600db6f176224482045d3",
     "desktop/usr/share/pacman/keyrings/omarchy-trusted": "ab0b688815444cffd48d15ca3597c77dbb364d59763c5784fca36691520f00fd",
     "desktop/usr/share/pacman/keyrings/omarchy.gpg": "763114ca466f5d850a39743b2f2f9572e33aacd1039aeed93e44654da919894d",
-    "installer/configure-target.sh": "4874eb2d900b9ef3440e451330c5193d39fca81ce9dabbb7bae15bb0400f0f39",
-    "packages/integration/PKGBUILD": "76b9f570016fb06703b357aaadc238da56ad3d61948ff80d01bf111b6099201b"
+    "installer/configure-target.sh": "8b8c3ec0cf12d724be7e8e4c2839b9d60e3a2635cf68485da54b82318fd6bdaa",
+    "installer/install.py": "3dbed1671d7997f3a93f5674a9b2d572a6ec87948b2f3584a3dac23754ff0a3b",
+    "packages/integration/PKGBUILD": "7abca9eafd8a71bccea465cd0c74d8ab4030aa89157757d4d151ea8c2d7e634a"
   },
   "transport_qualification": {
     "sha256": "450eee11e6ec2cfa6067f6ece04cae852163128d09e22b60b1da1716879f1a3f",
     "evidence": "verification/alongside-2026-11-06.json",
     "linux_stages": 6,
     "windows_stages": 6
+  },
+  "initial_install_ordering": {
+    "policy_hook_operations": [
+      "Upgrade"
+    ],
+    "esp_mount_before_first_pacstrap": "installer/install.py:734",
+    "alongside_initial_defaults_before_pacstrap": "installer/install.py:751 writes ESP_PATH=/boot and SKIP_UEFI=yes before pacstrap at752",
+    "complete_machine_defaults": "installer/configure-target.sh:31",
+    "deferral_restored_before_explicit_rebuild": "installer/configure-target.sh:39-55",
+    "final_registration_guard": "finish_alongside_boot verifies original entries/order before new registration; install.py removes SKIP_UEFI only after it succeeds",
+    "windows_runtime_trace": {
+      "evidence": "/home/abdulrahman/.t3/worktrees/arch-niri-dux/package-owned-policy/out/alongside/windows-boot-policy/serial.log",
+      "sha256": "c04377f53c1a3fad40699c74dc25e68efe87b55f4dade5a1b803067cd214f2d2",
+      "first_pacstrap_stage_line": 378,
+      "upstream_skipped_uefi_line": 3644,
+      "configuration_stage_line": 3715,
+      "explicit_limine_skipped_uefi_line": 3721,
+      "final_registration_stage_line": 3837
+    },
+    "initial_package_transaction_does_not_run_policy_hook": true,
+    "debian_alongside": {
+      "passed": true,
+      "machine": "msi-dux",
+      "source_commit": "74efae8d6f79baccdb003bbf01c4e725c766a95f",
+      "evidence": "/home/abdulrahman/.cache/arch-niri-dux-verification/pr58-74efae8/out/alongside/linux-boot-policy-msi",
+      "success": "linux alongside acceptance passed",
+      "milestones": [
+        "Real existing linux boots before installation and sentinel is intact",
+        "Every byte of every existing partition survives installation",
+        "Default firmware path boots the new encrypted installation",
+        "Pinned kernel reinstall and snapshot hooks preserve the existing OS entry",
+        "New encrypted installation boots after kernel package reinstall",
+        "Existing linux boots through Limine after package update and retains its sentinel"
+      ],
+      "inputs": {
+        "iso": {
+          "path": "/home/abdulrahman/.cache/arch-niri-dux-verification/pr58-74efae8/out/arch-niri-dux-2026.11.06-x86_64.iso",
+          "sha256": "76893bdf6ebe1004ae14cd98ce4a0774a7d0323dd3d664eed1e09cff68d4731f"
+        },
+        "fixture": {
+          "path": "/home/abdulrahman/.cache/arch-niri-dux-verification/pr58-74efae8/out/alongside/linux-fixture/disk.qcow2",
+          "sha256": "963bf8994abb2980072aab0363bb701d3e970ad4db350f50110487e7c077966a"
+        },
+        "firmware": {
+          "path": "/home/abdulrahman/.cache/arch-niri-dux-verification/pr58-74efae8/out/alongside/linux-fixture/OVMF_VARS.fd",
+          "sha256": "46d53f4ebce68a910f2ced27e59051aeb26a51a5d8cdfb3ea25e2cba19185132"
+        }
+      }
+    }
   }
 }

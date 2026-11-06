@@ -8,7 +8,6 @@ from pathlib import Path
 import shutil
 import subprocess
 
-from verification.policy import SYSTEM_UNITS, USER_UNITS
 from verification.vm import VM, graphical_login, installed_login, stage_probes
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -68,10 +67,8 @@ def main():
         kernel = ' /run/verify/kernel.pkg.tar.zst' if args.kernel_package else ''
         vm.command('pacman -U --noconfirm /tmp/fast/packages/*.pkg.tar.zst' + kernel
                    + ' >/run/verify/boot-policy-transaction.log 2>&1; '
-                   'cp /tmp/fast/packages/integration.manifest.json /run/verify/fast-packages.json; '
-                   'systemctl preset ' + ' '.join(SYSTEM_UNITS)
-                   + ' snapper-timeline.timer; systemctl --global preset '
-                   + ' '.join(USER_UNITS), timeout=300)
+                   'cp /tmp/fast/packages/integration.manifest.json /run/verify/fast-packages.json',
+                   timeout=300)
         vm.probe('policy', 'upgraded-boot')
         vm.poweroff()
         vm.stop()

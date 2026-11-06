@@ -48,7 +48,6 @@ def check():
     run('useradd', '-m', 'preset-check')
     uid = pwd.getpwnam('preset-check').pw_uid
     try:
-        run('systemctl', '--global', 'preset', *USER_UNITS)
         run('loginctl', 'enable-linger', 'preset-check')
         wait_until('New user manager', lambda: subprocess.run(
             ['systemctl', 'is-active', '--quiet', f'user@{uid}.service']).returncode == 0)
@@ -77,7 +76,7 @@ def check():
         assert any(row[:4] == ['ConditionKernelCommandLine', False, True, 'noresume']
                    for row in conditions[unit]), conditions
     repositories = output('pacman-conf', '--repo-list').splitlines()
-    assert repositories == ['omarchy', 'core', 'extra', 'arch-niri-dux'], repositories
+    assert repositories == ['core', 'extra', 'omarchy', 'arch-niri-dux'], repositories
     # Get the real unlocked collection over the logged-in user's session bus.
     # Merely finding the daemon doesn't prove that PAM received the password.
     def unlocked():
@@ -110,6 +109,9 @@ def record_boot():
 
 
 def upgraded_boot():
+    transaction = Path('/run/verify/boot-policy-transaction.log').read_text()
+    # A kernel co-transaction can rebuild artifacts even if our hook never ran.
+    assert 'Rebuilding Arch Niri Dux boot policy' in transaction, 'Policy hook did not run.'
     before = json.loads(Path('/run/verify/boot-policy-before.json').read_text())
     after = boot_artifacts()
     for path, old in before.items():

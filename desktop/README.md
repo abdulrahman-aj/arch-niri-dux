@@ -7,7 +7,9 @@ The upstream license is included. No personal dotfiles are used.
 The `arch-niri-dux` package owns these system files. The installer applies vendor presets for the
 Dux services and runs `/usr/lib/arch-niri-dux/initialize-user` as the desktop
 user to seed only missing settings. Package upgrades never replay account or
-user initialization. Dux Greeter starts Niri. Dux creates its own shell settings.
+user initialization. Changing a service preset requires an explicit migration for
+existing systems ([#54](https://github.com/abdulrahman-aj/arch-niri-dux/issues/54));
+upgrades do not reapply presets. Dux Greeter starts Niri. Dux creates its own shell settings.
 The Greetd service selects our `/etc/greetd/dux.toml`. Arch retains ownership of
 its separate stock `config.toml`. Pacman preserves local edits to `dux.toml`.
 
@@ -96,12 +98,15 @@ configs. Systemd overrides belong under `/etc/systemd/`, ahead of vendor files.
 Greetd selects `/usr/lib/pam.d/arch-niri-dux` for authentication, including the
 stock local-login stack and GNOME Keyring password/session integration. Its
 greeter session uses the same stack. `/etc/pacman.d/arch-niri-dux.conf` owns the
-online repository order and servers; the installer retains only pacman options.
+online repository order and servers: core and extra use
+`https://geo.mirror.pkgbuild.com/$repo/os/$arch`, followed by omarchy and
+arch-niri-dux. The installer retains only pacman options.
 
-Package upgrades of the mkinitcpio and Limine policy drop-ins trigger
+Every `arch-niri-dux` upgrade triggers
 `95-arch-niri-dux-boot-policy.hook`, which runs `limine-mkinitcpio` to rebuild
-active initramfs images and boot entries. A transaction that also changes the
-kernel may run both this hook and the upstream kernel hook; both use the same
+active initramfs images and boot entries. Pacman Path triggers match upgrades of
+the package containing the target files, even when those files are unchanged.
+A transaction that also changes the kernel may run both this hook and the upstream kernel hook; both use the same
 serialized upstream rebuild implementation.
 
 The policy hook deliberately excludes first installation. The installer mounts
