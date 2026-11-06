@@ -25,8 +25,8 @@ class PayloadFinalizationTests(unittest.TestCase):
             'url': 'https://example.invalid/' + base['filename'], 'repository': 'core', 'signature': 'producer-verified',
         }])
         own = [self.package(name) for name in ('arch-niri-dux', 'arch-niri-dux-baseline')]
-        self.recipe = dict(name='example-bin', url='https://example.invalid/recipe', commit='d' * 40,
-                           source_date_epoch=1234, files={'PKGBUILD': 'e' * 64, '.SRCINFO': 'f' * 64})
+        self.recipe = dict(name='example-bin', source_date_epoch=1234,
+                           files={'PKGBUILD': 'e' * 64, '.SRCINFO': 'f' * 64})
         self.apps = [self.package('example-bin') | {'version': '1-1', 'recipe': self.recipe}]
         self.integration = dict(version='1-1', source_sha256='a' * 64, recipe_sha256='b' * 64,
                                 source_date_epoch=1234, packages=own, apps=self.apps,
@@ -116,7 +116,7 @@ class PayloadFinalizationTests(unittest.TestCase):
         self.rejected('Dux app inventory')
 
     def test_stale_app_provenance_is_rejected(self):
-        self.apps[0]['recipe'] = self.recipe | {'commit': 'a' * 40}
+        self.apps[0]['recipe'] = self.recipe | {'files': {'PKGBUILD': 'a' * 64, '.SRCINFO': 'f' * 64}}
         self.save()
         self.rejected('Dux app provenance')
 

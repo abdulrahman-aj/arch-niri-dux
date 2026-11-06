@@ -64,8 +64,7 @@ class SignedReleaseTests(unittest.TestCase):
         pkgver, pkgrel = version.split('-')
         (source / 'PKGBUILD').write_text(description)
         (source / '.SRCINFO').write_text(f'pkgbase = dux-example-bin\n\tpkgver = {pkgver}\n\tpkgrel = {pkgrel}\n')
-        recipe = dict(name='dux-example-bin', url='https://aur.example.invalid/dux-example-bin.git',
-                      commit='d' * 40, source_date_epoch=1234,
+        recipe = dict(name='dux-example-bin', source_date_epoch=1234,
                       files={name: release.build.digest(source / name) for name in ('PKGBUILD', '.SRCINFO')})
         (self.root / 'packages/aur-recipes.json').write_text(json.dumps([recipe]))
         return recipe

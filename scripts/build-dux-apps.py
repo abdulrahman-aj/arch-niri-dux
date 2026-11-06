@@ -24,8 +24,6 @@ def validate_recipe(root, recipe):
     if not re.fullmatch(r'[a-z0-9][a-z0-9+_.-]*', name):
         raise ValueError('Invalid Dux app package name')
     source = root / 'packages/aur' / name
-    if not re.fullmatch(r'[a-f0-9]{40}', recipe['commit']):
-        raise ValueError('Invalid pinned AUR commit')
     if not {'PKGBUILD', '.SRCINFO'}.issubset(recipe['files']):
         raise ValueError('Recipe is missing its build or dependency metadata')
     for filename, expected in recipe['files'].items():

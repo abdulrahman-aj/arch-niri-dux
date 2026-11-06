@@ -19,15 +19,14 @@ Snapshot also come from Arch's signed packages. New entries extend the closure.
 A lock refresh can change existing pins.
 
 `aur/` contains reviewed recipes for Dux Greeter, Search, Calendar and Files.
-They derive from the AUR commits in `aur-recipes.json`, whose maintainer,
-`bbedward`, is a Dux Labs member. That file also pins every recipe file's hash,
-and builds refuse changed files. `scripts/build-dux-apps.py` builds them as an
+Their maintainer, `bbedward`, is a Dux Labs member. `aur-recipes.json` pins
+every recipe file's hash, and builds refuse changed files. `scripts/build-dux-apps.py` builds them as an
 unprivileged user, and `makepkg` verifies every upstream source checksum.
 Integration releases sign and publish them in our repository, like our own
 packages. Installed systems never use the AUR.
 
 The scheduled `dux-apps.yml` workflow tracks upstream GitHub releases rather
-than AUR commits, so updates do not wait for or trust the AUR. When Dux tags a
+than the AUR, so updates do not wait for or trust it. When Dux tags a
 release, `scripts/bump-dux-apps.py` changes only `pkgver`, `pkgrel`, checksums,
 recipe hashes and `source_date_epoch`. Release-asset checksums must equal
 GitHub's published digests. Repository files at the release tag have no

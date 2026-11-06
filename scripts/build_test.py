@@ -63,7 +63,7 @@ class ReviewedRecipeTests(unittest.TestCase):
             source.mkdir(parents=True)
             for name in ('PKGBUILD', '.SRCINFO'):
                 (source / name).write_text('reviewed contents')
-            recipe = dict(name='example-bin', commit='a' * 40,
+            recipe = dict(name='example-bin',
                           files={name: aur.digest(source / name) for name in ('PKGBUILD', '.SRCINFO')})
             self.assertEqual(aur.validate_recipe(root, recipe), source)
             (source / 'PKGBUILD').write_text('changed contents')
@@ -79,7 +79,7 @@ class ReviewedRecipeTests(unittest.TestCase):
                 (source / name).touch()
             outside = root / 'packages/aur/outside'
             outside.write_text('outside')
-            recipe = dict(name='example-bin', commit='a' * 40,
+            recipe = dict(name='example-bin',
                           files={name: aur.digest(source / name) for name in ('PKGBUILD', '.SRCINFO')})
             recipe['files']['../outside'] = aur.digest(outside)
             with self.assertRaisesRegex(ValueError, 'recipe changed'):
