@@ -25,8 +25,8 @@ plus 2 GiB.
 An enabled swapfile lives in its own `@swap` subvolume inside the encrypted
 filesystem. Btrfs computes its physical resume offset. Recovery entries use
 `noresume` and block hibernation so an old snapshot cannot resume a different
-system's memory image. Hibernate/resume passed on the Zenbook. See
-[verification](../VERIFICATION.md) for the evidence and remaining hardware checks.
+system's memory image. See
+[verification](../VERIFICATION.md) for qualified software paths and hardware gaps.
 
 Boot uses Plymouth's stock `bgrt` theme with `quiet splash`. The disk
 passphrase appears in a graphical box instead of inline boot logs, with an

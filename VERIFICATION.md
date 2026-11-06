@@ -16,15 +16,24 @@ validation, the Dux shortcut editor/cheatsheet, enabled units and presets, greet
 login, unlocked GNOME Keyring, and loaded vendor systemd drop-ins. It does not
 replace fresh installation or snapshot/alongside qualification.
 
-The latest completed baseline qualification is
-[desktop recommendations](verification/desktop-recommendations-2026-11-05.json):
-0.2.0-4, 27 fresh offline acceptance stages, 123 source and seven build tests.
-The latest [alongside qualification](verification/alongside-2026-11-02.json)
-used real Debian 13 and Windows 11 fixtures. Fixture images and raw logs are
-local artifacts, not committed; use `make provision-alongside` and
-`make verify-alongside` to repeat them.
+The current [0.3.0-1 qualification](verification/package-owned-policy-2026-11-06.json)
+passed all 28 fresh offline acceptance stages and the fast package tier, with
+123 source tests and seven build tests. The one-line shim failed Dux 2.1's real
+manual-MRU cheatsheet check, so the qualified configuration uses relative home
+includes, package-owned defaults/session tail and `overrides.kdl` last. Policy
+ownership, both user preset cases, greetd/keyring, snapshot restoration and
+recovery `noresume` passed. Raw evidence is under
+`out/verify-package-owned-hybrid/` and `out/verify-package-owned-fast-2/`.
 
 ## Alongside acceptance
+
+The [current alongside qualification](verification/alongside-2026-11-06.json)
+passed all six stages for both Debian 13 and Windows 11 Enterprise LTSC Evaluation
+(build 26100). Every original partition byte survived installation. The new
+Arch system booted by default, kernel/snapshot hooks retained the old-OS entry,
+and both original systems booted through Limine afterward with their sentinels.
+Fresh official fixtures were provisioned for this run. Raw evidence is under
+`out/alongside/linux-policy/` and `out/alongside/windows-policy/`.
 
 Fetch and provision official fixtures with `make fetch-alongside` and
 `make provision-alongside`, then run `make verify-alongside` with the candidate

@@ -1,0 +1,306 @@
+{
+  "schema": 1,
+  "date": "2026-11-06",
+  "source_commit": "9ac6ce28adad9aa0cf47974e2d55901df384f6e2",
+  "integration_version": "0.3.0-1",
+  "build_mode": "development",
+  "checks": {
+    "lint": [
+      "Ruff",
+      "ShellCheck",
+      "actionlint"
+    ],
+    "source_tests": 123,
+    "build_tests": 7
+  },
+  "full_acceptance": {
+    "passed": true,
+    "evidence": "/home/abdulrahman/.t3/worktrees/arch-niri-dux/package-owned-policy/out/verify-package-owned-hybrid",
+    "inputs": {
+      "iso": "/home/abdulrahman/.t3/worktrees/arch-niri-dux/package-owned-policy/out/arch-niri-dux-2026.11.06-x86_64.iso",
+      "iso_sha256": "160a1d089750bdd35a26ef70d5fd8cf5c12b6c824e646faf6eba35907db3a2bd",
+      "package_manifest_sha256": "2201f9cf472f332ae08dfbd9e5a64fbbb3b903e5d35448ec01c7e32050855f70",
+      "verification_scripts": {
+        "verification/__init__.py": "adcf5ec1deba87cdcad5c9b7e0929c54d08529d2638943965b59ed506b1b95ea",
+        "verification/apps.py": "82f9eccc5c962c7e4eb160306270dd2b1530ccf785718878a5c192bfb50310d7",
+        "verification/boot.py": "0d327d9f710a4e8d1ad699c4837bdbd7e522671116288329c8d61bf8653959bf",
+        "verification/browser.py": "e4f0142ac5adf5795177c623018dec2582d639e6aa0b72a23e9e3d9967b0a9a9",
+        "verification/camera.py": "2bb0b484f2719196937cd892d47d8fdc94b1d00ef35fc3184207c53891c11ddb",
+        "verification/desktop.py": "dd63598825cb552f2b9bd65305675154fed1476a7f9345de547af9acd5677521",
+        "verification/guest.py": "1c7edbd26a95c68ec130bbdaebdf57cec944c1012f0940af294a5618e541f938",
+        "verification/integration.py": "b1aa75c688270e9c0cc3a4acc7ce5d725fd0a0649bc7c6a02cb23718da20d973",
+        "verification/pdf.py": "7d4ffad5738c183c12665335aea1a9a345e17e4a03ef35f1594164f27ef87e6d",
+        "verification/policy.py": "e7196c3a74a90a655446182dab6831a74785967e6225f846d7bc24d128d34e7e",
+        "verification/recovery.py": "d2dd5a3be623a941097ff806b1417507332a18dba53ee443d8cf633cba19ae3a",
+        "verification/vm.py": "c2ed048f7a4fab6b003c2ed2db24fe6a76cee28ebc48414ec08a669b9e5f9924",
+        "build-integration.py": "d7a4786bbf3c5147f51f5f714cd619f47cc9f376da5b3d2a818180ff6df090a2",
+        "verify.py": "8e115cc364c12b290ed496dba1d440ac75b73839761bb5c6f11b21ee2af1e214"
+      }
+    },
+    "milestones": [
+      "Offline encrypted installation completed",
+      "Graphical disk unlock accepts keyboard input and retries an incorrect password",
+      "UEFI boot from encrypted disk without installation ISO",
+      "Plymouth configuration and boot services are active",
+      "Encrypted swap outside root snapshots; physical resume offset matches the kernel",
+      "Package presets, systemd policy and PAM-unlocked keyring",
+      "Niri, Dux, terminal, Neovim and Chromium smoke checks",
+      "Login shells, user services and Niri spawns resolve local user executables",
+      "GOP metrics, live file indexing, Calendar event create/read and Dux Files integration",
+      "Live Dux light/dark changes reach Chromium, GTK settings, portals and Dux apps",
+      "Bloom material wallpaper is the fresh-user default and rendered",
+      "User initialization preserved existing desktop choices",
+      "Manuals, archive round-trip, rsync, JSON/search and diagnostic CLI tools work",
+      "Images and text open in the selected apps; text edits save; Calculator launches",
+      "Decibels audio and four Celluloid open/play/close cycles output the expected fixture tones",
+      "Dux discovers drive tools; Qt images, shared networking and desktop backends work",
+      "Driverless CUPS queue delivered a PDF to a loopback IPP printer",
+      "Papers is the default PDF viewer and rendered a sample document",
+      "Dux Files PDF preview rendered document content with its Qt PDF backend",
+      "Snapshot preview, shutter photo and video recording work with a synthetic camera",
+      "Chromium open-file request uses Dux Files and responds to cancellation",
+      "Chromium screen sharing produced nonblank captured desktop content",
+      "Screen lock and password unlock",
+      "Integration upgrade, baseline changes and personal preservation passed; recovery fixture prepared",
+      "Limine snapshot boot and restoration",
+      "Restored system rebooted normally and home was preserved",
+      "Text fallback unlocks the disk with the splash disabled",
+      "Graphical password screen works again after text fallback"
+    ]
+  },
+  "integration": {
+    "version": "0.3.0-1",
+    "source_sha256": "f72e6cbac4f4994edd260a0062c96fd0fe84a0719807ffa7a6ec10028e513735",
+    "recipe_sha256": "76b9f570016fb06703b357aaadc238da56ad3d61948ff80d01bf111b6099201b",
+    "source_date_epoch": 1793914624,
+    "packages": [
+      {
+        "name": "arch-niri-dux",
+        "filename": "arch-niri-dux-0.3.0-1-any.pkg.tar.zst",
+        "sha256": "2263ea6105480315570bc1ba970aa7b76ce1acc4711db32a3d321377ae5f9005"
+      },
+      {
+        "name": "arch-niri-dux-baseline",
+        "filename": "arch-niri-dux-baseline-0.3.0-1-any.pkg.tar.zst",
+        "sha256": "04e82b58573dc8211be5c2e06b9da2e09436f6e4b5489754f1d273e62678c0b4"
+      }
+    ]
+  },
+  "package_policy": {
+    "package_owned_policy": [
+      "/etc/mkinitcpio.conf.d/arch-niri-dux.conf",
+      "/etc/snapper/configs/root",
+      "/usr/lib/pam.d/arch-niri-dux",
+      "/usr/share/limine-entry-tool.d/arch-niri-dux.conf",
+      "/usr/lib/systemd/system-preset/50-arch-niri-dux.preset",
+      "/usr/lib/systemd/user-preset/50-arch-niri-dux.preset",
+      "/usr/share/arch-niri-dux/niri/tail.kdl",
+      "/usr/lib/systemd/system/greetd.service.d/10-plymouth.conf",
+      "/usr/lib/systemd/system/systemd-hibernate.service.d/60-recovery.conf",
+      "/usr/lib/systemd/system/systemd-hybrid-sleep.service.d/60-recovery.conf",
+      "/usr/lib/systemd/system/systemd-suspend-then-hibernate.service.d/60-recovery.conf"
+    ],
+    "system_units_enabled": [
+      "NetworkManager.service",
+      "bluetooth.service",
+      "snapper-cleanup.timer",
+      "limine-snapper-sync.service",
+      "systemd-timesyncd.service",
+      "power-profiles-daemon.service",
+      "getty@tty2.service",
+      "cups.service",
+      "avahi-daemon.service",
+      "greetd.service"
+    ],
+    "user_units_enabled": [
+      "dms.service",
+      "dsearch.service",
+      "dcal.service",
+      "dfiles.service",
+      "dux-application-themes.service"
+    ],
+    "new_and_existing_user_presets": true,
+    "snapper_timeline_disabled": true,
+    "greetd_after": [
+      "systemd-journald.socket",
+      "system.slice",
+      "getty@tty1.service",
+      "plymouth-quit-wait.service",
+      "systemd-user-sessions.service",
+      "basic.target",
+      "sysinit.target",
+      "plymouth-quit.service"
+    ],
+    "recovery_conditions": {
+      "systemd-hibernate.service": [
+        [
+          "ConditionKernelCommandLine",
+          false,
+          true,
+          "noresume",
+          0
+        ]
+      ],
+      "systemd-hybrid-sleep.service": [
+        [
+          "ConditionKernelCommandLine",
+          false,
+          true,
+          "noresume",
+          0
+        ]
+      ],
+      "systemd-suspend-then-hibernate.service": [
+        [
+          "ConditionKernelCommandLine",
+          false,
+          true,
+          "noresume",
+          0
+        ]
+      ]
+    },
+    "repository_order": [
+      "omarchy",
+      "core",
+      "extra",
+      "arch-niri-dux"
+    ],
+    "login_keyring_unlocked": true
+  },
+  "niri": {
+    "choice": "hybrid relative home includes, package defaults and session tail, overrides.kdl last",
+    "one_line_shim_rejected": "Dux 2.1 ignored the tilde include for recent-windows.kdl; real manual-MRU cheatsheet assertion failed.",
+    "failure_evidence": "/home/abdulrahman/.t3/worktrees/arch-niri-dux/package-owned-policy/out/verify-package-owned-2/serial.log",
+    "passed_evidence": {
+      "stock_inherited": true,
+      "override_effective": true,
+      "reset_restores_stock": true,
+      "manual_mru_preserved": true,
+      "native_binds_next_included": {
+        "exists": true,
+        "included": true
+      },
+      "alt_f4_inherited": true,
+      "tracked_override_link_preserved": true
+    }
+  },
+  "fast_acceptance": {
+    "passed": true,
+    "evidence": "/home/abdulrahman/.t3/worktrees/arch-niri-dux/package-owned-policy/out/verify-package-owned-fast-2",
+    "inputs": {
+      "fixture": "/home/abdulrahman/.t3/worktrees/arch-niri-dux/package-owned-policy/out/verify-package-owned-hybrid/disk.qcow2",
+      "accepted_inputs": {
+        "iso": "/home/abdulrahman/.t3/worktrees/arch-niri-dux/package-owned-policy/out/arch-niri-dux-2026.11.06-x86_64.iso",
+        "iso_sha256": "160a1d089750bdd35a26ef70d5fd8cf5c12b6c824e646faf6eba35907db3a2bd",
+        "package_manifest_sha256": "2201f9cf472f332ae08dfbd9e5a64fbbb3b903e5d35448ec01c7e32050855f70",
+        "verification_scripts": {
+          "verification/__init__.py": "adcf5ec1deba87cdcad5c9b7e0929c54d08529d2638943965b59ed506b1b95ea",
+          "verification/apps.py": "82f9eccc5c962c7e4eb160306270dd2b1530ccf785718878a5c192bfb50310d7",
+          "verification/boot.py": "0d327d9f710a4e8d1ad699c4837bdbd7e522671116288329c8d61bf8653959bf",
+          "verification/browser.py": "e4f0142ac5adf5795177c623018dec2582d639e6aa0b72a23e9e3d9967b0a9a9",
+          "verification/camera.py": "2bb0b484f2719196937cd892d47d8fdc94b1d00ef35fc3184207c53891c11ddb",
+          "verification/desktop.py": "dd63598825cb552f2b9bd65305675154fed1476a7f9345de547af9acd5677521",
+          "verification/guest.py": "1c7edbd26a95c68ec130bbdaebdf57cec944c1012f0940af294a5618e541f938",
+          "verification/integration.py": "b1aa75c688270e9c0cc3a4acc7ce5d725fd0a0649bc7c6a02cb23718da20d973",
+          "verification/pdf.py": "7d4ffad5738c183c12665335aea1a9a345e17e4a03ef35f1594164f27ef87e6d",
+          "verification/policy.py": "e7196c3a74a90a655446182dab6831a74785967e6225f846d7bc24d128d34e7e",
+          "verification/recovery.py": "d2dd5a3be623a941097ff806b1417507332a18dba53ee443d8cf633cba19ae3a",
+          "verification/vm.py": "c2ed048f7a4fab6b003c2ed2db24fe6a76cee28ebc48414ec08a669b9e5f9924",
+          "build-integration.py": "d7a4786bbf3c5147f51f5f714cd619f47cc9f376da5b3d2a818180ff6df090a2",
+          "verify.py": "8e115cc364c12b290ed496dba1d440ac75b73839761bb5c6f11b21ee2af1e214"
+        }
+      },
+      "source_sha256": "5660a4a3e1e7eb7e8f6bd87bd84b0ef957574669406601d011e19cc640c2556d",
+      "verification_scripts": {
+        "verification/__init__.py": "adcf5ec1deba87cdcad5c9b7e0929c54d08529d2638943965b59ed506b1b95ea",
+        "verification/apps.py": "82f9eccc5c962c7e4eb160306270dd2b1530ccf785718878a5c192bfb50310d7",
+        "verification/boot.py": "0d327d9f710a4e8d1ad699c4837bdbd7e522671116288329c8d61bf8653959bf",
+        "verification/browser.py": "e4f0142ac5adf5795177c623018dec2582d639e6aa0b72a23e9e3d9967b0a9a9",
+        "verification/camera.py": "2bb0b484f2719196937cd892d47d8fdc94b1d00ef35fc3184207c53891c11ddb",
+        "verification/desktop.py": "dd63598825cb552f2b9bd65305675154fed1476a7f9345de547af9acd5677521",
+        "verification/guest.py": "1c7edbd26a95c68ec130bbdaebdf57cec944c1012f0940af294a5618e541f938",
+        "verification/integration.py": "b1aa75c688270e9c0cc3a4acc7ce5d725fd0a0649bc7c6a02cb23718da20d973",
+        "verification/pdf.py": "7d4ffad5738c183c12665335aea1a9a345e17e4a03ef35f1594164f27ef87e6d",
+        "verification/policy.py": "e7196c3a74a90a655446182dab6831a74785967e6225f846d7bc24d128d34e7e",
+        "verification/recovery.py": "d2dd5a3be623a941097ff806b1417507332a18dba53ee443d8cf633cba19ae3a",
+        "verification/vm.py": "c639bbaf830d179e8e943996ecbc1b0119a14eb0709404417519a7b56fb5e2b8",
+        "build-integration.py": "d7a4786bbf3c5147f51f5f714cd619f47cc9f376da5b3d2a818180ff6df090a2",
+        "verify-fast.py": "66563c19bcf93550f300d9764d584791d1b3496df45e54e59c5c4c9bb7bdbcac"
+      }
+    },
+    "result": {
+      "fixture": "/home/abdulrahman/.t3/worktrees/arch-niri-dux/package-owned-policy/out/verify-package-owned-hybrid/disk.qcow2",
+      "source_sha256": "5660a4a3e1e7eb7e8f6bd87bd84b0ef957574669406601d011e19cc640c2556d",
+      "checks": [
+        "package upgrade",
+        "Niri and Dux bindings",
+        "presets",
+        "greetd login and unlocked keyring",
+        "systemd drop-ins"
+      ]
+    }
+  },
+  "review": {
+    "model": "opencode-go/glm-5.3-flash",
+    "effort": "high",
+    "verdict": "Approve with recommendations; moved-file package ownership checks added, compression inheritance documented, fast-tier provenance added.",
+    "later_transport_fix": "Real Unix socket and swtpm restart tests passed. Debian and Windows alongside each completed six stages with staged vm.py SHA256 identical to the final committed implementation.",
+    "final_verdict": "Approved, no blockers; final hybrid, fast-tier and socket lifecycle reviewed at 9ac6ce2.",
+    "provenance_keys": "Full and fast embedded inputs exactly match saved inputs.json; both use verification/vm.py."
+  },
+  "limits": [
+    "Development artifacts only; no production signing or HTTPS delivery qualification.",
+    "No physical machine changes or hardware qualification.",
+    "Full and fast input records retain exact transport/probe hashes; the subsequent shared short-socket helper is covered by tests and alongside runs."
+  ],
+  "policy_source_sha256": {
+    "desktop/etc/fonts/conf.d/50-arabic.conf": "90cd1ae8176627853fd183f9ebb0e0593c12fd2af89f512f8ade9c1f9f7d593b",
+    "desktop/etc/greetd/dux.toml": "2e78dbf017454ba8ae4f2cc114b81684bbedbb3a24df13bd171c0b1b6774f3cb",
+    "desktop/etc/mkinitcpio.conf.d/arch-niri-dux.conf": "bcf6ea4d0c31507f1d770a7d0d21c027a2425f7ece407b3e961d6f1f35a5d1fa",
+    "desktop/etc/pacman.d/arch-niri-dux.conf": "0bcae9d002ca02df5b2d3896f64b4e0ba89e0def9305586f0616eab6bba97c20",
+    "desktop/etc/profile.d/dux-editor.sh": "ef2ec828f349a68c3c76814f4eba9a5b57978c9fc845924571d3177defa1ee7a",
+    "desktop/etc/profile.d/dux-localbin.sh": "c6b8b07f8aea861d33d1cb32358e258874464855b234360c72f2b5eb5a3d1c35",
+    "desktop/etc/snapper/configs/root": "14a5638fe8179d3a5a3f463a82fc42d9e1c4a220ecd39d40a0ba1d48c4c5be2c",
+    "desktop/etc/systemd/logind.conf.d/30-lid.conf": "c2f8ab0052b5f2ac3672133a5fad88bb5214d33aaaa22f66cf4c1cf33f1c12e6",
+    "desktop/etc/xdg/mimeapps.list": "981e040c063b1147a5f7fa651727786b997ab523e4811b9cd87ef660d4530d8a",
+    "desktop/etc/xdg/xdg-desktop-portal/niri-portals.conf": "3d6b23ba8c00ae2c85380954559b75a9c84a29a405354136ef97e7f018460b1f",
+    "desktop/etc/xdg/xdg-terminals.list": "d63b322123983f24343609ca7ae5402b435a7002f49b13e4164ddd862ee38d9e",
+    "desktop/usr/lib/arch-niri-dux/initialize-application-themes": "c82924dee05b1706f58c15cc7ad888a7da6fd0def12b3154e89924ceed1389ee",
+    "desktop/usr/lib/arch-niri-dux/initialize-user": "d52806de609e1b1cc576aab2498270ae7d15dad7a05de5a857a6826d46bf4528",
+    "desktop/usr/lib/environment.d/90-dux.conf": "1bbf33f33420bba2c57327daa5ee668e781eedfa67bbf6c8e77f0c3023b40a35",
+    "desktop/usr/lib/pam.d/arch-niri-dux": "6813dd459c50b2f56c6c122b5a171d225489f485dc328387e83c5e28518ef78f",
+    "desktop/usr/lib/systemd/system/greetd.service.d/10-plymouth.conf": "48ff692e3f9f7437ec737c5370b0c4ed670cc90da85aec914cfe056745a7b17a",
+    "desktop/usr/lib/systemd/system/greetd.service.d/50-arch-niri-dux.conf": "162ee410068250dc6f59bc70d6c3e5b8059aabdd1d2daebb94f701554800601d",
+    "desktop/usr/lib/systemd/system/systemd-hibernate.service.d/60-recovery.conf": "7c9b579fe8451ce7af3555f96f5181b7c867ca3f5eeb86ceb4accb7451268e2f",
+    "desktop/usr/lib/systemd/system/systemd-hybrid-sleep.service.d/60-recovery.conf": "7c9b579fe8451ce7af3555f96f5181b7c867ca3f5eeb86ceb4accb7451268e2f",
+    "desktop/usr/lib/systemd/system/systemd-suspend-then-hibernate.service.d/60-recovery.conf": "7c9b579fe8451ce7af3555f96f5181b7c867ca3f5eeb86ceb4accb7451268e2f",
+    "desktop/usr/lib/systemd/system-preset/50-arch-niri-dux.preset": "08281fcf540cf504bf2fb98bcd0e2034ddbb19c4ae32a66122d968dbd1a039ab",
+    "desktop/usr/lib/systemd/user/dux-application-themes.service": "cceb0b23abddfde82c69a7894e2dced04f52a628d7e156257b40e5cb88186cb4",
+    "desktop/usr/lib/systemd/user-preset/50-arch-niri-dux.preset": "b1fb19f5cfc9245fc64ca901316e66d4a73b4ad4e7e0ebf63ba6aa8dce02c00b",
+    "desktop/usr/lib/udev/rules.d/60-arch-niri-dux-ddc.rules": "9b6d54a202bb125277454ce5d1bf2d3a9f3f32c9dd0b0ebd22605b1a1b5af16b",
+    "desktop/usr/share/arch-niri-dux/DUX-LICENSE": "4cee96286c5b7da9763a4694868bb1853b33bb1558821e0c609ad2eabd426bfa",
+    "desktop/usr/share/arch-niri-dux/niri/config.kdl": "463306783e07028c9a53f99d58ef6027d18135f621c492b5e9aad2c563ecf5da",
+    "desktop/usr/share/arch-niri-dux/niri/dms/alttab.kdl": "220cbc69932f20e7c53f3f747078980e2a3381d1f844a43e73c5f0c2471bdc27",
+    "desktop/usr/share/arch-niri-dux/niri/dms/binds.kdl": "36b56dc41e95360ce7ae2009bab938392f874ca2580dca0fff5a3c52fe26219b",
+    "desktop/usr/share/arch-niri-dux/niri/dms/colors.kdl": "c7c47fb7baffe685d84db3f42ad498b68d4a592efa4ceff38b1c18c29a9796ba",
+    "desktop/usr/share/arch-niri-dux/niri/dms/input.kdl": "eac60a08f0cbfcf40221e7630778c11ace87650025526a4ab7f139cc0850420f",
+    "desktop/usr/share/arch-niri-dux/niri/dms/layout.kdl": "2763377736dd59229ef0d563688cf4c50fabf87daf6a7117ab6990051afafbfd",
+    "desktop/usr/share/arch-niri-dux/niri/overrides.kdl": "c333eaf3cb06d2ebe66c57f93ee80c93dcd6f1090f6083320b5aa4d58c7f66c3",
+    "desktop/usr/share/arch-niri-dux/niri/tail.kdl": "e2f5ae78ff9b0b253c3f506dc7c729d3507d5d7de6b9c5927987a12d36bf3735",
+    "desktop/usr/share/arch-niri-dux/niri-user.kdl": "940cf55ba44bfe6a86157d03ec2384d62485e9cae122bcfffc6bcba4204c8b4a",
+    "desktop/usr/share/arch-niri-dux/session.kdl": "1e0b1334ecf9a58729a4d0deb490d221ceba634c9da2eb8890ceddf49338066f",
+    "desktop/usr/share/libalpm/hooks/25-arch-niri-dux-keyring.hook": "c3f25b8111645cf7c6fa272e660e14f6fd64da83ca3a6682d5f56017b0913631",
+    "desktop/usr/share/limine-entry-tool.d/arch-niri-dux.conf": "8a83614bc1a7ffb928c56dbdc094cfc60c5e37fee1f503d59d28fc5e972c9255",
+    "desktop/usr/share/pacman/keyrings/omarchy-trusted": "ab0b688815444cffd48d15ca3597c77dbb364d59763c5784fca36691520f00fd",
+    "desktop/usr/share/pacman/keyrings/omarchy.gpg": "763114ca466f5d850a39743b2f2f9572e33aacd1039aeed93e44654da919894d",
+    "installer/configure-target.sh": "4874eb2d900b9ef3440e451330c5193d39fca81ce9dabbb7bae15bb0400f0f39",
+    "packages/integration/PKGBUILD": "76b9f570016fb06703b357aaadc238da56ad3d61948ff80d01bf111b6099201b"
+  },
+  "transport_qualification": {
+    "sha256": "450eee11e6ec2cfa6067f6ece04cae852163128d09e22b60b1da1716879f1a3f",
+    "evidence": "verification/alongside-2026-11-06.json",
+    "linux_stages": 6,
+    "windows_stages": 6
+  }
+}
