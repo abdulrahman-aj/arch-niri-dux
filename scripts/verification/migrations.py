@@ -104,7 +104,7 @@ def check():
     # Skips preserve customized files and links, including their referents.
     custom = HOME / '.local/state/migration-custom'
     custom.write_text('personal settings\n')
-    custom.chown(1000, 1000)
+    run('chown', 'tester', str(custom))
     link = HOME / '.local/state/migration-link'
     link.symlink_to(custom)
     before = custom.read_bytes()

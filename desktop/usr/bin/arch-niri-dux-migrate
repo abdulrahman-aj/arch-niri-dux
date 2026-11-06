@@ -40,13 +40,14 @@ def scripts(scope):
     return result
 
 
-def write(path, value):
-    temporary = path.with_name(path.name + '.tmp')
+def write(path, value, atomic=True):
+    temporary = path.with_name(path.name + '.tmp') if atomic else path
     with temporary.open('w') as stream:
         stream.write(value + '\n')
         stream.flush()
         os.fsync(stream.fileno())
-    temporary.replace(path)
+    if atomic:
+        temporary.replace(path)
     descriptor = os.open(path.parent, os.O_RDONLY | os.O_DIRECTORY)
     try:
         os.fsync(descriptor)
@@ -127,7 +128,8 @@ def process(action, scope, state):
             f'{kind}/{p.name}' for kind in ('system', 'user') for p in scripts(kind)
         ).encode()).hexdigest()
         if not (state / 'generation').exists() or (state / 'generation').read_text().strip() != generation:
-            write(state / 'generation', generation)
+            # Keep the watched inode stable across successive releases.
+            write(state / 'generation', generation, atomic=False)
     else:
         with lock(SYSTEM, shared=True):
             if action != 'baseline' and not system_ready():
@@ -161,7 +163,7 @@ def main():
                 # concurrent retry cannot be overwritten by a stale failure.
                 failure = state / 'failure'
                 if not failure.exists() or failure.read_text().strip() != str(error):
-                    write(failure, str(error))
+                    write(failure, str(error), atomic=False)
                 notify(str(error), state)
                 return 1
         return 0

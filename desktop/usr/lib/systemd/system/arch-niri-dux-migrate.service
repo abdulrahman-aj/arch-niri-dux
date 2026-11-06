@@ -1,6 +1,10 @@
 [Unit]
+# Run after the enabling target without making that target wait for this queue.
+DefaultDependencies=no
+Conflicts=shutdown.target
+Before=shutdown.target
 Description=Apply Arch Niri Dux system migrations
-After=local-fs.target
+After=local-fs.target multi-user.target
 
 [Service]
 Type=oneshot

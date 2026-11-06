@@ -1,6 +1,10 @@
 [Unit]
+# Run after the enabling target without making that target wait for this queue.
+DefaultDependencies=no
+Conflicts=shutdown.target
+Before=shutdown.target
 Description=Apply Arch Niri Dux user migrations
-After=dms.service
+After=graphical-session.target dms.service
 PartOf=graphical-session.target
 
 [Service]
