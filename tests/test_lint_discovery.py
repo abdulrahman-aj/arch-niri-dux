@@ -33,6 +33,10 @@ class LintDiscoveryTests(unittest.TestCase):
         return subprocess.run([sys.executable, str(ROOT / 'scripts/lint-shell.py')],
                               cwd=cwd or self.root, text=True, capture_output=True)
 
+    def lint_shell(self, *args):
+        return subprocess.run([sys.executable, str(ROOT / 'scripts/lint-shell.py'), *args],
+                              cwd=self.root, text=True, capture_output=True)
+
     def test_new_shell_files_anywhere_are_checked_without_staging(self):
         for name, prefix in [('new directory/out/extensionless', '#!/usr/bin/env bash\n'),
                              ('portable', '#!/bin/sh\n'),
@@ -75,6 +79,19 @@ class LintDiscoveryTests(unittest.TestCase):
         result = self.shellcheck()
         self.assertNotEqual(result.returncode, 0)
         self.assertIn('SC2086', result.stdout)
+
+    def test_format_modes_cover_new_shell_files_but_not_pkgbuilds(self):
+        script = self.write('formatted.sh', '#!/bin/sh\nif true; then\necho "checked"\nfi\n')
+        recipe = self.write('new package/PKGBUILD',
+                            "pkgname=(example-app)\ndepends=(bash\n         greetd)\n"
+                            'package() { mkdir -p "$pkgdir/usr"; }\n')
+        self.assertEqual(self.shellcheck().returncode, 0)
+        self.assertNotEqual(self.lint_shell('--check-format').returncode, 0)
+        self.assertEqual(self.lint_shell('--format').returncode, 0)
+        self.assertIn('    echo "checked"', script.read_text())
+        self.assertIn('         greetd)', recipe.read_text())
+        self.assertEqual(self.lint_shell('--check-format').returncode, 0)
+        self.assertEqual(self.shellcheck().returncode, 0)
 
     def test_python_discovery_is_repository_wide_and_preserves_exclusions(self):
         shutil.copyfile(ROOT / 'ruff.toml', self.root / 'ruff.toml')
