@@ -1,8 +1,7 @@
 """Behavioral regression coverage; fixtures are never packaged."""
 
 from contextlib import contextmanager
-import importlib.machinery
-import importlib.util
+import types
 import json
 import multiprocessing
 from pathlib import Path
@@ -11,10 +10,8 @@ import unittest
 from unittest.mock import patch
 
 RUNNER = Path(__file__).resolve().parents[1] / 'desktop/usr/bin/arch-niri-dux-migrate'
-loader = importlib.machinery.SourceFileLoader('migrate', str(RUNNER))
-spec = importlib.util.spec_from_loader(loader.name, loader)
-migrate = importlib.util.module_from_spec(spec)
-loader.exec_module(migrate)
+migrate = types.ModuleType('migrate')
+exec(compile(RUNNER.read_text(), str(RUNNER), 'exec'), migrate.__dict__)
 
 
 def acquire(state, connection):
