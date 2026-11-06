@@ -1,0 +1,165 @@
+{
+  "schema": 1,
+  "date": "2026-11-07",
+  "source_commit": "dd2b3bfdd9d8e7d0ca9003a91af87e8e96c6fb98",
+  "integration_version": "0.3.0-2",
+  "checks": {
+    "lint": {
+      "passed": true,
+      "evidence": "/home/abdulrahman/.t3/scratch/arch-niri-dux-architect/pr58-final-evidence/pr58-lint.log"
+    },
+    "test": {
+      "passed": true,
+      "source_tests": 123,
+      "build_tests": 7,
+      "evidence": "/home/abdulrahman/.t3/scratch/arch-niri-dux-architect/pr58-final-evidence/pr58-test.log"
+    }
+  },
+  "fixture": {
+    "source_commit": "74efae8d6f79baccdb003bbf01c4e725c766a95f",
+    "machine": "msi-dux",
+    "path": "/home/abdulrahman/.cache/arch-niri-dux-verification/pr58-74efae8/out/verify-boot-policy-fresh/disk.qcow2",
+    "sha256": "dea4a5251a7ac5dfeb06a356ff85adca2fdb9ba49cf86a9debb5e597bc1f6168",
+    "transfer": "Copied accepted laptop fixture; SHA256 matched on both machines."
+  },
+  "fast": {
+    "policy": {
+      "passed": true,
+      "machine": "msi-dux",
+      "evidence": "/home/abdulrahman/.cache/arch-niri-dux-build-pr58/verify-fast-dd2b3bf-policy",
+      "memory_guard": "MemAvailable >= 10 GiB before starting each 8 GiB VM",
+      "result": {
+        "fixture": "/home/abdulrahman/.cache/arch-niri-dux-verification/pr58-74efae8/out/verify-boot-policy-fresh/disk.qcow2",
+        "source_sha256": "9a3488fbcddace61a7773d790fb861e93a9bce9f2014bd50eb55dfb6f1d03a2d",
+        "kernel_in_transaction": false,
+        "checks": [
+          "ALPM boot policy regeneration",
+          "package upgrade",
+          "Niri and Dux bindings",
+          "presets",
+          "greetd login and unlocked keyring",
+          "systemd drop-ins"
+        ]
+      },
+      "artifacts": {
+        "FAST-PASSED": "82b9c5c689f196ef5270c0997673c14aaac70ab5570d568bab2524447e42c50e",
+        "inputs.json": "05ee45d478d7d57242b5cb64dbe5205a4d6b885b8c637754545743501eb3427f",
+        "fast-packages.json": "8105aa448e10254718f9d936a10449351d4171c954d98101a74b923791b8c2e7",
+        "boot-policy-upgrade.json": "cdcd269edd49fc0270891fc99399eda248f26aafa875c554483d750f32d945eb",
+        "boot-policy-transaction.log": "62457b3c21875f8f88d1b4fda8a4decd62fd91d1a7078f4ccdd1fd6aa51c4997",
+        "package-policy.json": "c2491d148acd8e1f2ecdd8eb6e7927c9b386883b81a216fe45d2d3c6c3ea0457"
+      },
+      "boot_artifacts": {
+        "before": {
+          "/boot/8a738a679586412d8fde7ad32fd0dc07/linux/initramfs": {
+            "mtime_ns": 1793990194000000000,
+            "sha256": "c82f82749e6367fe687b23bc7731b60f41e7add11efe7dc1897f5ae6ae2dca45"
+          },
+          "/boot/limine.conf": {
+            "mtime_ns": 1793990222000000000,
+            "sha256": "4853dbc664c8573a2ac96afaf91ae0a919d9f2d1c83952af26f30c1488f1691c"
+          }
+        },
+        "after": {
+          "/boot/8a738a679586412d8fde7ad32fd0dc07/linux/initramfs": {
+            "mtime_ns": 1794001150000000000,
+            "sha256": "270150734bf0252430ef74d33eff38b6747fa705ff7785e93bd4d26bdf47cf5d"
+          },
+          "/boot/limine.conf": {
+            "mtime_ns": 1794001150000000000,
+            "sha256": "e5b6ec7855968cefcfda9571a360d803e94e6f7f05e9986097d6f6c5b2c4a30d"
+          }
+        },
+        "installed_packages": "arch-niri-dux 0.3.0-2\narch-niri-dux-baseline 0.3.0-2\nlinux 7.2.14.arch1-1",
+        "all_boot_artifacts_regenerated": true
+      }
+    },
+    "kernel": {
+      "passed": true,
+      "machine": "msi-dux",
+      "evidence": "/home/abdulrahman/.cache/arch-niri-dux-build-pr58/verify-fast-dd2b3bf-kernel",
+      "memory_guard": "MemAvailable >= 10 GiB before starting each 8 GiB VM",
+      "result": {
+        "fixture": "/home/abdulrahman/.cache/arch-niri-dux-verification/pr58-74efae8/out/verify-boot-policy-fresh/disk.qcow2",
+        "source_sha256": "9a3488fbcddace61a7773d790fb861e93a9bce9f2014bd50eb55dfb6f1d03a2d",
+        "kernel_in_transaction": true,
+        "checks": [
+          "ALPM boot policy regeneration",
+          "package upgrade",
+          "Niri and Dux bindings",
+          "presets",
+          "greetd login and unlocked keyring",
+          "systemd drop-ins"
+        ]
+      },
+      "artifacts": {
+        "FAST-PASSED": "1e615421a16335a124210cd1a3b8800da350821d8e31e91a9ecd026d86625b7d",
+        "inputs.json": "79368c1c9ac2ac4823d0cde47dcb33597acd48aba4f37e29d24ee47865c4d292",
+        "fast-packages.json": "a849247c472d8665ea5d99cc269cab57a14feedb508c357ae9db71d0230d7c46",
+        "boot-policy-upgrade.json": "791bd70016fbbbd172c218f44f782202dc8c214bb06e2b50f5cd3e2b4ed6007d",
+        "boot-policy-transaction.log": "05f41fdd3028bc4df540d791fd4f50b16776d6947cf1b41c962ffd2752e74a55",
+        "package-policy.json": "aa32307c472eae6ae1c16bcd199ecee02475c146f91632a0e426cd8caca7812b"
+      },
+      "boot_artifacts": {
+        "before": {
+          "/boot/8a738a679586412d8fde7ad32fd0dc07/linux/initramfs": {
+            "mtime_ns": 1793990194000000000,
+            "sha256": "c82f82749e6367fe687b23bc7731b60f41e7add11efe7dc1897f5ae6ae2dca45"
+          },
+          "/boot/limine.conf": {
+            "mtime_ns": 1793990222000000000,
+            "sha256": "4853dbc664c8573a2ac96afaf91ae0a919d9f2d1c83952af26f30c1488f1691c"
+          }
+        },
+        "after": {
+          "/boot/8a738a679586412d8fde7ad32fd0dc07/linux/initramfs": {
+            "mtime_ns": 1794001086000000000,
+            "sha256": "270150734bf0252430ef74d33eff38b6747fa705ff7785e93bd4d26bdf47cf5d"
+          },
+          "/boot/limine.conf": {
+            "mtime_ns": 1794001088000000000,
+            "sha256": "c78341d851ab85ed8ebd77e953cba53c139d2e856546d43bdcd935bac05288fe"
+          }
+        },
+        "installed_packages": "arch-niri-dux 0.3.0-2\narch-niri-dux-baseline 0.3.0-2\nlinux 7.2.14.arch1-1",
+        "all_boot_artifacts_regenerated": true
+      }
+    }
+  },
+  "repository_resolution": {
+    "passed": true,
+    "machine": "msi-dux",
+    "evidence": "/home/abdulrahman/.cache/arch-niri-dux-build-pr58/repository-resolution.log",
+    "repository_order": [
+      "core",
+      "extra",
+      "omarchy",
+      "arch-niri-dux"
+    ],
+    "selected": {
+      "dux-shell": {
+        "repository": "extra",
+        "version": "2.1.0-1"
+      },
+      "quickshell": {
+        "repository": "extra",
+        "version": "0.3.2-1"
+      },
+      "limine-mkinitcpio-hook": {
+        "repository": "omarchy",
+        "version": "1.40.0-2"
+      }
+    },
+    "checks": [
+      "pacman-conf --repo-list",
+      "pacman -Si",
+      "pacman -Sp with empty cache"
+    ],
+    "log_sha256": "125a48f3832a478d2c0f994d200cfb79f61b8a3b4d42a47664f304c2513faf5d"
+  },
+  "limits": [
+    "No full installer rerun for these final mirror, verifier and documentation changes.",
+    "No physical disks, release tags or published packages changed.",
+    "Independent review of the final changes remains with the architect."
+  ]
+}
