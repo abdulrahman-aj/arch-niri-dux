@@ -169,7 +169,8 @@ def check():
 
 
 def prepare_snapshot():
-    fixture(CODE, 'system', 10, 'echo applied >> /run/verify/migration-system-snapshot-effects')
+    Path('/var/log/arch-niri-dux-migration-snapshot-effects').unlink(missing_ok=True)
+    fixture(CODE, 'system', 10, 'echo applied >> /var/log/arch-niri-dux-migration-snapshot-effects')
     fixture(CODE, 'user', 10, 'echo applied >> "$HOME/.local/state/migration-user-snapshot-effects"')
 
 
@@ -180,7 +181,8 @@ def after_snapshot():
 
 def restored():
     wait_until('System migration after root restore', lambda: Path(
-        '/run/verify/migration-system-snapshot-effects').read_text().splitlines() == ['applied', 'applied'])
+        '/var/log/arch-niri-dux-migration-snapshot-effects').read_text().splitlines() == ['applied', 'applied'])
+    Path('/run/verify/migration-system-snapshot-effects').write_text(Path('/var/log/arch-niri-dux-migration-snapshot-effects').read_text())
     assert (HOME / '.local/state/migration-user-snapshot-effects').read_text().splitlines() == ['applied']
     assert (USER_STATE / '99999999_10_verification.sh.json').is_file()
     for scope, state in [('system', STATE), ('user', USER_STATE)]:
