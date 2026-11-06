@@ -157,7 +157,7 @@ def publish(root, packages, history, destination, tag, commit):
     app_entries = {entry['name']: entry for entry in manifest['apps']}
     versions = {name: (version, 'any') for name in build.NAMES}
     versions |= {name: (entry['version'], apps.ARCH) for name, entry in app_entries.items()}
-    reused = set()
+    reused = {}
     for old in history.glob('*.pkg.tar.zst'):
         if old.is_symlink() or not old.is_file():
             raise ValueError('Unexpected historical package link.')
@@ -180,7 +180,8 @@ def publish(root, packages, history, destination, tag, commit):
             if contents(old) != contents(packages / old.name):
                 raise ValueError(f'{old.name} changed without a new pkgrel.')
             app_entries[name]['sha256'] = build.digest(old)
-            reused.add(old.name)
+            reused[old.name] = old
+            continue
         else:
             # pacman -Syu refreshes the database first. Retaining every app version
             # would exhaust the 1 GB Pages limit; GitHub Releases keep them.
@@ -190,9 +191,9 @@ def publish(root, packages, history, destination, tag, commit):
     current = []
     for entry in manifest['packages'] + manifest['apps']:
         target = destination / entry['filename']
-        if entry['filename'] not in reused:
-            shutil.copyfile(packages / entry['filename'], target)
-            sign(root, target)
+        shutil.copyfile(reused.get(entry['filename'], packages / entry['filename']), target)
+        # Re-sign reused bytes too: their old signature may be from an expired subkey.
+        sign(root, target)
         current.append(target)
     database = destination / 'arch-niri-dux.db.tar.gz'
     subprocess.run(['repo-add', '--include-sigs', str(database), *map(str, current)], check=True)

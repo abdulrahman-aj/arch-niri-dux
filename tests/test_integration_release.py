@@ -270,6 +270,21 @@ class SignedReleaseTests(unittest.TestCase):
             new.write_text('New package')
             run('--local-user', primary, '--detach-sign', str(new))
             release.verify(self.root, new)
+
+            # An unchanged app keeps its published bytes but must not keep the
+            # expired signature, or the new release could not be fetched.
+            built = self.packages(self.root / 'built')
+            history = self.root / 'history'
+            history.mkdir()
+            app = 'dux-example-bin-2.1.0-1-x86_64.pkg.tar.zst'
+            shutil.copyfile(built / app, history / app)
+            run('--faked-system-time', '1577836860', '--local-user', primary, '--detach-sign', str(history / app))
+            os.environ['GNUPGHOME'] = str(home)
+            try:
+                self.publish(built, history, self.root / 'signed')
+            finally:
+                os.environ['GNUPGHOME'] = str(self.home)
+            release.verify(self.root, self.root / 'signed' / app)
         finally:
             subprocess.run(['gpgconf', '--homedir', str(home), '--kill', 'all'], check=True)
 
