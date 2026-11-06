@@ -33,6 +33,8 @@ def check():
     assert Path('/run/verify/install.json').is_file()
     assert not any((CODE / 'system').iterdir())
     assert not any((CODE / 'user').iterdir())
+    assert (STATE / 'generation').is_file()
+    assert (USER_STATE / 'lock').is_file()
     run('useradd', '-m', 'migration-later')
     run('runuser', '-u', 'migration-later', '--', 'bash', '/usr/lib/arch-niri-dux/initialize-user')
     run('systemctl', 'stop', 'arch-niri-dux-migrate.service')
@@ -82,6 +84,11 @@ def check():
     journal = subprocess.check_output(['journalctl', '-u', 'arch-niri-dux-migrate.service',
                                        '--no-pager'], text=True)
     Path('/run/verify/migration-failure-journal.log').write_text(journal)
+    notified = USER_STATE / 'notified'
+    wait_until('Failure notification recorded', notified.exists)
+    notification_time = notified.stat().st_mtime_ns
+    subprocess.run(['runuser', '-u', 'tester', '--', COMMAND, 'run'], check=False)
+    assert notified.stat().st_mtime_ns == notification_time
     ready.touch()
     run(COMMAND, 'run')
     assert system_effect.read_text().splitlines() == ['first', 'second', 'last']
@@ -94,13 +101,30 @@ def check():
     assert subprocess.run([COMMAND, 'run']).returncode != 0
     unsafe.unlink()
     run(COMMAND, 'run')
+    # Skips preserve customized files and links, including their referents.
+    custom = HOME / '.local/state/migration-custom'
+    custom.write_text('personal settings\n')
+    custom.chown(1000, 1000)
+    link = HOME / '.local/state/migration-link'
+    link.symlink_to(custom)
+    before = custom.read_bytes()
+    skipped = fixture(CODE, 'user', 4,
+                      'if [[ -L "$HOME/.local/state/migration-link" || -e "$HOME/.local/state/migration-custom" ]]; then\n'
+                      'echo "Customized files and symlinks preserved"; exit 77\nfi\ntrue')
+    run(COMMAND, 'run')
+    wait_until('Customized user migration skipped', lambda: (USER_STATE / (skipped.name + '.json')).exists())
+    record = json.loads((USER_STATE / (skipped.name + '.json')).read_text())
+    assert record['outcome'] == 'skip' and record['reason']
+    assert link.is_symlink() and custom.read_bytes() == before
+    custom.unlink()
+    link.unlink()
     # A genuinely new entrypoint baselines without running the fixtures.
     run('useradd', '-m', 'migration-new')
     try:
         run('runuser', '-u', 'migration-new', '--', 'bash', '/usr/lib/arch-niri-dux/initialize-user')
         new = Path('/home/migration-new/.local/state')
         assert not (new / 'verification-effects').exists()
-        assert len(list((new / 'arch-niri-dux/migrations').glob('*.json'))) == 3
+        assert len(list((new / 'arch-niri-dux/migrations').glob('*.json'))) == 4
     finally:
         run('userdel', '-r', 'migration-new')
     # A logged-out existing account catches up when its graphical target starts.
@@ -141,7 +165,8 @@ def check():
         'ordering_and_retry': True, 'failure_and_status': True,
         'path_in_active_session': True, 'user_only_release': True,
         'next_graphical_target': True, 'fresh_account_baseline': True,
-        'pacman_lock_defers_execution': True,
+        'pacman_lock_defers_execution': True, 'customizations_skipped': True,
+        'failure_notification_deduplicated': True, 'installer_baselines': True,
     }, indent=2) + '\n')
 
 

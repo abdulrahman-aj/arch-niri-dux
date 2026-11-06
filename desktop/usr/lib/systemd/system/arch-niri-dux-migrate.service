@@ -1,6 +1,6 @@
 [Unit]
 Description=Apply Arch Niri Dux system migrations
-After=local-fs.target multi-user.target
+After=local-fs.target
 
 [Service]
 Type=oneshot

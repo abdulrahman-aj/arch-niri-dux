@@ -143,3 +143,19 @@ class Migrations(unittest.TestCase):
         link.symlink_to(path)
         with self.assertRaises(RuntimeError):
             migrate.trusted(link)
+
+    def test_stale_transaction_lock_is_bounded(self):
+        lock = self.root / 'db.lck'
+        lock.touch()
+        with patch.object(migrate, 'PACMAN_LOCK', lock), patch.object(migrate, 'TRANSACTION_WAIT', 0):
+            with self.assertRaises(RuntimeError):
+                migrate.process('run', 'system', self.state)
+        self.assertFalse((self.state / 'generation').exists())
+
+    def test_notification_once_per_failure_until_recovery(self):
+        with patch.object(migrate.os, 'geteuid', return_value=1000), patch.object(migrate.subprocess, 'run') as send:
+            migrate.notify('first failure', self.state)
+            migrate.notify('first failure', self.state)
+            self.assertEqual(send.call_count, 1)
+            migrate.notify('second failure', self.state)
+            self.assertEqual(send.call_count, 2)
