@@ -1,12 +1,10 @@
 # Integration releases
 
-Full system updates through pacman or Dux update `arch-niri-dux`,
-`arch-niri-dux-baseline` and the four Dux apps from our repository, with required
-package and database signatures. Arch, Omarchy, `dux-shell` and `dux-gop` keep
-their existing sources. User initialization creates missing personal
-defaults. Pacman preserves local system-file edits through its `backup`/`.pacnew`
-behavior. Removing the baseline metapackage opts out of its future app additions
-without removing integration.
+[Package inputs](README.md) describes what our signed repository supplies and
+how the baseline metapackage controls app additions. User initialization creates
+missing personal defaults; package upgrades do not replay it. Pacman preserves
+edits to files listed in the integration recipe's `backup` array through its
+`.pacnew` behavior.
 
 ## Publish
 
@@ -60,9 +58,6 @@ Initial provisioning uses `scripts/setup-release-key.py --passphrase-file PATH`.
 Ordinary releases use the existing CI secret. The helper's `--restore` operation
 replaces that live secret; it does not rotate or renew keys.
 
-ISOs provision the public certificate offline. Integration-package upgrades
-refresh it through a pacman hook. That hook cannot bootstrap a client that
-already rejects the repository's new signer. Compromised-key recovery and
-clients that skip a signing-key transition still need end-to-end qualification.
-Their failure paths and required evidence are tracked in
-[issue #52](https://github.com/abdulrahman-aj/arch-niri-dux/issues/52).
+See [rotation and compromise
+recovery](../keys/RECOVERY.md#rotation-and-compromise-recovery) for
+trust-transition limits and required qualification.

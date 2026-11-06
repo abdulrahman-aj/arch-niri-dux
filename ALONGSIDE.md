@@ -11,41 +11,38 @@ and `existing_boot: "0001"` in addition to the normal private JSON settings.
 sector size. Never use these examples on a physical disk for verification.
 
 The installer appends a dedicated 4 GiB ESP and encrypted Btrfs partition using
-unused GPT slots with `sfdisk --append --wipe never --wipe-partitions never`
-and a nonblocking device lock. `sgdisk --verify` stays a read-only check.
-On a real virtual SATA block device, the previous sgdisk writer zeroed Windows
-disk-ID bytes 440 through 443. Sfdisk preserved them. The installer performs
-no write-after-the-fact restoration. It never shrinks, moves or formats
-existing partitions. It mounts existing ESPs read-only to validate the selected
-x86-64 PE EFI application. Their size does not matter and their fallback files
-stay intact.
-The old OS entry chainloads the original EFI path by its original GPT partition
-GUID, retaining adjacent GRUB/shim/BCD resources on the original ESP.
+unused GPT slots with `sfdisk --append --wipe never --wipe-partitions never` and
+a nonblocking device lock. `sgdisk --verify` stays a read-only check. It never
+shrinks, moves or formats existing partitions. It mounts existing ESPs read-only
+to validate the selected x86-64 PE EFI application. Their size does not matter
+and their fallback files stay intact. The old OS entry chainloads the original
+EFI path by its original GPT partition GUID, retaining adjacent GRUB/shim/BCD
+resources on the original ESP.
 
 The installer compares disk identity, both GPT copies including unused slots,
 protective MBR, free extents and firmware entries/order immediately before
 partition creation. It verifies the saved partition entries afterward and the
-kernel's new partition geometry before formatting. It also runs `sgdisk --verify`
-after creation. It checks both on-disk GPT CRCs, every occupied original GPT
-entry byte, and the original protective-MBR bootstrap/disk-signature bytes.
-Limine's documented `SKIP_UEFI` setting covers every initial package and kernel
-hook until configuration completes. The installer then
-checks the new EFI binary exists and registers it with `efibootmgr --create-only`.
-It checks that the entry is active and resolves to the new ESP GUID/path.
-It prepends the new entry while retaining existing entries and their order.
-Erase mode erases the selected disk.
+kernel's new partition geometry before formatting. It also runs `sgdisk
+--verify` after creation. It checks both on-disk GPT CRCs, every occupied
+original GPT entry byte, and the original protective-MBR
+bootstrap/disk-signature bytes. Limine's documented `SKIP_UEFI` setting covers
+every initial package and kernel hook until configuration completes. The
+installer then checks the new EFI binary exists and registers it with
+`efibootmgr --create-only`. It checks that the entry is active and resolves to
+the new ESP GUID/path. It prepends the new entry while retaining existing
+entries and their order.
 
-Unsupported: BIOS/MBR, hybrid MBR, damaged/relocated GPT metadata, nonstandard
-GPT entry counts, mounted/active disks, bootloaders without a matching registered
-FAT ESP entry on this disk, EFI paths containing spaces/non-ASCII characters,
-and free space spread across smaller extents. There is no partition resizing,
-ESP expansion/reuse, BitLocker unlocking, Secure Boot work, RAID/LDM migration or
-firmware repair. TPM-bound Windows installations can request recovery after a
-boot-chain change, so the Windows acceptance fixture must have BitLocker/device
-encryption disabled. The installer rejects detected BitLocker/device encryption
-and Windows dynamic disks before mutation. Qualification uses disposable VMs.
-Secure Boot remains deferred pending
-[a separate design](https://github.com/abdulrahman-aj/arch-niri-dux/issues/49).
+Unsupported layouts include BIOS/MBR, hybrid MBR, damaged/relocated GPT
+metadata, nonstandard GPT entry counts, mounted/active disks, bootloaders
+without a matching registered FAT ESP entry on this disk, EFI paths containing
+spaces/non-ASCII characters, and free space spread across smaller extents. There
+is no partition resizing, ESP expansion/reuse, BitLocker unlocking, Secure Boot
+work, RAID/LDM migration or firmware repair. TPM-bound Windows installations can
+request recovery after a boot-chain change, so the Windows acceptance fixture
+must have BitLocker/device encryption disabled. The installer rejects detected
+BitLocker/device encryption and Windows dynamic disks before mutation.
+Qualification uses disposable VMs. Secure Boot remains deferred pending [a
+separate design](https://github.com/abdulrahman-aj/arch-niri-dux/issues/49).
 
 An external partition editor must not run during installation. Revalidation
 closes the long confirmation/package-preflight window. It cannot make GPT edits
@@ -64,13 +61,13 @@ Its local SHA256 is recorded. No product key or personal credentials are needed.
 
 ```
 make test
-make iso
+make iso-development
 make fetch-alongside ARGS="--os linux --directory out/alongside/media"
 make fetch-alongside ARGS="--os windows --directory out/alongside/media"
-make provision-alongside ARGS="--os linux --media out/alongside/media/debian.qcow2 --iso out/arch-niri-dux-2026.11.02-x86_64.iso --directory out/alongside/linux-fixture"
-make verify-alongside ARGS="--os linux --iso out/arch-niri-dux-2026.11.02-x86_64.iso --fixture out/alongside/linux-fixture/disk.qcow2 --firmware out/alongside/linux-fixture/OVMF_VARS.fd --directory out/alongside/linux-test"
-make provision-alongside ARGS="--os windows --media out/alongside/media/windows11-ltsc-eval.iso --iso out/arch-niri-dux-2026.11.02-x86_64.iso --directory out/alongside/windows"
-make verify-alongside ARGS="--os windows --iso out/arch-niri-dux-2026.11.02-x86_64.iso --fixture out/alongside/windows/disk.qcow2 --firmware out/alongside/windows/OVMF_VARS.fd --windows-token out/alongside/windows/report-token --directory out/alongside/windows-test"
+make provision-alongside ARGS="--os linux --media out/alongside/media/debian.qcow2 --iso out/CANDIDATE.iso --directory out/alongside/linux-fixture"
+make verify-alongside ARGS="--os linux --iso out/CANDIDATE.iso --fixture out/alongside/linux-fixture/disk.qcow2 --firmware out/alongside/linux-fixture/OVMF_VARS.fd --directory out/alongside/linux-test"
+make provision-alongside ARGS="--os windows --media out/alongside/media/windows11-ltsc-eval.iso --iso out/CANDIDATE.iso --directory out/alongside/windows"
+make verify-alongside ARGS="--os windows --iso out/CANDIDATE.iso --fixture out/alongside/windows/disk.qcow2 --firmware out/alongside/windows/OVMF_VARS.fd --windows-token out/alongside/windows/report-token --directory out/alongside/windows-test"
 ```
 
 Use the actual generated ISO filename and fresh evidence directories. Media
@@ -109,11 +106,9 @@ Only test instrumentation adds a serial console to the new Arch installation.
 Evidence includes input hashes, serial/QEMU logs, original partition hashes,
 firmware listings, menu configuration, Windows guest reports and a milestone
 list. Only a full run writes `SUCCESS`. Never treat a screenshot or a loader
-stub as proof of a successful old-OS boot. Both fresh real-OS scenarios passed
-all six milestones against the 0.3.0-1 development ISO, SHA256
-`160a1d089750bdd35a26ef70d5fd8cf5c12b6c824e646faf6eba35907db3a2bd`.
-See [current verification](VERIFICATION.md) and
-[exact inputs and results](verification/alongside-2026-11-06.json).
+stub as proof of a successful old-OS boot. See [current
+verification](VERIFICATION.md#alongside-acceptance) for accepted inputs and
+results.
 
 Keep at least 8 GiB host headroom. Guest waits and Windows report waits stop at a
 9 GiB threshold to protect that headroom. Media downloads reserve it before writing. Monitor
@@ -128,10 +123,7 @@ This requires the saved successful Windows OS report and verifies the qcow2
 before firmware registration. The TPM emulator restarts for each QEMU run with
 its original state preserved.
 
-The earlier EBUSY failure came from forcing a second full kernel table reread
-after sgdisk had already updated the partition nodes. The installer now waits
-for udev and checks exact kernel starts/sizes before any formatter. Missing or
-mismatching nodes still abort with the new partitions left in place. There is
-no automatic table recovery. The successful Debian qualification exercised this
-path. Unexpected firmware changes abort before appending the chainload entry.
-Registration deferral remains enabled on a failed installation.
+Missing or mismatching kernel partition nodes abort before formatting, leaving
+the new partitions in place. There is no automatic table recovery. Unexpected
+firmware changes abort before appending the chainload entry. Registration
+deferral remains enabled on a failed installation.

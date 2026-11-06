@@ -15,7 +15,7 @@ authorization.
 
 The recovery password decrypts the backup file. It is not needed for ordinary CI
 releases or laptop updates. Inside the decrypted bundle, the private keys have no
-additional passphrase: protect any imported keyring or private-key export.
+additional passphrase. Protect any imported keyring or private-key export.
 
 The current master fingerprint is:
 

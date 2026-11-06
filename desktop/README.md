@@ -4,12 +4,16 @@
 vendored verbatim. `packages/desktop-sources.json` records source URLs and hashes.
 The upstream license is included. No personal dotfiles are used.
 
-The `arch-niri-dux` package owns these system files. The installer applies vendor presets for the
-Dux services and runs `/usr/lib/arch-niri-dux/initialize-user` as the desktop
-user to seed only missing settings. Package upgrades never replay account or
-user initialization. Changing a service preset requires an explicit migration for
-existing systems ([#54](https://github.com/abdulrahman-aj/arch-niri-dux/issues/54));
-upgrades do not reapply presets. Dux Greeter starts Niri. Dux creates its own shell settings.
+The `arch-niri-dux` package owns shared system configuration. The installer
+applies vendor presets for Dux services and runs
+`/usr/lib/arch-niri-dux/initialize-user` as the desktop user to seed only
+missing settings. Package upgrades never replay account or user initialization.
+Changing a service preset requires an explicit migration for existing systems
+([#54](https://github.com/abdulrahman-aj/arch-niri-dux/issues/54)); upgrades do
+not reapply presets. Dux Greeter starts Niri. Dux creates its own shell
+settings.
+
+## Migrations
 
 Package migrations run offline after pacman releases its database lock, and at
 boot. System and user queues keep separate completion records. The desktop
@@ -22,15 +26,16 @@ System records roll back with root snapshots; user records stay with home.
 Downgrades ignore unknown records and never reverse changes. Authoring and
 release qualification are covered in [the migrations skill](../.agents/skills/migrations/SKILL.md).
 
+## Niri configuration
+
 The Greetd service selects our `/etc/greetd/dux.toml`. Arch retains ownership of
 its separate stock `config.toml`. Pacman preserves local edits to `dux.toml`.
 
 Package construction generates Niri's stock configuration and terminal-resolved
-bindings in `/usr/share/arch-niri-dux/niri/defaults.kdl`. The home entrypoint uses a hybrid include list: package defaults, relative
+bindings in `/usr/share/arch-niri-dux/niri/defaults.kdl`. The home entrypoint loads package defaults, relative
 optional `dms/*.kdl` and `recent-windows.kdl` includes, package-owned `tail.kdl`
 (session environment and file-dialog rules), then optional `overrides.kdl` last.
-Dux 2.1 silently ignores `~` includes: the one-line shim failed the real
-cheatsheet/manual-MRU check. Relative home includes preserve shortcut editing.
+Dux 2.1 ignores `~` includes. Relative home includes allow shortcut editing.
 Put personal Niri settings in `~/.config/niri/overrides.kdl`; initialization
 seeds comments only and preserves existing files and symlinks. Package updates
 can change defaults and session policy without editing home. `dms/binds.kdl` starts empty and holds
@@ -44,25 +49,28 @@ until a fixed package is available. Generated `dms/alttab.kdl` controls appearan
 Rerunning user initialization preserves existing user Niri files. Generated
 layout/input files remain local, so Dux settings continue to control them.
 
+## Applications and session defaults
+
 New users start on Dux's upstream "bloom" material preset. The seed lives in
 `~/.local/state/dms/session.json` and is only created when absent. Existing
 `session.json` files are never overwritten, so chosen wallpapers are preserved.
 Dux provides the preset assets. The installer does not edit the vendored Niri
 files for this default.
 
-Papers uses `org.gnome.Papers.desktop` and is the default PDF viewer in the factory
-`/etc/xdg/mimeapps.list`. Fresh users also get Loupe for common images,
+Papers uses `org.gnome.Papers.desktop` and is the default PDF viewer in the
+factory `/etc/xdg/mimeapps.list`. Fresh users also get Loupe for common images,
 GNOME Text Editor for plain text and Markdown, Celluloid for common video,
 Decibels for common audio, Chromium for the browser and Dux Files for folders.
-User initialization preserves `~/.config/mimeapps.list`, so user choices
-survive reruns. GNOME Calculator is installed standalone.
-`EDITOR`/`VISUAL` remain `nvim`. Snapshot is the camera app and uses
-`org.gnome.Snapshot.desktop`. Qt PDF support in `qt6-webengine` enables PDF preview inside Dux
-Files, while Papers remains the default document app. These apps come from
-signed Arch packages. `kimageformats` adds AVIF, HEIF and JPEG XL decoding for Qt
-apps. `qt6-imageformats` supplies WebP, TIFF and other Qt decoders.
-`smartmontools` supports System Monitor's drive-health view. `fprintd` supplies
-the fingerprint backend; enrollment and authentication require supported hardware and user setup. The live ISO remains terminal-only.
+User initialization leaves `~/.config/mimeapps.list` untouched. GNOME Calculator
+is installed standalone. `EDITOR`/`VISUAL` remain `nvim`. Snapshot is the camera
+app and uses `org.gnome.Snapshot.desktop`. Qt PDF support in `qt6-webengine`
+enables PDF preview inside Dux Files, while Papers remains the default document
+app. The document and media viewers come from signed Arch packages.
+`kimageformats` adds AVIF, HEIF and JPEG XL decoding for Qt apps.
+`qt6-imageformats` supplies WebP, TIFF and other Qt decoders. `smartmontools`
+supports System Monitor's drive-health view. `fprintd` supplies the fingerprint
+backend; enrollment and authentication require supported hardware and user
+setup. The live ISO remains terminal-only.
 
 CUPS and Avahi start for Dux's native driverless printer settings. CUPS keeps
 its stock localhost-only listeners. GVFS supplies Android, Apple-device
@@ -71,10 +79,9 @@ and cava support Dux's own effects without changing its settings.
 
 Dux controls external-monitor brightness through I2C/DDC. `i2c-tools` loads
 `i2c-dev` at boot. A udev rule grants the active local session access to I2C
-buses under display controllers. Reboot after installing this update; monitor
-and connection support still determine whether DDC works.
-NetworkManager uses `dnsmasq` for hotspot sharing. The standalone dnsmasq service
-is not enabled.
+buses under display controllers. Monitor and connection support determine
+whether DDC works. NetworkManager uses `dnsmasq` for hotspot sharing. The
+standalone dnsmasq service is not enabled.
 
 Matugen supplies Dux's colors and system light/dark preference. A first-login
 service applies upstream's GTK integration and selects the matching GTK theme
@@ -100,6 +107,8 @@ Each context preserves system and Nix PATH entries. No mise shims are added.
 The `session-path` stage of `make verify` checks the user-service environment,
 login shell and a real Niri-spawned wrapper without personal dotfiles.
 
+## System policy
+
 System policy belongs to the integration package: mkinitcpio's complete MODULES
 and HOOKS arrays, Limine defaults, the root Snapper config, service presets,
 Plymouth/recovery service drop-ins, and the greetd PAM service. To override
@@ -109,10 +118,16 @@ configs. Systemd overrides belong under `/etc/systemd/`, ahead of vendor files.
 
 Greetd selects `/usr/lib/pam.d/arch-niri-dux` for authentication, including the
 stock local-login stack and GNOME Keyring password/session integration. Its
-greeter session uses the same stack. `/etc/pacman.d/arch-niri-dux.conf` owns the
-online repository order and servers: core and extra use
-`https://geo.mirror.pkgbuild.com/$repo/os/$arch`, followed by omarchy and
-arch-niri-dux. The installer retains only pacman options.
+greeter session uses the same stack. See [package
+repositories](../packages/README.md#repositories) for online update sources.
+
+`snap-pac` creates snapshots around package transactions. Recovery entries use
+`noresume` and block hibernation to prevent resuming a normal-root memory image
+over an older snapshot. Timeline snapshots are disabled. Number cleanup keeps 5
+regular and 5 important snapshots, with `snapper-cleanup.timer` enabled. Pre-0.3
+systems need manual repair.
+
+## Boot-policy upgrades
 
 Every `arch-niri-dux` upgrade triggers
 `95-arch-niri-dux-boot-policy.hook`, which runs `limine-mkinitcpio` to rebuild
@@ -121,8 +136,6 @@ the package containing the target files, even when those files are unchanged.
 A transaction that also changes the kernel may run both this hook and the upstream kernel hook; both use the same
 serialized upstream rebuild implementation.
 
-The policy hook deliberately excludes first installation. The installer mounts
-the ESP, seeds `SKIP_UEFI=yes` before the first alongside pacstrap, then writes
-the complete machine configuration and deferral before explicitly rebuilding.
-It removes deferral only after the firmware-preservation checks and final
-registration. This keeps package boot-policy updates out of early installation.
+The hook excludes first installation. The
+[installer](../installer/README.md#machine-configuration) rebuilds explicitly
+after writing machine settings and EFI deferral.

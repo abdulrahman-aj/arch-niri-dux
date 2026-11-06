@@ -1,47 +1,33 @@
 # Arch + Niri + Dux
 
-An offline Arch installer for x86_64 UEFI machines. Includes Niri, the Dux 2.1
-desktop and apps, encrypted Btrfs and snapshot recovery. Common files open in
-Papers, Loupe, GNOME Text Editor, Celluloid and Decibels. Includes Chromium,
-Alacritty, Neovim, Snapshot, Calculator, standard CLI tools, Btop and Fastfetch,
-plus driverless printing and phone/camera file-access backends. Fastfetch is
-also available on the live ISO.
+An offline Arch installer for x86_64 UEFI machines, with Niri, Dux 2.1,
+encrypted Btrfs and snapshot recovery. The installed system includes
+[desktop apps and device backends](desktop/README.md#applications-and-session-defaults).
+The live ISO is terminal-only and includes Fastfetch.
 
 ## Build and test
 
-Building requires Linux, Nix, Make and KVM access. Allow 24 GiB of build space, 8 GiB of
-RAM and about 2.5 GiB for the ISO. Build cache goes in
-`~/.cache/arch-niri-dux-build`. Use `BUILD_STATE=/path/with/space make iso` to change it.
+Building requires Linux, Nix and Make. Allow 24 GiB of build space and about 2.5
+GiB for the ISO. VM verification also requires KVM access. Build cache goes in
+`~/.cache/arch-niri-dux-build`. Use `BUILD_STATE=/path/with/space make iso` to
+change it.
 
 ```sh
 make iso
 make verify
 ```
 
-`make lint` runs Ruff, ShellCheck and actionlint. It discovers Python sources,
-shell files by extension or shebang, and our `PKGBUILD` recipes, including
-untracked scripts. Generated output and vendored Dux app recipes are excluded.
-`make test` runs lint, source tests and build tests in CI.
-
-Acceptance scenarios live in `scripts/verification/`. Each scenario keeps its
-host interaction, guest probes and cleanup together. `scripts/verify.py` runs
-them in order. Alongside installation and hibernation reuse the same VM control
-and probe staging. The upgrade test records the state that snapshot restoration
-must recover.
-
-Accepted machine-readable evidence lives in `verification/`. Logs, screenshots
-and VM disks stay in disposable workspaces. The default workspace is under
-`/tmp`. Use `--directory` to select another location, such as an `out/` subdirectory.
+See [verification](VERIFICATION.md) for test targets, VM requirements and current limits.
 
 `make iso` uses the recipe version's signed release packages. For unreleased
 integration changes, use `make iso-development` instead. See [release maintenance](packages/RELEASING.md).
 
-The build writes the ISO and checksums to `out/`. VM tests need a GPU render node
-and virtio 3D acceleration. `QEMU_RENDER_NODE` defaults to `/dev/dri/renderD128`.
+The build writes the ISO and checksums to `out/`.
 
 Signed binary packages and reviewed Dux app recipes use separate pins. See
-[package inputs](packages/README.md). Desktop configuration comes from upstream
-Dux. Rebuilds use the same inputs, but are not byte-identical.
+[package inputs](packages/README.md) and [desktop
+configuration](desktop/README.md#niri-configuration) for details. Pinned inputs
+do not produce byte-identical rebuilds.
 
 ## Install
 
@@ -72,15 +58,11 @@ sudo limine-snapper-restore
 Restore and reboot into the normal entry. `/home`, including personal config,
 stays untouched.
 
-`snap-pac` creates snapshots around package transactions. Recovery entries use
-`noresume` to prevent resuming a normal-root hibernation image over an older
-snapshot. Timeline snapshots are disabled. Number cleanup uses limits of 5
-regular and 5 important snapshots, with `snapper-cleanup.timer` enabled.
+See [snapshot policy](desktop/README.md#system-policy) for transaction snapshots
+and recovery safeguards.
 
 ## Status
 
-[VM verification](VERIFICATION.md) covers installation, desktop, updates, recovery
-and hibernation. Laptop hibernate/resume also passed. The intermittent lid symptom
-and docked display behavior still need checks on physical hardware.
-Secure Boot is deferred. Track remaining work in
-[GitHub issues](https://github.com/abdulrahman-aj/arch-niri-dux/issues).
+[Verification](VERIFICATION.md) records accepted software paths and hardware
+gaps. Track remaining work in [GitHub
+issues](https://github.com/abdulrahman-aj/arch-niri-dux/issues).
