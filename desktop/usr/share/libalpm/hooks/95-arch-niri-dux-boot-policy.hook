@@ -1,0 +1,12 @@
+[Trigger]
+Operation = Install
+Operation = Upgrade
+Type = Path
+Target = etc/mkinitcpio.conf.d/arch-niri-dux.conf
+Target = usr/share/limine-entry-tool.d/arch-niri-dux.conf
+
+[Action]
+Description = Rebuilding Arch Niri Dux boot policy...
+When = PostTransaction
+Depends = limine-mkinitcpio-hook
+Exec = /usr/bin/limine-mkinitcpio

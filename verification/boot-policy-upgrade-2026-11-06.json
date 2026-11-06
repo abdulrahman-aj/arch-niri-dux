@@ -1,0 +1,432 @@
+{
+  "schema": 1,
+  "date": "2026-11-06",
+  "base_commit": "6545e38824931a6b6fed7a7902cde7bb88dd623d",
+  "integration_version": "0.3.0-2",
+  "checks": {
+    "lint": [
+      "Ruff",
+      "ShellCheck",
+      "actionlint"
+    ],
+    "source_tests": 123,
+    "build_tests": 7
+  },
+  "review": {
+    "model": "opencode-go/glm-5.3-flash",
+    "effort": "high",
+    "verdict": "Approved, no blockers"
+  },
+  "hook_first_installed_and_ran_in_same_transaction": true,
+  "kernel_co_transaction": "Same-version pinned linux reinstall exercises the native ALPM Upgrade trigger. Native90 and policy95 rebuild sequentially; both complete successfully and the VM boots afterward.",
+  "manual_rebuild_invoked_by_fast_tier": false,
+  "runs": {
+    "policy_only": {
+      "evidence": "/home/abdulrahman/.t3/worktrees/arch-niri-dux/package-owned-policy/out/verify-boot-policy-only-3",
+      "inputs": {
+        "kernel_sha256": null,
+        "fixture": "/home/abdulrahman/.t3/worktrees/arch-niri-dux/package-owned-policy/out/verify-package-owned-hybrid/disk.qcow2",
+        "accepted_inputs": {
+          "iso": "/home/abdulrahman/.t3/worktrees/arch-niri-dux/package-owned-policy/out/arch-niri-dux-2026.11.06-x86_64.iso",
+          "iso_sha256": "160a1d089750bdd35a26ef70d5fd8cf5c12b6c824e646faf6eba35907db3a2bd",
+          "package_manifest_sha256": "2201f9cf472f332ae08dfbd9e5a64fbbb3b903e5d35448ec01c7e32050855f70",
+          "verification_scripts": {
+            "verification/__init__.py": "adcf5ec1deba87cdcad5c9b7e0929c54d08529d2638943965b59ed506b1b95ea",
+            "verification/apps.py": "82f9eccc5c962c7e4eb160306270dd2b1530ccf785718878a5c192bfb50310d7",
+            "verification/boot.py": "0d327d9f710a4e8d1ad699c4837bdbd7e522671116288329c8d61bf8653959bf",
+            "verification/browser.py": "e4f0142ac5adf5795177c623018dec2582d639e6aa0b72a23e9e3d9967b0a9a9",
+            "verification/camera.py": "2bb0b484f2719196937cd892d47d8fdc94b1d00ef35fc3184207c53891c11ddb",
+            "verification/desktop.py": "dd63598825cb552f2b9bd65305675154fed1476a7f9345de547af9acd5677521",
+            "verification/guest.py": "1c7edbd26a95c68ec130bbdaebdf57cec944c1012f0940af294a5618e541f938",
+            "verification/integration.py": "b1aa75c688270e9c0cc3a4acc7ce5d725fd0a0649bc7c6a02cb23718da20d973",
+            "verification/pdf.py": "7d4ffad5738c183c12665335aea1a9a345e17e4a03ef35f1594164f27ef87e6d",
+            "verification/policy.py": "e7196c3a74a90a655446182dab6831a74785967e6225f846d7bc24d128d34e7e",
+            "verification/recovery.py": "d2dd5a3be623a941097ff806b1417507332a18dba53ee443d8cf633cba19ae3a",
+            "verification/vm.py": "c2ed048f7a4fab6b003c2ed2db24fe6a76cee28ebc48414ec08a669b9e5f9924",
+            "build-integration.py": "d7a4786bbf3c5147f51f5f714cd619f47cc9f376da5b3d2a818180ff6df090a2",
+            "verify.py": "8e115cc364c12b290ed496dba1d440ac75b73839761bb5c6f11b21ee2af1e214"
+          }
+        },
+        "source_sha256": "dd90e84f40b4c3dd28cabdf6930da6abd2bdac6c7c803fe05cf7cfb1a59e5156",
+        "verification_scripts": {
+          "verification/__init__.py": "adcf5ec1deba87cdcad5c9b7e0929c54d08529d2638943965b59ed506b1b95ea",
+          "verification/apps.py": "82f9eccc5c962c7e4eb160306270dd2b1530ccf785718878a5c192bfb50310d7",
+          "verification/boot.py": "2282f8d867d2a1062b41ccc61d1c85e9b04b1e43f5f867672992a36dba5fda8a",
+          "verification/browser.py": "e4f0142ac5adf5795177c623018dec2582d639e6aa0b72a23e9e3d9967b0a9a9",
+          "verification/camera.py": "2bb0b484f2719196937cd892d47d8fdc94b1d00ef35fc3184207c53891c11ddb",
+          "verification/desktop.py": "dd63598825cb552f2b9bd65305675154fed1476a7f9345de547af9acd5677521",
+          "verification/guest.py": "1c7edbd26a95c68ec130bbdaebdf57cec944c1012f0940af294a5618e541f938",
+          "verification/integration.py": "b1aa75c688270e9c0cc3a4acc7ce5d725fd0a0649bc7c6a02cb23718da20d973",
+          "verification/pdf.py": "7d4ffad5738c183c12665335aea1a9a345e17e4a03ef35f1594164f27ef87e6d",
+          "verification/policy.py": "e31a6ab4a4e015259cd994715a96cbe7bfefaccba5b8b046c8e5903247bd6e68",
+          "verification/recovery.py": "d2dd5a3be623a941097ff806b1417507332a18dba53ee443d8cf633cba19ae3a",
+          "verification/vm.py": "450eee11e6ec2cfa6067f6ece04cae852163128d09e22b60b1da1716879f1a3f",
+          "build-integration.py": "d7a4786bbf3c5147f51f5f714cd619f47cc9f376da5b3d2a818180ff6df090a2",
+          "verify-fast.py": "748d3fb4b7591aa8d31bbe139d81da257763f76246f35bb8bd54a05330d916dc"
+        }
+      },
+      "packages": {
+        "version": "0.3.0-2",
+        "source_sha256": "5c4c391281f37512c2251b6f7adcd68b2daae0f87f264d799689cb96ae64402b",
+        "recipe_sha256": "c7a74b554bbf701668be3adb1a71f0f1bf21634c4d01d26ccb06947ae195b9ea",
+        "source_date_epoch": 1793987812,
+        "packages": [
+          {
+            "name": "arch-niri-dux",
+            "filename": "arch-niri-dux-0.3.0-2-any.pkg.tar.zst",
+            "sha256": "897f9c5cd1a42c63ada9b05936724dd889228fc5c83f40a959cceae74225ac6d"
+          },
+          {
+            "name": "arch-niri-dux-baseline",
+            "filename": "arch-niri-dux-baseline-0.3.0-2-any.pkg.tar.zst",
+            "sha256": "1d2fe63c4ec17a7744089dd791449a26ab55621cb04d2901f5530b408a08b1bf"
+          }
+        ]
+      },
+      "boot_artifacts": {
+        "before": {
+          "/boot/5fd0ad52c3514b749650a900171795ce/linux/initramfs": {
+            "mtime_ns": 1793985896000000000,
+            "sha256": "145ba5e50e1ee885453926de48c76f17528e716b6c1eec3be10a040e4a2bf548"
+          },
+          "/boot/limine.conf": {
+            "mtime_ns": 1793985930000000000,
+            "sha256": "707dad775e88938c9000ba2bc41cbc96a38ea142d4283d27c47865050c24e712"
+          }
+        },
+        "after": {
+          "/boot/5fd0ad52c3514b749650a900171795ce/linux/initramfs": {
+            "mtime_ns": 1793988268000000000,
+            "sha256": "14d01d0ba2239dd3082f5592509abd4ec9a085865d6b10e8a5ce3be71540c700"
+          },
+          "/boot/limine.conf": {
+            "mtime_ns": 1793988268000000000,
+            "sha256": "f6550078690ace7e41ecc7e0c55642b55f5e0521c4641298425c3b75f2813697"
+          }
+        },
+        "installed_packages": "arch-niri-dux 0.3.0-2\narch-niri-dux-baseline 0.3.0-2\nlinux 7.2.14.arch1-1",
+        "all_boot_artifacts_regenerated": true
+      },
+      "result": {
+        "fixture": "/home/abdulrahman/.t3/worktrees/arch-niri-dux/package-owned-policy/out/verify-package-owned-hybrid/disk.qcow2",
+        "source_sha256": "dd90e84f40b4c3dd28cabdf6930da6abd2bdac6c7c803fe05cf7cfb1a59e5156",
+        "kernel_in_transaction": false,
+        "checks": [
+          "ALPM boot policy regeneration",
+          "package upgrade",
+          "Niri and Dux bindings",
+          "presets",
+          "greetd login and unlocked keyring",
+          "systemd drop-ins"
+        ]
+      },
+      "transaction_log": "/home/abdulrahman/.t3/worktrees/arch-niri-dux/package-owned-policy/out/verify-boot-policy-only-3/boot-policy-transaction.log",
+      "transaction_log_sha256": "683e12a9d9fccef4e8c55e8975954412ac234554f0ee2d675909ca195a46b0b6",
+      "package_policy": {
+        "package_owned_policy": [
+          "/etc/mkinitcpio.conf.d/arch-niri-dux.conf",
+          "/etc/snapper/configs/root",
+          "/usr/share/libalpm/hooks/95-arch-niri-dux-boot-policy.hook",
+          "/usr/lib/pam.d/arch-niri-dux",
+          "/usr/share/limine-entry-tool.d/arch-niri-dux.conf",
+          "/usr/lib/systemd/system-preset/50-arch-niri-dux.preset",
+          "/usr/lib/systemd/user-preset/50-arch-niri-dux.preset",
+          "/usr/share/arch-niri-dux/niri/tail.kdl",
+          "/usr/lib/systemd/system/greetd.service.d/10-plymouth.conf",
+          "/usr/lib/systemd/system/systemd-hibernate.service.d/60-recovery.conf",
+          "/usr/lib/systemd/system/systemd-hybrid-sleep.service.d/60-recovery.conf",
+          "/usr/lib/systemd/system/systemd-suspend-then-hibernate.service.d/60-recovery.conf"
+        ],
+        "system_units_enabled": [
+          "NetworkManager.service",
+          "bluetooth.service",
+          "snapper-cleanup.timer",
+          "limine-snapper-sync.service",
+          "systemd-timesyncd.service",
+          "power-profiles-daemon.service",
+          "getty@tty2.service",
+          "cups.service",
+          "avahi-daemon.service",
+          "greetd.service"
+        ],
+        "user_units_enabled": [
+          "dms.service",
+          "dsearch.service",
+          "dcal.service",
+          "dfiles.service",
+          "dux-application-themes.service"
+        ],
+        "new_and_existing_user_presets": true,
+        "snapper_timeline_disabled": true,
+        "greetd_after": [
+          "basic.target",
+          "system.slice",
+          "plymouth-quit.service",
+          "systemd-journald.socket",
+          "sysinit.target",
+          "getty@tty1.service",
+          "systemd-user-sessions.service",
+          "plymouth-quit-wait.service"
+        ],
+        "recovery_conditions": {
+          "systemd-hibernate.service": [
+            [
+              "ConditionKernelCommandLine",
+              false,
+              true,
+              "noresume",
+              0
+            ]
+          ],
+          "systemd-hybrid-sleep.service": [
+            [
+              "ConditionKernelCommandLine",
+              false,
+              true,
+              "noresume",
+              0
+            ]
+          ],
+          "systemd-suspend-then-hibernate.service": [
+            [
+              "ConditionKernelCommandLine",
+              false,
+              true,
+              "noresume",
+              0
+            ]
+          ]
+        },
+        "repository_order": [
+          "omarchy",
+          "core",
+          "extra",
+          "arch-niri-dux"
+        ],
+        "login_keyring_unlocked": true
+      },
+      "niri": {
+        "stock_inherited": true,
+        "override_effective": true,
+        "reset_restores_stock": true,
+        "manual_mru_preserved": true,
+        "native_binds_next_included": {
+          "exists": true,
+          "included": true
+        },
+        "alt_f4_inherited": true,
+        "tracked_override_link_preserved": true
+      }
+    },
+    "kernel_co_transaction": {
+      "evidence": "/home/abdulrahman/.t3/worktrees/arch-niri-dux/package-owned-policy/out/verify-boot-policy-kernel",
+      "inputs": {
+        "kernel_sha256": "e5c8674514d6ec198b24ebc26bd282a44afa2ce445662d8958fbdc7717bf3bb7",
+        "fixture": "/home/abdulrahman/.t3/worktrees/arch-niri-dux/package-owned-policy/out/verify-package-owned-hybrid/disk.qcow2",
+        "accepted_inputs": {
+          "iso": "/home/abdulrahman/.t3/worktrees/arch-niri-dux/package-owned-policy/out/arch-niri-dux-2026.11.06-x86_64.iso",
+          "iso_sha256": "160a1d089750bdd35a26ef70d5fd8cf5c12b6c824e646faf6eba35907db3a2bd",
+          "package_manifest_sha256": "2201f9cf472f332ae08dfbd9e5a64fbbb3b903e5d35448ec01c7e32050855f70",
+          "verification_scripts": {
+            "verification/__init__.py": "adcf5ec1deba87cdcad5c9b7e0929c54d08529d2638943965b59ed506b1b95ea",
+            "verification/apps.py": "82f9eccc5c962c7e4eb160306270dd2b1530ccf785718878a5c192bfb50310d7",
+            "verification/boot.py": "0d327d9f710a4e8d1ad699c4837bdbd7e522671116288329c8d61bf8653959bf",
+            "verification/browser.py": "e4f0142ac5adf5795177c623018dec2582d639e6aa0b72a23e9e3d9967b0a9a9",
+            "verification/camera.py": "2bb0b484f2719196937cd892d47d8fdc94b1d00ef35fc3184207c53891c11ddb",
+            "verification/desktop.py": "dd63598825cb552f2b9bd65305675154fed1476a7f9345de547af9acd5677521",
+            "verification/guest.py": "1c7edbd26a95c68ec130bbdaebdf57cec944c1012f0940af294a5618e541f938",
+            "verification/integration.py": "b1aa75c688270e9c0cc3a4acc7ce5d725fd0a0649bc7c6a02cb23718da20d973",
+            "verification/pdf.py": "7d4ffad5738c183c12665335aea1a9a345e17e4a03ef35f1594164f27ef87e6d",
+            "verification/policy.py": "e7196c3a74a90a655446182dab6831a74785967e6225f846d7bc24d128d34e7e",
+            "verification/recovery.py": "d2dd5a3be623a941097ff806b1417507332a18dba53ee443d8cf633cba19ae3a",
+            "verification/vm.py": "c2ed048f7a4fab6b003c2ed2db24fe6a76cee28ebc48414ec08a669b9e5f9924",
+            "build-integration.py": "d7a4786bbf3c5147f51f5f714cd619f47cc9f376da5b3d2a818180ff6df090a2",
+            "verify.py": "8e115cc364c12b290ed496dba1d440ac75b73839761bb5c6f11b21ee2af1e214"
+          }
+        },
+        "source_sha256": "dd90e84f40b4c3dd28cabdf6930da6abd2bdac6c7c803fe05cf7cfb1a59e5156",
+        "verification_scripts": {
+          "verification/__init__.py": "adcf5ec1deba87cdcad5c9b7e0929c54d08529d2638943965b59ed506b1b95ea",
+          "verification/apps.py": "82f9eccc5c962c7e4eb160306270dd2b1530ccf785718878a5c192bfb50310d7",
+          "verification/boot.py": "2282f8d867d2a1062b41ccc61d1c85e9b04b1e43f5f867672992a36dba5fda8a",
+          "verification/browser.py": "e4f0142ac5adf5795177c623018dec2582d639e6aa0b72a23e9e3d9967b0a9a9",
+          "verification/camera.py": "2bb0b484f2719196937cd892d47d8fdc94b1d00ef35fc3184207c53891c11ddb",
+          "verification/desktop.py": "dd63598825cb552f2b9bd65305675154fed1476a7f9345de547af9acd5677521",
+          "verification/guest.py": "1c7edbd26a95c68ec130bbdaebdf57cec944c1012f0940af294a5618e541f938",
+          "verification/integration.py": "b1aa75c688270e9c0cc3a4acc7ce5d725fd0a0649bc7c6a02cb23718da20d973",
+          "verification/pdf.py": "7d4ffad5738c183c12665335aea1a9a345e17e4a03ef35f1594164f27ef87e6d",
+          "verification/policy.py": "e31a6ab4a4e015259cd994715a96cbe7bfefaccba5b8b046c8e5903247bd6e68",
+          "verification/recovery.py": "d2dd5a3be623a941097ff806b1417507332a18dba53ee443d8cf633cba19ae3a",
+          "verification/vm.py": "450eee11e6ec2cfa6067f6ece04cae852163128d09e22b60b1da1716879f1a3f",
+          "build-integration.py": "d7a4786bbf3c5147f51f5f714cd619f47cc9f376da5b3d2a818180ff6df090a2",
+          "verify-fast.py": "748d3fb4b7591aa8d31bbe139d81da257763f76246f35bb8bd54a05330d916dc"
+        }
+      },
+      "packages": {
+        "version": "0.3.0-2",
+        "source_sha256": "5c4c391281f37512c2251b6f7adcd68b2daae0f87f264d799689cb96ae64402b",
+        "recipe_sha256": "c7a74b554bbf701668be3adb1a71f0f1bf21634c4d01d26ccb06947ae195b9ea",
+        "source_date_epoch": 1793987812,
+        "packages": [
+          {
+            "name": "arch-niri-dux",
+            "filename": "arch-niri-dux-0.3.0-2-any.pkg.tar.zst",
+            "sha256": "3a502eb26b172a64e3b7505785fc6c2a7ab5daf55ca629e077b8b41a703942df"
+          },
+          {
+            "name": "arch-niri-dux-baseline",
+            "filename": "arch-niri-dux-baseline-0.3.0-2-any.pkg.tar.zst",
+            "sha256": "8cf4de2781c0c42b6aa29de13c899b839ed2d7f166e8cafe346555f835a706bd"
+          }
+        ]
+      },
+      "boot_artifacts": {
+        "before": {
+          "/boot/5fd0ad52c3514b749650a900171795ce/linux/initramfs": {
+            "mtime_ns": 1793985896000000000,
+            "sha256": "145ba5e50e1ee885453926de48c76f17528e716b6c1eec3be10a040e4a2bf548"
+          },
+          "/boot/limine.conf": {
+            "mtime_ns": 1793985930000000000,
+            "sha256": "707dad775e88938c9000ba2bc41cbc96a38ea142d4283d27c47865050c24e712"
+          }
+        },
+        "after": {
+          "/boot/5fd0ad52c3514b749650a900171795ce/linux/initramfs": {
+            "mtime_ns": 1793988340000000000,
+            "sha256": "14d01d0ba2239dd3082f5592509abd4ec9a085865d6b10e8a5ce3be71540c700"
+          },
+          "/boot/limine.conf": {
+            "mtime_ns": 1793988344000000000,
+            "sha256": "0d2f3951efd79bcf7b5970f74b726c46a1b7e8c659798c3dff2206e8ce66bc3d"
+          }
+        },
+        "installed_packages": "arch-niri-dux 0.3.0-2\narch-niri-dux-baseline 0.3.0-2\nlinux 7.2.14.arch1-1",
+        "all_boot_artifacts_regenerated": true
+      },
+      "result": {
+        "fixture": "/home/abdulrahman/.t3/worktrees/arch-niri-dux/package-owned-policy/out/verify-package-owned-hybrid/disk.qcow2",
+        "source_sha256": "dd90e84f40b4c3dd28cabdf6930da6abd2bdac6c7c803fe05cf7cfb1a59e5156",
+        "kernel_in_transaction": true,
+        "checks": [
+          "ALPM boot policy regeneration",
+          "package upgrade",
+          "Niri and Dux bindings",
+          "presets",
+          "greetd login and unlocked keyring",
+          "systemd drop-ins"
+        ]
+      },
+      "transaction_log": "/home/abdulrahman/.t3/worktrees/arch-niri-dux/package-owned-policy/out/verify-boot-policy-kernel/boot-policy-transaction.log",
+      "transaction_log_sha256": "7bb6e243c5ae6c9ab8e559d18210d84ef48148e64f827fa5df91928f7cc7c023",
+      "package_policy": {
+        "package_owned_policy": [
+          "/etc/mkinitcpio.conf.d/arch-niri-dux.conf",
+          "/etc/snapper/configs/root",
+          "/usr/share/libalpm/hooks/95-arch-niri-dux-boot-policy.hook",
+          "/usr/lib/pam.d/arch-niri-dux",
+          "/usr/share/limine-entry-tool.d/arch-niri-dux.conf",
+          "/usr/lib/systemd/system-preset/50-arch-niri-dux.preset",
+          "/usr/lib/systemd/user-preset/50-arch-niri-dux.preset",
+          "/usr/share/arch-niri-dux/niri/tail.kdl",
+          "/usr/lib/systemd/system/greetd.service.d/10-plymouth.conf",
+          "/usr/lib/systemd/system/systemd-hibernate.service.d/60-recovery.conf",
+          "/usr/lib/systemd/system/systemd-hybrid-sleep.service.d/60-recovery.conf",
+          "/usr/lib/systemd/system/systemd-suspend-then-hibernate.service.d/60-recovery.conf"
+        ],
+        "system_units_enabled": [
+          "NetworkManager.service",
+          "bluetooth.service",
+          "snapper-cleanup.timer",
+          "limine-snapper-sync.service",
+          "systemd-timesyncd.service",
+          "power-profiles-daemon.service",
+          "getty@tty2.service",
+          "cups.service",
+          "avahi-daemon.service",
+          "greetd.service"
+        ],
+        "user_units_enabled": [
+          "dms.service",
+          "dsearch.service",
+          "dcal.service",
+          "dfiles.service",
+          "dux-application-themes.service"
+        ],
+        "new_and_existing_user_presets": true,
+        "snapper_timeline_disabled": true,
+        "greetd_after": [
+          "plymouth-quit-wait.service",
+          "basic.target",
+          "sysinit.target",
+          "systemd-journald.socket",
+          "plymouth-quit.service",
+          "systemd-user-sessions.service",
+          "system.slice",
+          "getty@tty1.service"
+        ],
+        "recovery_conditions": {
+          "systemd-hibernate.service": [
+            [
+              "ConditionKernelCommandLine",
+              false,
+              true,
+              "noresume",
+              0
+            ]
+          ],
+          "systemd-hybrid-sleep.service": [
+            [
+              "ConditionKernelCommandLine",
+              false,
+              true,
+              "noresume",
+              0
+            ]
+          ],
+          "systemd-suspend-then-hibernate.service": [
+            [
+              "ConditionKernelCommandLine",
+              false,
+              true,
+              "noresume",
+              0
+            ]
+          ]
+        },
+        "repository_order": [
+          "omarchy",
+          "core",
+          "extra",
+          "arch-niri-dux"
+        ],
+        "login_keyring_unlocked": true
+      },
+      "niri": {
+        "stock_inherited": true,
+        "override_effective": true,
+        "reset_restores_stock": true,
+        "manual_mru_preserved": true,
+        "native_binds_next_included": {
+          "exists": true,
+          "included": true
+        },
+        "alt_f4_inherited": true,
+        "tracked_override_link_preserved": true
+      }
+    }
+  },
+  "limits": [
+    "Upgrade qualification on accepted 0.3.0-1 VM overlays; no fresh 0.3.0-2 ISO/install run.",
+    "Full fresh verification remains required before release. No production publication or physical machine changes."
+  ],
+  "implementation_sha256": {
+    "packages/integration/PKGBUILD": "7abca9eafd8a71bccea465cd0c74d8ab4030aa89157757d4d151ea8c2d7e634a",
+    "desktop/usr/share/libalpm/hooks/95-arch-niri-dux-boot-policy.hook": "f618be02f2d8eae7a24d7e4d076dc239115939f3b0cc3e0e49c90b61a01f580c",
+    "desktop/etc/mkinitcpio.conf.d/arch-niri-dux.conf": "a564b8eb0642391637d32eff15c6491411f84e47f3cef927d84372e454797526",
+    "desktop/usr/share/limine-entry-tool.d/arch-niri-dux.conf": "484911ea1fdb992faac26278aef3a2d4588c29df4b8600db6f176224482045d3",
+    "scripts/verify-fast.py": "748d3fb4b7591aa8d31bbe139d81da257763f76246f35bb8bd54a05330d916dc",
+    "scripts/verification/policy.py": "e31a6ab4a4e015259cd994715a96cbe7bfefaccba5b8b046c8e5903247bd6e68",
+    "scripts/verification/boot.py": "2282f8d867d2a1062b41ccc61d1c85e9b04b1e43f5f867672992a36dba5fda8a"
+  }
+}

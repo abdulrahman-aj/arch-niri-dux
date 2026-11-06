@@ -86,7 +86,7 @@ def plymouth_config(root='/'):
     root = Path(root)
     # Read the initramfs that will actually boot, rather than a single config
     # file: mkinitcpio combines the main file with later drop-ins.
-    images = list((root / 'boot').glob('initramfs-linux*.img'))
+    images = list((root / 'boot').glob('*/*/initramfs'))
     assert images, 'No built initramfs found.'
     for image in images:
         contents = run('lsinitcpio', str(image), stdout=subprocess.PIPE).stdout.splitlines()

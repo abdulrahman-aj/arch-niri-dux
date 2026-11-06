@@ -11,10 +11,13 @@ image does not qualify later signed release bytes or production HTTPS delivery.
 builds current integration packages inside a disposable overlay of a completed
 `make verify` image. Keep `ACCEPTANCE-PASSED`, `install.json` and `OVMF_VARS.fd`
 next to the fixture. Use an accepted 0.3+ fixture: older installer-owned policy
-requires manual repair, and this target performs no migration. It checks Niri
+requires manual repair, and this target performs no migration. It verifies ALPM regenerated the active Limine initramfs and boot menu,
+without manually invoking the rebuild tool, then checks Niri
 validation, the Dux shortcut editor/cheatsheet, enabled units and presets, greetd
 login, unlocked GNOME Keyring, and loaded vendor systemd drop-ins. It does not
 replace fresh installation or snapshot/alongside qualification.
+Pass `--kernel-package PATH` to include a local kernel archive in the same
+transaction and exercise both boot rebuild hooks.
 
 The current [0.3.0-1 qualification](verification/package-owned-policy-2026-11-06.json)
 passed all 28 fresh offline acceptance stages and the fast package tier, with
@@ -24,6 +27,16 @@ includes, package-owned defaults/session tail and `overrides.kdl` last. Policy
 ownership, both user preset cases, greetd/keyring, snapshot restoration and
 recovery `noresume` passed. Raw evidence is under
 `out/verify-package-owned-hybrid/` and `out/verify-package-owned-fast-2/`.
+
+The [0.3.0-2 boot-policy upgrade qualification](verification/boot-policy-upgrade-2026-11-06.json)
+passed the fast tier twice: a policy-only package upgrade, and the same upgrade
+with a pinned-kernel reinstall exercising ALPM's Upgrade trigger. The newly
+shipped hook ran in its first installation transaction. Both active initramfs
+and `limine.conf` mtimes/hashes changed without a manual rebuild. In the combined
+transaction the native and policy hooks rebuilt sequentially; reboot, greetd,
+keyring, Niri/Dux and loaded-policy checks passed afterward. Full fresh
+0.3.0-2 ISO/install qualification remains required before release; the fresh
+and alongside results below/above qualify the 0.3.0-1 fixture.
 
 ## Alongside acceptance
 

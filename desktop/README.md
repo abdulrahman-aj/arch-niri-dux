@@ -97,3 +97,9 @@ Greetd selects `/usr/lib/pam.d/arch-niri-dux` for authentication, including the
 stock local-login stack and GNOME Keyring password/session integration. Its
 greeter session uses the same stack. `/etc/pacman.d/arch-niri-dux.conf` owns the
 online repository order and servers; the installer retains only pacman options.
+
+Package installs/upgrades of the mkinitcpio and Limine policy drop-ins trigger
+`95-arch-niri-dux-boot-policy.hook`, which runs `limine-mkinitcpio` to rebuild
+active initramfs images and boot entries. A transaction that also changes the
+kernel may run both this hook and the upstream kernel hook; both use the same
+serialized upstream rebuild implementation.

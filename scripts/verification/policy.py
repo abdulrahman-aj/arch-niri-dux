@@ -1,6 +1,7 @@
 """Package policy qualification on disposable installed guests."""
 
 import json
+import hashlib
 from pathlib import Path
 import subprocess
 import pwd
@@ -24,6 +25,7 @@ def output(*args):
 def check():
     run('systemd-detect-virt', '--vm')
     owned = ['/etc/mkinitcpio.conf.d/arch-niri-dux.conf', '/etc/snapper/configs/root',
+             '/usr/share/libalpm/hooks/95-arch-niri-dux-boot-policy.hook',
              '/usr/lib/pam.d/arch-niri-dux', '/usr/share/limine-entry-tool.d/arch-niri-dux.conf',
              '/usr/lib/systemd/system-preset/50-arch-niri-dux.preset',
              '/usr/lib/systemd/user-preset/50-arch-niri-dux.preset',
@@ -93,5 +95,31 @@ def check():
     }, indent=2) + '\n')
 
 
+def boot_artifacts():
+    # limine_history payloads are immutable recovery images, not current kernels.
+    paths = [*sorted(Path('/boot').glob('*/*/initramfs')), Path('/boot/limine.conf')]
+    assert len(paths) > 1, 'No installed initramfs found.'
+    return {str(path): {'mtime_ns': path.stat().st_mtime_ns,
+                        'sha256': hashlib.sha256(path.read_bytes()).hexdigest()}
+            for path in paths}
+
+
+def record_boot():
+    run('systemd-detect-virt', '--vm')
+    Path('/run/verify/boot-policy-before.json').write_text(json.dumps(boot_artifacts(), indent=2) + '\n')
+
+
+def upgraded_boot():
+    before = json.loads(Path('/run/verify/boot-policy-before.json').read_text())
+    after = boot_artifacts()
+    for path, old in before.items():
+        assert after[path]['mtime_ns'] > old['mtime_ns'], (path, old, after[path])
+    Path('/run/verify/boot-policy-upgrade.json').write_text(json.dumps({
+        'before': before, 'after': after,
+        'installed_packages': output('pacman', '-Q', 'arch-niri-dux', 'arch-niri-dux-baseline', 'linux'),
+        'all_boot_artifacts_regenerated': True,
+    }, indent=2) + '\n')
+
+
 if __name__ == '__main__':
-    dispatch('policy', {'check': check})
+    dispatch('policy', {'check': check, 'record-boot': record_boot, 'upgraded-boot': upgraded_boot})

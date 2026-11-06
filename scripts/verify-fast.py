@@ -19,6 +19,8 @@ def main():
     parser.add_argument('--fixture', required=True, type=Path,
                         help='disk.qcow2 from a full accepted make verify run')
     parser.add_argument('--directory', required=True, type=Path, help='New evidence directory')
+    parser.add_argument('--kernel-package', type=Path,
+                        help='Also reinstall this kernel archive in the same package transaction')
     args = parser.parse_args()
     fixture = args.fixture.resolve()
     accepted = fixture.parent
@@ -28,6 +30,8 @@ def main():
     directory.mkdir(mode=0o700, parents=True, exist_ok=False)
     for name in ('OVMF_VARS.fd', 'install.json'):
         shutil.copyfile(accepted / name, directory / name)
+    if args.kernel_package:
+        shutil.copyfile(args.kernel_package, directory / 'kernel.pkg.tar.zst')
     probe_hashes = stage_probes(directory)
     spec = importlib.util.spec_from_file_location('builder', ROOT / 'scripts/build-integration.py')
     builder = importlib.util.module_from_spec(spec)
@@ -37,6 +41,7 @@ def main():
     epoch = int(subprocess.check_output(['git', 'log', '-1', '--format=%ct'], cwd=ROOT, text=True))
     builder.prepare_source(ROOT, source, epoch)
     (directory / 'inputs.json').write_text(json.dumps({
+        'kernel_sha256': builder.digest(directory / 'kernel.pkg.tar.zst') if args.kernel_package else None,
         'fixture': str(fixture), 'accepted_inputs': json.loads((accepted / 'inputs.json').read_text()),
         'source_sha256': builder.digest(source / 'integration.tar'),
         'verification_scripts': probe_hashes | {'verify-fast.py': builder.digest(Path(__file__))},
@@ -59,12 +64,15 @@ def main():
                    'chown -R tester:tester /tmp/fast')
         vm.command(f'runuser -u tester -- python /run/verify/build-integration.py '
                    f'/tmp/fast/source /tmp/fast/build /tmp/fast/packages --epoch {epoch}', timeout=180)
-        vm.command('pacman -U --noconfirm /tmp/fast/packages/*.pkg.tar.zst; '
+        vm.probe('policy', 'record-boot')
+        kernel = ' /run/verify/kernel.pkg.tar.zst' if args.kernel_package else ''
+        vm.command('pacman -U --noconfirm /tmp/fast/packages/*.pkg.tar.zst' + kernel
+                   + ' >/run/verify/boot-policy-transaction.log 2>&1; '
                    'cp /tmp/fast/packages/integration.manifest.json /run/verify/fast-packages.json; '
                    'systemctl preset ' + ' '.join(SYSTEM_UNITS)
                    + ' snapper-timeline.timer; systemctl --global preset '
                    + ' '.join(USER_UNITS), timeout=300)
-        vm.command('limine-mkinitcpio', timeout=300)
+        vm.probe('policy', 'upgraded-boot')
         vm.poweroff()
         vm.stop()
         vm.start(cdrom=False)
@@ -77,7 +85,8 @@ def main():
         vm.poweroff()
         (directory / 'FAST-PASSED').write_text(json.dumps({
             'fixture': str(fixture), 'source_sha256': builder.digest(source / 'integration.tar'),
-            'checks': ['package upgrade', 'Niri and Dux bindings', 'presets',
+            'kernel_in_transaction': bool(args.kernel_package),
+            'checks': ['ALPM boot policy regeneration', 'package upgrade', 'Niri and Dux bindings', 'presets',
                        'greetd login and unlocked keyring', 'systemd drop-ins'],
         }, indent=2) + '\n')
     finally:
