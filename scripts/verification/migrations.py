@@ -161,6 +161,7 @@ def check():
     user_effect.unlink()
     ready.unlink()
     run(COMMAND, 'run')
+    user_command('systemctl', '--user', 'is-active', 'arch-niri-dux-migrate.path')
     Path('/run/verify/migrations.json').write_text(json.dumps({
         'ordering_and_retry': True, 'failure_and_status': True,
         'path_in_active_session': True, 'user_only_release': True,

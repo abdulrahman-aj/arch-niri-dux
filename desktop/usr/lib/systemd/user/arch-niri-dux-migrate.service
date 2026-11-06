@@ -1,6 +1,8 @@
 [Unit]
 # Run after the enabling target without making that target wait for this queue.
 DefaultDependencies=no
+# Successive package transactions and failure recovery can arrive in a burst.
+StartLimitIntervalSec=0
 Conflicts=shutdown.target
 Before=shutdown.target
 Description=Apply Arch Niri Dux user migrations
