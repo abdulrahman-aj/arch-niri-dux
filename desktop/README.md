@@ -26,10 +26,10 @@ layout/input files remain local, so Dux settings continue to control them.
 
 ## Personal Niri configuration
 
-Put personal overrides in `~/.config/niri/custom.kdl`. The entrypoint includes it
-last, after the packaged defaults and Dux-generated settings. It is optional;
-the installer does not create it, and initialization and package upgrades leave
-its contents and symlinks alone. Dotfile tools such as Stow can manage this file
+Put personal overrides in `~/.config/niri/overrides.kdl`. The entrypoint includes it
+last, after the packaged defaults and Dux-generated settings. Initialization seeds
+a comment-only file explaining its purpose when it is absent. Existing contents
+and symlinks are preserved. Dotfile tools such as Stow can manage this file
 without taking ownership of `config.kdl` or Dux-generated files.
 
 For example, to make tiled columns full width while leaving floating dialogs
@@ -41,17 +41,29 @@ layout {
 }
 ```
 
-You can also use relative `include` directives inside `custom.kdl` to split your
+You can also use relative `include` directives inside `overrides.kdl` to split your
 configuration into files. Paths resolve from `~/.config/niri/`, including when
-`custom.kdl` is a symlink. Settings in `custom.kdl` take precedence over Dux's
+`overrides.kdl` is a symlink. Settings in `overrides.kdl` take precedence over Dux's
 settings, so only override the settings you intend to manage yourself.
 
-Existing installations keep their current `config.kdl`. To enable this extension
-point there, add this line once at the end of `~/.config/niri/config.kdl`:
+On existing packaged installations, the next Niri login migrates an unchanged
+stock `config.kdl` from releases `0.2.0-1` through `0.2.0-4`. The session runs
+`/usr/lib/arch-niri-dux/migrate-niri-overrides` as the desktop user. It backs up
+the original to `config.kdl.before-overrides`, seeds a missing `overrides.kdl`,
+and atomically replaces the stock entrypoint. Existing overrides are preserved.
+
+Customized entrypoints and symlinks are left alone. To enable the extension
+point in one of those, add this line at the end of your entrypoint:
 
 ```kdl
-include optional=true "custom.kdl"
+include optional=true "overrides.kdl"
 ```
+
+To apply the stock-entrypoint migration in a running session or retry a failure,
+run `/usr/lib/arch-niri-dux/migrate-niri-overrides` as your desktop user. Login
+attempts log through `systemd-cat`; inspect them with
+`journalctl -t arch-niri-dux-niri`. The helper retries safely and never
+overwrites an unrelated backup. A package update does not restart your session.
 
 ## Desktop defaults
 

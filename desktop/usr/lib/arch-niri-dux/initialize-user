@@ -21,6 +21,9 @@ fi
 if [[ ! -e "$config_dir/niri/config.kdl" && ! -L "$config_dir/niri/config.kdl" ]]; then
     install -m 0644 "$defaults/niri-user.kdl" "$config_dir/niri/config.kdl"
 fi
+if [[ ! -e "$config_dir/niri/overrides.kdl" && ! -L "$config_dir/niri/overrides.kdl" ]]; then
+    install -m 0644 "$defaults/niri-overrides.kdl" "$config_dir/niri/overrides.kdl"
+fi
 # Dux's terminal picker reads a per-user list. Factory MIME defaults are inherited.
 if [[ ! -e "$config_dir/xdg-terminals.list" && ! -L "$config_dir/xdg-terminals.list" ]]; then
     install -m 0644 /etc/xdg/xdg-terminals.list "$config_dir/xdg-terminals.list"

@@ -1,0 +1,3 @@
+// Personal Niri overrides, loaded after distro defaults and Dux-generated settings.
+// Add settings here, or include other files relative to your Niri config directory.
+// This file is yours: Dux and package upgrades do not overwrite it.

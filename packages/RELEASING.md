@@ -41,6 +41,33 @@ repository metadata are regenerated. Signatures do not prevent a server replayin
 older signed repository. Release CI runs unit tests and makepkg, not graphical
 VM acceptance. Keep the candidate's local VM evidence with the PR.
 
+## Per-user Niri migration
+
+The overrides entrypoint is the first targeted user-state migration, not a
+general migration runner. The packaged session starts
+`/usr/lib/arch-niri-dux/migrate-niri-overrides` as each Niri user. Logged-out
+users receive it on their next login; fresh users get the new seed directly.
+There is no root hook traversing home directories or replaying user setup.
+
+The helper recognizes the exact stock entrypoint shipped in `0.2.0-1` through
+`0.2.0-4`. Keep that fingerprint available so direct upgrades can skip releases.
+Keep its session-start trigger in later packages too: a logged-out user may
+upgrade past every intervening release before their next login. Neither can be
+removed while direct upgrades from those releases remain supported.
+Customized files, files owned by another user, and symlinks are not migrated.
+The helper retains the original backup and replaces the entrypoint atomically.
+Its resulting content is the completion condition, so there is no marker that
+could get out of sync with `/home` after snapshot restoration. Failed attempts
+can be retried at login or by running the helper as the desktop user.
+
+Package downgrades do not undo the migration. The added include is optional and
+remains valid with older `0.2.0` defaults; personal overrides stay user-owned.
+The original entrypoint is available in `config.kdl.before-overrides` for manual
+recovery. Source tests cover preservation, retries and restored old content.
+Use the installed-system upgrade/recovery verification path when qualifying
+the release. Broader system-state migrations remain tracked in
+[issue #54](https://github.com/abdulrahman-aj/arch-niri-dux/issues/54).
+
 ## Signing and recovery
 
 The [release-key guide](../keys/RECOVERY.md) explains the master and signing keys,

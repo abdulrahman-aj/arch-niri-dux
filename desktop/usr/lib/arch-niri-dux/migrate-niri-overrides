@@ -1,0 +1,39 @@
+#!/usr/bin/env bash
+set -euo pipefail
+[[ $EUID != 0 ]] || { echo 'Run Niri migration as the desktop user.' >&2; exit 1; }
+
+defaults="$(dirname -- "${BASH_SOURCE[0]}")/../../share/arch-niri-dux"
+niri_dir="${XDG_CONFIG_HOME:-$HOME/.config}/niri"
+config="$niri_dir/config.kdl"
+[[ -f "$config" && -O "$config" && ! -L "$config" ]] || exit 0
+
+# Exact seed shipped in packaged releases 0.2.0-1 through 0.2.0-4.
+# Retain this fingerprint so upgrades can skip those releases.
+digest="$(sha256sum -- "$config")"
+digest="${digest%% *}"
+[[ "$digest" == 5fe73e67f8900c5a89c217fa6321b4a04db0cb758796d1b44c1a3ccd1dcde880 ]] || exit 0
+
+backup="$config.before-overrides"
+cp --preserve=mode --no-clobber -- "$config" "$backup"
+if [[ -L "$backup" ]] || ! cmp -s -- "$config" "$backup"; then
+    echo "Niri migration stopped: entrypoint or backup changed; inspect $backup before retrying." >&2
+    exit 1
+fi
+
+overrides="$niri_dir/overrides.kdl"
+if [[ ! -e "$overrides" && ! -L "$overrides" ]]; then
+    install -m 0644 "$defaults/niri-overrides.kdl" "$overrides"
+fi
+
+temporary="$(mktemp "$niri_dir/.config.kdl.XXXXXX")"
+trap 'rm -f -- "$temporary"' EXIT
+install -m "$(stat -c %a -- "$config")" "$defaults/niri-user.kdl" "$temporary"
+
+# Do not replace an entrypoint edited while the migration was preparing its files.
+current="$(sha256sum -- "$config")"
+if [[ -L "$config" || "${current%% *}" != "$digest" ]]; then
+    echo 'Niri migration stopped: the entrypoint changed; retry after editing finishes.' >&2
+    exit 1
+fi
+mv -T -- "$temporary" "$config"
+printf 'Enabled Niri overrides; original entrypoint saved to %s\n' "$backup"

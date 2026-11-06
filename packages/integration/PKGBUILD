@@ -18,7 +18,7 @@ prepare() {
 }
 
 package_arch-niri-dux() {
-    depends=(bash systemd pacman niri 'dux-shell>=2.1.0' dux-greeter-bin dux-search-bin dux-calendar-bin
+    depends=(bash coreutils diffutils systemd pacman niri 'dux-shell>=2.1.0' dux-greeter-bin dux-search-bin dux-calendar-bin
              dux-files-bin greetd gnome-keyring matugen adw-gtk-theme gtk3
              xdg-desktop-portal-gnome xdg-desktop-portal-gtk xdg-terminal-exec xdg-utils)
     backup=(etc/fonts/conf.d/50-arabic.conf etc/greetd/dux.toml
@@ -29,7 +29,8 @@ package_arch-niri-dux() {
             etc/xdg/xdg-terminals.list)
     cp -a "$srcdir/desktop/etc" "$srcdir/desktop/usr" "$pkgdir/"
     chmod 0755 "$pkgdir/usr/lib/arch-niri-dux/initialize-user" \
-        "$pkgdir/usr/lib/arch-niri-dux/initialize-application-themes"
+        "$pkgdir/usr/lib/arch-niri-dux/initialize-application-themes" \
+        "$pkgdir/usr/lib/arch-niri-dux/migrate-niri-overrides"
     install -Dm644 "$srcdir/desktop/usr/share/arch-niri-dux/DUX-LICENSE" \
         "$pkgdir/usr/share/licenses/$pkgname/DUX-LICENSE"
     # Originals remain pinned source inputs; sessions load the generated files.

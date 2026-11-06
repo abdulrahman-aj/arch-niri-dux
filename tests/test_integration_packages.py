@@ -27,6 +27,8 @@ class IntegrationSourceTests(unittest.TestCase):
                            check=True)
             defaults = payload / 'usr/share/arch-niri-dux'
             self.assertTrue((defaults / 'niri/defaults.kdl').is_file())
+            migration = payload / 'usr/lib/arch-niri-dux/migrate-niri-overrides'
+            self.assertTrue(os.access(migration, os.X_OK))
             bindings = (defaults / 'niri/binds.kdl').read_text()
             self.assertIn('spawn "xdg-terminal-exec"', bindings)
             self.assertNotIn('{{TERMINAL_COMMAND}}', bindings)
@@ -85,7 +87,7 @@ class ExistingUserTests(unittest.TestCase):
             data = home / '.local/share'
             files = [config / 'niri/dms' / f'{name}.kdl'
                      for name in ('colors', 'layout', 'alttab', 'input', 'binds')]
-            files += [config / 'niri/config.kdl', config / 'niri/custom.kdl', config / 'xdg-terminals.list',
+            files += [config / 'niri/config.kdl', config / 'niri/overrides.kdl', config / 'xdg-terminals.list',
                       config / 'mimeapps.list', config / 'environment.d/90-dux.conf', state / 'dms/session.json']
             for index, file in enumerate(files):
                 file.parent.mkdir(parents=True, exist_ok=True)
@@ -96,11 +98,11 @@ class ExistingUserTests(unittest.TestCase):
             bindings = config / 'niri/dms/binds.kdl'
             bindings.unlink()
             bindings.symlink_to(target)
-            custom_target = home / 'tracked-custom.kdl'
-            custom_target.write_text('layout {\n    default-column-width { proportion 1.0; }\n}\n')
-            custom = config / 'niri/custom.kdl'
-            custom.unlink()
-            custom.symlink_to(custom_target)
+            overrides_target = home / 'tracked-overrides.kdl'
+            overrides_target.write_text('layout {\n    default-column-width { proportion 1.0; }\n}\n')
+            overrides = config / 'niri/overrides.kdl'
+            overrides.unlink()
+            overrides.symlink_to(overrides_target)
             manager = data / 'dbus-1/services/dev.duxlabs.files.FileManager1.service'
             manager.parent.mkdir(parents=True)
             manager.symlink_to('/missing/personal-manager.service')
@@ -113,8 +115,8 @@ class ExistingUserTests(unittest.TestCase):
             for file, value in before.items():
                 self.assertEqual((file.read_bytes(), file.stat().st_mode, file.stat().st_uid), value)
             self.assertTrue(bindings.is_symlink())
-            self.assertTrue(custom.is_symlink())
-            self.assertEqual(custom.readlink(), custom_target)
+            self.assertTrue(overrides.is_symlink())
+            self.assertEqual(overrides.readlink(), overrides_target)
             self.assertEqual(manager.readlink(), Path('/missing/personal-manager.service'))
 
 

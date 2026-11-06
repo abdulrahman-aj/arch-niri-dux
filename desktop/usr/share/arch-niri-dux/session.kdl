@@ -1,3 +1,6 @@
+// Runs as each desktop user, including users logged out during package updates.
+spawn-at-startup "systemd-cat" "--identifier=arch-niri-dux-niri" "/usr/lib/arch-niri-dux/migrate-niri-overrides"
+
 environment {
     QT_QPA_PLATFORM "wayland;xcb"
     QT_QPA_PLATFORMTHEME "gtk3"
