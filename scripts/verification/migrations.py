@@ -35,7 +35,8 @@ def check():
     assert not any((CODE / 'user').iterdir())
     assert (STATE / 'generation').is_file()
     assert (USER_STATE / 'lock').is_file()
-    run('useradd', '-m', 'migration-later')
+    # Avoid logind retaining a just-deleted policy probe's UID during shutdown.
+    run('useradd', '-m', '-u', '42420', 'migration-later')
     run('runuser', '-u', 'migration-later', '--', 'bash', '/usr/lib/arch-niri-dux/initialize-user')
     run('systemctl', 'stop', 'arch-niri-dux-migrate.service')
     system_effect = Path('/var/lib/arch-niri-dux/verification-effects')
