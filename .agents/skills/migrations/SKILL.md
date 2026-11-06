@@ -11,8 +11,9 @@ scripts.
 
 Place Bash scripts in `desktop/usr/lib/arch-niri-dux/migrations/{system,user}/`.
 System scripts run as root; user scripts run per account after system success.
-Use sortable IDs like `20261106_01_description.sh`. Retain scripts across
-releases for skipped-version upgrades. Never edit a released script or reuse an
+Name scripts `YYYYMMDD_NN_slug.sh`, e.g. `20261106_01_description.sh`; the
+runner rejects other names so text order stays chronological. Retain scripts
+across releases for skipped-version upgrades. Never edit a released script or reuse an
 ID. Scripts must be offline, noninteractive and idempotent. Interruption can
 occur between side effects and recording. No downloads, package transactions,
 prompts, or sudo from user scripts. Exit 0 for success; exit 77 with a stdout

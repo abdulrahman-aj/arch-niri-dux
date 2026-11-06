@@ -35,7 +35,8 @@ def scripts(scope):
     result = sorted(directory.iterdir())
     for path in result:
         trusted(path)
-        if not re.fullmatch(r'[0-9][a-zA-Z0-9_-]*\.sh', path.name) or not path.is_file():
+        # Fixed-width date and sequence keep text sort in chronological order.
+        if not re.fullmatch(r'[0-9]{8}_[0-9]{2}_[a-z0-9][a-z0-9_-]*\.sh', path.name) or not path.is_file():
             raise RuntimeError(f'Invalid migration: {path}')
     return result
 
