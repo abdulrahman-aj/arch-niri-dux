@@ -185,9 +185,8 @@ def restored():
     Path('/run/verify/migration-system-snapshot-effects').write_text(Path('/var/log/arch-niri-dux-migration-snapshot-effects').read_text())
     assert (HOME / '.local/state/migration-user-snapshot-effects').read_text().splitlines() == ['applied']
     assert (USER_STATE / '99999999_10_verification.sh.json').is_file()
-    for scope, state in [('system', STATE), ('user', USER_STATE)]:
-        (CODE / scope / '99999999_10_verification.sh').unlink()
-        (state / '99999999_10_verification.sh.json').unlink()
+    for scope in ('system', 'user'):
+        (CODE / scope / '99999999_10_verification.sh').unlink(missing_ok=True)
     run(COMMAND, 'run')
 
 
