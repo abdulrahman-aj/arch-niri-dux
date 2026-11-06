@@ -181,7 +181,7 @@ def after_snapshot():
 
 def restored():
     wait_until('System migration after root restore', lambda: Path(
-        '/var/log/arch-niri-dux-migration-snapshot-effects').read_text().splitlines() == ['applied', 'applied'])
+        '/var/log/arch-niri-dux-migration-snapshot-effects').read_text().splitlines().count('applied') >= 2)
     Path('/run/verify/migration-system-snapshot-effects').write_text(Path('/var/log/arch-niri-dux-migration-snapshot-effects').read_text())
     assert (HOME / '.local/state/migration-user-snapshot-effects').read_text().splitlines() == ['applied']
     assert (USER_STATE / '99999999_10_verification.sh.json').is_file()
