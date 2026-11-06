@@ -41,6 +41,8 @@ jobs:
           epoch=$(git -c safe.directory="$GITHUB_WORKSPACE" log -1 --format=%ct)
           runuser -u nobody -- python scripts/build-integration.py "$GITHUB_WORKSPACE" \
             "$RUNNER_TEMP/package-work" "$RUNNER_TEMP/packages" --epoch "$epoch"
+          runuser -u nobody -- python scripts/build-dux-apps.py "$GITHUB_WORKSPACE" \
+            "$RUNNER_TEMP/package-work" "$RUNNER_TEMP/packages"
       - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
         with:
           name: integration-${{ github.sha }}

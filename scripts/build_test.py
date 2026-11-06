@@ -8,7 +8,7 @@ spec = importlib.util.spec_from_file_location('build_lock', Path(__file__).with_
 module = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(module)
 
-aur_spec = importlib.util.spec_from_file_location('build_aur', Path(__file__).with_name('build-aur.py'))
+aur_spec = importlib.util.spec_from_file_location('build_dux_apps', Path(__file__).with_name('build-dux-apps.py'))
 aur = importlib.util.module_from_spec(aur_spec)
 aur_spec.loader.exec_module(aur)
 

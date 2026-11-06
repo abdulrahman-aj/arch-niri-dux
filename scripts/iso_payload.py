@@ -17,20 +17,19 @@ def _digest(path):
         return hashlib.file_digest(stream, 'sha256').hexdigest()
 
 
-def _manifest(root, repository, aur_manifest):
+def _manifest(root, repository):
     lock = json.loads((root / 'packages/closure.lock.json').read_text())
     integration = json.loads((repository / 'integration.manifest.json').read_text())
     recipes = json.loads((root / 'packages/aur-recipes.json').read_text())
-    aur = json.loads(aur_manifest.read_text()) if aur_manifest is not None else []
+    apps = integration.get('apps', [])
     expected = {recipe['name']: recipe for recipe in recipes}
-    if len(expected) != len(recipes) or len(aur) != len(expected) or {entry['name'] for entry in aur} != set(expected):
-        raise ValueError('AUR inventory does not match the declared recipes.')
-    if any(entry['recipe'] != expected[entry['name']] for entry in aur):
-        raise ValueError('AUR provenance does not match the declared recipes.')
+    if len(expected) != len(recipes) or len(apps) != len(expected) or {entry['name'] for entry in apps} != set(expected):
+        raise ValueError('Dux app inventory does not match the declared recipes.')
+    if any(entry['recipe'] != expected[entry['name']] for entry in apps):
+        raise ValueError('Dux app provenance does not match the declared recipes.')
     if lock['schema'] != 1:
         raise ValueError('Unsupported package lock schema.')
-    return dict(schema=1, requested=lock['requested'], packages=lock['packages'],
-                integration=integration, aur_packages=aur)
+    return dict(schema=1, requested=lock['requested'], packages=lock['packages'], integration=integration)
 
 
 def _inventory(manifest, repository):
@@ -38,7 +37,7 @@ def _inventory(manifest, repository):
     filenames = set()
     for entries, version in ((manifest['packages'], None),
                              (manifest['integration']['packages'], manifest['integration']['version']),
-                             (manifest['aur_packages'], None)):
+                             (manifest['integration'].get('apps', []), None)):
         for entry in entries:
             name, filename, checksum = entry['name'], entry['filename'], entry['sha256']
             if not isinstance(filename, str) or Path(filename).name != filename or not filename.endswith('.pkg.tar.zst'):
@@ -101,8 +100,8 @@ def _write(path, text):
         temporary.unlink(missing_ok=True)
 
 
-def finalize(root, repository, aur_manifest=None):
-    manifest = _manifest(root, repository, aur_manifest)
+def finalize(root, repository):
+    manifest = _manifest(root, repository)
     inventory = _inventory(manifest, repository)
     # Build a fresh database: merging the bootstrap database can retain entries
     # whose package files are no longer part of the completed payload.
@@ -132,10 +131,8 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('root', type=Path)
     parser.add_argument('repository', type=Path)
-    parser.add_argument('--aur-manifest', type=Path, help='Producer results; omit when no AUR recipes remain')
     arguments = parser.parse_args()
-    finalize(arguments.root.resolve(), arguments.repository.resolve(),
-             arguments.aur_manifest.resolve() if arguments.aur_manifest else None)
+    finalize(arguments.root.resolve(), arguments.repository.resolve())
 
 
 if __name__ == '__main__':

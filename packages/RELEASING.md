@@ -1,9 +1,9 @@
 # Integration releases
 
-Full system updates through pacman, Dux or Yay update `arch-niri-dux` and
-`arch-niri-dux-baseline`. Arch and Dux keep their existing
-sources. Our repository contains only our two packages, with required
-package and database signatures. User initialization creates missing personal
+Full system updates through pacman or Dux update `arch-niri-dux`,
+`arch-niri-dux-baseline` and the four Dux apps from our repository, with required
+package and database signatures. Arch, Omarchy, `dux-shell` and `dux-gop` keep
+their existing sources. User initialization creates missing personal
 defaults. Pacman preserves local system-file edits through its `backup`/`.pacnew`
 behavior. Removing the baseline metapackage opts out of its future app additions
 without removing integration.
@@ -11,6 +11,10 @@ without removing integration.
 ## Publish
 
 1. Change `pkgver`/`pkgrel` in `integration/PKGBUILD` and submit a reviewed PR.
+   Dux app updates arrive as PRs from the `dux-apps.yml` workflow. GitHub does
+   not run CI on PRs created by Actions; close and reopen one to run it. That
+   workflow needs "Allow GitHub Actions to create and approve pull requests".
+   A merged app update ships with the next integration version.
 2. Run `make test`, `make iso-development`, and `make verify` on the candidate.
    Update recorded evidence for changes affecting installation or the desktop.
 3. Merge, then tag that main commit as `integration-v<version>-<pkgrel>` and push
@@ -29,9 +33,13 @@ without removing integration.
 
 The protected release and Pages environments allow only `integration-v*` tags.
 The publisher also requires the tagged commit to belong to main and refuses a
-version older than an already published release. A failed Pages deployment can
+version older than an already published release. Each release contains every
+Dux app. An app version already published keeps its signed bytes. The publisher
+refuses an app downgrade, or changed package contents without a new `pkgrel`. A failed Pages deployment can
 be retried. The publisher reuses the published release's package bytes. Published
-versioned packages remain available for clients with older cached databases.
+integration packages remain available for clients with older cached databases.
+Pages serves only the current Dux app versions, keeping it under its 1 GB limit;
+GitHub Releases keep every version.
 Do not replace release assets or force-move published tags. Make a new version.
 
 Build ISOs from a trusted checkout. Its public key provides the initial release

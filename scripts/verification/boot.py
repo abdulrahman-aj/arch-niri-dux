@@ -192,7 +192,7 @@ def verify_boot(vm, passed, swap_gib):
     passed('UEFI boot from encrypted disk without installation ISO')
     vm.command('test -e /dev/mapper/dux-root; findmnt -n -o FSTYPE / | grep -x btrfs; test "$(ls /sys/class/net | tr "\\n" " ")" = "lo "')
     vm.command('cat /proc/cmdline; ! grep -q /@snapshots/ /proc/cmdline; systemctl is-enabled greetd; systemctl is-active greetd; test -f /home/tester/.config/niri/config.kdl')
-    vm.command('systemctl is-active NetworkManager; systemctl is-enabled bluetooth; command -v nvim chromium alacritty xdg-terminal-exec yay niri dms papers snapshot')
+    vm.command('systemctl is-active NetworkManager; systemctl is-enabled bluetooth; command -v nvim chromium alacritty xdg-terminal-exec niri dms papers snapshot; ! command -v yay')
     vm.command('mkdir -p /run/verify; mount -t 9p -o trans=virtio,version=9p2000.L verify /run/verify || mountpoint -q /run/verify')
     vm.probe('boot', 'plymouth-config')
     vm.probe('boot', 'plymouth-status')

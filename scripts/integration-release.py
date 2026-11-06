@@ -2,6 +2,7 @@
 """Sign the integration repository or fetch an authenticated release for an ISO."""
 
 import argparse
+import gzip
 import importlib.util
 import json
 import os
@@ -12,9 +13,17 @@ import subprocess
 import tempfile
 import urllib.request
 
-spec = importlib.util.spec_from_file_location('integration_build', Path(__file__).with_name('build-integration.py'))
-build = importlib.util.module_from_spec(spec)
-spec.loader.exec_module(build)
+
+
+def load(name, filename):
+    spec = importlib.util.spec_from_file_location(name, Path(__file__).with_name(filename))
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+build = load('integration_build', 'build-integration.py')
+apps = load('dux_apps', 'build-dux-apps.py')
 RELEASES = 'https://github.com/abdulrahman-aj/arch-niri-dux/releases/download'
 
 
@@ -62,6 +71,16 @@ def validate_manifest(root, directory):
         raise ValueError('Invalid source date epoch.')
     if manifest.get('version') != version:
         raise ValueError('Release version does not match the checkout.')
+    recipes = {recipe['name']: (recipe, filename) for recipe, _, filename in apps.recipes(root)}
+    if not isinstance(manifest.get('apps'), list) or len(manifest['apps']) != len(recipes) or \
+            {entry['name'] for entry in manifest['apps']} != set(recipes):
+        raise ValueError('Release must contain exactly the reviewed Dux apps.')
+    for entry in manifest['apps']:
+        recipe, filename = recipes[entry['name']]
+        if entry['recipe'] != recipe or entry['filename'] != filename:
+            raise ValueError('Dux app recipe differs from the release; use iso-development for unreleased work.')
+        if not re.fullmatch(r'[a-f0-9]{64}', entry['sha256']) or build.digest(directory / filename) != entry['sha256']:
+            raise ValueError('Dux app package checksum mismatch.')
     if build.digest(root / 'packages/integration/PKGBUILD') != manifest['recipe_sha256']:
         raise ValueError('Recipe differs from the release; use iso-development for unreleased work.')
     with tempfile.TemporaryDirectory(prefix='integration-inputs-') as temporary:
@@ -93,7 +112,9 @@ def fetch(root, destination, base_url=RELEASES):
     manifest = json.loads((destination / 'integration.manifest.json').read_text())
     expected = {f'{name}-{build.version(root)}-any.pkg.tar.zst' for name in build.NAMES}
     names = [entry['filename'] for entry in manifest['packages']]
-    if len(names) != 2 or set(names) != expected:
+    expected |= {filename for _, _, filename in apps.recipes(root)}
+    names += [entry['filename'] for entry in manifest.get('apps', [])]
+    if len(names) != len(expected) or set(names) != expected:
         raise ValueError('Unexpected release asset names.')
     for name in (*names, 'integration.tar', 'integration.PKGBUILD'):
         download(f'{base}/{name}', destination / name)
@@ -109,6 +130,18 @@ def sign(root, path):
     verify(root, path)
 
 
+def contents(path):
+    """Package metadata and payload digests, without fields that vary between identical rebuilds."""
+    def member(name):
+        return subprocess.check_output(['bsdtar', '-xOf', str(path), name])
+    # Comments name the makepkg/fakeroot versions. .BUILDINFO lists the build
+    # environment, and the .MTREE digests of both metadata files follow from that.
+    info = [line for line in member('.PKGINFO').decode().splitlines() if not line.startswith('#')]
+    tree = [line for line in gzip.decompress(member('.MTREE')).decode().splitlines()
+            if not line.startswith(('./.BUILDINFO ', './.PKGINFO '))]
+    return info, tree
+
+
 def publish(root, packages, history, destination, tag, commit):
     version = build.version(root)
     if tag != f'integration-v{version}' or not re.fullmatch(r'[a-f0-9]{40}', commit):
@@ -121,25 +154,45 @@ def publish(root, packages, history, destination, tag, commit):
     if destination.exists() and (not destination.is_dir() or any(destination.iterdir())):
         raise ValueError('Repository output must be empty.')
     destination.mkdir(parents=True, exist_ok=True)
+    app_entries = {entry['name']: entry for entry in manifest['apps']}
+    versions = {name: (version, 'any') for name in build.NAMES}
+    versions |= {name: (entry['version'], apps.ARCH) for name, entry in app_entries.items()}
+    reused = set()
     for old in history.glob('*.pkg.tar.zst'):
         if old.is_symlink() or not old.is_file():
             raise ValueError('Unexpected historical package link.')
-        name = next((name for name in build.NAMES if re.fullmatch(
-            re.escape(name) + r'-[0-9]+(?:\.[0-9]+)*-[0-9]+(?:\.[0-9]+)*-any\.pkg\.tar\.zst', old.name)), None)
+        name = next((name for name, (_, arch) in versions.items() if re.fullmatch(
+            re.escape(name) + r'-[0-9]+(?:\.[0-9]+)*-[0-9]+(?:\.[0-9]+)*-' + arch + r'\.pkg\.tar\.zst', old.name)), None)
         if name is None:
             raise ValueError('Unexpected historical package name.')
         verify(root, old, historical=True)
-        old_version = old.name.removeprefix(name + '-').removesuffix('-any.pkg.tar.zst')
-        newer = int(subprocess.check_output(['vercmp', version, old_version], text=True))
-        if newer <= 0:
-            raise ValueError('A release must be newer than every published integration package.')
+        current_version, arch = versions[name]
+        old_version = old.name.removeprefix(name + '-').removesuffix(f'-{arch}.pkg.tar.zst')
+        newer = int(subprocess.check_output(['vercmp', current_version, old_version], text=True))
+        if name in build.NAMES:
+            if newer <= 0:
+                raise ValueError('A release must be newer than every published integration package.')
+        elif newer < 0:
+            raise ValueError(f'A release must not downgrade the published {name}.')
+        elif newer == 0:
+            # Rebuilds are not byte-identical, and pacman caches by filename, so a
+            # published version keeps its bytes. A recipe change needs a new pkgrel.
+            if contents(old) != contents(packages / old.name):
+                raise ValueError(f'{old.name} changed without a new pkgrel.')
+            app_entries[name]['sha256'] = build.digest(old)
+            reused.add(old.name)
+        else:
+            # pacman -Syu refreshes the database first. Retaining every app version
+            # would exhaust the 1 GB Pages limit; GitHub Releases keep them.
+            continue
         shutil.copyfile(old, destination / old.name)
         shutil.copyfile(Path(str(old) + '.sig'), destination / (old.name + '.sig'))
     current = []
-    for entry in manifest['packages']:
+    for entry in manifest['packages'] + manifest['apps']:
         target = destination / entry['filename']
-        shutil.copyfile(packages / entry['filename'], target)
-        sign(root, target)
+        if entry['filename'] not in reused:
+            shutil.copyfile(packages / entry['filename'], target)
+            sign(root, target)
         current.append(target)
     database = destination / 'arch-niri-dux.db.tar.gz'
     subprocess.run(['repo-add', '--include-sigs', str(database), *map(str, current)], check=True)

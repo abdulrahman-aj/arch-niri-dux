@@ -31,7 +31,6 @@ github-cli
 fastfetch
 curl
 base-devel
-yay
 mesa
 vulkan-intel
 vulkan-radeon
