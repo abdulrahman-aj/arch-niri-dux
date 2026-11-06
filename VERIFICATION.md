@@ -38,6 +38,16 @@ keyring, Niri/Dux and loaded-policy checks passed afterward. Full fresh
 0.3.0-2 ISO/install qualification remains required before release; the fresh
 and alongside results below/above qualify the 0.3.0-1 fixture.
 
+The [dux-apps signed-repo qualification](verification/dux-apps-signed-repo-2026-11-06.json)
+passed all 28 fresh offline acceptance stages plus the fast package tier on a
+development ISO that delivers the four Dux apps (2.1.0-1) through the signed
+integration repository and drops yay from the baseline. Manual overlay probes
+show `pacman -Q yay` failing with the package not found, the apps listed from
+the extracted offline repo database, and the pinned release key in the guest
+keyring with `Required TrustedOnly` enforcement. It completes the fresh
+0.3.0-2 qualification for this branch. Raw evidence is under `out/verify-pr59/`,
+`out/verify-pr59-fast/`, `out/verify-pr59-manual/` and `out/verify-pr59-probes/`.
+
 ## Alongside acceptance
 
 The [current alongside qualification](verification/alongside-2026-11-06.json)

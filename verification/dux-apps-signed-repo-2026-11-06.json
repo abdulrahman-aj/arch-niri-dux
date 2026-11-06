@@ -4,9 +4,18 @@
   "pull_request": 59,
   "branch": "dux-apps-signed-repo",
   "source_commit": "4d789c8c4a6a986f8b703fc1bdd79b74e2ba2c14",
-  "source_note": "Local pr59-verify branch was rewritten mid-run (rebase onto 74efae8 at 23:25 +03, after the 22:45 build start at fa41c21). The built integration.tar boot-policy hook byte-matches 4d789c8, and the manifest source_date_epoch equals 4d789c8 committer time, so all VM evidence below qualifies 4d789c8, NOT PR head fa41c21. PR #59 on GitHub still points at fa41c21.",
+  "source_note": "Evidence qualifies 4d789c8. The ISO build started before the rebase onto 74efae8 finished, but the built integration.tar boot-policy hook byte-matches 4d789c8 and the manifest source_date_epoch equals 4d789c8 committer time, and make verify re-validated the payload against this checkout. Pushed to dux-apps-signed-repo with the evidence commits.",
   "integration_version": "0.3.0-2",
   "build_mode": "development",
+  "checks": {
+    "lint": [
+      "Ruff",
+      "ShellCheck",
+      "actionlint"
+    ],
+    "source_tests": 129,
+    "build_tests": 7
+  },
   "full_acceptance": {
     "passed": true,
     "evidence": "/home/abdulrahman/.t3/worktrees/arch-niri-dux/pr59-verify/out/verify-pr59",
@@ -117,6 +126,12 @@
       "signed_packages_and_database": true,
       "tampered_database_rejected": true,
       "signed_repository_enabled": true
+    },
+    "release_key_in_guest": {
+      "pinned_fingerprint": "BB9E749687704AB10C3556FDC61E39EC09709E11",
+      "guest_keyring_match": "pub rsa3072 2026-11-04 [C] BB9E749687704AB10C3556FDC61E39EC09709E11, uid [ultimate] Arch Niri Dux package releases",
+      "guest_siglevel": "SigLevel = Required TrustedOnly",
+      "raw_probes": "out/verify-pr59-manual/manual-probes.json (overlay of the accepted fixture disk)"
     }
   },
   "package_policy": {
@@ -237,7 +252,7 @@
   },
   "limits": [
     "Development artifacts only; no production signing or HTTPS delivery qualification.",
-    "Evidence qualifies local commit 4d789c8, not PR head fa41c21.",
+    "Installed Dux app packages validated by SHA-256 of the hash-pinned offline payload; detached-signature verification is release-path (unit-tested) plus disposable-key upgrade/tamper checks in acceptance.",
     "No physical machine changes or hardware qualification."
   ]
 }
