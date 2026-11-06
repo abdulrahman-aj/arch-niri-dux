@@ -10,3 +10,6 @@ include optional=true "dms/windowrules.kdl"
 include optional=true "recent-windows.kdl"
 include optional=true "dms/binds-next.kdl"
 include optional=true "dms/binds.kdl"
+
+// Personal overrides load last and can be managed by a dotfiles tool.
+include optional=true "custom.kdl"

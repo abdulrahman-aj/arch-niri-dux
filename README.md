@@ -56,6 +56,10 @@ Dux. Rebuilds use the same inputs, but are not byte-identical.
 Super+Return opens a terminal, Super+Space opens the launcher, and Super+Alt+L
 locks the screen.
 
+Personal Niri overrides can live in `~/.config/niri/custom.kdl`, including a
+Stow-managed symlink. See [personal configuration](desktop/README.md#personal-niri-configuration)
+for examples and the one-time opt-in on existing installations.
+
 Use Dux's system updater or `yay` for repository and AUR updates.
 The installer offers automatic/custom encrypted swap or no hibernation.
 With swap enabled, use `systemctl hibernate`. Closing the lid suspends when

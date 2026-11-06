@@ -24,6 +24,37 @@ until a fixed package is available. Generated `dms/alttab.kdl` controls appearan
 Rerunning user initialization preserves existing user Niri files. Generated
 layout/input files remain local, so Dux settings continue to control them.
 
+## Personal Niri configuration
+
+Put personal overrides in `~/.config/niri/custom.kdl`. The entrypoint includes it
+last, after the packaged defaults and Dux-generated settings. It is optional;
+the installer does not create it, and initialization and package upgrades leave
+its contents and symlinks alone. Dotfile tools such as Stow can manage this file
+without taking ownership of `config.kdl` or Dux-generated files.
+
+For example, to make tiled columns full width while leaving floating dialogs
+at their application-requested sizes:
+
+```kdl
+layout {
+    default-column-width { proportion 1.0; }
+}
+```
+
+You can also use relative `include` directives inside `custom.kdl` to split your
+configuration into files. Paths resolve from `~/.config/niri/`, including when
+`custom.kdl` is a symlink. Settings in `custom.kdl` take precedence over Dux's
+settings, so only override the settings you intend to manage yourself.
+
+Existing installations keep their current `config.kdl`. To enable this extension
+point there, add this line once at the end of `~/.config/niri/config.kdl`:
+
+```kdl
+include optional=true "custom.kdl"
+```
+
+## Desktop defaults
+
 New users start on Dux's upstream "bloom" material preset. The seed lives in
 `~/.local/state/dms/session.json` and is only created when absent. Existing
 `session.json` files are never overwritten, so chosen wallpapers are preserved.
