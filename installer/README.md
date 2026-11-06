@@ -12,7 +12,7 @@ The live ISO must provide `fzf` for selection menus, plus:
   owns the shared desktop integration. The baseline tracks the selected package
   list. It installs after initial boot setup so `snap-pac` starts with a bootable
   system. `/usr/lib/arch-niri-dux/initialize-user` runs as the new desktop user
-  to seed absent settings. Machine initialization and service enablement remain
+  to seed absent settings. Machine initialization and application of package-owned service presets remain
   in `configure-target.sh`. None of these steps downloads anything.
 
 Partitioning uses a 4 GiB FAT32 ESP and a LUKS2 Btrfs root. Independent root,
@@ -25,8 +25,8 @@ plus 2 GiB.
 An enabled swapfile lives in its own `@swap` subvolume inside the encrypted
 filesystem. Btrfs computes its physical resume offset. Recovery entries use
 `noresume` and block hibernation so an old snapshot cannot resume a different
-system's memory image. Hibernate/resume passed on the Zenbook. See
-[verification](../VERIFICATION.md) for the evidence and remaining hardware checks.
+system's memory image. See
+[verification](../VERIFICATION.md) for qualified software paths and hardware gaps.
 
 Boot uses Plymouth's stock `bgrt` theme with `quiet splash`. The disk
 passphrase appears in a graphical box instead of inline boot logs, with an
@@ -60,3 +60,25 @@ wizard shows the resolved size and defaults its final erase confirmation to
 Cancel. Installation timing starts when `install()` begins.
 Auto swap needs roughly RAM plus 31 GiB of disk space. Smaller disks can use a
 custom size or disable swap, while the base installation requires 32 GiB.
+
+The package owns mkinitcpio, Limine defaults, Snapper root policy, PAM, service
+presets and vendor systemd drop-ins. The installer supplies account/locale data,
+UUIDs, kernel arguments and resume offset, EFI deferral, and the per-machine
+no-hibernation choice. `SNAPSHOT_KERNEL_PARAMETERS+=noresume` stays in
+`/etc/default/limine` because snapper sync does not read entry-tool drop-ins.
+It also sets `SNAPPER_CONFIGS` in Snapper's config and adjusts NSS for mDNS;
+neither has a suitable independent drop-in. It never edits greetd's PAM file or
+limine-snapper-sync's backup config.
+
+The target's minimal pacman options include the package-owned repository
+fragment. This does not change the installer's offline `file://` repository.
+For mkinitcpio overrides, use a later-sorting drop-in, as described in
+[desktop integration](../desktop/README.md). There is no migration from older
+installer-owned policy; existing pre-0.3 systems require manual repair.
+
+The integration boot-policy ALPM hook runs on upgrades only. Fresh installation
+uses `configure-target.sh`'s explicit `limine-mkinitcpio` after writing UUIDs,
+kernel arguments and any `SKIP_UEFI=yes` deferral. In alongside mode, `install.py`
+already mounts the new ESP and writes `ESP_PATH=/boot` plus deferral before the
+first pacstrap, protecting the upstream EFI/kernel hooks too. Final firmware
+verification/registration precedes removal of deferral.

@@ -1,0 +1,2 @@
+// Keep session policy updateable while relative home includes remain visible to Dux.
+include "../session.kdl"

@@ -10,3 +10,6 @@ include optional=true "dms/windowrules.kdl"
 include optional=true "recent-windows.kdl"
 include optional=true "dms/binds-next.kdl"
 include optional=true "dms/binds.kdl"
+
+include "/usr/share/arch-niri-dux/niri/tail.kdl"
+include optional=true "overrides.kdl"

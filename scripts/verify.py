@@ -113,6 +113,8 @@ def main():
             print('Install-only debug run complete. Full acceptance has NOT passed.', flush=True)
             return 0
         boot.verify_boot(vm, passed, args.swap_gib)
+        vm.probe('policy', 'check', timeout=180)
+        passed('Package presets, systemd policy and PAM-unlocked keyring')
         desktop.verify(vm, passed)
         apps.verify(vm, passed)
         pdf.verify(vm, passed)

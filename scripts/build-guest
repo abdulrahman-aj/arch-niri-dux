@@ -60,7 +60,7 @@ chown nobody:nobody /build/integration-work /build/integration-packages
 if [[ $(cat /state/integration-mode) == release ]]; then
     python /source/scripts/integration-release.py fetch /source /build/integration-packages
 else
-    integration_epoch=$(git -c safe.directory=/source -C /source log -1 --format=%ct)
+    integration_epoch=$(cat /state/integration-epoch)
     runuser -u nobody -- python /source/scripts/build-integration.py /source \
         /build/integration-work /build/integration-packages --epoch "$integration_epoch"
 fi

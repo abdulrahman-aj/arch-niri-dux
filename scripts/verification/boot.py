@@ -84,13 +84,15 @@ def plymouth_config(root='/'):
     # text fallback availability. Runs on the live system (root='/') or on a
     # mounted target during prepare().
     root = Path(root)
-    hooks_text = (root / 'etc/mkinitcpio.conf').read_text()
-    match = re.search(r'^HOOKS=\((.*)\)', hooks_text, re.M)
-    assert match, 'mkinitcpio HOOKS are missing.'
-    hooks = match.group(1).split()
-    for hook in ('systemd', 'kms', 'plymouth', 'sd-encrypt'):
-        assert hook in hooks, f'mkinitcpio hook {hook} is missing: {hooks}'
-    assert hooks.index('systemd') < hooks.index('plymouth') < hooks.index('sd-encrypt'), hooks
+    # Read the initramfs that will actually boot, rather than a single config
+    # file: mkinitcpio combines the main file with later drop-ins.
+    images = list((root / 'boot').glob('*/*/initramfs'))
+    assert images, 'No built initramfs found.'
+    for image in images:
+        contents = run('lsinitcpio', str(image), stdout=subprocess.PIPE).stdout.splitlines()
+        for required in ('usr/lib/systemd/systemd', 'usr/bin/plymouth',
+                         'usr/lib/systemd/systemd-cryptsetup'):
+            assert required in contents, (image, required)
     cmdline = (root / 'etc/kernel/cmdline').read_text().split() if (root / 'etc/kernel/cmdline').is_file() \
         else Path('/proc/cmdline').read_text().split()
     assert 'quiet' in cmdline and 'splash' in cmdline, cmdline
@@ -103,9 +105,6 @@ def plymouth_config(root='/'):
     assert 'Theme=bgrt' in theme_conf.read_text(), theme_conf.read_text()
     for fallback in ('bgrt', 'spinner', 'details', 'text'):
         assert (root / f'usr/share/plymouth/themes/{fallback}').is_dir(), fallback
-    dropin = root / 'etc/systemd/system/greetd.service.d/10-plymouth.conf'
-    assert dropin.is_file(), 'Greeter Plymouth ordering is missing.'
-    assert 'plymouth-quit.service' in dropin.read_text(), dropin.read_text()
     for unit in ('plymouth-start.service', 'plymouth-quit.service', 'plymouth-quit-wait.service'):
         assert (root / f'usr/lib/systemd/system/{unit}').is_file(), unit
 

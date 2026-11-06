@@ -110,10 +110,10 @@ Evidence includes input hashes, serial/QEMU logs, original partition hashes,
 firmware listings, menu configuration, Windows guest reports and a milestone
 list. Only a full run writes `SUCCESS`. Never treat a screenshot or a loader
 stub as proof of a successful old-OS boot. Both fresh real-OS scenarios passed
-all six milestones on implementation source `73139365d6c8ce44dd0dcfd27f77b624447b6935`, including main
-`0320799`. Their shared final ISO SHA256 is `591fc771dadeaaf5306cf1db00127dc422ff033b325873667eafdf6f2fb27bd9`.
-See [the verified inputs and review dispositions](VERIFICATION.md#verified-alongside-installation-2026-11-02)
-and [the exact input hashes](verification/alongside-2026-11-02.json).
+all six milestones against the 0.3.0-1 development ISO, SHA256
+`160a1d089750bdd35a26ef70d5fd8cf5c12b6c824e646faf6eba35907db3a2bd`.
+See [current verification](VERIFICATION.md) and
+[exact inputs and results](verification/alongside-2026-11-06.json).
 
 Keep at least 8 GiB host headroom. Guest waits and Windows report waits stop at a
 9 GiB threshold to protect that headroom. Media downloads reserve it before writing. Monitor

@@ -9,6 +9,8 @@ flock -n 9 || { echo 'Another ISO build is using this state directory' >&2; exit
 mode=${1:-release}
 [[ $mode == release || $mode == development ]] || { echo 'Expected release or development mode' >&2; exit 1; }
 printf '%s\n' "$mode" >"$state/integration-mode"
+# Linked worktrees point outside the guest's source mount. Resolve Git here.
+git log -1 --format=%ct >"$state/integration-epoch"
 [[ -s keys/integration-signing.gpg && -s keys/integration-signing.fingerprint ]] || {
     echo 'Provision the integration public signing identity before building an ISO.' >&2
     exit 1

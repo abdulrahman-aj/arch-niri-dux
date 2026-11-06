@@ -1,10 +1,12 @@
-.PHONY: iso iso-development verify verify-release verify-hibernate lint test build-test verify-alongside provision-alongside fetch-alongside
+.PHONY: iso iso-development verify verify-fast verify-release verify-hibernate lint test build-test verify-alongside provision-alongside fetch-alongside
 iso:
 	./scripts/build-in-dev ./scripts/build-iso
 iso-development:
 	./scripts/build-in-dev ./scripts/build-iso development
 verify:
 	./scripts/build-in-dev python3 scripts/verify.py $(ARGS)
+verify-fast:
+	./scripts/build-in-dev python3 scripts/verify-fast.py $(ARGS)
 verify-release:
 	./scripts/build-in-dev python3 scripts/verify.py --online-repository $(ARGS)
 verify-hibernate:

@@ -38,7 +38,7 @@ class WindowsVM(VM):
 
     def start(self, cdrom=True, network=False, software_display=False):
         self.stop_tpm()
-        control = self.directory / 'tpm.sock'
+        control = self.control_path('tpm.sock')
         control.unlink(missing_ok=True)
         self.tpm_process = subprocess.Popen(['swtpm', 'socket', '--tpm2', '--tpmstate',
             f'dir={self.tpm_state}', '--ctrl', f'type=unixio,path={control}', '--flags', 'not-need-init'])
