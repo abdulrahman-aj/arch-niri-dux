@@ -67,7 +67,6 @@ def check():
     user_command(COMMAND, 'run')
     assert system_effect.read_text().splitlines() == ['first', 'second']
     assert user_effect.read_text().splitlines() == ['first', 'second']
-    # A user-only release must wake an already logged-in account.
     fixture(CODE, 'user', 3, effect('"$HOME/.local/state/verification-effects"', 'third'))
     run(COMMAND, 'run')
     wait_until('User-only generation', lambda: user_effect.read_text().splitlines() == ['first', 'second', 'third'])
