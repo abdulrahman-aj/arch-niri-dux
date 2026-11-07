@@ -12,6 +12,9 @@ Enter the Nix dev shell with `nix develop`. Make targets enter it automatically.
 | `fetch-alongside`, `provision-alongside`, `verify-alongside` | Heavy: fetch inputs, prepare fixtures, test alongside installs |
 | `gc` | Delete storage owned by checkouts that no longer exist |
 
+Run `make lint` and `make test` before every PR. They are light and run on any
+machine, including one with `AGENT_HEAVY_JOBS=deny`.
+
 Pass verification arguments through `ARGS='...'`. Evidence defaults to
 `out/verify/`; see [VERIFICATION.md](VERIFICATION.md) for fixture requirements.
 
