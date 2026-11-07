@@ -18,6 +18,8 @@ def qualify(helper, *, fakeroot=True):
         signing.mkdir(mode=0o700)
         client.mkdir(mode=0o700)
         (client / 'pubring.gpg').touch()
+        # Root pacman may try retrieving unknown signers. Fail locally, never query a public keyserver.
+        (client / 'gpg.conf').write_text('keyserver hkp://127.0.0.1:9\nkeyserver-options timeout=1\n')
         homes = [signing, client]
 
         def gpg(home, *args, data=None):
@@ -78,10 +80,13 @@ def qualify(helper, *, fakeroot=True):
             ]
 
             def transaction(success):
-                result = subprocess.run(pacman + ['-Syy', '--noconfirm'], capture_output=True, check=False)
+                result = subprocess.run(pacman + ['-Syy', '--noconfirm'], capture_output=True, check=False, timeout=30)
                 if result.returncode == 0:
                     result = subprocess.run(
-                        pacman + ['-S', '--noconfirm', 'dux-lifecycle-fixture'], capture_output=True, check=False
+                        pacman + ['-S', '--noconfirm', 'dux-lifecycle-fixture'],
+                        capture_output=True,
+                        check=False,
+                        timeout=30,
                     )
                 assert (result.returncode == 0) == success, (result.stdout, result.stderr)
 
