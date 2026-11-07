@@ -17,5 +17,5 @@ against the source distribution's public keyring before adding their public keys
 `integration-signing.fingerprint` pins its primary identity. CI receives only
 the signing subkey. The [release-key guide](RECOVERY.md) covers what to back up,
 how to inspect and access both private keys, CI secret restoration, and the
-remaining rotation and revocation limitations. See
+rotation, revocation and authenticated client recovery. See
 [release maintenance](../packages/RELEASING.md) for ordinary publication.

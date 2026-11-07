@@ -43,7 +43,7 @@ class PublisherCheckoutTests(unittest.TestCase):
                 'PATH': str(commands) + ':' + os.environ['PATH'],
                 'GIT_CONFIG_GLOBAL': '/dev/null',
                 'GIT_CONFIG_NOSYSTEM': '1',
-                'GITHUB_REF_NAME': 'integration-v0.1.0-2',
+                'GITHUB_REF_NAME': 'v0.1.0-2',
                 'LC_ALL': 'C',
                 'GITHUB_SHA': commit,
                 'GITHUB_REPOSITORY': 'abdulrahman-aj/arch-niri-dux',
@@ -88,9 +88,10 @@ class PublisherScratchTests(unittest.TestCase):
                 stubs = {
                     'git': 'exit 0\n',
                     'gh': """[[ $1 == api ]] || exit 81
-printf '%s\\n' '[[{"tag_name":"integration-v0.1.0-2","draft":false}]]'
+printf '%s\\n' '[[{"tag_name":"v0.1.0-2","draft":false}]]'
 """,
                     'python': """case "$2" in
+    history-tags) ;;
     fetch)
         mkdir -p "$4"
         touch "$4/reused"
@@ -111,7 +112,7 @@ esac
                 environment = os.environ | {
                     'PATH': str(commands) + ':' + os.environ['PATH'],
                     'TMPDIR': str(scratch),
-                    'GITHUB_REF_NAME': 'integration-v0.1.0-2',
+                    'GITHUB_REF_NAME': 'v0.1.0-2',
                     'GITHUB_SHA': 'a' * 40,
                     'GITHUB_REPOSITORY': 'abdulrahman-aj/arch-niri-dux',
                     'FAIL_STAGE': stage,

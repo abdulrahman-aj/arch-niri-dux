@@ -1,10 +1,12 @@
 """Behavioral regression coverage; fixtures are never packaged."""
 
 import types
+import fcntl
 import json
 import multiprocessing
 from pathlib import Path
 import tempfile
+import time
 import unittest
 from unittest.mock import patch
 
@@ -17,6 +19,14 @@ def acquire(state, connection):
     with migrate.lock(state):
         connection.send(True)
     connection.close()
+
+
+def hold_exclusive(state, connection):
+    with open(Path(state) / 'lock', 'a') as stream:
+        fcntl.flock(stream, fcntl.LOCK_EX)
+        connection.send(True)
+        connection.close()
+        time.sleep(10)
 
 
 class Migrations(unittest.TestCase):
@@ -97,6 +107,38 @@ class Migrations(unittest.TestCase):
             with self.assertRaises(RuntimeError):
                 migrate.process('run', 'system', self.state)
         self.assertFalse((self.state / 'generation').exists())
+
+    def test_contended_migration_lock_fails_with_recorded_failure(self):
+        (self.state / 'lock').touch()
+        context = multiprocessing.get_context('spawn')
+        receive, send = context.Pipe(duplex=False)
+        holder = context.Process(target=hold_exclusive, args=(self.state, send))
+        holder.start()
+        self.addCleanup(lambda: holder.kill() if holder.is_alive() else None)
+        self.assertTrue(receive.poll(5))
+        previous_umask = migrate.os.umask(0o022)
+        self.addCleanup(migrate.os.umask, previous_umask)
+        patch.object(migrate, 'LOCK_WAIT', 2).start()
+        patch.object(migrate, 'TRANSACTION_WAIT', 0).start()
+        patch.object(migrate, 'PACMAN_LOCK', self.root / 'no-db.lck').start()
+        patch.object(migrate, 'trusted').start()
+        notifier = patch.object(migrate, 'notify').start()
+        patch.object(migrate.sys, 'argv', ['arch-niri-dux-migrate', 'run']).start()
+        patch.object(migrate.os, 'geteuid', return_value=0).start()
+        start = time.monotonic()
+        result = migrate.main()
+        elapsed = time.monotonic() - start
+        if holder.is_alive():
+            holder.kill()
+        holder.join(5)
+        self.assertEqual(result, 1)
+        failure = (self.state / 'failure').read_text().strip()
+        self.assertIn('lock', failure.lower())
+        notifier.assert_called_once()
+        # The run waited out the deadline instead of failing instantly or
+        # hanging on the holder.
+        self.assertGreaterEqual(elapsed, 1)
+        self.assertLess(elapsed, 10)
 
     def test_fresh_user_baseline_while_system_pending(self):
         (self.state / 'lock').touch()

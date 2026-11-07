@@ -58,7 +58,9 @@ sudo limine-snapper-restore
 ```
 
 Restore and reboot into the normal entry. `/home`, including personal config,
-stays untouched.
+stays untouched. After restoring an older snapshot, run a full system update
+before installing anything else. The restored system may trust signing keys
+that were revoked after the snapshot was taken.
 
 See [snapshot policy](desktop/README.md#system-policy) for transaction snapshots
 and recovery safeguards.
