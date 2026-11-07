@@ -7,7 +7,7 @@ import subprocess
 import time
 
 from . import dispatch
-from .guest import png_dimensions, run, screenshot, user_command, wait_until
+from .guest import png_dimensions, run, user_command, wait_until
 from .vm import PASSWORD, graphical_login, installed_login
 
 LOCAL_PROBES = Path('/var/tmp/arch-niri-dux-suspend')
@@ -118,8 +118,20 @@ def evidence(stage, locked):
     destination = Path('/run/verify', name + '.json')
     destination.write_text(json.dumps(record, indent=2) + '\n')
     print(json.dumps(record), flush=True)
-    # State assertions establish the lock; the PNG records what was rendered.
-    screenshot(name + '.png')
+    # Niri's action IPC rejects screenshots while locked. Dux's standalone
+    # full-screen client uses Wayland screencopy, not the shell's IPC service.
+    user_command(
+        'dms',
+        'screenshot',
+        'full',
+        '--no-clipboard',
+        '--no-notify',
+        '--dir',
+        '/run/verify',
+        '--filename',
+        name + '.png',
+        timeout=20,
+    )
     record['screenshot_dimensions'] = png_dimensions(Path('/run/verify') / (name + '.png'))
     destination.write_text(json.dumps(record, indent=2) + '\n')
 
@@ -143,7 +155,12 @@ def verify(vm, passed):
     graphical_login(vm)
     vm.probe('suspend', 'before', timeout=45)
     vm.probe('suspend', 'prepare')
-    vm.command(f'umount /run/verify; mount --bind {LOCAL_PROBES} /run/verify')
+    # A completed PNG can briefly retain an open writer on the share.
+    vm.command(
+        f'for attempt in $(seq 1 10); do '
+        f'if umount /run/verify; then mount --bind {LOCAL_PROBES} /run/verify; exit $?; fi; '
+        'sleep 1; done; exit 1'
+    )
     vm.send('systemctl suspend\n')
     vm.expect(r'\r?\n' + RESUMED + r'\r?\n', timeout=90)
     # Let the emulated console settle after systemd-sleep thaws the user slice.
