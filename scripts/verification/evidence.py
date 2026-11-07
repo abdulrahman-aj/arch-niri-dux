@@ -4,19 +4,13 @@ import json
 from pathlib import Path
 import shlex
 
-from workspace import disk_guard, own
-
 from .digest import digest
 
 
 class Evidence:
     def __init__(self, directory, *, parents=False, exist_ok=False):
-        disk_guard(directory)
-        fresh = not directory.exists() or not any(directory.iterdir())
         self.directory = directory
         directory.mkdir(mode=0o700, parents=parents, exist_ok=exist_ok)
-        if fresh:
-            own(directory)
         self.milestones = []
 
     def passed(self, message):

@@ -8,6 +8,8 @@ import shlex
 import shutil
 import subprocess
 
+from workspace import disk_guard, own
+
 from verification.digest import digest
 from verification.evidence import Evidence
 
@@ -38,7 +40,9 @@ def main():
     parser.add_argument('--firmware', type=Path, required=True)
     parser.add_argument('--directory', type=Path, required=True)
     args = parser.parse_args()
+    disk_guard(args.directory)
     evidence = Evidence(args.directory)  # Never reuse evidence or fixture overlays.
+    own(args.directory)
     directory = args.directory.resolve()
     disk = directory / 'disk.qcow2'
     subprocess.run(
