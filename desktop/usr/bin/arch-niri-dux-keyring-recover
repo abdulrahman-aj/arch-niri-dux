@@ -70,7 +70,10 @@ def recover(
                 raise ValueError('Release primary is not already trusted by pacman.')
             validated = home / 'certificate.gpg'
             validated.write_bytes(gpg(home, '--export', primary))
-            subprocess.run(['pacman-key', '--gpgdir', str(keyring), '--add', str(validated)], check=True)
+            # Key import needs only the explicit keyring, independent of host repositories.
+            subprocess.run(
+                ['pacman-key', '--config', '/dev/null', '--gpgdir', str(keyring), '--add', str(validated)], check=True
+            )
             gpg(keyring, '--check-trustdb')
             revoked = [key['fingerprint'] for key in candidate if key['validity'] == 'r']
             print(f'Primary: {primary}\nUsable signers: {", ".join(usable)}\nRevoked: {", ".join(revoked)}')
