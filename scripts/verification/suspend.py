@@ -181,9 +181,10 @@ def verify(vm, passed):
     vm.probe('suspend', 'wake', timeout=30)
     vm.probe('suspend', 'locked', timeout=45)
     capture(vm, 'locked')
-    # QEMU's post-resume GL/input path can stall. The desktop probe already
-    # qualifies password unlock before sleep; native signals qualify this lock.
-    vm.poweroff()
+    # QEMU's post-resume GL/input and orderly shutdown can stall. Desktop
+    # already qualifies password unlock; sync evidence before restarting this
+    # disposable VM through the host to restore the share.
+    vm.command('sync')
     vm.stop()
     vm.start(cdrom=False)
     installed_login(vm)
