@@ -32,14 +32,17 @@ Signed binary packages and reviewed Dux app recipes use separate pins. See
 configuration](desktop/README.md#niri-configuration) for details. Rebuilding our packages from pinned inputs
 does not produce byte-identical packages.
 
-## Verify before flashing
+## Get the ISO
 
-For release 0.3.0, obtain `arch-niri-dux-0.3.0-x86_64.iso` through the
-maintainer's chosen transport. Download `SHA256SUMS`, `SHA256SUMS.sig` and
-`integration-signing.gpg` from that release's GitHub assets. Put all four files
-in one directory. Use a trusted copy of these instructions, or confirm them
-directly with the maintainer. A public key supplied beside an ISO is not enough
-without this independent check.
+Build it yourself with `make iso` (see [Build and test](#build-and-test)); the ISO lands in `out/`.
+
+### Verify a prebuilt ISO
+
+If you got a prebuilt `arch-niri-dux-0.3.0-x86_64.iso` from someone else, verify it before flashing.
+Download `SHA256SUMS`, `SHA256SUMS.sig` and `integration-signing.gpg` from the
+[0.3.0 release](https://github.com/abdulrahman-aj/arch-niri-dux/releases) and put them next to the ISO.
+Take these instructions from this repository, not from whoever sent the ISO: a public key
+supplied beside an ISO is not enough without this independent check.
 
 On Linux with GnuPG and GNU coreutils installed, run from that directory:
 
@@ -51,19 +54,19 @@ sha256sum --check --strict SHA256SUMS
 ```
 
 Flash only if all commands succeed, including a good signature and
-`arch-niri-dux-0.3.0-x86_64.iso: OK`. Otherwise stop and ask the maintainer.
+`arch-niri-dux-0.3.0-x86_64.iso: OK`. Otherwise don't flash it.
 The first check authenticates the complete public certificate against these
-instructions. The signature authorizes the maintainer's chosen ISO bytes;
+instructions. The signature authorizes the exact ISO bytes the project released;
 it does not prove that CI built or reproduced them.
 
-Confirm the intended release with the maintainer. Signatures do not prevent
-replay of an older release. `gpgv` does not enforce key expiry or revocation;
+Check that the release is the one you meant to install: signatures do not
+prevent replay of an older release. `gpgv` does not enforce key expiry or revocation;
 use current trusted instructions and follow any [key recovery
 advisory](keys/RECOVERY.md#iso-verification-and-recovery) before installing.
 
 ## Install
 
-1. Verify the ISO as above, then write it to a USB drive and boot it in UEFI
+1. Build the ISO, or verify a prebuilt one, as above. Write it to a USB drive and boot it in UEFI
    mode with Secure Boot off.
 2. Follow the terminal wizard. **Erase mode erases the selected disk.** Alongside
    mode asks you to select an unallocated GPT region. See
