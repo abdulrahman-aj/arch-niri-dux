@@ -44,6 +44,5 @@ class LockDefaultsTest(unittest.TestCase):
             (config / 'dms').mkdir()
             settings = config / 'dms/settings.json'
             settings.write_text('{invalid')
-            with self.assertRaises(json.JSONDecodeError):
-                module.initialize(config, {'lockBeforeSuspend': True})
+            module.initialize(config, {'lockBeforeSuspend': True})
             self.assertEqual(settings.read_text(), '{invalid')
