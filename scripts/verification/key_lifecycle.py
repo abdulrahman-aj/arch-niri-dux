@@ -80,18 +80,29 @@ def qualify(helper, *, fakeroot=True):
             ]
 
             def transaction(success):
-                result = subprocess.run(pacman + ['-Syy', '--noconfirm'], capture_output=True, check=False, timeout=30)
+                # Refuse unknown keys explicitly; --noconfirm defaults to importing them.
+                refresh = ['-Syy', '--noconfirm'] if success else ['-Syy']
+                result = subprocess.run(
+                    pacman + refresh, input=b'n\n', capture_output=True, check=False, timeout=30, start_new_session=True
+                )
                 if result.returncode == 0:
                     result = subprocess.run(
                         pacman + ['-S', '--noconfirm', 'dux-lifecycle-fixture'],
                         capture_output=True,
                         check=False,
                         timeout=30,
+                        stdin=subprocess.DEVNULL,
+                        start_new_session=True,
                     )
                 assert (result.returncode == 0) == success, (result.stdout, result.stderr)
 
+            local_conf = work / 'local.conf'
+            local_conf.write_text('[options]\nArchitecture = auto\n')
+
             def installed():
-                return subprocess.check_output(pacman + ['-Q', 'dux-lifecycle-fixture'], text=True).split()[1]
+                # Even -Q can load sync databases; inspect local state without rejected remote metadata.
+                query = pacman[:-2] + ['--config', str(local_conf)]
+                return subprocess.check_output(query + ['-Q', 'dux-lifecycle-fixture'], text=True).split()[1]
 
             def release(version, package_signer, database_signer=None):
                 payload = work / 'payload'
@@ -119,8 +130,10 @@ def qualify(helper, *, fakeroot=True):
                 recover(certificate, digest or hashlib.sha256(certificate.read_bytes()).hexdigest(), anchor, client)
 
             # A works; A-only clients cannot cross two missed certificate transitions.
+            print(f'Lifecycle initial signer: {a}', flush=True)
             release('1-1', a)
             transaction(True)
+            print('Lifecycle initial transaction accepted', flush=True)
             b = add()
             c = add()
             release('2-1', c)
@@ -199,3 +212,9 @@ def verify_installed():
     subprocess.run(['systemd-detect-virt', '--vm'], check=True)
     result = qualify(Path('/usr/bin/arch-niri-dux-keyring-recover'), fakeroot=False)
     Path('/run/verify/key-lifecycle.json').write_text(json.dumps(result, indent=2) + '\n')
+
+
+if __name__ == '__main__':
+    from . import dispatch
+
+    dispatch('key_lifecycle', {'installed': verify_installed})
