@@ -1,10 +1,10 @@
 [
   {
     "name": "dux-greeter-bin",
-    "source_date_epoch": 1793756880,
+    "source_date_epoch": 1793984626,
     "files": {
-      ".SRCINFO": "25262abcea434401b29981843707838b3e6d8f761705e0796b0c1e157137c549",
-      "PKGBUILD": "1689495738914dd11580affc4892c6aaa8e27ea95baf74237a86850b878c650b",
+      ".SRCINFO": "66c4f475c25203efbf6785350f1d9bed6a6eb797020e84618a1c63efa27e1914",
+      "PKGBUILD": "61679fb36b8833438fb37e69158f6589a5047a490aaa1ef4c8fb2a6203d6b0a9",
       "dux-greeter.install": "115f1e98517114e83b12a8e985f53779932f63b24ff6d3d2436a91fea7716505",
       "tmpfiles-dms-greeter.conf": "3dc267a18f22d06f595a80fb77275db56fe88c48b838db364ba3a1d307572a50",
       "dms-niri.kdl": "0376981f71a7331e3a8e5fdf71628f8c0e3881328969011f31fc1da6d54036c0",
@@ -13,29 +13,29 @@
   },
   {
     "name": "dux-search-bin",
-    "source_date_epoch": 1793756886,
+    "source_date_epoch": 1793984586,
     "files": {
-      ".SRCINFO": "eaee2c3f99a442fc1b943a42e66f5cdcfbf6c86a8a285609d91e19dd93dd611a",
-      "PKGBUILD": "ae25b029de82a01ef2b60b8a08fa802f596bc12435426ca05579581a527302fd",
+      ".SRCINFO": "b70cf1543ae9bb841eb39a777ecdf0031eab1558d3d3cb21c3c0858aac8f0547",
+      "PKGBUILD": "bd0129da98d6067f5a851639e26249479e6817307c4f64687530a49c2ac1a91d",
       "dsearch.service": "4203149be986e77617da42b0c7297e268b5daf89bf796ecbc41263e7746b031d"
     }
   },
   {
     "name": "dux-calendar-bin",
-    "source_date_epoch": 1793756868,
+    "source_date_epoch": 1793984679,
     "files": {
-      ".SRCINFO": "7314a74109abc87caf6d9134b3fb58300984c6a55869a1645f878a912191d64d",
-      "PKGBUILD": "1dc56889b5afc32a5f63d06cb8b342684174d74e25e23fe56a2be61a2898aa38",
+      ".SRCINFO": "dccfe8d8946b12d4051a64f466347f918705b56561d3a0c225339ceb8cda00b8",
+      "PKGBUILD": "331eebc25961c41d847d9f854e35a428ae62f1bc74e42407b566782af1399c83",
       "dev.duxlabs.calendar.desktop": "49ab0353bd4a915c43adae4d11ff49730e13a2af530aaf6b918a3d8e430c9acf",
       "dcal.service": "4ca116a3853362bfe7513ebe10be3c06fb244520e5cca997c66d8d562d03fc12"
     }
   },
   {
     "name": "dux-files-bin",
-    "source_date_epoch": 1793756874,
+    "source_date_epoch": 1793984654,
     "files": {
-      ".SRCINFO": "d4bfacacb999b5fc7e19b90f131f756d9f453302152913e0a8e00e941b7c1d04",
-      "PKGBUILD": "a1400dbce7e11ad3b47e8647be3ba3ff7711423f142132073e6fba001ba6637a",
+      ".SRCINFO": "bd96c0ccaed9e3dd00728303bea93a1823281ad00e9cbc2b79ee69c09a92b61a",
+      "PKGBUILD": "57cf64bef9892606341d578032ab920cf26141183050639f94a00c9dc4418343",
       "dev.duxlabs.files.desktop": "0f230c913a248cbac737341ef5ee0a9e6ccfdda08b459ca14b5af99dd49f773d",
       "dev.duxlabs.files.metainfo.xml": "3fca7d27b64bd0c81e93868f4c3c5ac3ef71790c95b58608890e9c022be62ed0",
       "dev.duxlabs.files.policy": "52fa30b44fefa5a632996075e370923c83b911cd198ffcff959a79789d1e5e17",
