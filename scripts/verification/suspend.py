@@ -40,6 +40,7 @@ def evidence(stage, locked):
 
     state = wait_until(f'Logind locked hint {locked}', expected_state, timeout=20)
     journal = run('journalctl', '-b', '_COMM=niri', '--no-pager', '-o', 'cat', stdout=subprocess.PIPE).stdout
+    # This substring includes both locking and unlocking transitions.
     events = [line for line in journal.splitlines() if 'locking session' in line]
     if locked:
         assert events and 'unlocking session' not in events[-1], events
