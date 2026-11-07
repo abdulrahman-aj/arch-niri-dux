@@ -1,0 +1,71 @@
+name: ISO checksum authorization
+
+on:
+  workflow_dispatch:
+    inputs:
+      sha256:
+        description: SHA-256 of the locally qualified release ISO (64 lowercase hex characters)
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: iso-checksums-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  validate:
+    if: github.repository == 'abdulrahman-aj/arch-niri-dux' && github.ref_type == 'tag'
+    runs-on: ubuntu-24.04
+    env:
+      ISO_SHA256: ${{ inputs.sha256 }}
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Verify the pinned Nix installer
+        shell: bash
+        run: |
+          curl --fail --location --output "$RUNNER_TEMP/nix-install" https://releases.nixos.org/nix/nix-2.35.4/install
+          echo "118c3dfa04bdc946b3f577365b9a295607142c9b920e2c07b184e266d62b1ee1  $RUNNER_TEMP/nix-install" | sha256sum --check
+      - uses: cachix/install-nix-action@75c75c31ebece974e48ebc36b4ad125bd97bd97b # v31
+        with:
+          install_url: file://${{ runner.temp }}/nix-install
+      - name: Show exact authorization before environment approval
+        run: |
+          ./scripts/build-in-dev python3 scripts/iso_checksums.py validate \
+            --tag "$GITHUB_REF_NAME" --sha256 "$ISO_SHA256" --commit "$GITHUB_SHA"
+
+  sign:
+    needs: validate
+    runs-on: ubuntu-24.04
+    environment: integration-release
+    permissions:
+      contents: write
+    env:
+      ISO_SHA256: ${{ inputs.sha256 }}
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Verify the pinned Nix installer
+        shell: bash
+        run: |
+          curl --fail --location --output "$RUNNER_TEMP/nix-install" https://releases.nixos.org/nix/nix-2.35.4/install
+          echo "118c3dfa04bdc946b3f577365b9a295607142c9b920e2c07b184e266d62b1ee1  $RUNNER_TEMP/nix-install" | sha256sum --check
+      - uses: cachix/install-nix-action@75c75c31ebece974e48ebc36b4ad125bd97bd97b # v31
+        with:
+          install_url: file://${{ runner.temp }}/nix-install
+      - name: Sign and append immutable ISO authorization assets
+        env:
+          PACKAGE_SIGNING_KEY: ${{ secrets.PACKAGE_SIGNING_KEY }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          ./scripts/build-in-dev python3 scripts/iso_checksums.py publish \
+            --tag "$GITHUB_REF_NAME" --sha256 "$ISO_SHA256" --commit "$GITHUB_SHA"

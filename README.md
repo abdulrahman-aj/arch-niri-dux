@@ -32,9 +32,39 @@ Signed binary packages and reviewed Dux app recipes use separate pins. See
 configuration](desktop/README.md#niri-configuration) for details. Rebuilding our packages from pinned inputs
 does not produce byte-identical packages.
 
+## Verify before flashing
+
+For release 0.3.0, obtain `arch-niri-dux-0.3.0-x86_64.iso` through the
+maintainer's chosen transport. Download `SHA256SUMS`, `SHA256SUMS.sig` and
+`integration-signing.gpg` from that release's GitHub assets. Put all four files
+in one directory. Use a trusted copy of these instructions, or confirm them
+directly with the maintainer. A public key supplied beside an ISO is not enough
+without this independent check.
+
+On Linux with GnuPG and GNU coreutils installed, run from that directory:
+
+```sh
+echo 'd296f2efe406b0172b0006fb98e9e515ef1e9cf69dc63e6d6694cf572886fe0f  integration-signing.gpg' |
+  sha256sum --check --strict &&
+gpgv --keyring ./integration-signing.gpg SHA256SUMS.sig SHA256SUMS &&
+sha256sum --check --strict SHA256SUMS
+```
+
+Flash only if all commands succeed, including a good signature and
+`arch-niri-dux-0.3.0-x86_64.iso: OK`. Otherwise stop and ask the maintainer.
+The first check authenticates the complete public certificate against these
+instructions. The signature authorizes the maintainer's chosen ISO bytes;
+it does not prove that CI built or reproduced them.
+
+Confirm the intended release with the maintainer. Signatures do not prevent
+replay of an older release. `gpgv` does not enforce key expiry or revocation;
+use current trusted instructions and follow any [key recovery
+advisory](keys/RECOVERY.md#iso-verification-and-recovery) before installing.
+
 ## Install
 
-1. Write the ISO to a USB drive and boot it in UEFI mode with Secure Boot off.
+1. Verify the ISO as above, then write it to a USB drive and boot it in UEFI
+   mode with Secure Boot off.
 2. Follow the terminal wizard. **Erase mode erases the selected disk.** Alongside
    mode asks you to select an unallocated GPT region. See
    [supported layouts and verification](ALONGSIDE.md).

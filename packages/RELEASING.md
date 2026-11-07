@@ -49,6 +49,67 @@ repository metadata are regenerated. Signatures do not prevent a server replayin
 older signed repository. Release CI runs unit tests and makepkg, not graphical
 VM acceptance. Keep the candidate's local VM evidence with the PR.
 
+## Authorize and distribute an ISO
+
+Before each release, update the README verification section to name its intended
+ISO version and check its public certificate digest. Merge these instructions and
+`.github/workflows/iso-checksums.yml` before creating the release tag.
+The workflow must exist on main for dispatch and in the selected package tag.
+Use the existing package release tag, for example `v0.3.0-1`; do not create a
+second ISO tag or move an existing tag. The protected `integration-release`
+environment permits `v*` tags and requires maintainer approval.
+
+Build from a clean trusted checkout of that tag and retain the local acceptance
+evidence from the publish steps above. Choose exactly one release ISO. Copy it
+to the canonical filename derived from the tag's version, then prepare its checksum:
+
+```sh
+cp out/CHOSEN.iso out/arch-niri-dux-0.3.0-x86_64.iso
+make iso-checksums ARGS='--tag v0.3.0-1 --iso out/arch-niri-dux-0.3.0-x86_64.iso'
+```
+
+This light target hashes only the explicit file and writes
+`out/iso-checksums/SHA256SUMS`. It refuses a noncanonical filename or an existing
+checksum file. Retain or explicitly remove an earlier candidate's checksum file
+before preparing another. Do not sign the build's `out/SHA256SUMS`, which may
+include other ISOs retained in `out/`.
+
+Dispatch **ISO checksum authorization** at the package tag, supplying the printed
+64-character digest. For example, replace `DIGEST` below with that value:
+
+```sh
+gh workflow run iso-checksums.yml --ref v0.3.0-1 -f sha256=DIGEST
+```
+
+The secret-free validation job checks the tag's commit belongs to main and shows
+the canonical filename, digest and source commit in its summary. Compare all
+three against your trusted checkout and qualified artifact **before approving**
+the `integration-release` job. Approval means "I authorize these exact ISO bytes."
+ISOs are not byte-reproducible. CI does not receive, build, inspect or reproduce
+the ISO. A compromised local builder or mistaken approval can therefore authorize
+a malicious ISO. The shared
+signing subkey also shares the package signer's compromise consequences.
+
+After approval, the separate signing job repeats validation using the pinned Nix
+tools. It imports only the existing CI secret into a disposable GnuPG home, signs
+canonical `SHA256SUMS` with the exact pinned subkey, verifies the result, and removes
+the private material and agent before upload. It appends `SHA256SUMS`,
+`SHA256SUMS.sig` and `integration-signing.gpg` to the existing published package
+release. It never creates a release, replaces assets, or publishes the ISO.
+
+Identical reruns verify and preserve existing assets, including the original
+signature bytes. Interrupted uploads can resume by adding only missing assets.
+Any conflicting checksum, certificate or invalid signature stops publication.
+Fix the cause; do not delete assets to replace a published ISO. Use a new package
+release tag for changed ISO bytes. Canonical ISO filenames omit `pkgrel`, so keep
+each tag's metadata separate and tell friends which release to use.
+
+Share the canonical ISO through Google Drive, USB or another chosen host. Give
+friends the release metadata and the trusted README verification instructions.
+Check that the README certificate digest still matches the published certificate
+whenever its bindings or revocations change. Neither a checksum nor a public key
+next to an unauthenticated download establishes trust by itself.
+
 ## Signing and recovery
 
 The [release-key guide](../keys/RECOVERY.md) explains the master and signing keys,
