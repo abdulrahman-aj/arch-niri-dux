@@ -20,6 +20,8 @@ def verify(vm, passed):
     vm.qmp_command('system_wakeup')
     vm.expect(r'\r?\nSUSPEND-RETURNED\r?\n')
     vm.expect(r'\x1b\[\?2004h')
+    # Resume restores the virtio console asynchronously after the shell prompt.
+    time.sleep(3)
     vm.command('journalctl -b -u systemd-suspend.service --no-pager')
     vm.probe('desktop', 'locked')
     vm.screenshot('03-suspend-resume-locked')
