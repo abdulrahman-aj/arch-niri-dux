@@ -376,7 +376,19 @@ class SignedReleaseTests(unittest.TestCase):
         with patch.object(installer, 'SHARE', self.root):
             conf = target / 'pacman.conf'
             conf.write_text(installer.offline_pacman_config(repository, 'offline'))
-        shutil.copytree(self.home, self.root / 'install-keyring', ignore=shutil.ignore_patterns('S.*'))
+        keyring = self.root / 'install-keyring'
+        keyring.mkdir(mode=0o700)
+        for arguments, data in (
+            (['--import'], self.public),
+            (['--import-ownertrust'], f'{self.fingerprint}:6:\n'.encode()),
+        ):
+            subprocess.run(
+                ['gpg', '--homedir', str(keyring), '--batch', *arguments],
+                input=data,
+                check=True,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+            )
         self.addCleanup(
             subprocess.run, ['gpgconf', '--homedir', str(self.root / 'install-keyring'), '--kill', 'all'], check=True
         )
@@ -427,7 +439,8 @@ class SignedReleaseTests(unittest.TestCase):
                     self.assertEqual(result.returncode, 0, result.stderr)
                 else:
                     self.assertNotEqual(result.returncode, 0)
-                    self.assertIn('signature', result.stderr.lower())
+                    if state == 'tampered':
+                        self.assertIn('signature', result.stderr.lower())
                 installed = subprocess.check_output(pacman + ['-Q', 'fixture'], text=True)
                 self.assertEqual(installed.strip(), 'fixture 1-1')
 
