@@ -1,4 +1,4 @@
-import importlib.util
+import sys
 import os
 from pathlib import Path
 import subprocess
@@ -7,9 +7,8 @@ import tempfile
 import unittest
 
 ROOT = Path(__file__).resolve().parents[1]
-spec = importlib.util.spec_from_file_location('integration_builder', ROOT / 'scripts/build-integration.py')
-builder = importlib.util.module_from_spec(spec)
-spec.loader.exec_module(builder)
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'scripts'))
+import integration_build as builder
 
 
 class IntegrationSourceTests(unittest.TestCase):
@@ -33,7 +32,7 @@ class IntegrationSourceTests(unittest.TestCase):
             self.assertEqual(first.read_bytes(), second.read_bytes())
             with tarfile.open(first) as archive:
                 self.assertEqual(archive.extractfile('desktop/usr/share/default.kdl').read(), asset.read_bytes())
-                self.assertEqual(archive.extractfile('packages.target').read(), b'base\nniri\n')
+                self.assertEqual(archive.extractfile('packages/packages.target').read(), b'base\nniri\n')
                 self.assertTrue(all(entry.uid == entry.gid == 0 and entry.mtime == 1234 for entry in archive))
 
     def test_archive_refuses_linked_inputs(self):

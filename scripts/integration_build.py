@@ -2,7 +2,6 @@
 """Build our owning integration and baseline packages with Arch's makepkg."""
 
 import argparse
-import hashlib
 import io
 import json
 import os
@@ -12,6 +11,8 @@ import shutil
 import subprocess
 import tarfile
 import tempfile
+
+from verification.digest import digest
 
 
 NAMES = {'arch-niri-dux', 'arch-niri-dux-baseline'}
@@ -26,11 +27,6 @@ def version(root):
             raise ValueError(f'Expected a numeric literal {name} in the integration recipe.')
         values.append(match[1])
     return '-'.join(values)
-
-
-def digest(path):
-    with path.open('rb') as stream:
-        return hashlib.file_digest(stream, 'sha256').hexdigest()
 
 
 def prepare_source(root, workspace, epoch):
@@ -50,9 +46,7 @@ def prepare_source(root, workspace, epoch):
                 raise ValueError(f'Unexpected integration source symlink: {path}')
             if not path.is_file() or path == root / 'desktop/README.md':
                 continue
-            if path == sources[0]:
-                name = 'packages.target'
-            elif path == signing_key:
+            if path == signing_key:
                 name = 'desktop/usr/share/pacman/keyrings/arch-niri-dux.gpg'
             else:
                 name = str(path.relative_to(root))

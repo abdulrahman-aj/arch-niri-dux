@@ -1,10 +1,11 @@
 """Package policy qualification on disposable installed guests."""
 
 import json
-import hashlib
 from pathlib import Path
 import subprocess
 import pwd
+
+from .digest import digest
 
 from . import dispatch
 from .guest import run, user_command, wait_until
@@ -169,10 +170,7 @@ def boot_artifacts():
     # limine_history payloads are immutable recovery images, not current kernels.
     paths = [*sorted(Path('/boot').glob('*/*/initramfs')), Path('/boot/limine.conf')]
     assert len(paths) > 1, 'No installed initramfs found.'
-    return {
-        str(path): {'mtime_ns': path.stat().st_mtime_ns, 'sha256': hashlib.sha256(path.read_bytes()).hexdigest()}
-        for path in paths
-    }
+    return {str(path): {'mtime_ns': path.stat().st_mtime_ns, 'sha256': digest(path)} for path in paths}
 
 
 def record_boot():

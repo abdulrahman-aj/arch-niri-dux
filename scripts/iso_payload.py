@@ -2,7 +2,6 @@
 """Finish an ISO's offline repository and inventory after all producers complete."""
 
 import argparse
-import hashlib
 import json
 import os
 from pathlib import Path
@@ -11,10 +10,7 @@ import subprocess
 import tarfile
 import tempfile
 
-
-def _digest(path):
-    with path.open('rb') as stream:
-        return hashlib.file_digest(stream, 'sha256').hexdigest()
+from verification.digest import digest
 
 
 def _manifest(root, repository):
@@ -73,7 +69,7 @@ def _inventory(manifest, repository):
         path = repository / filename
         if path.is_symlink() or not path.is_file():
             raise ValueError(f'Package must be a regular file: {filename}')
-        if _digest(path) != checksum:
+        if digest(path) != checksum:
             raise ValueError(f'Package checksum mismatch: {filename}')
     if any(path.name != 'offline.db' for path in repository.glob('*.db')):
         raise ValueError('Unexpected repository database.')
@@ -127,7 +123,7 @@ def finalize(root, repository):
         ):
             raise ValueError('Repository database inventory does not match the declared packages.')
         checksums = ''.join(f'{checksum}  {filename}\n' for filename, checksum, _ in sorted(inventory.values()))
-        checksums += f'{_digest(database)}  offline.db\n'
+        checksums += f'{digest(database)}  offline.db\n'
         # No final metadata is replaced until every package and database entry
         # agrees. A failed build must not publish a new inventory.
         for path in repository.glob('offline.*'):

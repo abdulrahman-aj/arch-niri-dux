@@ -8,7 +8,6 @@ release-asset checksum must equal the digest GitHub publishes for that asset.
 
 import argparse
 from datetime import datetime
-import importlib.util
 import json
 import os
 from pathlib import Path
@@ -18,10 +17,10 @@ import subprocess
 import tempfile
 import urllib.request
 
+from verification.digest import digest
+
 ARCHES = ('', '_x86_64', '_aarch64')
-spec = importlib.util.spec_from_file_location('dux_apps', Path(__file__).with_name('build-dux-apps.py'))
-apps = importlib.util.module_from_spec(spec)
-spec.loader.exec_module(apps)
+import dux_apps as apps
 
 
 def srcinfo(text):
@@ -117,7 +116,7 @@ def bump(root, recipe):
         (work / '.SRCINFO').write_text(text)
         for name in recipe['files']:
             shutil.copyfile(work / name, source / name)
-    recipe['files'] = {name: apps.digest(source / name) for name in recipe['files']}
+    recipe['files'] = {name: digest(source / name) for name in recipe['files']}
     published = datetime.fromisoformat(release['published_at'].replace('Z', '+00:00'))
     recipe['source_date_epoch'] = int(published.timestamp())
     return f'{recipe["name"]} {version}'

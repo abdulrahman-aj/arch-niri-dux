@@ -3,7 +3,6 @@
 
 import argparse
 import gzip
-import importlib.util
 import json
 import os
 from pathlib import Path
@@ -13,16 +12,12 @@ import subprocess
 import tempfile
 import urllib.request
 
-
-def load(name, filename):
-    spec = importlib.util.spec_from_file_location(name, Path(__file__).with_name(filename))
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
-    return module
+from verification.digest import digest
 
 
-build = load('integration_build', 'build-integration.py')
-apps = load('dux_apps', 'build-dux-apps.py')
+import integration_build as build
+import dux_apps as apps
+
 RELEASES = 'https://github.com/abdulrahman-aj/arch-niri-dux/releases/download'
 
 
@@ -72,10 +67,10 @@ def validate_manifest(root, directory):
             raise ValueError('Unexpected release package filename or version.')
         if not re.fullmatch(r'[a-f0-9]{64}', entry['sha256']):
             raise ValueError('Invalid package checksum.')
-        if build.digest(directory / entry['filename']) != entry['sha256']:
+        if digest(directory / entry['filename']) != entry['sha256']:
             raise ValueError('Release package checksum mismatch.')
     for name, field in [('integration.tar', 'source_sha256'), ('integration.PKGBUILD', 'recipe_sha256')]:
-        if build.digest(directory / name) != manifest[field]:
+        if digest(directory / name) != manifest[field]:
             raise ValueError(f'Release source checksum mismatch: {name}')
     if type(manifest['source_date_epoch']) is not int or manifest['source_date_epoch'] < 0:
         raise ValueError('Invalid source date epoch.')
@@ -92,13 +87,13 @@ def validate_manifest(root, directory):
         recipe, filename = recipes[entry['name']]
         if entry['recipe'] != recipe or entry['filename'] != filename:
             raise ValueError('Dux app recipe differs from the release; use iso-development for unreleased work.')
-        if not re.fullmatch(r'[a-f0-9]{64}', entry['sha256']) or build.digest(directory / filename) != entry['sha256']:
+        if not re.fullmatch(r'[a-f0-9]{64}', entry['sha256']) or digest(directory / filename) != entry['sha256']:
             raise ValueError('Dux app package checksum mismatch.')
-    if build.digest(root / 'packages/integration/PKGBUILD') != manifest['recipe_sha256']:
+    if digest(root / 'packages/integration/PKGBUILD') != manifest['recipe_sha256']:
         raise ValueError('Recipe differs from the release; use iso-development for unreleased work.')
     with tempfile.TemporaryDirectory(prefix='integration-inputs-') as temporary:
         archive = build.prepare_source(root, Path(temporary), manifest['source_date_epoch'])
-        if build.digest(archive) != manifest['source_sha256']:
+        if digest(archive) != manifest['source_sha256']:
             raise ValueError('Integration differs from the release; use iso-development for unreleased work.')
     return manifest
 
@@ -219,7 +214,7 @@ def publish(root, packages, history, destination, tag, commit):
             # published version keeps its bytes. A recipe change needs a new pkgrel.
             if contents(old) != contents(packages / old.name):
                 raise ValueError(f'{old.name} changed without a new pkgrel.')
-            app_entries[name]['sha256'] = build.digest(old)
+            app_entries[name]['sha256'] = digest(old)
             reused[old.name] = old
             continue
         else:

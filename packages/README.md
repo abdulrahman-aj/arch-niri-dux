@@ -6,7 +6,7 @@
 `packages.target`. Removing it lets you remove optional apps while keeping
 integration updates.
 
-`scripts/build-integration.py` prepares a deterministic local source archive and
+`scripts/integration_build.py` prepares a deterministic local source archive and
 records its checksum for makepkg. Release ISOs fetch the exact signed release
 artifacts. Development ISOs build the local recipe. The installer installs the
 packages, and pacman tracks their files.
@@ -27,14 +27,14 @@ existing pins.
 
 `aur/` contains reviewed recipes for Dux Greeter, Search, Calendar and Files.
 `aur-recipes.json` pins every recipe file's hash, and builds refuse changed
-files. `scripts/build-dux-apps.py` builds them as an unprivileged user, and
+files. `scripts/dux_apps.py` builds them as an unprivileged user, and
 `makepkg` verifies every upstream source checksum. Integration releases sign and
 publish them in our repository, like our own packages. Installed systems never
 use the AUR.
 
 The scheduled `dux-apps.yml` workflow tracks upstream GitHub releases rather
 than the AUR, so updates do not wait for or trust it. When Dux tags a
-release, `scripts/bump-dux-apps.py` changes only `pkgver`, `pkgrel`, checksums,
+release, `scripts/bump_dux_apps.py` changes only `pkgver`, `pkgrel`, checksums,
 recipe hashes and `source_date_epoch`. Release-asset checksums must equal
 GitHub's published digests. Repository files at the release tag have no
 published digest. The workflow opens a PR and never merges or publishes.

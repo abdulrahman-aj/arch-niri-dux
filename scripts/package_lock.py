@@ -3,7 +3,6 @@
 
 import base64
 import concurrent.futures
-import hashlib
 import json
 import pathlib
 import shutil
@@ -13,6 +12,8 @@ import tarfile
 import tempfile
 import time
 import urllib.request
+
+from verification.digest import digest
 
 
 DOWNLOAD_TIMEOUT = 60
@@ -39,11 +40,6 @@ def download(url, dest, timeout=DOWNLOAD_TIMEOUT, attempts=DOWNLOAD_ATTEMPTS):
                 break
             time.sleep(2**attempt)
     raise RuntimeError(f'Failed to download {url} after {attempts} attempts: {last_error}') from last_error
-
-
-def digest(path):
-    with path.open('rb') as stream:
-        return hashlib.file_digest(stream, 'sha256').hexdigest()
 
 
 def cache_matches(path, expected):

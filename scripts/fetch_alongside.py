@@ -8,6 +8,8 @@ from pathlib import Path
 import shutil
 import urllib.request
 
+from verification.digest import digest
+
 SOURCES = {
     'linux': (
         'https://cloud.debian.org/images/cloud/trixie/20261026-2643/debian-13-genericcloud-amd64-20261026-2643.qcow2',
@@ -49,8 +51,7 @@ def main():
                     stream.write(chunk)
     if destination.stat().st_size != size:
         raise RuntimeError('Incomplete official media download.')
-    with destination.open('rb') as stream:
-        sha256 = hashlib.file_digest(stream, 'sha256').hexdigest()
+    sha256 = digest(destination)
     metadata = dict(source=url, resolved=resolved, size=size, sha256=sha256)
     if args.os == 'linux':
         manifest_url = url.rsplit('/', 1)[0] + '/SHA512SUMS'

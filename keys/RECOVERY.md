@@ -139,7 +139,7 @@ read -r -s -p 'Recovery password: ' recovery_password
 printf '\n'
 printf '%s\n' "$recovery_password" > "$password_file"
 unset recovery_password
-./scripts/build-in-dev python3 scripts/setup-release-key.py \
+./scripts/build-in-dev python3 scripts/release_key.py \
     --passphrase-file "$password_file" --restore "$backup"
 rm -- "$password_file"
 unset password_file
