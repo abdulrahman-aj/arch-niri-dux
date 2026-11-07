@@ -30,6 +30,8 @@ systemd policy and the PAM-unlocked keyring, Niri/Dux/terminal/editor/browser
 smoke checks, desktop apps (manuals, archives, media playback, driverless
 printing to a loopback printer), PDF rendering, the synthetic camera, screen
 sharing, screen lock, migration ordering with retries and session triggers,
+an update started through Dux's updater (its pacman backend, `pkexec` and
+authentication dialog) running system and user migrations,
 an integration upgrade with Limine snapshot boot and restore preserving home,
 and the `plymouth.enable=0` text fallback with graphical unlock restored
 afterward. `make verify-release` additionally checks published HTTPS package
