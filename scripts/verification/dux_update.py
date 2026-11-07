@@ -248,8 +248,10 @@ def check():
             lambda: (migrations.USER_STATE / (name + '.json')).is_file(),
         )
         assert USER_EFFECT.read_text().splitlines() == ['dux-updater']
+        # pkexec logs COMMAND= just before exec'ing pacman, so journald may
+        # attribute that line to _COMM=pacman; pkexec's syslog ident is stable.
         journal = subprocess.check_output(
-            ['journalctl', '-b', '--no-pager', '-o', 'cat', '_COMM=pkexec'], text=True
+            ['journalctl', '-b', '--no-pager', '-o', 'cat', 'SYSLOG_IDENTIFIER=pkexec'], text=True
         ).strip()
         # The transaction came from Dux's backend argv, not another upgrade.
         assert 'COMMAND=/usr/bin/pacman -Syu --needed --noconfirm' in journal, journal
