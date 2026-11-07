@@ -7,9 +7,9 @@ The live ISO is terminal-only and includes Fastfetch.
 
 ## Build and test
 
-Building requires Linux, Nix and Make. Allow 24 GiB of build space and about 2.5
+Building requires Linux, Nix and Make. Allow at least 30 GiB of free build space and about 2.5
 GiB for the ISO. VM verification also requires KVM access. Build state goes in
-`~/.cache/arch-niri-dux-build`. Use `BUILD_STATE=/path/with/space make iso` to
+`~/.cache/arch-niri-dux-build-<checkout-path-hash>`. Use `BUILD_STATE=/path/with/space make iso` to
 change it. Every build state shares the verified bootstrap ISO and packages in
 `~/.cache/arch-niri-dux-downloads`. Builds recheck each file's hash or
 signature before use. The cache never prunes old versions; deleting it is safe.

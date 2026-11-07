@@ -38,8 +38,6 @@ def main():
     parser.add_argument('--firmware', type=Path, required=True)
     parser.add_argument('--directory', type=Path, required=True)
     args = parser.parse_args()
-    if shutil.disk_usage(args.directory.parent).free < 16 * 1024**3:
-        parser.error('Need 16 GiB free for one scenario, including a 9 GiB stop threshold protecting 8 GiB headroom.')
     evidence = Evidence(args.directory)  # Never reuse evidence or fixture overlays.
     directory = args.directory.resolve()
     disk = directory / 'disk.qcow2'

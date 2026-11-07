@@ -11,6 +11,8 @@ import subprocess
 import sys
 import tempfile
 
+from workspace import disk_guard
+
 from verification.digest import digest
 from verification.evidence import Evidence
 
@@ -41,6 +43,9 @@ def main():
         parser.error('Build an ISO first with make iso, or pass --iso PATH.')
     if not os.access('/dev/kvm', os.R_OK | os.W_OK):
         parser.error('The VM verification requires access to /dev/kvm.')
+    disk_guard(args.directory or ROOT / 'out/verify')
+    if args.disk:
+        disk_guard(args.disk)
     directory = args.directory
     if directory is None:
         # Runs hold multi-gigabyte disks, and /tmp is often RAM-backed tmpfs.
