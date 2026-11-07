@@ -117,15 +117,22 @@ and loses to them. An emptied seed file stays in place so restarts don't undo
 an opt-out.
 
 The update seed puts Dux's Software Updates button on the main bar, right of
-the clock. It hides while Dux knows of no updates. Dux's server checks at login
-and then every 6 hours, for any pending package from the configured
-repositories. Background failures, such as being offline, stay silent. Clicking
-the button opens Dux's updater; its Update All runs the same `pacman -Syu` that
-installs our packages and triggers migrations. A bar layout saved before the
-seed ran (`barConfigs` in a user file) is kept and gets no button. Dux only
-checks in the background while the button or update notifications hold its
-updater, so without either there are no checks. Move, remove or add the button
-in Dux Settings, Bar.
+the clock. It hides while Dux knows of no updates. Dux's server checks weekly
+for any pending package from the configured repositories, with no check at
+login. It schedules from its last check, saved in
+`~/.cache/dms/sysupdate.json`, so logins and reboots don't restart the week; a
+new account checks a few minutes after its first login. Failed checks, such as
+while offline, stay silent and retry every 5 minutes. Clicking the button opens
+Dux's updater; its Update All runs the same `pacman -Syu` that installs our
+packages and triggers migrations. A bar layout saved before the seed ran
+(`barConfigs` in a user file) is kept and gets no button. Dux only checks in
+the background while the button or update notifications hold its updater, so
+without either there are no checks. Move, remove or add the button in Dux
+Settings, Bar; Software Updates shows the weekly interval as a custom interval.
+
+Seeds never change a value that already exists. To change a shipped default for
+existing accounts, add a user migration that rewrites the key only where it
+still holds the old default, and update the seed for new accounts.
 
 ## Firewall and mDNS
 

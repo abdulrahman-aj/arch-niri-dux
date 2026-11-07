@@ -1,12 +1,15 @@
-"""Dux announces pending updates on its own; its updater installs them.
+"""Dux announces pending updates on its own schedule; its updater installs them.
 
 The packaged defaults put Dux's Software Updates button on the bar, hidden
-while nothing is pending, and make Dux's server check at login and every
-6 hours. This stage starts from a fixture repository with nothing newer, then
-offers our packages one pkgrel newer, and lets Dux's login check find each
-state without opening Settings. The host clicks the button and Dux's Update
-All, types the password into Dux's real authentication dialog, and checks the
-migration contract end to end. Dux runs `pkexec pacman -Syu --needed
+while nothing is pending, and make Dux's server check weekly, with no check at
+login. Dux schedules from its last check, persisted in ~/.cache/dms, so
+logins and reboots don't reset the week. This stage shortens the interval to
+Dux's 5-minute minimum the way a user would, lets the scheduled check find a
+fixture repository with nothing newer, re-logs in before the interval to show
+no extra check runs, then offers our packages one pkgrel newer and lets the
+next scheduled check find them. The host clicks the button, sends Update All's
+request, types the password into Dux's real authentication dialog, and checks
+the migration contract end to end. Dux runs `pkexec pacman -Syu --needed
 --noconfirm` through its pacman backend because no AUR helper is installed.
 """
 
@@ -40,6 +43,10 @@ PANEL = 'dux-update-panel.png'
 # A row through the middle of Dux's default top bar, in screenshot pixels.
 BAR_MIDDLE = 22
 BAR_ABOVE_PILLS = 6
+WEEK = 7 * 24 * 60 * 60
+# Dux's minimum interval.
+SHORT = 5 * 60
+SCHEDULE = Path('/home/tester/.cache/dms/sysupdate.json')
 
 
 def installed():
@@ -121,36 +128,55 @@ def write_before(before):
     (WORK / 'before.json').write_text(json.dumps(before, indent=2) + '\n')
 
 
-def login_check(previous):
-    """Restart the shell as a login does and wait for Dux's own check.
+def state():
+    return daemon_request('sysupdate.getState')
 
-    Nothing opens Settings: the bar button holds Dux's updater, and the seeded
-    updaterCheckOnStart makes the shell ask its server to check on start.
-    """
+
+def set_interval(seconds):
+    """Change the interval as Dux Settings does: saved, then applied on connect."""
+    reply = user_command(
+        'dms', 'ipc', 'call', 'settings', 'set', 'updaterIntervalSeconds', str(seconds), capture=True
+    ).stdout
+    assert 'SUCCESS' in reply, reply
+    relogin(seconds)
+
+
+def relogin(interval):
+    """Restart the shell and its server as a logout and login do."""
     user_command('systemctl', '--user', 'restart', 'dms.service')
+    # The restarted shell re-sends its saved interval once it connects.
+    return wait_until('Dux server after login', lambda: state()['intervalSeconds'] == interval and state())
+
+
+def scheduled_check(previous):
+    """Wait for Dux's scheduler to complete a successful check after `previous`."""
 
     def checked():
-        state = daemon_request('sysupdate.getState')
+        current = state()
         # Failed background checks also advance lastCheckUnix; only a
-        # successful check after the restart counts.
-        return state['phase'] == 'idle' and state.get('lastSuccessUnix', 0) > previous and state
+        # successful check counts.
+        return current['phase'] == 'idle' and current.get('lastSuccessUnix', 0) > previous and current
 
     try:
-        return wait_until("Dux's login update check", checked, timeout=180)
+        # The next check is at most one interval plus Dux's startup grace away.
+        return wait_until("Dux's scheduled update check", checked, timeout=SHORT + 180)
     except TimeoutError:
-        (EVIDENCE / 'dux-update-state.json').write_text(json.dumps(daemon_request('sysupdate.getState'), indent=2))
+        (EVIDENCE / 'dux-update-state.json').write_text(json.dumps(state(), indent=2))
         raise
 
 
 def prepare():
-    """Dux checked at login on its own, then finds nothing newer."""
+    """Dux checks on its schedule, finds nothing newer, and skips login checks."""
     run('systemd-detect-virt', '--vm')
     assert (EVIDENCE / 'install.json').is_file(), 'Requires the disposable installation fixture.'
-    # The session's first login already checked (offline, so it failed
-    # silently) and armed the 6-hour schedule, before anything opened Settings.
-    initial = daemon_request('sysupdate.getState')
-    assert initial['lastCheckUnix'] > 0 and initial['intervalSeconds'] == 6 * 60 * 60, initial
+    # A fresh account's first check runs shortly after its first login, long
+    # before this stage, without anything opening Settings.
+    initial = state()
+    assert initial['lastCheckUnix'] > 0 and initial['intervalSeconds'] == WEEK, initial
     assert not initial.get('error'), initial
+    # The schedule must outlive reboots, so its state can't be on tmpfs.
+    filesystem = subprocess.check_output(['findmnt', '-n', '-o', 'FSTYPE', '-T', str(SCHEDULE)], text=True).strip()
+    assert SCHEDULE.is_file() and filesystem != 'tmpfs', filesystem
     shutil.rmtree(WORK, ignore_errors=True)
     WORK.mkdir(mode=0o755)
     try:
@@ -161,8 +187,15 @@ def prepare():
         assert candidate_version, 'Candidate arch-niri-dux package was not built.'
         run('repo-remove', str(database()), *PACKAGES)
         use_fixture_repository(packages)
-        state = login_check(initial.get('lastSuccessUnix', 0))
-        assert state['count'] == 0 and not state.get('error'), state
+        set_interval(SHORT)
+        none = scheduled_check(initial.get('lastSuccessUnix', 0))
+        assert none['count'] == 0 and not none.get('error'), none
+        # Logging in again before the interval elapses keeps the schedule.
+        after_login = relogin(SHORT)
+        time.sleep(30)
+        later = state()
+        assert later['lastCheckUnix'] == none['lastCheckUnix'], (none, later)
+        assert later['nextCheckUnix'] >= none['lastCheckUnix'] + SHORT, later
         write_before(
             {
                 'packages': installed().splitlines(),
@@ -170,8 +203,11 @@ def prepare():
                 'generation': (migrations.STATE / 'generation').read_text().strip(),
                 'checkupdates': shutil.which('checkupdates'),
                 'fakeroot': shutil.which('fakeroot'),
-                'first_login_check': {key: initial[key] for key in ('lastCheckUnix', 'intervalSeconds')},
-                'none_check': state['lastSuccessUnix'],
+                'first_check': {key: initial[key] for key in ('lastCheckUnix', 'intervalSeconds')},
+                'none_check': none['lastSuccessUnix'],
+                'relogin_kept_schedule': {
+                    key: after_login[key] for key in ('lastCheckUnix', 'nextCheckUnix', 'intervalSeconds')
+                },
             }
         )
     except BaseException:
@@ -180,28 +216,28 @@ def prepare():
 
 
 def offer():
-    """Dux's next login check finds our newer packages."""
+    """Dux's next scheduled check finds our newer packages."""
     try:
         before = json.loads((WORK / 'before.json').read_text())
         # Taken just before the offer so the clock rarely changes width
         # between the two screenshots the host compares.
         screenshot(NONE)
         run('repo-add', str(database()), *map(str, (WORK / 'packages').glob('*.pkg.tar.zst')))
-        state = login_check(before['none_check'])
+        found = scheduled_check(before['none_check'])
         update = next(
             (
                 package
-                for package in state['packages']
+                for package in found['packages']
                 if package['name'] == 'arch-niri-dux' and package['toVersion'] == before['candidate']
             ),
             None,
         )
-        assert update, state
-        assert state['nextCheckUnix'] - state['lastCheckUnix'] == 6 * 60 * 60, state
+        assert update, found
+        assert found['nextCheckUnix'] - found['lastCheckUnix'] == SHORT, found
         # A selected AUR helper would run in a terminal instead of through pkexec.
-        system = [backend['id'] for backend in state['backends'] if backend['repo'] == 'system']
-        assert system == ['pacman'], state['backends']
-        before |= {'found': update, 'backends': state['backends'], 'available_check': state['lastSuccessUnix']}
+        system = [backend['id'] for backend in found['backends'] if backend['repo'] == 'system']
+        assert system == ['pacman'], found['backends']
+        before |= {'found': update, 'backends': found['backends'], 'available_check': found['lastSuccessUnix']}
         write_before(before)
         screenshot(AVAILABLE)
     except BaseException:
@@ -258,8 +294,9 @@ def check():
         (EVIDENCE / 'dux-update.json').write_text(
             json.dumps(
                 {
-                    'trigger': "Dux's login check, the bar button, then Update All's server request",
-                    'first_login_check': before['first_login_check'],
+                    'trigger': "Dux's scheduled checks, the bar button, then Update All's server request",
+                    'first_check': before['first_check'],
+                    'relogin_kept_schedule': before['relogin_kept_schedule'],
                     'none_check': before['none_check'],
                     'available_check': before['available_check'],
                     'check_mechanism_present': 'checkupdates'
@@ -282,6 +319,8 @@ def check():
         )
     finally:
         restore_pacman_conf()
+    # Back to the shipped weekly interval for later stages.
+    set_interval(WEEK)
     SYSTEM_EFFECT.unlink()
     USER_EFFECT.unlink()
     shutil.rmtree(WORK)
@@ -332,7 +371,7 @@ def update_button(vm):
 def verify(vm, passed):
     vm.probe('dux_update', 'prepare', timeout=600)
     vm.probe('dux_update', 'offer', timeout=300)
-    passed("Dux's own login check found no update with the button hidden, then found ours and showed it")
+    passed("Dux's scheduled checks found no update with the button hidden, skipped a re-login, then showed ours")
     vm.click(*update_button(vm))
     # The button opens Dux's updater panel. OCR cannot read its buttons, so the
     # upgrade is the same server request its Update All sends.

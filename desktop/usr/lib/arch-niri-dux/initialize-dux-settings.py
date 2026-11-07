@@ -35,11 +35,12 @@ MAIN_BAR = {
 }
 
 SEEDS = {
-    # The bar button makes Dux's server check in the background: at login and
-    # then every 6 hours. Background failures (offline) stay silent.
+    # The bar button keeps Dux's server checking in the background. Weekly,
+    # with no login check, keeps the button quiet on live Arch. Dux schedules
+    # from its last check persisted in ~/.cache/dms, so reboots don't reset the
+    # week; a failed (offline) check retries every 5 minutes, silently.
     '00-arch-niri-dux-updates.json': {
-        'updaterCheckOnStart': True,
-        'updaterIntervalSeconds': 6 * 60 * 60,
+        'updaterIntervalSeconds': 7 * 24 * 60 * 60,
         'barConfigs': [MAIN_BAR],
     },
 }
