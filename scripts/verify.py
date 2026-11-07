@@ -13,7 +13,7 @@ import tempfile
 
 from verification.digest import digest
 
-from verification import apps, boot, browser, camera, desktop, integration, pdf, recovery
+from verification import apps, boot, browser, camera, desktop, dux_update, integration, pdf, recovery
 from verification.vm import VM, PASSWORD, stage_probes
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -151,6 +151,7 @@ def main():
         desktop.verify_lock(vm, passed)
         vm.probe('migrations', 'check', timeout=180)
         passed('Migration ordering, retries, session triggers and new-account baseline')
+        dux_update.verify(vm, passed)
         recovery.verify(vm, passed)
         boot.verify_fallback(vm, passed)
         if args.online_repository:
