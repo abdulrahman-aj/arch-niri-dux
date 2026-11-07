@@ -20,8 +20,9 @@ def prepare(root):
     configuration = json.loads(Path('/run/verify/install.json').read_text())
     if configuration.get('swap_gib') == 0:
         assert not (root / 'swap/swapfile').exists()
-        assert not any(token.startswith('resume=') or token.startswith('resume_offset=')
-                       for token in cmdline.read_text().split())
+        assert not any(
+            token.startswith('resume=') or token.startswith('resume_offset=') for token in cmdline.read_text().split()
+        )
         assert 'AllowHibernation=no' in (root / 'etc/systemd/sleep.conf.d/60-hibernation.conf').read_text()
 
 
@@ -65,18 +66,33 @@ def storage():
     assert any(row[0] == '/swap/swapfile' and int(row[2]) > 0 for row in swaps), swaps
     expected_gib = configuration.get('swap_gib')
     if expected_gib is None:
-        memory_kib = int(next(line.split()[1] for line in Path('/proc/meminfo').read_text().splitlines()
-                              if line.startswith('MemTotal:')))
+        memory_kib = int(
+            next(
+                line.split()[1]
+                for line in Path('/proc/meminfo').read_text().splitlines()
+                if line.startswith('MemTotal:')
+            )
+        )
         expected_gib = (memory_kib * 1024 + 1024**3 - 1) // 1024**3 + 2
     assert Path('/swap/swapfile').stat().st_size == expected_gib * 1024**3
-    offset = run('btrfs', 'inspect-internal', 'map-swapfile', '-r', '/swap/swapfile', stdout=subprocess.PIPE).stdout.strip()
+    offset = run(
+        'btrfs', 'inspect-internal', 'map-swapfile', '-r', '/swap/swapfile', stdout=subprocess.PIPE
+    ).stdout.strip()
     assert offset.isdecimal(), offset
     assert 'resume=/dev/mapper/dux-root' in cmdline
     assert f'resume_offset={offset}' in cmdline, (offset, cmdline)
     assert stat.S_IMODE(Path('/swap/swapfile').stat().st_mode) == 0o600
-    Path('/run/verify/swap-evidence.json').write_text(json.dumps({
-        'subvolume': mounted_subvolume, 'resume_offset': int(offset), 'active_swap': swaps,
-    }, indent=2) + '\n')
+    Path('/run/verify/swap-evidence.json').write_text(
+        json.dumps(
+            {
+                'subvolume': mounted_subvolume,
+                'resume_offset': int(offset),
+                'active_swap': swaps,
+            },
+            indent=2,
+        )
+        + '\n'
+    )
 
 
 def plymouth_config(root='/'):
@@ -90,11 +106,13 @@ def plymouth_config(root='/'):
     assert images, 'No built initramfs found.'
     for image in images:
         contents = run('lsinitcpio', str(image), stdout=subprocess.PIPE).stdout.splitlines()
-        for required in ('usr/lib/systemd/systemd', 'usr/bin/plymouth',
-                         'usr/lib/systemd/systemd-cryptsetup'):
+        for required in ('usr/lib/systemd/systemd', 'usr/bin/plymouth', 'usr/lib/systemd/systemd-cryptsetup'):
             assert required in contents, (image, required)
-    cmdline = (root / 'etc/kernel/cmdline').read_text().split() if (root / 'etc/kernel/cmdline').is_file() \
+    cmdline = (
+        (root / 'etc/kernel/cmdline').read_text().split()
+        if (root / 'etc/kernel/cmdline').is_file()
         else Path('/proc/cmdline').read_text().split()
+    )
     assert 'quiet' in cmdline and 'splash' in cmdline, cmdline
     assert any(token.startswith('rd.luks.name=') for token in cmdline), cmdline
     assert 'plymouth.enable=0' not in cmdline, cmdline
@@ -122,8 +140,7 @@ def plymouth_status():
         assert Path(f'/usr/share/plymouth/themes/{fallback}').is_dir(), fallback
     # Boot failures must not be masked: only quiet+splash quiet the console.
     assert 'systemd.show_status=false' not in cmdline, cmdline
-    journal = run('journalctl', '-b', '--no-pager', '-o', 'short-monotonic',
-                  stdout=subprocess.PIPE).stdout
+    journal = run('journalctl', '-b', '--no-pager', '-o', 'short-monotonic', stdout=subprocess.PIPE).stdout
     assert 'plymouth' in journal.lower(), 'No Plymouth activity in this boot journal.'
     run('systemctl', 'is-active', 'greetd')
     evidence = {'theme': theme, 'cmdline': cmdline}
@@ -139,15 +156,24 @@ def prepare_hibernate():
     token = secrets.token_hex(16)
     Path('/run/dux-hibernate-memory-marker').write_text(token)
     Path('/run/dux-hibernate-resumed').unlink(missing_ok=True)
-    Path('/run/verify/hibernate-expected.json').write_text(json.dumps({
-        'boot_id': Path('/proc/sys/kernel/random/boot_id').read_text().strip(), 'memory_token': token,
-    }, indent=2) + '\n')
+    Path('/run/verify/hibernate-expected.json').write_text(
+        json.dumps(
+            {
+                'boot_id': Path('/proc/sys/kernel/random/boot_id').read_text().strip(),
+                'memory_token': token,
+            },
+            indent=2,
+        )
+        + '\n'
+    )
     dropin = Path('/run/systemd/system/systemd-hibernate.service.d/90-verification.conf')
     dropin.parent.mkdir(parents=True, exist_ok=True)
     # ExecStartPost runs only after systemd-sleep's hibernation call returns.
     # /run is intentionally RAM-backed: a cold boot cannot satisfy this proof.
-    dropin.write_text('[Service]\nExecStartPost=/usr/bin/touch /run/dux-hibernate-resumed\n'
-                      "ExecStartPost=/usr/bin/sh -c 'echo DUX_HIBERNATION_RESUMED >/dev/ttyS0'\n")
+    dropin.write_text(
+        '[Service]\nExecStartPost=/usr/bin/touch /run/dux-hibernate-resumed\n'
+        "ExecStartPost=/usr/bin/sh -c 'echo DUX_HIBERNATION_RESUMED >/dev/ttyS0'\n"
+    )
     run('systemctl', 'daemon-reload')
     run('sync')
 
@@ -190,17 +216,28 @@ def verify_boot(vm, passed, swap_gib):
     vm.start(cdrom=False)
     installed_login(vm)
     passed('UEFI boot from encrypted disk without installation ISO')
-    vm.command('test -e /dev/mapper/dux-root; findmnt -n -o FSTYPE / | grep -x btrfs; test "$(ls /sys/class/net | tr "\\n" " ")" = "lo "')
-    vm.command('cat /proc/cmdline; ! grep -q /@snapshots/ /proc/cmdline; systemctl is-enabled greetd; systemctl is-active greetd; test -f /home/tester/.config/niri/config.kdl')
-    vm.command('systemctl is-active NetworkManager; systemctl is-enabled bluetooth; command -v nvim chromium alacritty xdg-terminal-exec niri dms papers snapshot; ! command -v yay')
-    vm.command('mkdir -p /run/verify; mount -t 9p -o trans=virtio,version=9p2000.L verify /run/verify || mountpoint -q /run/verify')
+    vm.command(
+        'test -e /dev/mapper/dux-root; findmnt -n -o FSTYPE / | grep -x btrfs; test "$(ls /sys/class/net | tr "\\n" " ")" = "lo "'
+    )
+    vm.command(
+        'cat /proc/cmdline; ! grep -q /@snapshots/ /proc/cmdline; systemctl is-enabled greetd; systemctl is-active greetd; test -f /home/tester/.config/niri/config.kdl'
+    )
+    vm.command(
+        'systemctl is-active NetworkManager; systemctl is-enabled bluetooth; command -v nvim chromium alacritty xdg-terminal-exec niri dms papers snapshot; ! command -v yay'
+    )
+    vm.command(
+        'mkdir -p /run/verify; mount -t 9p -o trans=virtio,version=9p2000.L verify /run/verify || mountpoint -q /run/verify'
+    )
     vm.probe('boot', 'plymouth-config')
     vm.probe('boot', 'plymouth-status')
     passed('Plymouth configuration and boot services are active')
     graphical_login(vm)
     vm.probe('boot', 'storage')
-    passed('No-swap installation disables hibernation' if swap_gib == 0 else
-           'Encrypted swap outside root snapshots; physical resume offset matches the kernel')
+    passed(
+        'No-swap installation disables hibernation'
+        if swap_gib == 0
+        else 'Encrypted swap outside root snapshots; physical resume offset matches the kernel'
+    )
 
 
 def verify_fallback(vm, passed):
@@ -223,7 +260,9 @@ def verify_fallback(vm, passed):
     vm.start(cdrom=False, software_display=True)
     installed_login(vm, keyboard_unlock=True, screenshot_tag='07-restored-splash')
     vm.mount_probes()
-    vm.command('! grep -qw plymouth.enable=0 /proc/cmdline; cd /run/verify && python -m verification.boot plymouth-status')
+    vm.command(
+        '! grep -qw plymouth.enable=0 /proc/cmdline; cd /run/verify && python -m verification.boot plymouth-status'
+    )
     vm.probe('recovery', 'restored')
     passed('Graphical password screen works again after text fallback')
     vm.probe('boot', 'serial-console-enable', timeout=300)
@@ -232,14 +271,17 @@ def verify_fallback(vm, passed):
 
 
 if __name__ == '__main__':
-    dispatch('boot', {
-        'prepare': lambda: prepare(Path(sys.argv[2])),
-        'storage': storage,
-        'plymouth-config': lambda: plymouth_config(sys.argv[2] if len(sys.argv) > 2 else '/'),
-        'plymouth-status': plymouth_status,
-        'prepare-hibernate': prepare_hibernate,
-        'serial-console-enable': lambda: serial_console(True, sys.argv[2] if len(sys.argv) > 2 else '/'),
-        'serial-console-disable': lambda: serial_console(False, sys.argv[2] if len(sys.argv) > 2 else '/'),
-        'splash-fallback-disable': lambda: splash_fallback(True),
-        'splash-fallback-enable': lambda: splash_fallback(False),
-    })
+    dispatch(
+        'boot',
+        {
+            'prepare': lambda: prepare(Path(sys.argv[2])),
+            'storage': storage,
+            'plymouth-config': lambda: plymouth_config(sys.argv[2] if len(sys.argv) > 2 else '/'),
+            'plymouth-status': plymouth_status,
+            'prepare-hibernate': prepare_hibernate,
+            'serial-console-enable': lambda: serial_console(True, sys.argv[2] if len(sys.argv) > 2 else '/'),
+            'serial-console-disable': lambda: serial_console(False, sys.argv[2] if len(sys.argv) > 2 else '/'),
+            'splash-fallback-disable': lambda: splash_fallback(True),
+            'splash-fallback-enable': lambda: splash_fallback(False),
+        },
+    )

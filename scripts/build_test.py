@@ -15,12 +15,20 @@ aur_spec.loader.exec_module(aur)
 
 class PayloadTests(unittest.TestCase):
     def setUp(self):
-        self.entry = dict(filename='base-1-any.pkg.tar.zst', sha256='a' * 64,
-                          url='https://example.org/base-1-any.pkg.tar.zst', signature='abc')
+        self.entry = dict(
+            filename='base-1-any.pkg.tar.zst',
+            sha256='a' * 64,
+            url='https://example.org/base-1-any.pkg.tar.zst',
+            signature='abc',
+        )
 
     def test_invalid_fields_rejected(self):
-        invalid = {'signature': '', 'filename': '../base.pkg.tar.zst',
-                   'url': 'http://example.org/base', 'sha256': 'invalid'}
+        invalid = {
+            'signature': '',
+            'filename': '../base.pkg.tar.zst',
+            'url': 'http://example.org/base',
+            'sha256': 'invalid',
+        }
         for field, value in invalid.items():
             # Each case rebuilds the valid entry so the mutations stay independent.
             with self.subTest(field=field):
@@ -63,8 +71,9 @@ class ReviewedRecipeTests(unittest.TestCase):
             source.mkdir(parents=True)
             for name in ('PKGBUILD', '.SRCINFO'):
                 (source / name).write_text('reviewed contents')
-            recipe = dict(name='example-bin',
-                          files={name: aur.digest(source / name) for name in ('PKGBUILD', '.SRCINFO')})
+            recipe = dict(
+                name='example-bin', files={name: aur.digest(source / name) for name in ('PKGBUILD', '.SRCINFO')}
+            )
             self.assertEqual(aur.validate_recipe(root, recipe), source)
             (source / 'PKGBUILD').write_text('changed contents')
             with self.assertRaisesRegex(ValueError, 'recipe changed'):
@@ -79,16 +88,19 @@ class ReviewedRecipeTests(unittest.TestCase):
                 (source / name).touch()
             outside = root / 'packages/aur/outside'
             outside.write_text('outside')
-            recipe = dict(name='example-bin',
-                          files={name: aur.digest(source / name) for name in ('PKGBUILD', '.SRCINFO')})
+            recipe = dict(
+                name='example-bin', files={name: aur.digest(source / name) for name in ('PKGBUILD', '.SRCINFO')}
+            )
             recipe['files']['../outside'] = aur.digest(outside)
             with self.assertRaisesRegex(ValueError, 'recipe changed'):
                 aur.validate_recipe(root, recipe)
+
 
 class LiveKeyringTests(unittest.TestCase):
     def test_key_operations_wait_for_live_initializer_and_stop_if_it_fails(self):
         import os
         import subprocess
+
         source = Path(__file__).with_name('build-guest').read_text()
         preparation = source.split('# Serialize keyring preparation', 1)[1].split('# Import the existing', 1)[0]
         preparation = '# Serialize keyring preparation' + preparation
@@ -96,17 +108,23 @@ class LiveKeyringTests(unittest.TestCase):
             with self.subTest(initializer_status=status), tempfile.TemporaryDirectory() as directory:
                 root = Path(directory)
                 systemctl = root / 'systemctl'
-                systemctl.write_text('#!/bin/bash\nsleep 0.02\n'
-                                     f'if [ {status} != 0 ]; then exit {status}; fi\n'
-                                     'touch "$KEYRING_TEST_STATE/ready"\n')
+                systemctl.write_text(
+                    '#!/bin/bash\nsleep 0.02\n'
+                    f'if [ {status} != 0 ]; then exit {status}; fi\n'
+                    'touch "$KEYRING_TEST_STATE/ready"\n'
+                )
                 pacman_key = root / 'pacman-key'
-                pacman_key.write_text('#!/bin/bash\n'
-                                      'test -f "$KEYRING_TEST_STATE/ready" || exit 29\n'
-                                      'printf "%s\\n" "$*" >> "$KEYRING_TEST_STATE/operations"\n')
+                pacman_key.write_text(
+                    '#!/bin/bash\n'
+                    'test -f "$KEYRING_TEST_STATE/ready" || exit 29\n'
+                    'printf "%s\\n" "$*" >> "$KEYRING_TEST_STATE/operations"\n'
+                )
                 systemctl.chmod(0o755)
                 pacman_key.chmod(0o755)
-                environment = os.environ | {'PATH': str(root) + ':' + os.environ['PATH'],
-                                            'KEYRING_TEST_STATE': str(root)}
+                environment = os.environ | {
+                    'PATH': str(root) + ':' + os.environ['PATH'],
+                    'KEYRING_TEST_STATE': str(root),
+                }
                 result = subprocess.run(['bash', '-e', '-c', preparation], env=environment)
                 self.assertEqual(result.returncode, status)
                 operations = root / 'operations'

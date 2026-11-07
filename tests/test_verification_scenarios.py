@@ -48,15 +48,26 @@ class ProbeStagingTests(unittest.TestCase):
             hashes = vm.stage_probes(root)
             for name, expected in hashes.items():
                 self.assertEqual(hashlib.sha256((root / name).read_bytes()).hexdigest(), expected)
-            subprocess.run([sys.executable, '-c',
-                            'from verification import apps, boot, browser, camera, desktop, '
-                            'guest, integration, pdf, recovery, vm'],
-                           cwd=root, env=os.environ | {'PYTHONPATH': ''}, check=True)
+            subprocess.run(
+                [
+                    sys.executable,
+                    '-c',
+                    'from verification import apps, boot, browser, camera, desktop, '
+                    'guest, integration, pdf, recovery, vm',
+                ],
+                cwd=root,
+                env=os.environ | {'PYTHONPATH': ''},
+                check=True,
+            )
             for name in ('boot', 'desktop', 'browser', 'camera', 'pdf', 'recovery', 'integration'):
                 with self.subTest(probe=name):
-                    result = subprocess.run([sys.executable, '-m', f'verification.{name}', 'unknown'],
-                                            cwd=root, env=os.environ | {'PYTHONPATH': ''},
-                                            capture_output=True, text=True)
+                    result = subprocess.run(
+                        [sys.executable, '-m', f'verification.{name}', 'unknown'],
+                        cwd=root,
+                        env=os.environ | {'PYTHONPATH': ''},
+                        capture_output=True,
+                        text=True,
+                    )
                     self.assertEqual(result.returncode, 1)
                     self.assertEqual(result.stderr.strip(), f'Unknown {name} probe')
 
@@ -64,8 +75,8 @@ class ProbeStagingTests(unittest.TestCase):
 class ScreenshotReadinessTests(unittest.TestCase):
     def test_screenshot_is_not_ready_until_the_png_write_is_complete(self):
         image = base64.b64decode(
-            'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8A'
-            'AwMCAO+/a9sAAAAASUVORK5CYII=')
+            'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/a9sAAAAASUVORK5CYII='
+        )
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / 'screenshot.png'
             self.assertFalse(guest.png_ready(path))
@@ -84,8 +95,10 @@ class ScenarioCleanupTests(unittest.TestCase):
             machine.key = lambda *args: actions.append(args)
             machine.chord = lambda *args: actions.append(args)
             milestones = []
-            with patch.object(pdf.subprocess, 'check_output', return_value='unrendered'), \
-                    patch.object(pdf.time, 'sleep'):
+            with (
+                patch.object(pdf.subprocess, 'check_output', return_value='unrendered'),
+                patch.object(pdf.time, 'sleep'),
+            ):
                 with self.assertRaisesRegex(RuntimeError, 'did not render'):
                     pdf.verify(machine, milestones.append)
             self.assertEqual(actions[-2:], [('esc',), ('pdf', 'files-pdf-close')])
@@ -119,8 +132,10 @@ class UpgradeRestorationTests(unittest.TestCase):
             restored.parent.mkdir()
             restored.write_text('restored')
             versions = '\n'.join(expected['before'])
-            with patch.object(integration, 'output', return_value=versions), \
-                    patch.object(integration.subprocess, 'run', return_value=SimpleNamespace(returncode=1)) as query:
+            with (
+                patch.object(integration, 'output', return_value=versions),
+                patch.object(integration.subprocess, 'run', return_value=SimpleNamespace(returncode=1)) as query,
+            ):
                 integration.assert_restored(root=root, evidence=root)
                 self.assertEqual(query.call_args.args[0], ['pacman', '-Q', 'different-fixture-app'])
                 restored.unlink()

@@ -33,8 +33,14 @@ def run(*args, **kwargs):
 
 def run_interactive(command, replies, timeout=180):
     pending = list(replies)
-    process = subprocess.Popen(command, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
-                               stderr=subprocess.STDOUT, bufsize=0, start_new_session=True)
+    process = subprocess.Popen(
+        command,
+        stdin=subprocess.PIPE,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        bufsize=0,
+        start_new_session=True,
+    )
     deadline = time.monotonic() + timeout
     buffered = b''
     try:
@@ -76,13 +82,27 @@ def user_command(*args, capture=False, timeout=None):
     if wayland is None:
         raise RuntimeError('No Wayland socket found for the graphical test user.')
     niri = next(runtime.glob('niri.*.sock'))
-    return run('runuser', '-u', 'tester', '--', 'env', f'HOME={user.pw_dir}',
-               f'XDG_CONFIG_HOME={user.pw_dir}/.config', f'XDG_CACHE_HOME={user.pw_dir}/.cache',
-               f'XDG_DATA_HOME={user.pw_dir}/.local/share', f'XDG_STATE_HOME={user.pw_dir}/.local/state',
-               'XDG_SESSION_TYPE=wayland',
-               'XDG_CURRENT_DESKTOP=niri', f'NIRI_SOCKET={niri}', f'XDG_RUNTIME_DIR={runtime}',
-               f'DBUS_SESSION_BUS_ADDRESS=unix:path={runtime}/bus', f'WAYLAND_DISPLAY={wayland.name}',
-               *args, stdout=subprocess.PIPE if capture else None, timeout=timeout)
+    return run(
+        'runuser',
+        '-u',
+        'tester',
+        '--',
+        'env',
+        f'HOME={user.pw_dir}',
+        f'XDG_CONFIG_HOME={user.pw_dir}/.config',
+        f'XDG_CACHE_HOME={user.pw_dir}/.cache',
+        f'XDG_DATA_HOME={user.pw_dir}/.local/share',
+        f'XDG_STATE_HOME={user.pw_dir}/.local/state',
+        'XDG_SESSION_TYPE=wayland',
+        'XDG_CURRENT_DESKTOP=niri',
+        f'NIRI_SOCKET={niri}',
+        f'XDG_RUNTIME_DIR={runtime}',
+        f'DBUS_SESSION_BUS_ADDRESS=unix:path={runtime}/bus',
+        f'WAYLAND_DISPLAY={wayland.name}',
+        *args,
+        stdout=subprocess.PIPE if capture else None,
+        timeout=timeout,
+    )
 
 
 def ipc(application, method, *parameters):

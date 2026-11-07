@@ -48,18 +48,35 @@ def main():
         vm.expect(r'(?i)(passphrase|password).*?:', timeout=180)
         vm.send(PASSWORD + '\n')
         vm.expect('DUX_HIBERNATION_RESUMED', timeout=180)
-        output = vm.command('printf "\\nHIBERNATE_BOOT_ID:"; cat /proc/sys/kernel/random/boot_id; '
-                            'printf "\\nHIBERNATE_MEMORY_TOKEN:"; cat /run/dux-hibernate-memory-marker; '
-                            'test -e /run/dux-hibernate-resumed')
+        output = vm.command(
+            'printf "\\nHIBERNATE_BOOT_ID:"; cat /proc/sys/kernel/random/boot_id; '
+            'printf "\\nHIBERNATE_MEMORY_TOKEN:"; cat /run/dux-hibernate-memory-marker; '
+            'test -e /run/dux-hibernate-resumed'
+        )
         boot_id = re.search(r'HIBERNATE_BOOT_ID:([a-f0-9-]+)', output)
         memory = re.search(r'HIBERNATE_MEMORY_TOKEN:([a-f0-9]+)', output)
-        if not boot_id or not memory or boot_id.group(1) != expected['boot_id'] or memory.group(1) != expected['memory_token']:
+        if (
+            not boot_id
+            or not memory
+            or boot_id.group(1) != expected['boot_id']
+            or memory.group(1) != expected['memory_token']
+        ):
             raise RuntimeError('Kernel boot ID or RAM-backed token changed; this was not a genuine memory resume.')
-        (directory / 'hibernate-resume.json').write_text(json.dumps({
-            'boot_id': boot_id.group(1), 'boot_id_unchanged': True,
-            'ram_token_survived': True, 'hibernation_service_returned': True,
-        }, indent=2) + '\n')
-        (directory / 'HIBERNATE-RESUME-PASSED').write_text('Same kernel boot ID and RAM-backed state survived hibernation.\n')
+        (directory / 'hibernate-resume.json').write_text(
+            json.dumps(
+                {
+                    'boot_id': boot_id.group(1),
+                    'boot_id_unchanged': True,
+                    'ram_token_survived': True,
+                    'hibernation_service_returned': True,
+                },
+                indent=2,
+            )
+            + '\n'
+        )
+        (directory / 'HIBERNATE-RESUME-PASSED').write_text(
+            'Same kernel boot ID and RAM-backed state survived hibernation.\n'
+        )
         vm.screenshot('06-hibernate-resumed')
         vm.poweroff()
         print(f'Hibernation memory resume passed. Evidence: {directory}', flush=True)

@@ -29,11 +29,16 @@ def focus_browser():
 
 
 def file_chooser():
-    wait_until('Chromium file-picker request', lambda:
-               (state := browser_state()) is not None and state['file'] == 'pending')
-    wait_until('Dux Files handling Chromium open-file dialog', lambda: any(
-        window.get('app_id') == 'dev.duxlabs.files' and re.match(r'(?i)(open|select)', window.get('title', ''))
-        for window in windows()))
+    wait_until(
+        'Chromium file-picker request', lambda: (state := browser_state()) is not None and state['file'] == 'pending'
+    )
+    wait_until(
+        'Dux Files handling Chromium open-file dialog',
+        lambda: any(
+            window.get('app_id') == 'dev.duxlabs.files' and re.match(r'(?i)(open|select)', window.get('title', ''))
+            for window in windows()
+        ),
+    )
     screenshot('02-file-chooser.png')
 
 
@@ -43,7 +48,11 @@ def captured_frame():
         raise RuntimeError(state['capture'])
     if state and state['capture'] == 'passed' and state['frames'] >= 3 and state['width'] > 0 and state['height'] > 0:
         pixels = state.get('pixels', {})
-        if pixels.get('nonBlack', 0) >= 10 and pixels.get('maximum', 0) - pixels.get('minimum', 0) > 60 and pixels.get('colors', 0) >= 8:
+        if (
+            pixels.get('nonBlack', 0) >= 10
+            and pixels.get('maximum', 0) - pixels.get('minimum', 0) > 60
+            and pixels.get('colors', 0) >= 8
+        ):
             return state
     return False
 
@@ -53,7 +62,8 @@ def capture():
     Path('/run/verify/screen-sharing.json').write_text(json.dumps(state, indent=2) + '\n')
     screenshot('02-screen-sharing.png')
 
-BROWSER_PAGE = '''<!doctype html>
+
+BROWSER_PAGE = """<!doctype html>
 <meta charset="utf-8"><meta name="color-scheme" content="light dark">
 <title>Dux verification loading</title>
 <style>body { font: 24px sans-serif; color-scheme: light dark; padding: 40px; }
@@ -123,7 +133,7 @@ document.getElementById('share').onclick = async () => {
 };
 publish();
 </script>
-'''
+"""
 
 
 def verify(vm, passed):
@@ -155,23 +165,32 @@ def verify(vm, passed):
 
 
 def file_chooser_cancelled():
-    wait_until('Chromium file chooser cancellation', lambda:
-               (state := browser_state()) is not None and state['file'] == 'cancelled')
+    wait_until(
+        'Chromium file chooser cancellation',
+        lambda: (state := browser_state()) is not None and state['file'] == 'cancelled',
+    )
 
 
 def capture_picker():
-    wait_until('GNOME screen-sharing source chooser', lambda: any(
-        'portal' in window.get('app_id', '').lower() and window.get('title') == 'Share Screen'
-        for window in windows()))
+    wait_until(
+        'GNOME screen-sharing source chooser',
+        lambda: any(
+            'portal' in window.get('app_id', '').lower() and window.get('title') == 'Share Screen'
+            for window in windows()
+        ),
+    )
     screenshot('02-screen-share-picker.png')
 
 
 if __name__ == '__main__':
-    dispatch('browser', {
-        'focus-browser': focus_browser,
-        'file-chooser': file_chooser,
-        'file-chooser-cancelled': file_chooser_cancelled,
-        'capture': capture,
-        'capture-source': lambda: screenshot('02-chromium-share-source.png'),
-        'capture-picker': capture_picker,
-    })
+    dispatch(
+        'browser',
+        {
+            'focus-browser': focus_browser,
+            'file-chooser': file_chooser,
+            'file-chooser-cancelled': file_chooser_cancelled,
+            'capture': capture,
+            'capture-source': lambda: screenshot('02-chromium-share-source.png'),
+            'capture-picker': capture_picker,
+        },
+    )

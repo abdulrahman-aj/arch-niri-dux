@@ -30,12 +30,14 @@ class PlymouthFallbackTests(unittest.TestCase):
             root = Path(directory)
             (root / 'etc/kernel').mkdir(parents=True)
             (root / 'etc/default').mkdir(parents=True)
-            base = ('rd.luks.name=uuid=dux-root root=/dev/mapper/dux-root '
-                    'rootflags=subvol=@ rw quiet splash resume=/dev/mapper/dux-root resume_offset=99')
+            base = (
+                'rd.luks.name=uuid=dux-root root=/dev/mapper/dux-root '
+                'rootflags=subvol=@ rw quiet splash resume=/dev/mapper/dux-root resume_offset=99'
+            )
             (root / 'etc/kernel/cmdline').write_text(base + '\n')
             (root / 'etc/default/limine').write_text(
-                f'KERNEL_CMDLINE[default]="{base}"\n'
-                '# Recovery guidance: plymouth.enable=0 is available\n')
+                f'KERNEL_CMDLINE[default]="{base}"\n# Recovery guidance: plymouth.enable=0 is available\n'
+            )
             guest.splash_fallback(True, root)
             disabled = (root / 'etc/kernel/cmdline').read_text().split()
             self.assertIn('plymouth.enable=0', disabled)

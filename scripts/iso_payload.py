@@ -23,7 +23,11 @@ def _manifest(root, repository):
     recipes = json.loads((root / 'packages/aur-recipes.json').read_text())
     apps = integration.get('apps', [])
     expected = {recipe['name']: recipe for recipe in recipes}
-    if len(expected) != len(recipes) or len(apps) != len(expected) or {entry['name'] for entry in apps} != set(expected):
+    if (
+        len(expected) != len(recipes)
+        or len(apps) != len(expected)
+        or {entry['name'] for entry in apps} != set(expected)
+    ):
         raise ValueError('Dux app inventory does not match the declared recipes.')
     if any(entry['recipe'] != expected[entry['name']] for entry in apps):
         raise ValueError('Dux app provenance does not match the declared recipes.')
@@ -35,12 +39,18 @@ def _manifest(root, repository):
 def _inventory(manifest, repository):
     inventory = {}
     filenames = set()
-    for entries, version in ((manifest['packages'], None),
-                             (manifest['integration']['packages'], manifest['integration']['version']),
-                             (manifest['integration'].get('apps', []), None)):
+    for entries, version in (
+        (manifest['packages'], None),
+        (manifest['integration']['packages'], manifest['integration']['version']),
+        (manifest['integration'].get('apps', []), None),
+    ):
         for entry in entries:
             name, filename, checksum = entry['name'], entry['filename'], entry['sha256']
-            if not isinstance(filename, str) or Path(filename).name != filename or not filename.endswith('.pkg.tar.zst'):
+            if (
+                not isinstance(filename, str)
+                or Path(filename).name != filename
+                or not filename.endswith('.pkg.tar.zst')
+            ):
                 raise ValueError(f'Unsafe package filename: {filename}')
             if not isinstance(name, str) or not re.fullmatch(r'[a-zA-Z0-9][a-zA-Z0-9@+_.-]*', name):
                 raise ValueError(f'Invalid package name: {name}')
@@ -112,8 +122,9 @@ def finalize(root, repository):
         subprocess.run(['repo-add', str(database), *map(str, packages)], check=True)
         actual = _database_inventory(database)
         if set(actual) != set(inventory) or any(
-                actual[name][:2] != entry[:2] or (entry[2] is not None and actual[name][2] != entry[2])
-                for name, entry in inventory.items()):
+            actual[name][:2] != entry[:2] or (entry[2] is not None and actual[name][2] != entry[2])
+            for name, entry in inventory.items()
+        ):
             raise ValueError('Repository database inventory does not match the declared packages.')
         checksums = ''.join(f'{checksum}  {filename}\n' for filename, checksum, _ in sorted(inventory.values()))
         checksums += f'{_digest(database)}  offline.db\n'

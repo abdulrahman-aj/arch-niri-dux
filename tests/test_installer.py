@@ -11,16 +11,21 @@ from installer import install as installer
 
 
 def settings(**changes):
-    values = dict(disk='/dev/vda', username='tester', hostname='dux',
-                  timezone='UTC', keymap='us', passphrase='test-passphrase',
-                  password='test-password')
+    values = dict(
+        disk='/dev/vda',
+        username='tester',
+        hostname='dux',
+        timezone='UTC',
+        keymap='us',
+        passphrase='test-passphrase',
+        password='test-password',
+    )
     values.update(changes)
     return installer.Settings(**values)
 
 
 def disk(**changes):
-    values = dict(name='/dev/vda', type='disk', size=64 * 1024**3,
-                  ro=False, mountpoints=[None], children=[])
+    values = dict(name='/dev/vda', type='disk', size=64 * 1024**3, ro=False, mountpoints=[None], children=[])
     values.update(changes)
     return values
 
@@ -30,27 +35,31 @@ class InstallerSafetyTests(unittest.TestCase):
         # The host may itself use Dux's mapper name. These disposable installer
         # fixtures must not inherit the host's occupied-device state.
         exists = Path.exists
-        patcher = patch.object(Path, 'exists', lambda path:
-                               path != Path('/dev/mapper/dux-root') and exists(path))
+        patcher = patch.object(Path, 'exists', lambda path: path != Path('/dev/mapper/dux-root') and exists(path))
         patcher.start()
         self.addCleanup(patcher.stop)
 
     def test_firmware_guards_stop_unsupported_boots_before_installation(self):
         with tempfile.TemporaryDirectory() as directory:
             variable = Path(directory) / 'SecureBoot-fixture'
-            for uefi, secure_boot, message in ((False, False, 'Boot the ISO in UEFI mode'),
-                                               (True, True, 'Disable Secure Boot'),
-                                               (True, False, None)):
+            for uefi, secure_boot, message in (
+                (False, False, 'Boot the ISO in UEFI mode'),
+                (True, True, 'Disable Secure Boot'),
+                (True, False, None),
+            ):
                 variable.write_bytes(b'\x06\x00\x00\x00' + bytes([secure_boot]))
                 output = io.StringIO()
-                with self.subTest(uefi=uefi, secure_boot=secure_boot), \
-                        patch.object(sys, 'argv', ['arch-niri-install']), \
-                        patch.object(installer.os, 'geteuid', return_value=0), \
-                        patch.object(Path, 'exists', return_value=uefi), \
-                        patch.object(Path, 'glob', return_value=[variable]), \
-                        patch.object(installer, 'wizard', return_value=settings()) as wizard, \
-                        patch.object(installer, 'install') as installation, \
-                        patch.object(installer, 'run') as commands, patch('sys.stderr', output):
+                with (
+                    self.subTest(uefi=uefi, secure_boot=secure_boot),
+                    patch.object(sys, 'argv', ['arch-niri-install']),
+                    patch.object(installer.os, 'geteuid', return_value=0),
+                    patch.object(Path, 'exists', return_value=uefi),
+                    patch.object(Path, 'glob', return_value=[variable]),
+                    patch.object(installer, 'wizard', return_value=settings()) as wizard,
+                    patch.object(installer, 'install') as installation,
+                    patch.object(installer, 'run') as commands,
+                    patch('sys.stderr', output),
+                ):
                     if message is None:
                         self.assertEqual(installer.main(), 0)
                         wizard.assert_called_once_with()
@@ -69,11 +78,13 @@ class InstallerSafetyTests(unittest.TestCase):
             config = Path(directory) / 'invalid.json'
             config.write_text(json.dumps({'unexpected': 'field'}))
             config.chmod(0o600)
-            with patch.object(sys, 'argv', ['install', '--config', str(config), '--confirm-disk', '/dev/vda']), \
-                    patch.object(installer.os, 'geteuid', return_value=0), \
-                    patch.object(Path, 'exists', return_value=True), \
-                    patch.object(Path, 'glob', return_value=[]), \
-                    patch.object(installer, 'install') as install:
+            with (
+                patch.object(sys, 'argv', ['install', '--config', str(config), '--confirm-disk', '/dev/vda']),
+                patch.object(installer.os, 'geteuid', return_value=0),
+                patch.object(Path, 'exists', return_value=True),
+                patch.object(Path, 'glob', return_value=[]),
+                patch.object(installer, 'install') as install,
+            ):
                 self.assertEqual(installer.main(), 1)
                 install.assert_not_called()
 
@@ -94,11 +105,17 @@ class InstallerSafetyTests(unittest.TestCase):
                 self.assertIsNotNone(installer.disk_rejection(device, set()))
 
     def test_input_validation_blocks_unsafe_identity_values(self):
-        for change in ({'username': 'root'}, {'username': '../root'},
-                       {'hostname': 'name\ncommand'}, {'timezone': '../../etc/passwd'},
-                       {'keymap': 'us\nHOOKS=()'}, {'disk': '/dev/vda1'},
-                       {'disk': '/dev/loop0'}, {'password': 'short'},
-                       {'passphrase': 'linebreak\nsecret'}):
+        for change in (
+            {'username': 'root'},
+            {'username': '../root'},
+            {'hostname': 'name\ncommand'},
+            {'timezone': '../../etc/passwd'},
+            {'keymap': 'us\nHOOKS=()'},
+            {'disk': '/dev/vda1'},
+            {'disk': '/dev/loop0'},
+            {'password': 'short'},
+            {'passphrase': 'linebreak\nsecret'},
+        ):
             with self.subTest(change=change), self.assertRaises(ValueError):
                 settings(**change).validate()
 
@@ -109,9 +126,12 @@ class InstallerSafetyTests(unittest.TestCase):
         self.assertNotIn(value.passphrase, repr(value))
 
     def test_partition_names_cover_nvme_sata_and_vm(self):
-        for drive, expected in (('/dev/nvme0n1', '/dev/nvme0n1p2'),
-                                ('/dev/mmcblk0', '/dev/mmcblk0p2'),
-                                ('/dev/sda', '/dev/sda2'), ('/dev/vda', '/dev/vda2')):
+        for drive, expected in (
+            ('/dev/nvme0n1', '/dev/nvme0n1p2'),
+            ('/dev/mmcblk0', '/dev/mmcblk0p2'),
+            ('/dev/sda', '/dev/sda2'),
+            ('/dev/vda', '/dev/vda2'),
+        ):
             self.assertEqual(installer.partition_name(drive, 2), expected)
 
     def test_fstab_uses_subvolume_paths_so_root_can_be_replaced(self):
@@ -127,12 +147,15 @@ class InstallerSafetyTests(unittest.TestCase):
             root = Path(directory)
             (root / 'packages.target').write_text('base\nlinux\n')
             (root / 'offline.db').touch()
-            with patch.object(installer, 'SHARE', root), patch.object(installer, 'REPO', root), \
-                    patch.object(installer, 'TARGET', root / 'target'), \
-                    patch.object(installer, 'require_disk', side_effect=[1, 2]), \
-                    patch.object(installer, 'verify_repository'), \
-                    patch.object(installer.shutil, 'which', return_value='/usr/bin/tool'), \
-                    patch.object(installer, 'run') as run:
+            with (
+                patch.object(installer, 'SHARE', root),
+                patch.object(installer, 'REPO', root),
+                patch.object(installer, 'TARGET', root / 'target'),
+                patch.object(installer, 'require_disk', side_effect=[1, 2]),
+                patch.object(installer, 'verify_repository'),
+                patch.object(installer.shutil, 'which', return_value='/usr/bin/tool'),
+                patch.object(installer, 'run') as run,
+            ):
                 with self.assertRaisesRegex(ValueError, 'identity changed'):
                     installer.install(settings())
                 run.assert_not_called()
@@ -141,9 +164,11 @@ class InstallerSafetyTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             (root / 'packages.target').write_text('base\n--root=/\n')
-            with patch.object(installer, 'SHARE', root), \
-                    patch.object(installer, 'require_disk', return_value=1), \
-                    patch.object(installer, 'run') as run:
+            with (
+                patch.object(installer, 'SHARE', root),
+                patch.object(installer, 'require_disk', return_value=1),
+                patch.object(installer, 'run') as run,
+            ):
                 with self.assertRaisesRegex(ValueError, 'package list'):
                     installer.install(settings())
                 run.assert_not_called()
@@ -156,10 +181,13 @@ class InstallerSafetyTests(unittest.TestCase):
             package.write_bytes(b'package')
             checksum = hashlib.sha256(package.read_bytes()).hexdigest()
             (root / 'SHA256SUMS').write_text(f'{checksum}  {package.name}\n')
-            with patch.object(installer, 'SHARE', root), patch.object(installer, 'REPO', root), \
-                    patch.object(installer, 'TARGET', root / 'target'), \
-                    patch.object(installer, 'require_disk', return_value=1), \
-                    patch.object(installer, 'run') as run:
+            with (
+                patch.object(installer, 'SHARE', root),
+                patch.object(installer, 'REPO', root),
+                patch.object(installer, 'TARGET', root / 'target'),
+                patch.object(installer, 'require_disk', return_value=1),
+                patch.object(installer, 'run') as run,
+            ):
                 value = settings()
                 with self.assertRaisesRegex(ValueError, 'repository database'):
                     installer.install(value)
@@ -169,23 +197,30 @@ class InstallerSafetyTests(unittest.TestCase):
     def test_disk_replacement_after_wizard_confirmation_is_rejected(self):
         value = settings()
         value.confirmed_device = (1, 2, 64 * 1024**3)
-        with patch.object(installer, 'require_disk', return_value=(1, 3, 64 * 1024**3)), \
-                patch.object(installer, 'run') as run:
+        with (
+            patch.object(installer, 'require_disk', return_value=(1, 3, 64 * 1024**3)),
+            patch.object(installer, 'run') as run,
+        ):
             with self.assertRaisesRegex(ValueError, 'confirmed disk was replaced'):
                 installer.install(value)
             run.assert_not_called()
 
     def test_cancel_at_final_summary_never_starts_installation(self):
         answers = ['tester', 'dux']
-        with patch.object(installer, 'eligible_disks', return_value=[disk()]), \
-                patch.object(installer, 'require_disk', return_value=1), \
-                patch.object(installer, 'secret', return_value='test-password'), \
-                patch.object(installer.shutil, 'which', return_value='/usr/bin/fzf'), \
-                patch.object(installer, 'memory_gib', return_value=16), \
-                patch.object(installer, 'choose', side_effect=[
-                    '/dev/vda  64.0 GiB', 'Erase disk', 'us', 'UTC', 'No swap / no hibernation', 'Cancel']), \
-                patch('builtins.input', side_effect=answers), \
-                patch.object(installer, 'run', side_effect=['us\nuk', None, 'UTC\nAsia/Amman']) as run:
+        with (
+            patch.object(installer, 'eligible_disks', return_value=[disk()]),
+            patch.object(installer, 'require_disk', return_value=1),
+            patch.object(installer, 'secret', return_value='test-password'),
+            patch.object(installer.shutil, 'which', return_value='/usr/bin/fzf'),
+            patch.object(installer, 'memory_gib', return_value=16),
+            patch.object(
+                installer,
+                'choose',
+                side_effect=['/dev/vda  64.0 GiB', 'Erase disk', 'us', 'UTC', 'No swap / no hibernation', 'Cancel'],
+            ),
+            patch('builtins.input', side_effect=answers),
+            patch.object(installer, 'run', side_effect=['us\nuk', None, 'UTC\nAsia/Amman']) as run,
+        ):
             with self.assertRaises(installer.Cancelled):
                 installer.wizard()
             self.assertEqual(run.call_args_list[1].args, ('loadkeys', 'us'))
@@ -207,14 +242,16 @@ class InstallerSafetyTests(unittest.TestCase):
                 raise ValueError('fixture failure')
 
             output = io.StringIO()
-            with self.subTest(started=started), \
-                    patch.object(sys, 'argv', ['install']), \
-                    patch.object(installer.os, 'geteuid', return_value=0), \
-                    patch.object(Path, 'exists', return_value=True), \
-                    patch.object(Path, 'glob', return_value=[]), \
-                    patch.object(installer, 'wizard', return_value=value), \
-                    patch.object(installer, 'install', side_effect=fail_install), \
-                    patch('sys.stderr', output):
+            with (
+                self.subTest(started=started),
+                patch.object(sys, 'argv', ['install']),
+                patch.object(installer.os, 'geteuid', return_value=0),
+                patch.object(Path, 'exists', return_value=True),
+                patch.object(Path, 'glob', return_value=[]),
+                patch.object(installer, 'wizard', return_value=value),
+                patch.object(installer, 'install', side_effect=fail_install),
+                patch('sys.stderr', output),
+            ):
                 self.assertEqual(installer.main(), 1)
             self.assertEqual('No disk was changed.' in output.getvalue(), not started)
             self.assertEqual('may be incomplete' in output.getvalue(), started)
@@ -222,8 +259,11 @@ class InstallerSafetyTests(unittest.TestCase):
     def test_invalid_username_and_passwords_retry_inline(self):
         with patch('builtins.input', side_effect=['root', 'tester']):
             self.assertEqual(installer.prompt('Username', validate=installer.validate_username), 'tester')
-        with patch.object(installer.getpass, 'getpass', side_effect=[
-                'short', 'long-password', 'different-password', 'long-password', 'long-password']):
+        with patch.object(
+            installer.getpass,
+            'getpass',
+            side_effect=['short', 'long-password', 'different-password', 'long-password', 'long-password'],
+        ):
             self.assertEqual(installer.secret('Login password'), 'long-password')
 
     def test_swap_auto_custom_disabled_and_capacity(self):
@@ -259,24 +299,43 @@ class InstallerSafetyTests(unittest.TestCase):
                 value = settings(swap_gib=size)
                 output = io.StringIO()
                 temporary_directory = tempfile.TemporaryDirectory
-                with patch.object(installer, 'SHARE', root), patch.object(installer, 'REPO', root), \
-                        patch.object(installer, 'TARGET', target), \
-                        patch.object(installer, 'require_disk', return_value=(1, 2, 64 * installer.GIB)), \
-                        patch.object(installer, 'verify_repository'), \
-                        patch.object(installer.shutil, 'which', return_value='/usr/bin/tool'), \
-                        patch.object(installer.os.path, 'ismount', return_value=False), \
-                        patch.object(installer, 'run', side_effect=command) as run, \
-                        patch.object(installer.tempfile, 'TemporaryDirectory',
-                                     side_effect=lambda **kwargs: temporary_directory(dir=root)), \
-                        patch.object(installer.subprocess, 'run'), \
-                        patch.object(installer.time, 'monotonic', side_effect=[10, 69]), \
-                        patch('sys.stdout', output):
+                with (
+                    patch.object(installer, 'SHARE', root),
+                    patch.object(installer, 'REPO', root),
+                    patch.object(installer, 'TARGET', target),
+                    patch.object(installer, 'require_disk', return_value=(1, 2, 64 * installer.GIB)),
+                    patch.object(installer, 'verify_repository'),
+                    patch.object(installer.shutil, 'which', return_value='/usr/bin/tool'),
+                    patch.object(installer.os.path, 'ismount', return_value=False),
+                    patch.object(installer, 'run', side_effect=command) as run,
+                    patch.object(
+                        installer.tempfile,
+                        'TemporaryDirectory',
+                        side_effect=lambda **kwargs: temporary_directory(dir=root),
+                    ),
+                    patch.object(installer.subprocess, 'run'),
+                    patch.object(installer.time, 'monotonic', side_effect=[10, 69]),
+                    patch('sys.stdout', output),
+                ):
                     installer.install(value)
                 commands = [call.args for call in run.call_args_list]
                 formatted = next(call for call in run.call_args_list if call.args[:2] == ('cryptsetup', 'luksFormat'))
                 opened = next(call for call in run.call_args_list if call.args[:2] == ('cryptsetup', 'open'))
-                self.assertEqual(formatted.args, ('cryptsetup', 'luksFormat', '--batch-mode', '--type', 'luks2',
-                                                 '--pbkdf-memory', '262144', '--key-file', '-', '/dev/vda2'))
+                self.assertEqual(
+                    formatted.args,
+                    (
+                        'cryptsetup',
+                        'luksFormat',
+                        '--batch-mode',
+                        '--type',
+                        'luks2',
+                        '--pbkdf-memory',
+                        '262144',
+                        '--key-file',
+                        '-',
+                        '/dev/vda2',
+                    ),
+                )
                 self.assertEqual(opened.args, ('cryptsetup', 'open', '--key-file', '-', '/dev/vda2', 'dux-root'))
                 self.assertEqual(formatted.kwargs['data'], value.passphrase)
                 self.assertEqual(opened.kwargs['data'], value.passphrase)
@@ -287,7 +346,9 @@ class InstallerSafetyTests(unittest.TestCase):
                 self.assertEqual(configure[-1], '12345' if size else '')
                 self.assertEqual(swap_created in commands, bool(size))
                 self.assertEqual(bool(swap_setup), bool(size))
-                self.assertEqual('/swap/swapfile none swap defaults 0 0' in (target / 'etc/fstab').read_text(), bool(size))
+                self.assertEqual(
+                    '/swap/swapfile none swap defaults 0 0' in (target / 'etc/fstab').read_text(), bool(size)
+                )
                 if size:
                     self.assertEqual(swap_setup[0][-2:], ('8G', str(target / 'swap/swapfile')))
                 self.assertIn('took 59 seconds', output.getvalue())

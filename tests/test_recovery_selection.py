@@ -2,7 +2,7 @@ import unittest
 
 from scripts.verification import recovery as guest
 
-MENU = '''timeout: 5
+MENU = """timeout: 5
 default_entry: 2
 /+Arch Niri Dux
 comment: machine-id=fixture
@@ -16,7 +16,7 @@ kernel_cmdline: rootflags=subvol=/@snapshots/10/snapshot rw
 ///Snapshot 1
 protocol: linux
 kernel_cmdline: rootflags=subvol=/@snapshots/1/snapshot rw
-'''
+"""
 
 
 class RecoveryMenuTests(unittest.TestCase):

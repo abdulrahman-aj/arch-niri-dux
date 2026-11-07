@@ -24,8 +24,13 @@ TARGET = Path('/mnt/arch-niri-dux')
 MAPPER = 'dux-root'
 MIN_DISK_BYTES = 32 * 1024**3
 GIB = 1024**3
-SUBVOLUMES = {'@': '/', '@home': '/home', '@log': '/var/log',
-              '@cache': '/var/cache/pacman/pkg', '@snapshots': '/.snapshots'}
+SUBVOLUMES = {
+    '@': '/',
+    '@home': '/home',
+    '@log': '/var/log',
+    '@cache': '/var/cache/pacman/pkg',
+    '@snapshots': '/.snapshots',
+}
 
 
 @dataclass(repr=False)
@@ -51,8 +56,11 @@ class Settings:
         if self.mode not in ('erase', 'alongside'):
             raise ValueError('Unknown installation mode.')
         if self.mode == 'alongside':
-            if (not isinstance(self.free_region, list) or len(self.free_region) != 2
-                    or any(type(value) is not int or value < 1 for value in self.free_region)):
+            if (
+                not isinstance(self.free_region, list)
+                or len(self.free_region) != 2
+                or any(type(value) is not int or value < 1 for value in self.free_region)
+            ):
                 raise ValueError('Select an exact free region [first sector, last sector].')
             if not isinstance(self.existing_boot, str) or not re.fullmatch(r'[0-9A-Fa-f]{4}', self.existing_boot):
                 raise ValueError('Select an existing firmware boot entry.')
@@ -102,21 +110,31 @@ def swap_size(settings, disk_bytes):
     # Leave room for the ESP, LUKS metadata and a usable desktop installation.
     maximum = disk_bytes // GIB - 4 - 24 - 1
     if size and size > maximum:
-        raise ValueError(f'{size} GiB swap will not fit while leaving 24 GiB for the system. '
-                         f'Choose at most {max(0, maximum)} GiB, no swap, or a larger disk.')
+        raise ValueError(
+            f'{size} GiB swap will not fit while leaving 24 GiB for the system. '
+            f'Choose at most {max(0, maximum)} GiB, no swap, or a larger disk.'
+        )
     return size
 
 
 def run(*args, data=None, capture=False):
     # Secrets travel through stdin; never put them in argv or log them.
-    result = subprocess.run(args, input=data, text=True, check=True,
-                            stdout=subprocess.PIPE if capture else None)
+    result = subprocess.run(args, input=data, text=True, check=True, stdout=subprocess.PIPE if capture else None)
     return result.stdout.strip() if capture else None
 
 
 def disk_inventory():
-    return json.loads(run('lsblk', '--json', '--bytes', '--paths', '--output',
-                          'NAME,TYPE,SIZE,MODEL,SERIAL,WWN,FSTYPE,RO,MOUNTPOINTS', capture=True))['blockdevices']
+    return json.loads(
+        run(
+            'lsblk',
+            '--json',
+            '--bytes',
+            '--paths',
+            '--output',
+            'NAME,TYPE,SIZE,MODEL,SERIAL,WWN,FSTYPE,RO,MOUNTPOINTS',
+            capture=True,
+        )
+    )['blockdevices']
 
 
 def descendants(disk):
@@ -153,10 +171,14 @@ def require_disk(disk):
     if len(matches) != 1:
         raise ValueError('Target disk is unavailable, mounted, in use, read-only or too small.')
     device_stat = os.stat(disk)
-    return (device_stat.st_rdev, device_stat.st_ino, matches[0]['size'],
-            matches[0].get('serial'), matches[0].get('wwn'),
-            str(Path('/sys/class/block', Path(disk).name).resolve()))
-
+    return (
+        device_stat.st_rdev,
+        device_stat.st_ino,
+        matches[0]['size'],
+        matches[0].get('serial'),
+        matches[0].get('wwn'),
+        str(Path('/sys/class/block', Path(disk).name).resolve()),
+    )
 
 
 ESP_TYPE = 'c12a7328-f81f-11d2-ba4b-00a0c93ec93b'
@@ -189,15 +211,14 @@ def free_regions(table):
 
 
 def firmware_entries(text):
-    return {line[4:8].upper(): line for line in text.splitlines()
-            if re.match(r'^Boot[0-9A-Fa-f]{4}[* ]', line)}
+    return {line[4:8].upper(): line for line in text.splitlines() if re.match(r'^Boot[0-9A-Fa-f]{4}[* ]', line)}
 
 
 def decode_efi_boot_path(data):
     """Read the EFI_LOAD_OPTION device path, independent of efibootmgr formatting."""
     length = struct.unpack_from('<H', data, 4)[0]
     cursor = 6
-    while data[cursor:cursor+2] != b'\0\0':
+    while data[cursor : cursor + 2] != b'\0\0':
         cursor += 2
         if cursor + 2 > len(data):
             raise ValueError('Invalid EFI boot description.')
@@ -211,7 +232,7 @@ def decode_efi_boot_path(data):
         kind, subtype, size = struct.unpack_from('<BBH', data, cursor)
         if size < 4 or cursor + size > end:
             raise ValueError('Invalid EFI device path node.')
-        node = data[cursor:cursor+size]
+        node = data[cursor : cursor + size]
         if (kind, subtype) == (4, 1):
             if partition is not None or size != 42 or node[40:42] != b'\2\2':
                 raise ValueError('Unsupported EFI hard drive path.')
@@ -243,7 +264,7 @@ def read_gpt_metadata(device, sector):
         mbr = disk.read(512)
         if len(mbr) != 512:
             raise ValueError('Truncated GPT metadata.')
-        if mbr[510:512] != b'\x55\xaa' or [mbr[450 + n * 16] for n in range(4)] != [0xee, 0, 0, 0]:
+        if mbr[510:512] != b'\x55\xaa' or [mbr[450 + n * 16] for n in range(4)] != [0xEE, 0, 0, 0]:
             raise ValueError('Hybrid or unsupported protective MBR.')
         disk.seek(sector)
         header = disk.read(sector)
@@ -276,8 +297,10 @@ def read_gpt_metadata(device, sector):
             raise ValueError('Invalid GPT header size.')
         checked = bytearray(copy[:size])
         struct.pack_into('<I', checked, 16, 0)
-        if (zlib.crc32(checked) != struct.unpack_from('<I', copy, 16)[0]
-                or zlib.crc32(entries) != struct.unpack_from('<I', copy, 88)[0]):
+        if (
+            zlib.crc32(checked) != struct.unpack_from('<I', copy, 16)[0]
+            or zlib.crc32(entries) != struct.unpack_from('<I', copy, 88)[0]
+        ):
             raise ValueError('GPT checksum mismatch; refusing an implicit repair.')
     if primary != secondary:
         raise ValueError('GPT partition arrays disagree.')
@@ -305,8 +328,14 @@ def alongside_snapshot(disk):
         if boot_path is None:
             continue
         part_number, guid, path = boot_path
-        part = next((part for part in table['partitions'] if part.get('uuid', '').lower() == guid.lower()
-                     and part.get('type', '').lower() == ESP_TYPE), None)
+        part = next(
+            (
+                part
+                for part in table['partitions']
+                if part.get('uuid', '').lower() == guid.lower() and part.get('type', '').lower() == ESP_TYPE
+            ),
+            None,
+        )
         if part is None or partition_name(disk, int(part_number)) != part['node']:
             continue
         path = path.replace('\\', '/')
@@ -315,11 +344,21 @@ def alongside_snapshot(disk):
         boots[number] = dict(partition=part['node'], guid=str(uuid.UUID(guid)), path=path)
     if not regions or not boots or len(table['partitions']) > 126:
         raise ValueError('Need a free region of at least 32 GiB, two GPT slots and an existing ESP firmware entry.')
-    occupied = {index: primary[index*128:(index+1)*128].hex() for index in range(128)
-                if primary[index*128:index*128+16] != bytes(16)}
-    return dict(table=table, regions=regions, boots=boots, entries=entries, order=firmware_order(firmware),
-                metadata=hashlib.sha256(mbr + header + primary + backup_header + secondary).hexdigest(),
-                bootstrap=hashlib.sha256(mbr[:446]).hexdigest(), occupied=occupied)
+    occupied = {
+        index: primary[index * 128 : (index + 1) * 128].hex()
+        for index in range(128)
+        if primary[index * 128 : index * 128 + 16] != bytes(16)
+    }
+    return dict(
+        table=table,
+        regions=regions,
+        boots=boots,
+        entries=entries,
+        order=firmware_order(firmware),
+        metadata=hashlib.sha256(mbr + header + primary + backup_header + secondary).hexdigest(),
+        bootstrap=hashlib.sha256(mbr[:446]).hexdigest(),
+        occupied=occupied,
+    )
 
 
 def alongside_plan(settings, snapshot):
@@ -330,8 +369,7 @@ def alongside_plan(settings, snapshot):
     slots = [number for number in range(1, 129) if number not in used][:2]
     first, last = settings.free_region
     esp_end = first + 4 * GIB // table['sectorsize'] - 1
-    return [(slots[0], first, esp_end, 'ef00', 'DUX EFI'),
-            (slots[1], esp_end + 1, last, '8309', 'DUX encrypted')]
+    return [(slots[0], first, esp_end, 'ef00', 'DUX EFI'), (slots[1], esp_end + 1, last, '8309', 'DUX encrypted')]
 
 
 def reject_unsupported_existing_storage(settings, snapshot):
@@ -372,30 +410,49 @@ def create_alongside_partitions(settings, snapshot, identity):
     lines = []
     for number, first, last, kind, label in plan:
         partition_type = ESP_TYPE if kind == 'ef00' else LUKS_TYPE
-        lines.append(f'{partition_name(settings.disk, number)} : start={first}, size={last-first+1}, '
-                     f'type={partition_type}, name="{label}"')
+        lines.append(
+            f'{partition_name(settings.disk, number)} : start={first}, size={last - first + 1}, '
+            f'type={partition_type}, name="{label}"'
+        )
     settings.installation_started = True
     # Appending with wiping disabled preserves Windows' protective-MBR disk
     # signature. sgdisk clears that field on block devices when adding entries.
-    run('sfdisk', '--append', '--quiet', '--lock=nonblock', '--wipe', 'never',
-        '--wipe-partitions', 'never', settings.disk, data='\n'.join(lines) + '\n')
+    run(
+        'sfdisk',
+        '--append',
+        '--quiet',
+        '--lock=nonblock',
+        '--wipe',
+        'never',
+        '--wipe-partitions',
+        'never',
+        settings.disk,
+        data='\n'.join(lines) + '\n',
+    )
     verify_gpt(settings.disk)
     mbr, _, primary, _, secondary = read_gpt_metadata(settings.disk, snapshot['table']['sectorsize'])
-    if (hashlib.sha256(mbr[:446]).hexdigest() != snapshot['bootstrap']
-            or any(primary[index*128:(index+1)*128].hex() != original
-                   or secondary[index*128:(index+1)*128].hex() != original
-                   for index, original in snapshot['occupied'].items())):
+    if hashlib.sha256(mbr[:446]).hexdigest() != snapshot['bootstrap'] or any(
+        primary[index * 128 : (index + 1) * 128].hex() != original
+        or secondary[index * 128 : (index + 1) * 128].hex() != original
+        for index, original in snapshot['occupied'].items()
+    ):
         raise ValueError('Original GPT entries or MBR bootstrap changed; refusing to format.')
     current = json.loads(run('sfdisk', '--json', settings.disk, capture=True))['partitiontable']
-    if (current['id'] != snapshot['table']['id']
-            or len(current['partitions']) != len(snapshot['table']['partitions']) + 2
-            or any(part not in current['partitions'] for part in snapshot['table']['partitions'])):
+    if (
+        current['id'] != snapshot['table']['id']
+        or len(current['partitions']) != len(snapshot['table']['partitions']) + 2
+        or any(part not in current['partitions'] for part in snapshot['table']['partitions'])
+    ):
         raise ValueError('Partition creation did not preserve the original GPT entries; refusing to format.')
     for number, first, last, kind, label in plan:
         part = next((p for p in current['partitions'] if p['node'] == partition_name(settings.disk, number)), None)
         expected_type = ESP_TYPE if kind == 'ef00' else LUKS_TYPE
-        if (part is None or part['start'] != first or part['size'] != last-first+1
-                or part['type'].lower() != expected_type):
+        if (
+            part is None
+            or part['start'] != first
+            or part['size'] != last - first + 1
+            or part['type'].lower() != expected_type
+        ):
             raise ValueError('Created partition geometry/type differs from the plan; refusing to format.')
     return tuple(partition_name(settings.disk, part[0]) for part in plan)
 
@@ -404,8 +461,10 @@ def verify_partition_nodes(settings, plan, sector_size):
     for number, first, last, kind, label in plan:
         node = partition_name(settings.disk, number)
         sysfs = Path('/sys/class/block') / Path(node).name
-        if (int((sysfs / 'start').read_text()) * 512 != first * sector_size
-                or int((sysfs / 'size').read_text()) * 512 != (last-first+1) * sector_size):
+        if (
+            int((sysfs / 'start').read_text()) * 512 != first * sector_size
+            or int((sysfs / 'size').read_text()) * 512 != (last - first + 1) * sector_size
+        ):
             raise ValueError('Kernel partition geometry differs from the plan; refusing to format.')
 
 
@@ -413,8 +472,12 @@ def require_new_boot_entry(entries, number, esp_number, guid):
     if entries.get(number, '')[8:9] != '*':
         raise ValueError('New firmware boot entry is missing or inactive.')
     path = firmware_boot_path(number)
-    if (path is None or path[0] != esp_number or path[1].lower() != guid
-            or path[2].replace('\\', '/').lower() != '/efi/limine/limine_x64.efi'):
+    if (
+        path is None
+        or path[0] != esp_number
+        or path[1].lower() != guid
+        or path[2].replace('\\', '/').lower() != '/efi/limine/limine_x64.efi'
+    ):
         raise ValueError('New firmware boot entry has the wrong ESP identity or loader path.')
 
 
@@ -422,8 +485,11 @@ def finish_alongside_boot(settings, snapshot, esp_number):
     binary = TARGET / 'boot/EFI/limine/limine_x64.efi'
     if not binary.is_file():
         raise ValueError('The new ESP is missing its Limine EFI binary; refusing firmware registration.')
-    guid = str(uuid.UUID(run('blkid', '-s', 'PARTUUID', '-o', 'value',
-                             partition_name(settings.disk, esp_number), capture=True)))
+    guid = str(
+        uuid.UUID(
+            run('blkid', '-s', 'PARTUUID', '-o', 'value', partition_name(settings.disk, esp_number), capture=True)
+        )
+    )
     before_text = run('efibootmgr', '--verbose', capture=True)
     before = firmware_entries(before_text)
     if before != snapshot['entries'] or firmware_order(before_text) != snapshot['order']:
@@ -433,11 +499,23 @@ def finish_alongside_boot(settings, snapshot, esp_number):
     text = config.read_text()
     # Resolve the old ESP by its original GUID, retaining adjacent GRUB/BCD files.
     # Keep the entry outside generated markers so package/snapshot hooks retain it.
-    text += (f"\n/Existing OS (firmware {settings.existing_boot.upper()})\n"
-             f"    protocol: efi\n    path: guid({boot['guid']}):{boot['path']}\n")
+    text += (
+        f'\n/Existing OS (firmware {settings.existing_boot.upper()})\n'
+        f'    protocol: efi\n    path: guid({boot["guid"]}):{boot["path"]}\n'
+    )
     config.write_text(text)
-    run('efibootmgr', '--create-only', '--disk', settings.disk, '--part', str(esp_number),
-        '--label', 'Arch Niri Dux', '--loader', '\\EFI\\limine\\limine_x64.efi')
+    run(
+        'efibootmgr',
+        '--create-only',
+        '--disk',
+        settings.disk,
+        '--part',
+        str(esp_number),
+        '--label',
+        'Arch Niri Dux',
+        '--loader',
+        '\\EFI\\limine\\limine_x64.efi',
+    )
     after = firmware_entries(run('efibootmgr', '--verbose', capture=True))
     added = after.keys() - before.keys()
     if len(added) != 1 or any(after.get(key) != value for key, value in before.items()):
@@ -448,8 +526,7 @@ def finish_alongside_boot(settings, snapshot, esp_number):
     run('efibootmgr', '--bootorder', expected_order)
     final = run('efibootmgr', '--verbose', capture=True)
     final_entries = firmware_entries(final)
-    if (firmware_order(final) != expected_order
-            or any(final_entries.get(key) != value for key, value in before.items())):
+    if firmware_order(final) != expected_order or any(final_entries.get(key) != value for key, value in before.items()):
         raise ValueError('Firmware failed to retain entries or make Limine the default.')
     require_new_boot_entry(final_entries, number, esp_number, guid)
 
@@ -470,11 +547,22 @@ def choose(label, choices, default=None, header=''):
         raise ValueError(f'No choices available for {label.lower()}.')
     if default in choices:
         choices = [default] + [choice for choice in choices if choice != default]
-    result = subprocess.run(['fzf', '--layout=reverse', '--border', '--no-sort', '--no-multi',
-                             '--prompt', label + '> ',
-                             '--header', header + ('\n\n' if header else '') +
-                             'Type to search · ↑/↓ to choose · Enter to select · Esc to cancel'],
-                            input='\n'.join(choices) + '\n', text=True, stdout=subprocess.PIPE)
+    result = subprocess.run(
+        [
+            'fzf',
+            '--layout=reverse',
+            '--border',
+            '--no-sort',
+            '--no-multi',
+            '--prompt',
+            label + '> ',
+            '--header',
+            header + ('\n\n' if header else '') + 'Type to search · ↑/↓ to choose · Enter to select · Esc to cancel',
+        ],
+        input='\n'.join(choices) + '\n',
+        text=True,
+        stdout=subprocess.PIPE,
+    )
     if result.returncode in (1, 130):
         raise Cancelled()
     result.check_returncode()
@@ -504,8 +592,10 @@ def wizard():
         raise ValueError('No unused writable disk of at least 32 GiB found. TTY2 is available for recovery.')
     if not shutil.which('fzf'):
         raise ValueError('The live installer is missing fzf, required for its selection menus.')
-    labels = {f"{disk['name']}  {int(disk['size']) / GIB:.1f} GiB  {(disk.get('model') or '').strip()}".rstrip(): disk
-              for disk in disks}
+    labels = {
+        f'{disk["name"]}  {int(disk["size"]) / GIB:.1f} GiB  {(disk.get("model") or "").strip()}'.rstrip(): disk
+        for disk in disks
+    }
     disk = labels[choose('Installation disk', list(labels))]
     mode = choose('Storage mode', ['Erase disk', 'Alongside in existing free space'])
     snapshot = None
@@ -513,8 +603,13 @@ def wizard():
     boot_number = None
     if mode.startswith('Alongside'):
         snapshot = alongside_snapshot(disk['name'])
-        regions = {f'Sectors {first}–{last} ({(last-first+1)*snapshot["table"]["sectorsize"]/GIB:.2f} GiB)': [first, last]
-                   for first, last in snapshot['regions']}
+        regions = {
+            f'Sectors {first}–{last} ({(last - first + 1) * snapshot["table"]["sectorsize"] / GIB:.2f} GiB)': [
+                first,
+                last,
+            ]
+            for first, last in snapshot['regions']
+        }
         region = regions[choose('Unallocated region', list(regions))]
         boots = {snapshot['entries'][number]: number for number in snapshot['boots']}
         boot_number = boots[choose('Existing OS to keep in Limine', list(boots))]
@@ -524,24 +619,32 @@ def wizard():
     run('loadkeys', keymap)
     timezones = run('timedatectl', 'list-timezones', capture=True).splitlines()
     timezone = choose('Timezone', timezones, default='Asia/Amman')
-    settings = Settings(disk['name'], prompt('Username', validate=validate_username),
-                        prompt('Hostname', 'dux', validate=validate_hostname), timezone,
-                        keymap, 'validate-inputs', 'validate-inputs',
-                        mode='alongside' if snapshot else 'erase', free_region=region, existing_boot=boot_number)
+    settings = Settings(
+        disk['name'],
+        prompt('Username', validate=validate_username),
+        prompt('Hostname', 'dux', validate=validate_hostname),
+        timezone,
+        keymap,
+        'validate-inputs',
+        'validate-inputs',
+        mode='alongside' if snapshot else 'erase',
+        free_region=region,
+        existing_boot=boot_number,
+    )
     settings.confirmed_layout = snapshot
-    available_bytes = ((region[1] - region[0] + 1) * snapshot['table']['sectorsize']
-                       if snapshot else int(disk['size']))
+    available_bytes = (region[1] - region[0] + 1) * snapshot['table']['sectorsize'] if snapshot else int(disk['size'])
     swap_error = ''
     while True:
         automatic = f'Auto — {memory_gib() + 2} GiB encrypted swap and hibernation'
-        choice = choose('Swap / hibernation', [automatic, 'Custom size', 'No swap / no hibernation'],
-                        header=swap_error)
+        choice = choose('Swap / hibernation', [automatic, 'Custom size', 'No swap / no hibernation'], header=swap_error)
         if choice == automatic:
             settings.swap_gib = None
         elif choice == 'Custom size':
+
             def validate_size(value):
                 if not value.isdecimal() or int(value) < 1:
                     raise ValueError('Enter a whole number of GiB greater than zero.')
+
             settings.swap_gib = int(prompt('Swap size in GiB', str(memory_gib() + 2), validate_size))
         else:
             settings.swap_gib = 0
@@ -556,20 +659,26 @@ def wizard():
     settings.validate()
     if require_disk(settings.disk) != settings.confirmed_device:
         raise ValueError('Disk identity changed while entering installation settings.')
-    summary = (f'ERASE ALL DATA on {settings.disk} ({int(disk["size"]) / GIB:.1f} GiB, '
-               f'{(disk.get("model") or "unknown model").strip()})\n'
-               f'User: {settings.username}    Host: {settings.hostname}\n'
-               f'Timezone: {settings.timezone}    Keyboard: {settings.keymap}\n'
-               'Storage: 4 GiB EFI + encrypted Btrfs, with separate /home\n'
-               f'Swap: {str(size) + " GiB encrypted; hibernation enabled" if size else "disabled; hibernation disabled"}')
+    summary = (
+        f'ERASE ALL DATA on {settings.disk} ({int(disk["size"]) / GIB:.1f} GiB, '
+        f'{(disk.get("model") or "unknown model").strip()})\n'
+        f'User: {settings.username}    Host: {settings.hostname}\n'
+        f'Timezone: {settings.timezone}    Keyboard: {settings.keymap}\n'
+        'Storage: 4 GiB EFI + encrypted Btrfs, with separate /home\n'
+        f'Swap: {str(size) + " GiB encrypted; hibernation enabled" if size else "disabled; hibernation disabled"}'
+    )
     if snapshot:
         plan = alongside_plan(settings, snapshot)
-        summary = (f'ALONGSIDE on {settings.disk}; preserve every existing partition.\n'
-                   + '\n'.join(f'Create {partition_name(settings.disk, n)}: sectors {a}–{b}, '
-                               f'{(b-a+1)*snapshot["table"]["sectorsize"]} bytes, {label} ({kind})'
-                               for n, a, b, kind, label in plan)
-                   + f'\nExisting OS: {snapshot["entries"][boot_number]}\n'
-                   + f'Swap: {size} GiB; Limine becomes firmware default.')
+        summary = (
+            f'ALONGSIDE on {settings.disk}; preserve every existing partition.\n'
+            + '\n'.join(
+                f'Create {partition_name(settings.disk, n)}: sectors {a}–{b}, '
+                f'{(b - a + 1) * snapshot["table"]["sectorsize"]} bytes, {label} ({kind})'
+                for n, a, b, kind, label in plan
+            )
+            + f'\nExisting OS: {snapshot["entries"][boot_number]}\n'
+            + f'Swap: {size} GiB; Limine becomes firmware default.'
+        )
     if size and size < memory_gib():
         summary += '\nWarning: swap is smaller than RAM; hibernation may fail under heavy memory use.'
     print('\n' + summary + '\n')
@@ -648,7 +757,15 @@ def install(settings):
         raise ValueError('Invalid or missing target package list.')
     print('\n[1/6] Checking the offline package payload…', flush=True)
     verify_repository(REPO)
-    for name in (('sfdisk', 'efibootmgr') if settings.mode == 'alongside' else ()) + ('sgdisk', 'wipefs', 'cryptsetup', 'mkfs.btrfs', 'mkfs.fat', 'pacstrap', 'arch-chroot'):
+    for name in (('sfdisk', 'efibootmgr') if settings.mode == 'alongside' else ()) + (
+        'sgdisk',
+        'wipefs',
+        'cryptsetup',
+        'mkfs.btrfs',
+        'mkfs.fat',
+        'pacstrap',
+        'arch-chroot',
+    ):
         if not shutil.which(name):
             raise ValueError(f'Required installer tool missing: {name}')
     # Recheck immediately before the first destructive operation.
@@ -682,13 +799,29 @@ def install(settings):
         # The build verifies upstream signatures and pins hashes of the ISO payload.
         # No remote repositories are enabled during installation.
         database = next(REPO.glob('*.db')).stem
-        offline_conf.write_text(f'[options]\nArchitecture = auto\nSigLevel = Never\n'
-                                f'LocalFileSigLevel = Never\n[{database}]\nServer = file://{REPO}\n')
+        offline_conf.write_text(
+            f'[options]\nArchitecture = auto\nSigLevel = Never\n'
+            f'LocalFileSigLevel = Never\n[{database}]\nServer = file://{REPO}\n'
+        )
         package_db = stage / 'db'
         package_db.mkdir()
-        resolved = run('pacman', '--config', str(offline_conf), '--dbpath', str(package_db),
-                       '--sync', '--refresh', '--print', '--noconfirm', '--print-format', '%f',
-                       *packages, 'arch-niri-dux', 'arch-niri-dux-baseline', capture=True)
+        resolved = run(
+            'pacman',
+            '--config',
+            str(offline_conf),
+            '--dbpath',
+            str(package_db),
+            '--sync',
+            '--refresh',
+            '--print',
+            '--noconfirm',
+            '--print-format',
+            '%f',
+            *packages,
+            'arch-niri-dux',
+            'arch-niri-dux-baseline',
+            capture=True,
+        )
         for filename in resolved.splitlines():
             if '.pkg.tar.' in filename and not (REPO / filename).is_file():
                 raise ValueError(f'Offline dependency is missing: {filename}')
@@ -701,9 +834,17 @@ def install(settings):
             else:
                 settings.installation_started = True
                 run('wipefs', '--all', settings.disk)
-                run('sgdisk', '--zap-all', '--new=1:0:+4G', '--typecode=1:ef00',
-                    '--change-name=1:EFI', '--new=2:0:0', '--typecode=2:8309',
-                    '--change-name=2:Linux encrypted', settings.disk)
+                run(
+                    'sgdisk',
+                    '--zap-all',
+                    '--new=1:0:+4G',
+                    '--typecode=1:ef00',
+                    '--change-name=1:EFI',
+                    '--new=2:0:0',
+                    '--typecode=2:8309',
+                    '--change-name=2:Linux encrypted',
+                    settings.disk,
+                )
             # The table writer updates kernel partition nodes. Let filesystem probes finish
             # before inspecting them: forcing another full reread races those
             # probes and can fail EBUSY even though the new nodes are correct.
@@ -711,8 +852,19 @@ def install(settings):
             if snapshot:
                 verify_partition_nodes(settings, plan, snapshot['table']['sectorsize'])
             run('mkfs.fat', '-F', '32', '-n', 'DUX_EFI', esp)
-            run('cryptsetup', 'luksFormat', '--batch-mode', '--type', 'luks2',
-                '--pbkdf-memory', '262144', '--key-file', '-', encrypted, data=settings.passphrase)
+            run(
+                'cryptsetup',
+                'luksFormat',
+                '--batch-mode',
+                '--type',
+                'luks2',
+                '--pbkdf-memory',
+                '262144',
+                '--key-file',
+                '-',
+                encrypted,
+                data=settings.passphrase,
+            )
             run('cryptsetup', 'open', '--key-file', '-', encrypted, MAPPER, data=settings.passphrase)
             opened = True
             run('mkfs.btrfs', '--force', '--label', 'DUX_ROOT', mapped)
@@ -738,8 +890,9 @@ def install(settings):
                 # A separate subvolume keeps it outside every root snapshot.
                 (TARGET / 'swap').chmod(0o700)
                 run('btrfs', 'filesystem', 'mkswapfile', '--size', f'{size}G', str(TARGET / 'swap/swapfile'))
-                resume_offset = run('btrfs', 'inspect-internal', 'map-swapfile', '-r',
-                                    str(TARGET / 'swap/swapfile'), capture=True)
+                resume_offset = run(
+                    'btrfs', 'inspect-internal', 'map-swapfile', '-r', str(TARGET / 'swap/swapfile'), capture=True
+                )
                 if not re.fullmatch(r'[0-9]+', resume_offset):
                     raise ValueError('Btrfs returned an invalid swap resume offset.')
             print('\n[3/6] Installing packages from the USB…', flush=True)
@@ -756,8 +909,10 @@ def install(settings):
             write('/etc/fstab', recovery_fstab(fstab))
             print('\n[4/6] Configuring the desktop, user and bootloader…', flush=True)
             write('/etc/hostname', settings.hostname + '\n')
-            write('/etc/hosts', '127.0.0.1 localhost\n::1 localhost\n'
-                  f'127.0.1.1 {settings.hostname}.localdomain {settings.hostname}\n')
+            write(
+                '/etc/hosts',
+                f'127.0.0.1 localhost\n::1 localhost\n127.0.1.1 {settings.hostname}.localdomain {settings.hostname}\n',
+            )
             write('/etc/locale.gen', 'en_US.UTF-8 UTF-8\n')
             write('/etc/locale.conf', 'LANG=en_US.UTF-8\n')
             write('/etc/vconsole.conf', 'KEYMAP=' + settings.keymap + '\n')
@@ -771,15 +926,25 @@ def install(settings):
                 configure_arguments.append('defer-efi')
             run('arch-chroot', str(TARGET), 'bash', '/root/configure-target.sh', *configure_arguments)
             target_script.unlink()
-            run('arch-chroot', str(TARGET), 'chpasswd',
-                data=f'{settings.username}:{settings.password}\n')
+            run('arch-chroot', str(TARGET), 'chpasswd', data=f'{settings.username}:{settings.password}\n')
             print('\n[5/6] Preparing automatic snapshots and recovery…', flush=True)
             if 'snap-pac' in packages:
                 run('pacstrap', '-C', str(offline_conf), '-G', '-M', str(TARGET), 'snap-pac', 'arch-niri-dux-baseline')
             else:
                 run('pacstrap', '-C', str(offline_conf), '-G', '-M', str(TARGET), 'arch-niri-dux-baseline')
-            run('arch-chroot', str(TARGET), 'snapper', '--no-dbus', '-c', 'root',
-                'create', '--cleanup-algorithm', 'number', '--description', 'Fresh installation')
+            run(
+                'arch-chroot',
+                str(TARGET),
+                'snapper',
+                '--no-dbus',
+                '-c',
+                'root',
+                'create',
+                '--cleanup-algorithm',
+                'number',
+                '--description',
+                'Fresh installation',
+            )
             run('arch-chroot', str(TARGET), 'limine-snapper-sync')
             print('\n[6/6] Saving changes and unmounting the installation…', flush=True)
             if snapshot:
@@ -793,9 +958,11 @@ def install(settings):
             if opened:
                 subprocess.run(['cryptsetup', 'close', MAPPER], check=False)
     elapsed = round(time.monotonic() - started_at)
-    print(f'\nINSTALLATION COMPLETE — took {elapsed} seconds. Remove the USB and reboot.\n'
-          'Use the disk passphrase at boot, then your username and login password.\n'
-          'Snapshot recovery is available in the Limine boot menu.')
+    print(
+        f'\nINSTALLATION COMPLETE — took {elapsed} seconds. Remove the USB and reboot.\n'
+        'Use the disk passphrase at boot, then your username and login password.\n'
+        'Snapshot recovery is available in the Limine boot menu.'
+    )
 
 
 def main():
@@ -825,8 +992,11 @@ def main():
         print('\nInstallation cancelled. No disk was changed.')
         return 130
     except (ValueError, TypeError, OSError, subprocess.CalledProcessError, KeyboardInterrupt) as error:
-        consequence = ('The selected disk may be incomplete.' if settings and settings.installation_started
-                       else 'No disk was changed.')
+        consequence = (
+            'The selected disk may be incomplete.'
+            if settings and settings.installation_started
+            else 'No disk was changed.'
+        )
         print(f'\nInstallation stopped: {error}\n{consequence}', file=sys.stderr)
         return 1
     return 0

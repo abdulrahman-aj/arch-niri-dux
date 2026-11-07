@@ -14,8 +14,9 @@ class AudioEvidenceTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / 'recording.wav'
             rate = 48000
-            samples = [int(4000 * math.sin(2 * math.pi * frequency * n / rate))
-                       if frequency else 0 for n in range(rate // 10)]
+            samples = [
+                int(4000 * math.sin(2 * math.pi * frequency * n / rate)) if frequency else 0 for n in range(rate // 10)
+            ]
             with wave.open(str(path), 'wb') as output:
                 output.setnchannels(1)
                 output.setsampwidth(2)

@@ -49,9 +49,18 @@ class RecoveryTests(unittest.TestCase):
                 message = root / 'message'
                 message.write_text('A release signed by CI\n')
                 key.gpg(home, '--local-user', fingerprint.strip(), '--detach-sign', str(message))
-                subprocess.run(['gpgv', '--keyring', str(root / 'keys/integration-signing.gpg'),
-                                str(message) + '.sig', str(message)], check=True,
-                               stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                subprocess.run(
+                    [
+                        'gpgv',
+                        '--keyring',
+                        str(root / 'keys/integration-signing.gpg'),
+                        str(message) + '.sig',
+                        str(message),
+                    ],
+                    check=True,
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL,
+                )
             finally:
                 real_run(['gpgconf', '--homedir', str(home), '--kill', 'all'], check=True)
 

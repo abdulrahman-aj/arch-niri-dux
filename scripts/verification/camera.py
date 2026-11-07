@@ -31,8 +31,7 @@ def pipewire_video_sources():
 
 
 def focus_camera():
-    window = next(window for window in windows()
-                  if 'snapshot' in (window.get('app_id') or '').lower())
+    window = next(window for window in windows() if 'snapshot' in (window.get('app_id') or '').lower())
     focus_window(window['id'])
 
 
@@ -52,27 +51,42 @@ def camera():
     user_command('gsettings', 'set', 'org.gnome.Snapshot', 'countdown', '0')
     user_command('gsettings', 'set', 'org.gnome.Snapshot', 'capture-mode', "'picture'")
     Path('/tmp/dux-synthetic-camera.pid').unlink(missing_ok=True)
-    user_command('sh', '-c',
-                 'gst-launch-1.0 videotestsrc pattern=ball is-live=true ! '
-                 'video/x-raw,width=640,height=480,framerate=30/1 ! pipewiresink mode=provide '
-                 'stream-properties="properties,media.class=Video/Source,media.role=Camera,node.name=DuxTestCamera" '
-                 'client-name="DUX verification camera" '
-                 '>/tmp/dux-synthetic-camera.log 2>&1 & echo $! > /tmp/dux-synthetic-camera.pid')
+    user_command(
+        'sh',
+        '-c',
+        'gst-launch-1.0 videotestsrc pattern=ball is-live=true ! '
+        'video/x-raw,width=640,height=480,framerate=30/1 ! pipewiresink mode=provide '
+        'stream-properties="properties,media.class=Video/Source,media.role=Camera,node.name=DuxTestCamera" '
+        'client-name="DUX verification camera" '
+        '>/tmp/dux-synthetic-camera.log 2>&1 & echo $! > /tmp/dux-synthetic-camera.pid',
+    )
     try:
-        wait_until('Synthetic PipeWire camera', lambda:
-                   'DuxTestCamera' in pipewire_video_sources(), timeout=60)
-        before = [str(path) for folder in ('Pictures', 'Videos')
-                  for path in Path('/home/tester', folder, 'Camera').glob('*')]
+        wait_until('Synthetic PipeWire camera', lambda: 'DuxTestCamera' in pipewire_video_sources(), timeout=60)
+        before = [
+            str(path) for folder in ('Pictures', 'Videos') for path in Path('/home/tester', folder, 'Camera').glob('*')
+        ]
         user_command('sh', '-c', 'snapshot --debug >/tmp/snapshot.log 2>&1 &')
-        wait_until('Snapshot window', lambda: any(
-            'snapshot' in (window.get('app_id') or '').lower() for window in windows()), timeout=60)
+        wait_until(
+            'Snapshot window',
+            lambda: any('snapshot' in (window.get('app_id') or '').lower() for window in windows()),
+            timeout=60,
+        )
         focus_camera()
         screenshot('02-snapshot.png')
         width, height = png_dimensions(Path('/run/verify/02-snapshot.png'))
-        Path('/run/verify/camera.json').write_text(json.dumps({
-            'synthetic': True, 'source': 'DuxTestCamera', 'before': before,
-            'width': width, 'height': height,
-        }, indent=2) + '\n')
+        Path('/run/verify/camera.json').write_text(
+            json.dumps(
+                {
+                    'synthetic': True,
+                    'source': 'DuxTestCamera',
+                    'before': before,
+                    'width': width,
+                    'height': height,
+                },
+                indent=2,
+            )
+            + '\n'
+        )
     except Exception:
         camera_cleanup()
         raise
@@ -82,6 +96,7 @@ def camera_media(video=False):
     evidence = Path('/run/verify/camera.json')
     state = json.loads(evidence.read_text())
     folder = Path('/home/tester', 'Videos' if video else 'Pictures', 'Camera')
+
     def completed_capture():
         for path in folder.glob('*'):
             if str(path) in state['before'] or not path.is_file():
@@ -94,8 +109,8 @@ def camera_media(video=False):
             if valid:
                 return path
         return None
-    captured = wait_until('Snapshot video recording' if video else 'Snapshot photograph',
-                          completed_capture, timeout=60)
+
+    captured = wait_until('Snapshot video recording' if video else 'Snapshot photograph', completed_capture, timeout=60)
     target = Path('/run/verify') / ('camera-video' if video else 'camera-photo')
     target = target.with_suffix(captured.suffix)
     shutil.copyfile(captured, target)
@@ -114,8 +129,9 @@ def verify(vm, passed):
         permission_deadline = time.monotonic() + 60
         while time.monotonic() < permission_deadline:
             vm.probe('camera', 'camera-screen')
-            if (click_screen_text(vm, vm.directory / '02-snapshot.png', 'Grant Access')
-                    or click_screen_text(vm, vm.directory / '02-snapshot.png', 'GrantAccess')):
+            if click_screen_text(vm, vm.directory / '02-snapshot.png', 'Grant Access') or click_screen_text(
+                vm, vm.directory / '02-snapshot.png', 'GrantAccess'
+            ):
                 break
             time.sleep(1)
         else:
@@ -137,10 +153,13 @@ def verify(vm, passed):
 
 
 if __name__ == '__main__':
-    dispatch('camera', {
-        'camera': camera,
-        'camera-photo': camera_media,
-        'camera-video': lambda: camera_media(video=True),
-        'camera-screen': lambda: screenshot('02-snapshot.png'),
-        'camera-cleanup': camera_cleanup,
-    })
+    dispatch(
+        'camera',
+        {
+            'camera': camera,
+            'camera-photo': camera_media,
+            'camera-video': lambda: camera_media(video=True),
+            'camera-screen': lambda: screenshot('02-snapshot.png'),
+            'camera-cleanup': camera_cleanup,
+        },
+    )

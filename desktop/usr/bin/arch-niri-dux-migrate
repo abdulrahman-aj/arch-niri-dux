@@ -68,7 +68,11 @@ def pending(queue, state):
 
 
 def system_ready():
-    return (SYSTEM / 'generation').is_file() and not (SYSTEM / 'failure').exists() and not pending(scripts('system'), SYSTEM)
+    return (
+        (SYSTEM / 'generation').is_file()
+        and not (SYSTEM / 'failure').exists()
+        and not pending(scripts('system'), SYSTEM)
+    )
 
 
 def execute(queue, state, baseline=False):
@@ -84,7 +88,9 @@ def execute(queue, state, baseline=False):
             elif result.returncode == 77 and result.stdout.strip():
                 outcome = {'outcome': 'skip', 'reason': result.stdout.strip()}
             else:
-                raise RuntimeError(f'{path.name} failed (exit {result.returncode}); retry with arch-niri-dux-migrate run')
+                raise RuntimeError(
+                    f'{path.name} failed (exit {result.returncode}); retry with arch-niri-dux-migrate run'
+                )
         write(state / (path.name + '.json'), json.dumps(outcome))
     (state / 'failure').unlink(missing_ok=True)
 
@@ -100,8 +106,11 @@ def notify(message, state):
         if marker.exists() and marker.read_text().strip() == message:
             return
         try:
-            subprocess.run(['notify-send', '--app-name=Arch Niri Dux',
-                            'Desktop migration failed', message], check=False, timeout=10)
+            subprocess.run(
+                ['notify-send', '--app-name=Arch Niri Dux', 'Desktop migration failed', message],
+                check=False,
+                timeout=10,
+            )
         except (OSError, subprocess.TimeoutExpired):
             pass
         try:
@@ -112,22 +121,31 @@ def notify(message, state):
 
 def process(action, scope, state):
     if action == 'status':
-        print(json.dumps({'scope': scope, 'pending': [p.name for p in pending(scripts(scope), state)],
-                          'failure': (state / 'failure').read_text().strip() if (state / 'failure').exists() else None,
-                          'system_ready': system_ready()}))
+        print(
+            json.dumps(
+                {
+                    'scope': scope,
+                    'pending': [p.name for p in pending(scripts(scope), state)],
+                    'failure': (state / 'failure').read_text().strip() if (state / 'failure').exists() else None,
+                    'system_ready': system_ready(),
+                }
+            )
+        )
         return
     if scope == 'system':
         # ALPM only schedules this service. Never overlap its transaction.
         deadline = time.monotonic() + TRANSACTION_WAIT
         while PACMAN_LOCK.exists():
             if time.monotonic() >= deadline:
-                raise RuntimeError(f'Pacman lock still present after {TRANSACTION_WAIT} seconds; check package transactions before retrying')
+                raise RuntimeError(
+                    f'Pacman lock still present after {TRANSACTION_WAIT} seconds; check package transactions before retrying'
+                )
             time.sleep(1)
         execute(scripts(scope), state, action == 'baseline')
         # A user-only release must wake existing sessions too.
-        generation = hashlib.sha256('\n'.join(
-            f'{kind}/{p.name}' for kind in ('system', 'user') for p in scripts(kind)
-        ).encode()).hexdigest()
+        generation = hashlib.sha256(
+            '\n'.join(f'{kind}/{p.name}' for kind in ('system', 'user') for p in scripts(kind)).encode()
+        ).hexdigest()
         if not (state / 'generation').exists() or (state / 'generation').read_text().strip() != generation:
             # Keep the watched inode stable across successive releases.
             write(state / 'generation', generation, atomic=False)
@@ -136,7 +154,9 @@ def process(action, scope, state):
             if action != 'baseline' and not system_ready():
                 failure = SYSTEM / 'failure'
                 detail = failure.read_text().strip() if failure.exists() else 'System queue pending'
-                raise RuntimeError(f'{detail}; inspect sudo arch-niri-dux-migrate status and retry sudo arch-niri-dux-migrate run')
+                raise RuntimeError(
+                    f'{detail}; inspect sudo arch-niri-dux-migrate status and retry sudo arch-niri-dux-migrate run'
+                )
             execute(scripts(scope), state, action == 'baseline')
 
 
@@ -147,7 +167,11 @@ def main():
     scope = 'system' if os.geteuid() == 0 else 'user'
     if scope == 'system':
         os.umask(0o022)
-    state = SYSTEM if scope == 'system' else Path(os.environ.get('XDG_STATE_HOME', str(Path.home() / '.local/state'))) / 'arch-niri-dux/migrations'
+    state = (
+        SYSTEM
+        if scope == 'system'
+        else Path(os.environ.get('XDG_STATE_HOME', str(Path.home() / '.local/state'))) / 'arch-niri-dux/migrations'
+    )
     try:
         state.mkdir(parents=True, exist_ok=True)
         if scope == 'system':

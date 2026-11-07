@@ -65,10 +65,13 @@ class VMCommandTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temporary:
             vm = verify.VM(Path(temporary), Path('unused.iso'), Path('unused.qcow2'))
             output = []
+
             def send(value):
-                result = subprocess.run(['bash', '-c', value], text=True, stdout=subprocess.PIPE,
-                                        stderr=subprocess.STDOUT, check=False)
+                result = subprocess.run(
+                    ['bash', '-c', value], text=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, check=False
+                )
                 output.append(result.stdout)
+
             # VM.command supplies timeout by keyword; the test responds immediately.
             def expect(pattern, timeout):  # noqa: ARG001
                 result = ''.join(output)
@@ -76,6 +79,7 @@ class VMCommandTests(unittest.TestCase):
                 if match is None:
                     self.fail('Guest command exited without producing its completion status.')
                 return match, result
+
             vm.send = send
             vm.expect = expect
             try:
@@ -112,10 +116,12 @@ class VMCommandTests(unittest.TestCase):
 if __name__ == '__main__':
     unittest.main()
 
+
 class VMDiskBudgetTests(unittest.TestCase):
     def test_low_host_space_stops_a_guest_wait_before_more_work(self):
         from unittest.mock import patch
         from types import SimpleNamespace
+
         with tempfile.TemporaryDirectory() as temporary:
             vm = verify.VM(Path(temporary), None, Path('unused.qcow2'))
             vm.min_free_bytes = 8 * 1024**3

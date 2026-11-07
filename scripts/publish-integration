@@ -47,7 +47,7 @@ if [[ $published == false ]]; then
         assets+=("$output/$name" "$output/$name.sig")
     done < <(jq -r '.packages[].filename, .apps[].filename' "$output/integration.manifest.json")
     assets+=("$output/integration.manifest.json" "$output/integration.manifest.json.sig"
-             "$output/integration.tar" "$output/integration.PKGBUILD")
+        "$output/integration.tar" "$output/integration.PKGBUILD")
     gh release create "$tag" --repo "$repository" --draft --target "$commit" \
         --title "$tag" --notes "Signed integration packages for $commit." "${assets[@]}"
     gh release edit "$tag" --repo "$repository" --draft=false

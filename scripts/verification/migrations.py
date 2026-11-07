@@ -54,10 +54,16 @@ def check():
     lock.touch(exist_ok=False)
     try:
         run('systemctl', '--no-block', 'start', 'arch-niri-dux-migrate.service')
-        wait_until('System service waiting for transaction', lambda: subprocess.run(
-            ['systemctl', 'is-active', '--quiet', 'arch-niri-dux-migrate.service']).returncode == 0
-            or subprocess.check_output(['systemctl', 'show', '-p', 'ActiveState', '--value',
-                                        'arch-niri-dux-migrate.service'], text=True).strip() == 'activating')
+        wait_until(
+            'System service waiting for transaction',
+            lambda: (
+                subprocess.run(['systemctl', 'is-active', '--quiet', 'arch-niri-dux-migrate.service']).returncode == 0
+                or subprocess.check_output(
+                    ['systemctl', 'show', '-p', 'ActiveState', '--value', 'arch-niri-dux-migrate.service'], text=True
+                ).strip()
+                == 'activating'
+            ),
+        )
         assert not system_effect.exists()
     finally:
         lock.unlink()
@@ -80,8 +86,7 @@ def check():
     status = json.loads(subprocess.check_output([COMMAND, 'status'], text=True))
     assert status['failure'] and len(status['pending']) == 2
     wait_until('System failure reported in user session', lambda: (USER_STATE / 'failure').exists())
-    journal = subprocess.check_output(['journalctl', '-u', 'arch-niri-dux-migrate.service',
-                                       '--no-pager'], text=True)
+    journal = subprocess.check_output(['journalctl', '-u', 'arch-niri-dux-migrate.service', '--no-pager'], text=True)
     Path('/run/verify/migration-failure-journal.log').write_text(journal)
     notified = USER_STATE / 'notified'
     wait_until('Failure notification recorded', notified.exists)
@@ -107,9 +112,13 @@ def check():
     link = HOME / '.local/state/migration-link'
     link.symlink_to(custom)
     before = custom.read_bytes()
-    skipped = fixture(CODE, 'user', 4,
-                      'if [[ -L "$HOME/.local/state/migration-link" || -e "$HOME/.local/state/migration-custom" ]]; then\n'
-                      'echo "Customized files and symlinks preserved"; exit 77\nfi\ntrue')
+    skipped = fixture(
+        CODE,
+        'user',
+        4,
+        'if [[ -L "$HOME/.local/state/migration-link" || -e "$HOME/.local/state/migration-custom" ]]; then\n'
+        'echo "Customized files and symlinks preserved"; exit 77\nfi\ntrue',
+    )
     run(COMMAND, 'run')
     wait_until('Customized user migration skipped', lambda: (USER_STATE / (skipped.name + '.json')).exists())
     record = json.loads((USER_STATE / (skipped.name + '.json')).read_text())
@@ -130,8 +139,7 @@ def check():
     account = pwd.getpwnam('migration-later')
     later = Path(account.pw_dir) / '.local/state/verification-effects'
     assert not later.exists()
-    prefix = ['runuser', '-u', account.pw_name, '--', 'env',
-              f'XDG_RUNTIME_DIR=/run/user/{account.pw_uid}']
+    prefix = ['runuser', '-u', account.pw_name, '--', 'env', f'XDG_RUNTIME_DIR=/run/user/{account.pw_uid}']
     try:
         run('loginctl', 'enable-linger', account.pw_name)
         wait_until('Second user manager', lambda: Path(f'/run/user/{account.pw_uid}/bus').exists())
@@ -140,12 +148,16 @@ def check():
         target.write_text('[Unit]\nRequires=graphical-session.target\nAfter=graphical-session.target\n')
         run(*prefix, 'systemctl', '--user', 'daemon-reload')
         run(*prefix, 'systemctl', '--user', 'start', 'migration-verification.target')
-        wait_until('Next graphical login migration', lambda: later.read_text().splitlines() == ['first', 'second', 'third'])
+        wait_until(
+            'Next graphical login migration', lambda: later.read_text().splitlines() == ['first', 'second', 'third']
+        )
     finally:
         run('loginctl', 'disable-linger', account.pw_name)
         run('systemctl', 'stop', f'user@{account.pw_uid}.service')
-        wait_until('Second user processes stopped', lambda: subprocess.run(
-            ['pgrep', '-u', str(account.pw_uid)], stdout=subprocess.DEVNULL).returncode == 1)
+        wait_until(
+            'Second user processes stopped',
+            lambda: subprocess.run(['pgrep', '-u', str(account.pw_uid)], stdout=subprocess.DEVNULL).returncode == 1,
+        )
         Path('/etc/systemd/user/migration-verification.target').unlink(missing_ok=True)
         run('userdel', '-r', account.pw_name)
     for scope in ('system', 'user'):
@@ -159,13 +171,24 @@ def check():
     ready.unlink()
     run(COMMAND, 'run')
     user_command('systemctl', '--user', 'is-active', 'arch-niri-dux-migrate.path')
-    Path('/run/verify/migrations.json').write_text(json.dumps({
-        'ordering_and_retry': True, 'failure_and_status': True,
-        'path_in_active_session': True, 'user_only_release': True,
-        'next_graphical_target': True, 'fresh_account_baseline': True,
-        'pacman_lock_defers_execution': True, 'customizations_skipped': True,
-        'failure_notification_deduplicated': True, 'installer_baselines': True,
-    }, indent=2) + '\n')
+    Path('/run/verify/migrations.json').write_text(
+        json.dumps(
+            {
+                'ordering_and_retry': True,
+                'failure_and_status': True,
+                'path_in_active_session': True,
+                'user_only_release': True,
+                'next_graphical_target': True,
+                'fresh_account_baseline': True,
+                'pacman_lock_defers_execution': True,
+                'customizations_skipped': True,
+                'failure_notification_deduplicated': True,
+                'installer_baselines': True,
+            },
+            indent=2,
+        )
+        + '\n'
+    )
 
 
 def prepare_snapshot():
@@ -180,9 +203,15 @@ def after_snapshot():
 
 
 def restored():
-    wait_until('System migration after root restore', lambda: Path(
-        '/var/log/arch-niri-dux-migration-snapshot-effects').read_text().splitlines().count('applied') >= 2)
-    Path('/run/verify/migration-system-snapshot-effects').write_text(Path('/var/log/arch-niri-dux-migration-snapshot-effects').read_text())
+    wait_until(
+        'System migration after root restore',
+        lambda: (
+            Path('/var/log/arch-niri-dux-migration-snapshot-effects').read_text().splitlines().count('applied') >= 2
+        ),
+    )
+    Path('/run/verify/migration-system-snapshot-effects').write_text(
+        Path('/var/log/arch-niri-dux-migration-snapshot-effects').read_text()
+    )
     assert (HOME / '.local/state/migration-user-snapshot-effects').read_text().splitlines() == ['applied']
     assert (USER_STATE / '99999999_10_verification.sh.json').is_file()
     for scope in ('system', 'user'):

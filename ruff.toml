@@ -1,6 +1,13 @@
 target-version = "py313"
+# Width for the formatter only; E501 stays off so lint never flags long lines.
+# p99 Python line length is 119, so 120 keeps the one-time reformat small.
+line-length = 120
 extend-exclude = ["out/**", "packages/aur"]
 
 [lint]
 # Correctness and unused code, without imposing a formatting/style rewrite.
 select = ["F", "ARG001", "RUF059"]
+
+[format]
+# The codebase is overwhelmingly single-quoted; keep that style.
+quote-style = "single"

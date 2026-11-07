@@ -23,8 +23,11 @@ def wait_for_memory():
     deadline = time.monotonic() + 600
     while time.monotonic() < deadline:
         subprocess.run(['free', '-g'], check=True)
-        available = next(int(line.split()[1]) for line in Path('/proc/meminfo').read_text().splitlines()
-                         if line.startswith('MemAvailable:'))
+        available = next(
+            int(line.split()[1])
+            for line in Path('/proc/meminfo').read_text().splitlines()
+            if line.startswith('MemAvailable:')
+        )
         if available >= 10 * 1024**2:
             return
         print('Waiting for 10 GiB available before starting a VM.', flush=True)
@@ -79,8 +82,14 @@ class VM:
         sockets = self.control_path('serial.sock').parent
         firmware = Path(os.environ.get('OVMF_DIR', '/usr/share/edk2/x64'))
         pairs = [('OVMF_CODE.4m.fd', 'OVMF_VARS.4m.fd'), ('OVMF_CODE.fd', 'OVMF_VARS.fd')]
-        pair = next(((firmware / code, firmware / variables) for code, variables in pairs
-                     if (firmware / code).is_file() and (firmware / variables).is_file()), None)
+        pair = next(
+            (
+                (firmware / code, firmware / variables)
+                for code, variables in pairs
+                if (firmware / code).is_file() and (firmware / variables).is_file()
+            ),
+            None,
+        )
         if pair is None:
             raise RuntimeError(f'OVMF code and variable-store firmware missing under {firmware}')
         code, template = pair
@@ -90,19 +99,43 @@ class VM:
         render_node = Path(os.environ.get('QEMU_RENDER_NODE', '/dev/dri/renderD128'))
         if not software_display and not os.access(render_node, os.R_OK | os.W_OK):
             raise RuntimeError(f'Niri VM verification needs an accessible GPU render node: {render_node}')
-        command = ['qemu-system-x86_64', '-machine', 'q35,accel=kvm', '-cpu', 'host',
-                   '-m', '8192', '-smp', '4', '-display',
-                   'none' if software_display else f'egl-headless,rendernode={render_node}',
-                   '-vga', 'none', '-device', 'VGA' if software_display else self.graphics,
-                   '-drive', f'if=pflash,format=raw,readonly=on,file={code}',
-                   '-drive', f'if=pflash,format=raw,file={variables}',
-                   '-drive', f'if=none,id=target-disk,format=qcow2,file={self.disk}',
-                   '-device', ('virtio-blk-pci,drive=target-disk,bootindex=2' if self.disk_interface == 'virtio'
-                               else 'ide-hd,drive=target-disk,bus=ide.0,bootindex=2'),
-                   '-nic', f'user,model={self.network_model}' if network else 'none',
-                   '-virtfs', f'local,path={self.directory},mount_tag=verify,security_model=none,id=verify',
-                   '-serial', f'unix:{sockets}/serial.sock,server=on,wait=off',
-                   '-qmp', f'unix:{sockets}/qmp.sock,server=on,wait=off']
+        command = [
+            'qemu-system-x86_64',
+            '-machine',
+            'q35,accel=kvm',
+            '-cpu',
+            'host',
+            '-m',
+            '8192',
+            '-smp',
+            '4',
+            '-display',
+            'none' if software_display else f'egl-headless,rendernode={render_node}',
+            '-vga',
+            'none',
+            '-device',
+            'VGA' if software_display else self.graphics,
+            '-drive',
+            f'if=pflash,format=raw,readonly=on,file={code}',
+            '-drive',
+            f'if=pflash,format=raw,file={variables}',
+            '-drive',
+            f'if=none,id=target-disk,format=qcow2,file={self.disk}',
+            '-device',
+            (
+                'virtio-blk-pci,drive=target-disk,bootindex=2'
+                if self.disk_interface == 'virtio'
+                else 'ide-hd,drive=target-disk,bus=ide.0,bootindex=2'
+            ),
+            '-nic',
+            f'user,model={self.network_model}' if network else 'none',
+            '-virtfs',
+            f'local,path={self.directory},mount_tag=verify,security_model=none,id=verify',
+            '-serial',
+            f'unix:{sockets}/serial.sock,server=on,wait=off',
+            '-qmp',
+            f'unix:{sockets}/qmp.sock,server=on,wait=off',
+        ]
         if not self.allow_reboot:
             command += ['-no-reboot']
         if cdrom:
@@ -113,8 +146,12 @@ class VM:
             else:
                 command += ['-device', 'qemu-xhci', '-device', 'usb-storage,drive=install-media,bootindex=1']
         command += self.extra_args
-        (self.directory / ('qemu-install.json' if cdrom else 'qemu-boot.json')).write_text(json.dumps(command, indent=2))
-        self.process = subprocess.Popen(command, stdout=(self.directory / 'qemu.log').open('a'), stderr=subprocess.STDOUT)
+        (self.directory / ('qemu-install.json' if cdrom else 'qemu-boot.json')).write_text(
+            json.dumps(command, indent=2)
+        )
+        self.process = subprocess.Popen(
+            command, stdout=(self.directory / 'qemu.log').open('a'), stderr=subprocess.STDOUT
+        )
         self.serial = self.connect('serial.sock')
         qmp_socket = self.connect('qmp.sock')
         qmp_socket.settimeout(30)
@@ -141,11 +178,11 @@ class VM:
         while time.monotonic() < deadline:
             if shutil.disk_usage(self.directory).free < self.min_free_bytes:
                 raise RuntimeError('VM stopped before breaching reserved host disk headroom.')
-            match = re.search(pattern, self.transcript[self.read_cursor:])
+            match = re.search(pattern, self.transcript[self.read_cursor :])
             if match:
                 beginning = self.read_cursor
                 self.read_cursor += match.end()
-                return match, self.transcript[beginning:self.read_cursor]
+                return match, self.transcript[beginning : self.read_cursor]
             try:
                 data = self.serial.recv(65536)
                 if not data:
@@ -161,7 +198,7 @@ class VM:
 
     def command(self, command, timeout=120):
         marker = '__VERIFY_' + secrets.token_hex(8) + '__'
-        payload = f"(\nset -e\n{command}\n)\nverify_status=$?; printf '\\n{marker}:%s\\n' \"$verify_status\""
+        payload = f'(\nset -e\n{command}\n)\nverify_status=$?; printf \'\\n{marker}:%s\\n\' "$verify_status"'
         self.send('bash -c ' + shlex.quote(payload) + '\n')
         match, output = self.expect(r'\r?\n' + marker + r':([0-9]+)\r?\n', timeout)
         if match.group(1) != '0':
@@ -196,10 +233,15 @@ class VM:
         self.qmp_command('send-key', {'keys': [{'type': 'qcode', 'data': name} for name in names], 'hold-time': 50})
 
     def click(self, x, y):
-        self.qmp_command('input-send-event', {'events': [
-            {'type': 'abs', 'data': {'axis': 'x', 'value': round(x * 32767)}},
-            {'type': 'abs', 'data': {'axis': 'y', 'value': round(y * 32767)}},
-        ]})
+        self.qmp_command(
+            'input-send-event',
+            {
+                'events': [
+                    {'type': 'abs', 'data': {'axis': 'x', 'value': round(x * 32767)}},
+                    {'type': 'abs', 'data': {'axis': 'y', 'value': round(y * 32767)}},
+                ]
+            },
+        )
         self.qmp_command('input-send-event', {'events': [{'type': 'btn', 'data': {'down': True, 'button': 'left'}}]})
         time.sleep(0.15)
         self.qmp_command('input-send-event', {'events': [{'type': 'btn', 'data': {'down': False, 'button': 'left'}}]})
@@ -262,8 +304,8 @@ def wait_for_password_screen(vm, name):
         path = vm.screenshot(name)
         if path is not None:
             text = subprocess.check_output(
-                ['tesseract', str(path), 'stdout', '--psm', '11'],
-                text=True, stderr=subprocess.DEVNULL)
+                ['tesseract', str(path), 'stdout', '--psm', '11'], text=True, stderr=subprocess.DEVNULL
+            )
             if 'passphrase' in text.lower():
                 path.with_suffix('.txt').write_text(text)
                 return
@@ -275,14 +317,13 @@ def click_screen_text(vm, path, phrase):
     # Chromium's share chooser can appear later or move with window geometry.
     # Locate its visible label instead of clicking a guessed screen coordinate.
     output = subprocess.check_output(
-        ['tesseract', str(path), 'stdout', '--psm', '11', 'tsv'],
-        text=True, stderr=subprocess.DEVNULL)
-    words = [row for row in csv.DictReader(output.splitlines(), delimiter='\t')
-             if row.get('text', '').strip()]
+        ['tesseract', str(path), 'stdout', '--psm', '11', 'tsv'], text=True, stderr=subprocess.DEVNULL
+    )
+    words = [row for row in csv.DictReader(output.splitlines(), delimiter='\t') if row.get('text', '').strip()]
     target = phrase.casefold().split()
     width, height = struct.unpack('>II', path.read_bytes()[16:24])
     for index in range(len(words) - len(target) + 1):
-        match = words[index:index + len(target)]
+        match = words[index : index + len(target)]
         if [word['text'].casefold() for word in match] != target:
             continue
         if len({(word['block_num'], word['par_num'], word['line_num']) for word in match}) != 1:
@@ -340,20 +381,21 @@ def graphical_login(vm):
     time.sleep(0.3)
     vm.type_graphical(PASSWORD)
     vm.key('ret')
-    vm.command('for attempt in $(seq 1 60); do pgrep -u tester -x niri >/dev/null && exit 0; sleep 1; done; exit 1', timeout=90)
-
+    vm.command(
+        'for attempt in $(seq 1 60); do pgrep -u tester -x niri >/dev/null && exit 0; sleep 1; done; exit 1', timeout=90
+    )
 
 
 def stage_probes(directory):
     """Copy one complete probe package so new scenarios cannot be omitted."""
     source = Path(__file__).parent
-    shutil.copytree(source, directory / 'verification',
-                    ignore=shutil.ignore_patterns('__pycache__'), dirs_exist_ok=True)
+    shutil.copytree(
+        source, directory / 'verification', ignore=shutil.ignore_patterns('__pycache__'), dirs_exist_ok=True
+    )
     builder = source.parent / 'build-integration.py'
     shutil.copyfile(builder, directory / builder.name)
     paths = sorted(source.glob('*.py')) + [builder]
-    return {str(path.relative_to(source.parent)): hashlib.sha256(path.read_bytes()).hexdigest()
-            for path in paths}
+    return {str(path.relative_to(source.parent)): hashlib.sha256(path.read_bytes()).hexdigest() for path in paths}
 
 
 if __name__ == '__main__':

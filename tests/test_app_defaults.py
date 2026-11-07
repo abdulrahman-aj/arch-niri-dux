@@ -73,9 +73,7 @@ class FactoryMimeTests(unittest.TestCase):
             executable = self.bin / binary
             executable.write_text('#!/bin/sh\nexit 0\n')
             executable.chmod(0o755)
-            (self.apps / desktop).write_text(
-                '[Desktop Entry]\nType=Application\n'
-                f'Name={desktop}\nExec={binary} %U\n')
+            (self.apps / desktop).write_text(f'[Desktop Entry]\nType=Application\nName={desktop}\nExec={binary} %U\n')
         self.environment = os.environ | {
             'HOME': str(self.root),
             'PATH': str(self.bin) + ':' + os.environ['PATH'],
@@ -87,9 +85,7 @@ class FactoryMimeTests(unittest.TestCase):
         }
 
     def query(self, mime):
-        return subprocess.check_output(
-            [self.binary, 'query', 'default', mime],
-            env=self.environment, text=True).strip()
+        return subprocess.check_output([self.binary, 'query', 'default', mime], env=self.environment, text=True).strip()
 
     def test_fresh_user_resolves_factory_defaults(self):
         expected = read_factory_defaults()
@@ -100,9 +96,8 @@ class FactoryMimeTests(unittest.TestCase):
 
     def test_existing_user_choice_wins_over_factory(self):
         (self.user / 'mimeapps.list').write_text(
-            '[Default Applications]\n'
-            'text/plain=Other.desktop\n'
-            'image/jpeg=Other.desktop\n')
+            '[Default Applications]\ntext/plain=Other.desktop\nimage/jpeg=Other.desktop\n'
+        )
         self.assertEqual(self.query('text/plain'), 'Other.desktop')
         self.assertEqual(self.query('image/jpeg'), 'Other.desktop')
         self.assertEqual(self.query('text/markdown'), 'org.gnome.TextEditor.desktop')

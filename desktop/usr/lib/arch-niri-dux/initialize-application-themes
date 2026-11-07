@@ -17,8 +17,12 @@ for _ in {1..90}; do
     # Re-read while waiting so a theme selected during startup stays selected.
     gtk_theme=$(gsettings get org.gnome.desktop.interface gtk-theme)
     case "$gtk_theme" in
-        "'Adwaita'"|"'Adwaita-dark'"|"'adw-gtk3'"|"'adw-gtk3-dark'"|"''") ;;
-        *) mkdir -p "$state_dir"; touch "$state_dir/application-themes"; exit 0 ;;
+        "'Adwaita'" | "'Adwaita-dark'" | "'adw-gtk3'" | "'adw-gtk3-dark'" | "''") ;;
+        *)
+            mkdir -p "$state_dir"
+            touch "$state_dir/application-themes"
+            exit 0
+            ;;
     esac
     mode=$(dms ipc call theme getMode 2>/dev/null || true)
     if [[ -s "$config_dir/gtk-3.0/dank-colors.css" && -s "$config_dir/gtk-4.0/dank-colors.css" && $mode =~ ^(light|dark)$ ]]; then

@@ -1,6 +1,9 @@
 #!/usr/bin/env bash
 set -euo pipefail
-[[ $EUID != 0 ]] || { echo 'Run user initialization as the desktop user.' >&2; exit 1; }
+[[ $EUID != 0 ]] || {
+    echo 'Run user initialization as the desktop user.' >&2
+    exit 1
+}
 
 config_dir=${XDG_CONFIG_HOME:-$HOME/.config}
 state_dir=${XDG_STATE_HOME:-$HOME/.local/state}

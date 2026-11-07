@@ -14,7 +14,6 @@ import tempfile
 import urllib.request
 
 
-
 def load(name, filename):
     spec = importlib.util.spec_from_file_location(name, Path(__file__).with_name(filename))
     module = importlib.util.module_from_spec(spec)
@@ -37,9 +36,21 @@ def fingerprint(root):
 def verify(root, path, *, historical=False):
     if path.is_symlink() or Path(str(path) + '.sig').is_symlink():
         raise ValueError('Release assets must be regular files, not links.')
-    result = subprocess.run(['gpgv', '--status-fd', '1', '--keyring',
-                             str(root / 'keys/integration-signing.gpg'), str(path) + '.sig', str(path)],
-                            check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+    result = subprocess.run(
+        [
+            'gpgv',
+            '--status-fd',
+            '1',
+            '--keyring',
+            str(root / 'keys/integration-signing.gpg'),
+            str(path) + '.sig',
+            str(path),
+        ],
+        check=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+    )
     signatures = [line.split() for line in result.stdout.splitlines() if line.startswith('[GNUPG:] VALIDSIG ')]
     statuses = {line.split()[1] for line in result.stdout.splitlines() if line.startswith('[GNUPG:] ')}
     if statuses & {'REVKEYSIG', 'EXPSIG'} or ('EXPKEYSIG' in statuses and not historical):
@@ -72,8 +83,11 @@ def validate_manifest(root, directory):
     if manifest.get('version') != version:
         raise ValueError('Release version does not match the checkout.')
     recipes = {recipe['name']: (recipe, filename) for recipe, _, filename in apps.recipes(root)}
-    if not isinstance(manifest.get('apps'), list) or len(manifest['apps']) != len(recipes) or \
-            {entry['name'] for entry in manifest['apps']} != set(recipes):
+    if (
+        not isinstance(manifest.get('apps'), list)
+        or len(manifest['apps']) != len(recipes)
+        or {entry['name'] for entry in manifest['apps']} != set(recipes)
+    ):
         raise ValueError('Release must contain exactly the reviewed Dux apps.')
     for entry in manifest['apps']:
         recipe, filename = recipes[entry['name']]
@@ -125,20 +139,39 @@ def fetch(root, destination, base_url=RELEASES):
 
 
 def sign(root, path):
-    subprocess.run(['gpg', '--batch', '--yes', '--pinentry-mode', 'loopback', '--local-user', fingerprint(root),
-                    '--output', str(path) + '.sig', '--detach-sign', str(path)], check=True)
+    subprocess.run(
+        [
+            'gpg',
+            '--batch',
+            '--yes',
+            '--pinentry-mode',
+            'loopback',
+            '--local-user',
+            fingerprint(root),
+            '--output',
+            str(path) + '.sig',
+            '--detach-sign',
+            str(path),
+        ],
+        check=True,
+    )
     verify(root, path)
 
 
 def contents(path):
     """Package metadata and payload digests, without fields that vary between identical rebuilds."""
+
     def member(name):
         return subprocess.check_output(['bsdtar', '-xOf', str(path), name])
+
     # Comments name the makepkg/fakeroot versions. .BUILDINFO lists the build
     # environment, and the .MTREE digests of both metadata files follow from that.
     info = [line for line in member('.PKGINFO').decode().splitlines() if not line.startswith('#')]
-    tree = [line for line in gzip.decompress(member('.MTREE')).decode().splitlines()
-            if not line.startswith(('./.BUILDINFO ', './.PKGINFO '))]
+    tree = [
+        line
+        for line in gzip.decompress(member('.MTREE')).decode().splitlines()
+        if not line.startswith(('./.BUILDINFO ', './.PKGINFO '))
+    ]
     return info, tree
 
 
@@ -161,8 +194,16 @@ def publish(root, packages, history, destination, tag, commit):
     for old in history.glob('*.pkg.tar.zst'):
         if old.is_symlink() or not old.is_file():
             raise ValueError('Unexpected historical package link.')
-        name = next((name for name, (_, arch) in versions.items() if re.fullmatch(
-            re.escape(name) + r'-[0-9]+(?:\.[0-9]+)*-[0-9]+(?:\.[0-9]+)*-' + arch + r'\.pkg\.tar\.zst', old.name)), None)
+        name = next(
+            (
+                name
+                for name, (_, arch) in versions.items()
+                if re.fullmatch(
+                    re.escape(name) + r'-[0-9]+(?:\.[0-9]+)*-[0-9]+(?:\.[0-9]+)*-' + arch + r'\.pkg\.tar\.zst', old.name
+                )
+            ),
+            None,
+        )
         if name is None:
             raise ValueError('Unexpected historical package name.')
         verify(root, old, historical=True)
@@ -230,8 +271,14 @@ def main():
     if arguments.command == 'fetch':
         fetch(arguments.root.resolve(), arguments.destination.resolve())
     else:
-        publish(arguments.root.resolve(), arguments.packages.resolve(), arguments.history.resolve(),
-                arguments.destination.resolve(), arguments.tag, arguments.commit)
+        publish(
+            arguments.root.resolve(),
+            arguments.packages.resolve(),
+            arguments.history.resolve(),
+            arguments.destination.resolve(),
+            arguments.tag,
+            arguments.commit,
+        )
 
 
 if __name__ == '__main__':
