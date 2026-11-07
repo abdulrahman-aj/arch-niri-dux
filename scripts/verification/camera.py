@@ -30,9 +30,22 @@ def pipewire_video_sources():
     return sources
 
 
+def snapshot_window():
+    return next((window for window in windows() if 'snapshot' in (window.get('app_id') or '').lower()), None)
+
+
 def focus_camera():
-    window = next(window for window in windows() if 'snapshot' in (window.get('app_id') or '').lower())
+    # Snapshot's window can be briefly absent from Niri's list right after a
+    # capture, so wait for it and for the focus to land before keys are sent.
+    try:
+        window = wait_until('Snapshot window', snapshot_window, timeout=30)
+    except TimeoutError:
+        # Keep Snapshot's own log to tell a crash from a slow remap.
+        if Path('/tmp/snapshot.log').is_file():
+            shutil.copyfile('/tmp/snapshot.log', '/run/verify/snapshot.log')
+        raise
     focus_window(window['id'])
+    wait_until('Snapshot focused', lambda: (snapshot_window() or {}).get('is_focused'), timeout=30)
 
 
 def camera_cleanup():
@@ -66,11 +79,7 @@ def camera():
             str(path) for folder in ('Pictures', 'Videos') for path in Path('/home/tester', folder, 'Camera').glob('*')
         ]
         user_command('sh', '-c', 'snapshot --debug >/tmp/snapshot.log 2>&1 &')
-        wait_until(
-            'Snapshot window',
-            lambda: any('snapshot' in (window.get('app_id') or '').lower() for window in windows()),
-            timeout=60,
-        )
+        wait_until('Snapshot window', snapshot_window, timeout=60)
         focus_camera()
         screenshot('02-snapshot.png')
         width, height = png_dimensions(Path('/run/verify/02-snapshot.png'))

@@ -48,3 +48,20 @@ class ScreenshotReadinessTests(unittest.TestCase):
                 with self.subTest(bytes_written=len(content)):
                     path.write_bytes(content)
                     self.assertEqual(guest.png_ready(path), ready)
+
+
+class CameraFocusTests(unittest.TestCase):
+    def test_focus_waits_for_a_snapshot_window_that_appears_late(self):
+        from scripts.verification import camera
+
+        unfocused = {'id': 7, 'app_id': 'org.gnome.Snapshot', 'is_focused': False}
+        focused = dict(unfocused, is_focused=True)
+        listings = iter([[], [{'id': 1, 'app_id': 'other'}], [unfocused], [unfocused], [focused]])
+        focus = Mock()
+        with (
+            patch.object(camera, 'windows', side_effect=lambda: next(listings)),
+            patch.object(camera, 'focus_window', focus),
+            patch.object(guest.time, 'sleep'),
+        ):
+            camera.focus_camera()
+        focus.assert_called_once_with(7)
