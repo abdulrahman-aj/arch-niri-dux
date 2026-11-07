@@ -1,0 +1,16 @@
+#!/usr/bin/nft -f
+# Loaded before firewall.nft at start. That load replaces this table in one
+# batch, so if firewall.nft or a firewall.d include is broken, the host keeps
+# this table and drops inbound traffic instead of booting with no policy.
+# Without the DHCP and neighbour discovery accepts, new links stay offline
+# until the policy is fixed.
+
+destroy table inet arch_niri_dux
+
+table inet arch_niri_dux {
+    chain input {
+        type filter hook input priority filter; policy drop;
+        ct state established,related accept
+        iif lo accept
+    }
+}
