@@ -4,7 +4,7 @@ enable snapper-cleanup.timer
 enable limine-snapper-sync.service
 enable systemd-timesyncd.service
 enable power-profiles-daemon.service
-enable getty@tty2.service
+enable getty@.service tty1 tty2
 enable cups.service
 enable avahi-daemon.service
 enable greetd.service
