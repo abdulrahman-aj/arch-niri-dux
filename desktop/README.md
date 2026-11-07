@@ -43,7 +43,6 @@ only overrides. Dux generates `dms/binds-next.kdl` for the installed Niri. The
 entrypoint includes it before personal bindings. Keep that generated file local.
 Later bindings replace earlier ones, so a disabled shortcut
 can override its stock action with `spawn "true"`. This still consumes the key.
-Keep hand-managed MRU (`recent-windows`) bindings in `overrides.kdl` until Dux fixes [#33](https://github.com/abdulrahman-aj/arch-niri-dux/issues/33).
 Generated `dms/alttab.kdl` controls appearance.
 Rerunning user initialization preserves existing user Niri files. Generated
 layout/input files remain local, so Dux settings continue to control them.
