@@ -16,11 +16,12 @@ virtio 3D acceleration; `QEMU_RENDER_NODE` defaults to `/dev/dri/renderD128`.
 ## `make verify`
 
 Full acceptance qualifies a fresh offline encrypted UEFI install on a
-disposable 48 GiB VM disk. The workspace (default under `/tmp`, overridable
-with `--directory`) records `install.json`, `inputs.json` with the ISO,
+disposable 48 GiB VM disk. The workspace (default `out/verify/dux-verify-*`
+on disk, overridable with `--directory`) records `install.json`, `inputs.json` with the ISO,
 package-manifest and verification-script hashes, `OVMF_VARS.fd`, serial and
 QEMU logs, screenshots and a milestone list. Only a full run writes
-`ACCEPTANCE-PASSED`.
+`ACCEPTANCE-PASSED`. A failed run deletes its disk and keeps the rest; a passed
+run keeps its ~6 GB disk as a fixture, so delete workspaces you no longer need.
 
 It boots the ISO with loopback as the only network interface, confirms the
 package manifest and installer payload hashes, then installs with

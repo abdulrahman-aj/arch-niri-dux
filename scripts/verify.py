@@ -22,7 +22,7 @@ ROOT = Path(__file__).resolve().parents[1]
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--iso', type=Path)
-    parser.add_argument('--directory', type=Path, help='Fresh verification workspace; default under /tmp')
+    parser.add_argument('--directory', type=Path, help='Fresh verification workspace; default under out/verify')
     parser.add_argument('--disk', type=Path, help='New disposable qcow2 path; default inside the workspace')
     parser.add_argument('--install-only', action='store_true', help='Debug only; does not produce acceptance success')
     parser.add_argument(
@@ -40,7 +40,11 @@ def main():
         parser.error('Build an ISO first with make iso, or pass --iso PATH.')
     if not os.access('/dev/kvm', os.R_OK | os.W_OK):
         parser.error('The VM verification requires access to /dev/kvm.')
-    directory = args.directory or Path(tempfile.mkdtemp(prefix='dux-verify-', dir='/tmp'))
+    directory = args.directory
+    if directory is None:
+        # Runs hold multi-gigabyte disks, and /tmp is often RAM-backed tmpfs.
+        (ROOT / 'out/verify').mkdir(parents=True, exist_ok=True)
+        directory = Path(tempfile.mkdtemp(prefix='dux-verify-', dir=ROOT / 'out/verify'))
     directory.mkdir(mode=0o700, parents=True, exist_ok=True)
     disk = args.disk or directory / 'disk.qcow2'
     if disk.exists():
@@ -96,6 +100,7 @@ def main():
         shutil.copyfile(original, source / target)
     vm = VM(directory, iso.resolve(), disk)
     milestones = []
+    succeeded = False
 
     def passed(name):
         milestones.append(name)
@@ -139,6 +144,7 @@ def main():
         subprocess.run(['qemu-img', 'snapshot', '-c', 'pristine', str(disk)], check=True)
         if args.install_only:
             print('Install-only debug run complete. Full acceptance has NOT passed.', flush=True)
+            succeeded = True
             return 0
         boot.verify_boot(vm, passed, args.swap_gib)
         vm.probe('policy', 'check', timeout=180)
@@ -160,6 +166,7 @@ def main():
             integration.verify_published(vm, passed)
         (directory / 'ACCEPTANCE-PASSED').write_text('All acceptance stages passed.\n')
         print(f'Acceptance passed. Evidence: {directory}', flush=True)
+        succeeded = True
         return 0
     except Exception as error:
         try:
@@ -172,6 +179,10 @@ def main():
         return 1
     finally:
         vm.stop()
+        # A failed or interrupted run's disk can never become an accepted
+        # fixture; drop it and keep the logs and screenshots.
+        if not succeeded:
+            disk.unlink(missing_ok=True)
 
 
 if __name__ == '__main__':
