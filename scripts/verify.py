@@ -100,7 +100,7 @@ def main():
         shutil.copyfile(original, source / target)
     vm = VM(directory, iso.resolve(), disk)
     milestones = []
-    failed = False
+    succeeded = False
 
     def passed(name):
         milestones.append(name)
@@ -144,6 +144,7 @@ def main():
         subprocess.run(['qemu-img', 'snapshot', '-c', 'pristine', str(disk)], check=True)
         if args.install_only:
             print('Install-only debug run complete. Full acceptance has NOT passed.', flush=True)
+            succeeded = True
             return 0
         boot.verify_boot(vm, passed, args.swap_gib)
         vm.probe('policy', 'check', timeout=180)
@@ -165,9 +166,9 @@ def main():
             integration.verify_published(vm, passed)
         (directory / 'ACCEPTANCE-PASSED').write_text('All acceptance stages passed.\n')
         print(f'Acceptance passed. Evidence: {directory}', flush=True)
+        succeeded = True
         return 0
     except Exception as error:
-        failed = True
         try:
             if vm.process and vm.process.poll() is None and vm.screenshot('failure') is None:
                 vm.probe('desktop', 'failure-screenshot', timeout=15)
@@ -178,9 +179,9 @@ def main():
         return 1
     finally:
         vm.stop()
-        # A failed run's disk can never become an accepted fixture; drop it and
-        # keep the logs and screenshots.
-        if failed:
+        # A failed or interrupted run's disk can never become an accepted
+        # fixture; drop it and keep the logs and screenshots.
+        if not succeeded:
             disk.unlink(missing_ok=True)
 
 

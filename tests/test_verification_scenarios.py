@@ -64,4 +64,4 @@ class CameraFocusTests(unittest.TestCase):
             patch.object(guest.time, 'sleep'),
         ):
             camera.focus_camera()
-        focus.assert_called_once_with(7)
+        focus.assert_called_with(7)

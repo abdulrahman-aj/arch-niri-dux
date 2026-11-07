@@ -36,16 +36,29 @@ def snapshot_window():
 
 def focus_camera():
     # Snapshot's window can be briefly absent from Niri's list right after a
-    # capture, so wait for it and for the focus to land before keys are sent.
+    # capture, and may come back with a new id, so re-resolve and re-focus
+    # until the focus lands before any key is sent.
+    def focused_window():
+        window = snapshot_window()
+        if window is None:
+            return None
+        if not window.get('is_focused'):
+            focus_window(window['id'])
+            return None
+        return window
+
     try:
-        window = wait_until('Snapshot window', snapshot_window, timeout=30)
+        wait_until('Snapshot window focused', focused_window, timeout=30)
     except TimeoutError:
         # Keep Snapshot's own log to tell a crash from a slow remap.
         if Path('/tmp/snapshot.log').is_file():
             shutil.copyfile('/tmp/snapshot.log', '/run/verify/snapshot.log')
         raise
-    focus_window(window['id'])
-    wait_until('Snapshot focused', lambda: (snapshot_window() or {}).get('is_focused'), timeout=30)
+
+
+def camera_ready():
+    focus_camera()
+    screenshot('02-snapshot.png')
 
 
 def camera_cleanup():
@@ -146,7 +159,9 @@ def verify(vm, passed):
         else:
             raise TimeoutError('Snapshot did not request camera permission on the fresh installation.')
         time.sleep(3)
-        vm.probe('camera', 'camera-screen')
+        # The permission click leaves focus with the host pointer, so give it
+        # back to Snapshot before the first shutter key.
+        vm.probe('camera', 'camera-ready')
         # Use Snapshot 51's upstream shutter shortcut to exercise its own
         # capture path in both modes, rather than generating files separately.
         # https://github.com/GNOME/snapshot/blob/51.0/src/application.rs
@@ -169,6 +184,7 @@ if __name__ == '__main__':
             'camera-photo': camera_media,
             'camera-video': lambda: camera_media(video=True),
             'camera-screen': lambda: screenshot('02-snapshot.png'),
+            'camera-ready': camera_ready,
             'camera-cleanup': camera_cleanup,
         },
     )
