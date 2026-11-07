@@ -6,7 +6,8 @@ set -euo pipefail
 install -d -m 0700 "$GNUPGHOME"
 cleanup() {
     gpgconf --homedir "$GNUPGHOME" --kill all || true
-    python -c 'import os, shutil; shutil.rmtree(os.environ["GNUPGHOME"])'
+    # The path checks above confine this to a fresh /tmp signing home.
+    rm -rf -- "$GNUPGHOME"
 }
 trap cleanup EXIT
 printf '%s' "${PACKAGE_SIGNING_KEY:?}" | gpg --batch --import
