@@ -112,6 +112,31 @@ valid. Raw pacman reports its own signature/key errors; these errors can indicat
 a missed transition, but the maintainer must establish the cause and supply the
 current authenticated certificate.
 
+## ISO verification and recovery
+
+ISO checksum signing reuses the selected CI subkey. It never requires restoring
+the backup to the local ISO builder or using the certification primary during an
+ordinary release. The same containment, revocation and replacement procedure
+above applies to package and ISO authorizations.
+
+After a compromise, publish an advisory identifying affected ISO releases and
+halt their distribution. Rebuild and qualify fresh ISOs from trusted sources under
+new release tags. Do not re-sign suspect ISO bytes or overwrite historical release
+assets. Deliver the current public certificate and its new SHA-256 pin through
+the authenticated maintainer channel, and update the README verification block.
+Do the same pin update after routine certificate changes, including new subkey
+bindings, expiry updates and revocations. Keep the primary fingerprint unchanged
+unless performing a separate trust replacement.
+
+The README pins the complete certificate because `gpgv` trusts every key supplied
+in its keyring. It does not enforce key expiry or revocation. A copied old README
+and certificate cannot learn about a later incident. Friends must obtain current
+trusted instructions, confirm their intended release, and obey recovery advisories.
+An attacker controlling only the ISO transport cannot substitute bytes that pass
+both checks, but signatures cannot prevent replay, denial of service, or compromise
+of the machine performing verification. A "good signature" alone is not permission
+to use an ISO identified as affected by an advisory.
+
 ## Qualification
 
 `make test` uses disposable GnuPG homes and real pacman roots. `make verify`
