@@ -32,8 +32,11 @@ limine-install --fallback
 limine-mkinitcpio
 
 # Select only our policy's units; preset-all also enables upstream defaults.
-mapfile -t dux_system_units < <(awk '$1 == "enable" || $1 == "disable" { print $2 }' \
+# A separate assignment lets errexit fail on a broken preset instead of
+# silently presetting an empty unit list.
+dux_system_preset=$(awk '$1 == "enable" || $1 == "disable" { print $2 }' \
     /usr/lib/systemd/system-preset/50-arch-niri-dux.preset)
+mapfile -t dux_system_units <<<"$dux_system_preset"
 systemctl preset "${dux_system_units[@]}"
 
 # Resolve printer .local names before unicast DNS, preserving other NSS sources.
@@ -49,8 +52,11 @@ fi
 arch-niri-dux-migrate baseline
 runuser -u "$dux_user" -- env -u XDG_CONFIG_HOME -u XDG_STATE_HOME -u XDG_DATA_HOME \
     bash /usr/lib/arch-niri-dux/initialize-user
-mapfile -t dux_user_units < <(awk '$1 == "enable" || $1 == "disable" { print $2 }' \
+# A separate assignment lets errexit fail on a broken preset instead of
+# silently presetting an empty unit list.
+dux_user_preset=$(awk '$1 == "enable" || $1 == "disable" { print $2 }' \
     /usr/lib/systemd/user-preset/50-arch-niri-dux.preset)
+mapfile -t dux_user_units <<<"$dux_user_preset"
 systemctl --global preset "${dux_user_units[@]}"
 systemd-tmpfiles --create /usr/lib/tmpfiles.d/dms-greeter.conf
 # The installer stays offline; enable online repositories only on the target.

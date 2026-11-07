@@ -110,7 +110,9 @@ qemu-system-x86_64 -enable-kvm -cpu host -m 8192 -smp 4 -display none -serial "f
     -virtfs "local,path=$host_cache,mount_tag=cache,security_model=none,readonly=on" \
     -virtfs "local,path=$downloads,mount_tag=downloads,security_model=none" \
     -nic user,model=virtio-net-pci -no-reboot
-[[ $(cat "$state/result" 2>/dev/null) == success ]] || {
+# A missing result means the guest never reported success; treat it as failure below.
+build_result=$(cat "$state/result" 2>/dev/null || true)
+[[ $build_result == success ]] || {
     echo "Build failed; see $state/guest-build.log and serial.log" >&2
     exit 1
 }

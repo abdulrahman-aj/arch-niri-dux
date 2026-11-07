@@ -18,10 +18,15 @@ gh api --paginate --slurp "repos/$repository/releases" >"$releases"
 current=$(jq --arg tag "$tag" '[.[][] | select(.tag_name == $tag)][0] // null' "$releases")
 published=false
 if [[ $current != null ]]; then
-    if [[ $(jq -r '.isDraft // .draft' <<<"$current") == true ]]; then
+    # Separate assignments let errexit fail on malformed release JSON instead
+    # of silently treating it as a non-draft or a mismatched draft.
+    is_draft=$(jq -r '.isDraft // .draft' <<<"$current")
+    if [[ $is_draft == true ]]; then
         # An interrupted upload has not been advertised to pacman clients yet.
-        [[ $(jq -r '.body' <<<"$current") == "Signed integration packages for $commit." ]]
-        [[ $(jq -r '.target_commitish' <<<"$current") == "$commit" ]]
+        draft_body=$(jq -r '.body' <<<"$current")
+        [[ $draft_body == "Signed integration packages for $commit." ]]
+        draft_target=$(jq -r '.target_commitish' <<<"$current")
+        [[ $draft_target == "$commit" ]]
         gh release delete "$tag" --repo "$repository" --yes
     else
         # Reuse immutable published bytes when retrying a failed Pages deployment.
