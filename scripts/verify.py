@@ -12,6 +12,7 @@ import sys
 import tempfile
 
 from verification.digest import digest
+from verification.evidence import Evidence
 
 from verification import apps, boot, browser, camera, desktop, dux_update, integration, pdf, recovery
 from verification.vm import VM, PASSWORD, stage_probes
@@ -45,7 +46,7 @@ def main():
         # Runs hold multi-gigabyte disks, and /tmp is often RAM-backed tmpfs.
         (ROOT / 'out/verify').mkdir(parents=True, exist_ok=True)
         directory = Path(tempfile.mkdtemp(prefix='dux-verify-', dir=ROOT / 'out/verify'))
-    directory.mkdir(mode=0o700, parents=True, exist_ok=True)
+    evidence = Evidence(directory, parents=True, exist_ok=True)
     disk = args.disk or directory / 'disk.qcow2'
     if disk.exists():
         parser.error('Use a fresh verification directory; refusing to overwrite an existing VM disk.')
@@ -68,20 +69,15 @@ def main():
     package_digest = digest(ROOT / 'out/packages.manifest.json')
     probe_hashes = stage_probes(directory)
     probe_hashes['verify.py'] = digest(Path(__file__))
-    (directory / 'inputs.json').write_text(
-        json.dumps(
-            {
-                'iso': str(iso.resolve()),
-                'iso_sha256': iso_digest,
-                'package_manifest_sha256': package_digest,
-                'verification_scripts': probe_hashes,
-            },
-            indent=2,
-        )
-        + '\n'
+    evidence.inputs(
+        {
+            'iso': str(iso.resolve()),
+            'iso_sha256': iso_digest,
+            'package_manifest_sha256': package_digest,
+            'verification_scripts': probe_hashes,
+        }
     )
-    (directory / 'key').write_text(PASSWORD)
-    (directory / 'key').chmod(0o600)
+    evidence.key(PASSWORD)
 
     source = directory / 'integration-input'
     source.mkdir()
@@ -99,13 +95,9 @@ def main():
             raise ValueError(f'Integration build input changed: {filename}')
         shutil.copyfile(original, source / target)
     vm = VM(directory, iso.resolve(), disk)
-    milestones = []
     succeeded = False
 
-    def passed(name):
-        milestones.append(name)
-        (directory / 'milestones.json').write_text(json.dumps(milestones, indent=2))
-        print('PASS: ' + name, flush=True)
+    passed = evidence.passed
 
     try:
         print(f'VM evidence: {directory}', flush=True)
@@ -122,11 +114,7 @@ def main():
         vm.command(
             f'test "$(sha256sum /run/archiso/bootmnt/packages.manifest.json | cut -d " " -f 1)" = {package_digest}'
         )
-        for filename in ('install.py', 'configure-target.sh'):
-            expected = digest(ROOT / 'installer' / filename)
-            vm.command(
-                f'test "$(sha256sum /usr/local/lib/arch-niri-dux/installer/{filename} | cut -d " " -f 1)" = {expected}'
-            )
+        evidence.verify_installer(vm, ROOT / 'installer')
         installation_output = vm.command(
             'arch-niri-install --config /run/verify/install.json --confirm-disk /dev/vda', timeout=2400
         )

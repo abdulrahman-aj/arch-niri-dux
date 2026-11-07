@@ -9,6 +9,7 @@ import shutil
 import subprocess
 
 from verification.digest import digest
+from verification.evidence import Evidence
 
 from verification.vm import VM, PASSWORD, installed_login, stage_probes
 from alongside_windows import WindowsVM, BootReports
@@ -39,7 +40,7 @@ def main():
     args = parser.parse_args()
     if shutil.disk_usage(args.directory.parent).free < 16 * 1024**3:
         parser.error('Need 16 GiB free for one scenario, including a 9 GiB stop threshold protecting 8 GiB headroom.')
-    args.directory.mkdir(mode=0o700)  # Never reuse evidence or fixture overlays.
+    evidence = Evidence(args.directory)  # Never reuse evidence or fixture overlays.
     directory = args.directory.resolve()
     disk = directory / 'disk.qcow2'
     subprocess.run(
@@ -49,7 +50,7 @@ def main():
     inputs = {}
     for name, path in [('iso', args.iso), ('fixture', args.fixture), ('firmware', args.firmware)]:
         inputs[name] = dict(path=str(path.resolve()), sha256=digest(path))
-    (directory / 'inputs.json').write_text(json.dumps(inputs, indent=2))
+    evidence.inputs(inputs)
     reports = None
     if args.os == 'windows':
         if args.windows_token is None:
@@ -60,15 +61,10 @@ def main():
         vm = VM(directory, args.iso.resolve(), disk)
     vm.min_free_bytes = 9 * 1024**3
     device = '/dev/sda' if reports else '/dev/vda'
-    (directory / 'key').write_text(PASSWORD)
-    (directory / 'key').chmod(0o600)
+    evidence.key(PASSWORD)
     stage_probes(directory)
-    milestones = []
 
-    def passed(message):
-        milestones.append(message)
-        (directory / 'milestones.json').write_text(json.dumps(milestones, indent=2))
-        print('PASS: ' + message, flush=True)
+    passed = evidence.passed
 
     try:
         vm.start(cdrom=False, network=bool(reports))
@@ -81,11 +77,7 @@ def main():
         vm.start()
         vm.expect(r'root@archiso[^\n]*#', timeout=180)
         vm.mount_probes()
-        for filename in ('install.py', 'configure-target.sh'):
-            expected_digest = digest(ROOT / 'installer' / filename)
-            vm.command(
-                f'test "$(sha256sum /usr/local/lib/arch-niri-dux/installer/{filename} | cut -d " " -f 1)" = {expected_digest}'
-            )
+        evidence.verify_installer(vm, ROOT / 'installer')
         # Plan through the ISO's own read-only inventory. The fixture must have
         # exactly one eligible region and one registered Debian bootloader.
         vm.probe('alongside', 'plan', device, args.os)
