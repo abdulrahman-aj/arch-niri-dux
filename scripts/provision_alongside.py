@@ -5,9 +5,10 @@ import argparse
 import json
 from pathlib import Path
 
-from workspace import disk_guard
 import subprocess
 import secrets
+
+from workspace import disk_guard
 
 from alongside_windows import (
     WindowsVM,

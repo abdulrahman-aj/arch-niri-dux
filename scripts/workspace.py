@@ -42,6 +42,8 @@ def own(directory, checkout=ROOT):
     directory = directory.resolve()
     owner = checkout.resolve()
     marker = directory / MARKER
+    if not marker.exists() and any(directory.iterdir()):
+        raise SystemExit(f'Refusing to claim nonempty unowned directory: {directory}')
     if marker.exists() and marker.read_text().strip() != str(owner):
         raise SystemExit(f'State belongs to another checkout: {directory}')
     marker.write_text(str(owner) + '\n')

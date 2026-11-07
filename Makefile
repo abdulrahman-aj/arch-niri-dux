@@ -37,7 +37,7 @@ fetch-alongside:
 	./scripts/build-in-dev python3 scripts/fetch_alongside.py $(ARGS)
 
 .PHONY: heavy-guard gc
-lock iso iso-development verify verify-fast verify-release verify-hibernate build-test verify-alongside provision-alongside fetch-alongside: | heavy-guard
+lock iso iso-development verify verify-fast verify-release verify-hibernate verify-alongside provision-alongside fetch-alongside: | heavy-guard
 heavy-guard:
 	@python3 scripts/workspace.py heavy-guard
 gc:

@@ -34,11 +34,12 @@ class WorkspaceTests(unittest.TestCase):
             linked = cache / 'arch-niri-dux-build-link'
             for path in (live, orphan, unowned, fixture, downloads):
                 path.mkdir(parents=True)
-                (path / 'payload').write_bytes(b'keep me')
             workspace.own(live, checkout)
             workspace.own(orphan, cache / 'gone')
             # Even a mistakenly registered downloads cache must survive.
             workspace.own(downloads, cache / 'gone')
+            for path in (live, orphan, unowned, fixture, downloads):
+                (path / 'payload').write_bytes(b'keep me')
             linked.symlink_to(orphan, target_is_directory=True)
             with contextlib.redirect_stdout(io.StringIO()):
                 self.assertEqual(workspace.collect(cache, checkout, True), [orphan])
@@ -55,6 +56,16 @@ class WorkspaceTests(unittest.TestCase):
             workspace.own(directory, directory / 'one')
             with self.assertRaises(SystemExit):
                 workspace.own(directory, directory / 'two')
+
+    def test_nonempty_unowned_directory_cannot_be_claimed(self):
+        with tempfile.TemporaryDirectory() as temp:
+            directory = Path(temp)
+            payload = directory / 'valuable-data'
+            payload.write_bytes(b'preserve')
+            with self.assertRaises(SystemExit):
+                workspace.own(directory)
+            self.assertFalse((directory / workspace.MARKER).exists())
+            self.assertEqual(payload.read_bytes(), b'preserve')
 
     def test_guards(self):
         with patch.dict(os.environ, {'AGENT_HEAVY_JOBS': 'deny'}):
