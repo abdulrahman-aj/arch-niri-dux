@@ -3,10 +3,6 @@ set -euo pipefail
 
 dux_user=$1
 dux_timezone=$2
-dux_luks_uuid=$3
-dux_btrfs_uuid=$4
-dux_resume_offset=${5:-}
-dux_defer_efi=${6:-}
 
 ln -sf "/usr/share/zoneinfo/$dux_timezone" /etc/localtime
 locale-gen
@@ -17,28 +13,6 @@ install -d -m 0750 /etc/sudoers.d
 printf '%%wheel ALL=(ALL:ALL) ALL\n' >/etc/sudoers.d/wheel
 chmod 0440 /etc/sudoers.d/wheel
 visudo -cf /etc/sudoers.d/wheel
-
-install -d /etc/kernel /etc/default /etc/conf.d /etc/snapper/configs
-dux_cmdline="rd.luks.name=$dux_luks_uuid=dux-root root=/dev/mapper/dux-root rootflags=subvol=@ rw quiet splash"
-if [[ -n "$dux_resume_offset" ]]; then
-    [[ "$dux_resume_offset" =~ ^[0-9]+$ ]]
-    dux_cmdline+=" resume=/dev/mapper/dux-root resume_offset=$dux_resume_offset"
-else
-    install -d /etc/systemd/sleep.conf.d
-    printf '[Sleep]\nAllowHibernation=no\n' >/etc/systemd/sleep.conf.d/60-hibernation.conf
-fi
-printf '%s\n' "$dux_cmdline" >/etc/kernel/cmdline
-cat >/etc/default/limine <<EOF
-KERNEL_CMDLINE[default]="$dux_cmdline"
-FS_UUID="$dux_btrfs_uuid"
-# Snapshot recovery must not resume a normal-root memory image.
-SNAPSHOT_KERNEL_PARAMETERS+=noresume
-EOF
-# Keep package/kernel hooks from registering boot entries before the installer
-# has verified that the original firmware entries survived configuration.
-if [[ "$dux_defer_efi" == defer-efi ]]; then
-    printf '\nSKIP_UEFI=yes\n' >>/etc/default/limine
-fi
 
 printf 'SNAPPER_CONFIGS="root"\n' >/etc/conf.d/snapper
 
@@ -54,10 +28,10 @@ plymouth-set-default-theme bgrt
 limine-install --fallback
 limine-mkinitcpio
 
-systemctl preset NetworkManager.service bluetooth.service snapper-cleanup.timer \
-    limine-snapper-sync.service systemd-timesyncd.service power-profiles-daemon.service \
-    getty@tty2.service cups.service avahi-daemon.service arch-niri-dux-firewall.service \
-    snapper-timeline.timer greetd.service
+# Select only our policy's units; preset-all also enables upstream defaults.
+mapfile -t dux_system_units < <(awk '$1 == "enable" || $1 == "disable" { print $2 }' \
+    /usr/lib/systemd/system-preset/50-arch-niri-dux.preset)
+systemctl preset "${dux_system_units[@]}"
 
 # Resolve printer .local names before unicast DNS, preserving other NSS sources.
 if ! grep -Eq '^[[:space:]]*hosts:.*mdns' /etc/nsswitch.conf 2>/dev/null; then
@@ -72,7 +46,9 @@ fi
 arch-niri-dux-migrate baseline
 runuser -u "$dux_user" -- env -u XDG_CONFIG_HOME -u XDG_STATE_HOME -u XDG_DATA_HOME \
     bash /usr/lib/arch-niri-dux/initialize-user
-systemctl --global preset dms.service dsearch.service dcal.service dfiles.service dux-application-themes.service
+mapfile -t dux_user_units < <(awk '$1 == "enable" || $1 == "disable" { print $2 }' \
+    /usr/lib/systemd/user-preset/50-arch-niri-dux.preset)
+systemctl --global preset "${dux_user_units[@]}"
 systemd-tmpfiles --create /usr/lib/tmpfiles.d/dms-greeter.conf
 # The installer stays offline; enable online repositories only on the target.
 pacman-key --populate omarchy

@@ -54,9 +54,9 @@ GiB.
 ## Machine configuration
 
 [The integration package](../desktop/README.md#system-policy) owns shared system
-policy. `configure-target.sh` supplies account/locale data, UUIDs, kernel
-arguments, resume offset, EFI deferral and the per-machine no-hibernation
-choice. `SNAPSHOT_KERNEL_PARAMETERS+=noresume` stays in `/etc/default/limine`
+policy. `install.py` writes UUIDs, kernel arguments, the resume offset, EFI
+deferral and the no-swap sleep policy before the first pacstrap.
+`configure-target.sh` receives only the username and timezone for chroot setup. `SNAPSHOT_KERNEL_PARAMETERS+=noresume` stays in `/etc/default/limine`
 because snapper sync does not read entry-tool drop-ins. The installer also sets
 `SNAPPER_CONFIGS` in `/etc/conf.d/snapper` and adjusts NSS for mDNS; neither has
 a suitable independent drop-in.
@@ -67,9 +67,10 @@ offline `file://` repository throughout.
 
 Fresh installation explicitly runs `limine-mkinitcpio` after writing machine
 settings. In alongside mode, `install.py` mounts the new ESP and writes
-`ESP_PATH=/boot` and `SKIP_UEFI=yes` before the first pacstrap to defer upstream
-EFI/kernel hooks. It rewrites deferral with the complete machine settings before
-rebuilding. Firmware verification and final registration precede removal of
-deferral. See [alongside installation](../ALONGSIDE.md) for preservation checks
+the complete machine settings, including `ESP_PATH=/boot` and `SKIP_UEFI=yes`,
+before the first pacstrap to defer upstream EFI/kernel hooks. Deferral covers
+both package transactions and the explicit initramfs rebuild. Only successful
+firmware verification and final registration allow `install.py` to regenerate
+settings without deferral. See [alongside installation](../ALONGSIDE.md) for preservation checks
 and [the upgrade hook](../desktop/README.md#boot-policy-upgrades) for later
 updates.
