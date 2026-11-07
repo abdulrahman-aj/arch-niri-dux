@@ -13,7 +13,8 @@ from pathlib import Path
 
 # Dux 2.1's default main bar, plus the updater button right of the clock. The
 # button hides while Dux knows of no updates; clicking it opens Dux's updater.
-# Unlisted bar options keep Dux's own defaults.
+# Unlisted bar options keep Dux's own defaults, but the widget lists are a copy:
+# re-sync them with Dux's default bar when updating Dux.
 MAIN_BAR = {
     'id': 'default',
     'name': 'Main Bar',

@@ -132,7 +132,9 @@ Settings, Bar; Software Updates shows the weekly interval as a custom interval.
 
 Seeds never change a value that already exists. To change a shipped default for
 existing accounts, add a user migration that rewrites the key only where it
-still holds the old default, and update the seed for new accounts.
+still holds the old default, and update the seed for new accounts. The seeded
+bar copies Dux 2.1's default widget lists; re-sync `MAIN_BAR` when a Dux update
+changes its default bar.
 
 ## Firewall and mDNS
 

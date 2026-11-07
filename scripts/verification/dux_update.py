@@ -206,7 +206,8 @@ def prepare():
         set_interval(SHORT)
         none = scheduled_check(initial.get('lastSuccessUnix', 0))
         assert none['count'] == 0 and not none.get('error'), none
-        # Logging in again before the interval elapses keeps the schedule.
+        # Logging in again before the interval elapses keeps the schedule. This
+        # restart and wait take well under the 5-minute interval.
         after_login = relogin(SHORT)
         time.sleep(30)
         later = state()
