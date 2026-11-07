@@ -111,6 +111,14 @@ def wake_display():
 
 
 def verify(vm, passed):
+    # Earlier smoke clients retain cwd/file references to the host share. A
+    # fresh boot isolates the sleep test and lets us detach 9p normally.
+    vm.poweroff()
+    vm.stop()
+    vm.start(cdrom=False)
+    installed_login(vm)
+    vm.mount_probes()
+    graphical_login(vm)
     vm.probe('suspend', 'before', timeout=45)
     vm.probe('suspend', 'prepare')
     vm.command(f'umount /run/verify; mount --bind {LOCAL_PROBES} /run/verify')
