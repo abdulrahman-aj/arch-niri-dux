@@ -30,13 +30,13 @@ conflicts=("${_binname}" "${_repo}" 'dux-files-git')
 source=(
   "LICENSE-${pkgver}::${_urlraw}/LICENSE"
   "README-${pkgver}.md::${_urlraw}/README.md"
-  "${_appid}-${pkgver}.desktop::${_urlraw}/assets/${_appid}.desktop"
-  "${_appid}-${pkgver}.metainfo.xml::${_urlraw}/assets/${_appid}.metainfo.xml"
-  "${_appid}-${pkgver}.policy::${_urlraw}/assets/${_appid}.policy"
-  "${_appid}.FileManager1-${pkgver}.service::${_urlraw}/assets/dbus/${_appid}.FileManager1.service"
-  "${_portalservice%.service}-${pkgver}.service::${_urlraw}/assets/dbus/${_portalservice}"
-  "${_binname}-${pkgver}.portal::${_urlraw}/assets/portal/${_binname}.portal"
-  "${_binname}-${pkgver}.service::${_urlraw}/assets/systemd/${_binname}.service"
+  "dev.duxlabs.files.desktop"
+  "dev.duxlabs.files.metainfo.xml"
+  "dev.duxlabs.files.policy"
+  "dev.duxlabs.files.FileManager1.service"
+  "org.freedesktop.impl.portal.desktop.dfiles.service"
+  "dfiles.portal"
+  "dfiles.service"
   "${_appid}-${pkgver}.svg::${_urlrel}/${_appid}.svg"
   "${_binname}-completions-${pkgver}.tar.gz::${_urlrel}/${_binname}-completions-${pkgver}.tar.gz"
 )
@@ -77,21 +77,21 @@ package() {
 
   install -Dm644 "${_appid}-${pkgver}.svg" \
     "${pkgdir}/usr/share/icons/hicolor/scalable/apps/${_appid}.svg"
-  install -Dm644 "${_appid}-${pkgver}.desktop" \
+  install -Dm644 "dev.duxlabs.files.desktop" \
     "${pkgdir}/usr/share/applications/${_appid}.desktop"
-  install -Dm644 "${_appid}-${pkgver}.metainfo.xml" \
+  install -Dm644 "dev.duxlabs.files.metainfo.xml" \
     "${pkgdir}/usr/share/metainfo/${_appid}.metainfo.xml"
-  install -Dm644 "${_appid}-${pkgver}.policy" \
+  install -Dm644 "dev.duxlabs.files.policy" \
     "${pkgdir}/usr/share/polkit-1/actions/${_appid}.policy"
 
-  install -Dm644 "${_appid}.FileManager1-${pkgver}.service" \
+  install -Dm644 "dev.duxlabs.files.FileManager1.service" \
     "${pkgdir}/usr/share/dbus-1/services/${_appid}.FileManager1.service"
-  install -Dm644 "${_portalservice%.service}-${pkgver}.service" \
+  install -Dm644 "org.freedesktop.impl.portal.desktop.dfiles.service" \
     "${pkgdir}/usr/share/dbus-1/services/${_portalservice}"
-  install -Dm644 "${_binname}-${pkgver}.portal" \
+  install -Dm644 "dfiles.portal" \
     "${pkgdir}/usr/share/xdg-desktop-portal/portals/${_binname}.portal"
 
-  install -Dm644 "${_binname}-${pkgver}.service" \
+  install -Dm644 "dfiles.service" \
     "${pkgdir}/usr/lib/systemd/user/${_binname}.service"
 
   install -Dm644 "LICENSE-${pkgver}"   "${pkgdir}/usr/share/licenses/${pkgname}/LICENSE"

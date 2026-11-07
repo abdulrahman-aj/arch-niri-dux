@@ -31,9 +31,9 @@ install=dux-greeter.install
 source=(
   "LICENSE-${pkgver}::${_urlraw}/LICENSE"
   "README-${pkgver}.md::${_urlraw}/README.md"
-  "tmpfiles-${_binname}-${pkgver}.conf::${_urlraw}/assets/systemd/tmpfiles-${_binname}.conf"
-  "dms-niri-${pkgver}.kdl::${_urlraw}/assets/examples/dms-niri.kdl"
-  "dms-hypr-${pkgver}.lua::${_urlraw}/assets/examples/dms-hypr.lua"
+  "tmpfiles-dms-greeter.conf"
+  "dms-niri.kdl"
+  "dms-hypr.lua"
   "${_binname}-completions-${pkgver}.tar.gz::${_urlrel}/${_binname}-completions-${pkgver}.tar.gz"
 )
 source_x86_64=("${_binname}-${arch[0]}-${pkgver}.gz::${_urlrel}/${_binname}-linux-${_barch[0]}.gz")
@@ -57,10 +57,10 @@ package() {
   install -Dm644 "_${_binname}"     "${pkgdir}/usr/share/zsh/site-functions/_${_binname}"
   install -Dm644 "${_binname}.fish" "${pkgdir}/usr/share/fish/vendor_completions.d/${_binname}.fish"
 
-  install -Dm644 "tmpfiles-${_binname}-${pkgver}.conf" "${pkgdir}/usr/lib/tmpfiles.d/${_binname}.conf"
+  install -Dm644 "tmpfiles-dms-greeter.conf" "${pkgdir}/usr/lib/tmpfiles.d/${_binname}.conf"
 
-  install -Dm644 "dms-niri-${pkgver}.kdl"  "${pkgdir}/usr/share/doc/${pkgname}/examples/dms-niri.kdl"
-  install -Dm644 "dms-hypr-${pkgver}.lua"  "${pkgdir}/usr/share/doc/${pkgname}/examples/dms-hypr.lua"
+  install -Dm644 "dms-niri.kdl"  "${pkgdir}/usr/share/doc/${pkgname}/examples/dms-niri.kdl"
+  install -Dm644 "dms-hypr.lua"  "${pkgdir}/usr/share/doc/${pkgname}/examples/dms-hypr.lua"
 
   install -Dm644 "LICENSE-${pkgver}"   "${pkgdir}/usr/share/licenses/${pkgname}/LICENSE"
   install -Dm644 "README-${pkgver}.md" "${pkgdir}/usr/share/doc/${pkgname}/README.md"

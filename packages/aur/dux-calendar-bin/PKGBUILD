@@ -23,8 +23,8 @@ replaces=('dankcalendar-bin')
 source=(
   "LICENSE-${pkgver}::${_urlraw}/LICENSE"
   "README-${pkgver}.md::${_urlraw}/README.md"
-  "${_desktopid}-${pkgver}.desktop::${_urlraw}/assets/${_desktopid}.desktop"
-  "${_binname}-${pkgver}.service::${_urlraw}/assets/systemd/${_binname}.service"
+  "dev.duxlabs.calendar.desktop"
+  "dcal.service"
   "${_iconname}-${pkgver}.svg::${_urlrel}/${_iconname}.svg"
   "${_binname}-completions-${pkgver}.tar.gz::${_urlrel}/${_binname}-completions-${pkgver}.tar.gz"
 )
@@ -61,10 +61,10 @@ package() {
   install -Dm644 "${_iconname}-${pkgver}.svg" \
     "${pkgdir}/usr/share/icons/hicolor/scalable/apps/${_iconname}.svg"
 
-  install -Dm644 "${_desktopid}-${pkgver}.desktop" \
+  install -Dm644 "dev.duxlabs.calendar.desktop" \
     "${pkgdir}/usr/share/applications/${_desktopid}.desktop"
 
-  install -Dm644 "${_binname}-${pkgver}.service" \
+  install -Dm644 "dcal.service" \
     "${pkgdir}/usr/lib/systemd/user/${_binname}.service"
 
   install -Dm644 "LICENSE-${pkgver}"   "${pkgdir}/usr/share/licenses/${pkgname}/LICENSE"

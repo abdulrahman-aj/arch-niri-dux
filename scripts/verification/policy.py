@@ -128,7 +128,7 @@ def check():
             conditions
         )
     repositories = output('pacman-conf', '--repo-list').splitlines()
-    assert repositories == ['core', 'extra', 'omarchy', 'arch-niri-dux'], repositories
+    assert repositories == ['arch-niri-dux', 'core', 'extra', 'omarchy'], repositories
 
     # Get the real unlocked collection over the logged-in user's session bus.
     # Merely finding the daemon doesn't prove that PAM received the password.

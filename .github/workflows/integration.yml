@@ -21,7 +21,14 @@ jobs:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
           persist-credentials: false
+      - name: Verify the pinned Nix installer
+        shell: bash
+        run: |
+          curl --fail --location --output "$RUNNER_TEMP/nix-install" https://releases.nixos.org/nix/nix-2.35.4/install
+          echo "118c3dfa04bdc946b3f577365b9a295607142c9b920e2c07b184e266d62b1ee1  $RUNNER_TEMP/nix-install" | sha256sum --check
       - uses: cachix/install-nix-action@75c75c31ebece974e48ebc36b4ad125bd97bd97b # v31
+        with:
+          install_url: file://${{ runner.temp }}/nix-install
       - run: make test
 
   packages:
@@ -59,7 +66,14 @@ jobs:
     env:
       GNUPGHOME: /tmp/integration-release-keyring
     steps:
+      - name: Verify the pinned Nix installer
+        shell: bash
+        run: |
+          curl --fail --location --output "$RUNNER_TEMP/nix-install" https://releases.nixos.org/nix/nix-2.35.4/install
+          echo "118c3dfa04bdc946b3f577365b9a295607142c9b920e2c07b184e266d62b1ee1  $RUNNER_TEMP/nix-install" | sha256sum --check
       - uses: cachix/install-nix-action@75c75c31ebece974e48ebc36b4ad125bd97bd97b # v31
+        with:
+          install_url: file://${{ runner.temp }}/nix-install
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
           fetch-depth: 0
