@@ -43,6 +43,28 @@ def kernel_events():
 
 
 def prepare():
+    # Check what Dux actually loaded, rather than inferring it from the seed.
+    expected = {
+        'lockBeforeSuspend': True,
+        'loginctlLockIntegration': True,
+        'acLockTimeout': 600,
+        'batteryLockTimeout': 600,
+    }
+
+    def loaded_settings():
+        try:
+            return {
+                key: json.loads(
+                    user_command('dms', 'ipc', 'call', 'settings', 'get', key, capture=True, timeout=2).stdout
+                )
+                for key in expected
+            }
+        except (subprocess.TimeoutExpired, json.JSONDecodeError):
+            return None
+
+    settings = wait_until('Dux settings IPC ready', loaded_settings, timeout=60)
+    Path('/run/verify/suspend-settings.json').write_text(json.dumps(settings, indent=2) + '\n')
+    assert settings == expected, settings
     # virtio-9p does not recover after S3 in this VM. Keep probes and evidence
     # on the guest disk until a reboot restores the host share.
     LOCAL_PROBES.mkdir(parents=True, exist_ok=True)
