@@ -61,8 +61,11 @@ def _seed(config, name, defaults):
             choices.update(value)
     missing = {key: value for key, value in defaults.items() if key not in choices}
     directory.mkdir(parents=True, exist_ok=True)
-    with target.open('x') as stream:
-        stream.write(json.dumps(missing, indent=2) + '\n')
+    # The seed file is also the done-marker, so it must appear complete or not
+    # at all. Dux reads only *.json, so it ignores the temporary name.
+    temporary = directory / f'.{name}.tmp'
+    temporary.write_text(json.dumps(missing, indent=2) + '\n')
+    temporary.replace(target)
 
 
 def initialize(config, seeds=SEEDS):

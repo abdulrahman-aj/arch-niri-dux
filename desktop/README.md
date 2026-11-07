@@ -107,23 +107,25 @@ login shell and a real Niri-spawned wrapper without personal dotfiles.
 
 ## Dux defaults and updates
 
-Before DMS starts, its packaged service drop-in runs
-`initialize-dux-settings.py` for new and existing accounts. Each feature seeds
-the keys missing from `settings.json` and every `config.d/*.json` file into its
-own `~/.config/dms/config.d/00-arch-niri-dux-*.json` file, once. Dux saves
-later changes back to that file, so Dux Settings and hand edits both win. An
-emptied seed file stays in place so restarts don't undo an opt-out.
+Before DMS starts, its packaged service drop-in runs `initialize-dux-
+settings.py` for new and existing accounts. Each feature seeds the keys missing
+from `settings.json` and every `config.d/*.json` file into its own
+`~/.config/dms/config.d/00-arch-niri-dux-*.json` file, once. Dux saves later
+changes back to that file, so change these settings in Dux Settings, in that
+file or in a later-sorting `config.d` file; `settings.json` loads first and
+loses to them. An emptied seed file stays in place so restarts don't undo an
+opt-out.
 
 The update seed puts Dux's Software Updates button on the main bar, right of
 the clock. It hides while Dux knows of no updates. Dux's server checks at login
 and then every 6 hours, for any pending package from the configured
-repositories. Background failures, such as being offline, stay silent.
-Clicking the button opens Dux's updater; its Update button runs the same
-`pacman -Syu` that installs our packages and triggers migrations. A bar layout
-saved before the seed ran (`barConfigs` in a user file) is kept and gets no
-button. Dux only checks while something holds its updater open, so without the
-button there are no background checks. Move, remove or add the button in Dux
-Settings, Bar.
+repositories. Background failures, such as being offline, stay silent. Clicking
+the button opens Dux's updater; its Update All runs the same `pacman -Syu` that
+installs our packages and triggers migrations. A bar layout saved before the
+seed ran (`barConfigs` in a user file) is kept and gets no button. Dux only
+checks in the background while the button or update notifications hold its
+updater, so without either there are no checks. Move, remove or add the button
+in Dux Settings, Bar.
 
 ## Firewall and mDNS
 

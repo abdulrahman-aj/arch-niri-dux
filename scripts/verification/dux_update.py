@@ -131,7 +131,9 @@ def login_check(previous):
 
     def checked():
         state = daemon_request('sysupdate.getState')
-        return state['phase'] == 'idle' and state['lastCheckUnix'] > previous and state
+        # Failed background checks also advance lastCheckUnix; only a
+        # successful check after the restart counts.
+        return state['phase'] == 'idle' and state.get('lastSuccessUnix', 0) > previous and state
 
     try:
         return wait_until("Dux's login update check", checked, timeout=180)
@@ -159,7 +161,7 @@ def prepare():
         assert candidate_version, 'Candidate arch-niri-dux package was not built.'
         run('repo-remove', str(database()), *PACKAGES)
         use_fixture_repository(packages)
-        state = login_check(initial['lastCheckUnix'])
+        state = login_check(initial.get('lastSuccessUnix', 0))
         assert state['count'] == 0 and not state.get('error'), state
         write_before(
             {
@@ -169,10 +171,9 @@ def prepare():
                 'checkupdates': shutil.which('checkupdates'),
                 'fakeroot': shutil.which('fakeroot'),
                 'first_login_check': {key: initial[key] for key in ('lastCheckUnix', 'intervalSeconds')},
-                'none_check': state['lastCheckUnix'],
+                'none_check': state['lastSuccessUnix'],
             }
         )
-        screenshot(NONE)
     except BaseException:
         restore_pacman_conf()
         raise
@@ -182,6 +183,9 @@ def offer():
     """Dux's next login check finds our newer packages."""
     try:
         before = json.loads((WORK / 'before.json').read_text())
+        # Taken just before the offer so the clock rarely changes width
+        # between the two screenshots the host compares.
+        screenshot(NONE)
         run('repo-add', str(database()), *map(str, (WORK / 'packages').glob('*.pkg.tar.zst')))
         state = login_check(before['none_check'])
         update = next(
@@ -197,7 +201,7 @@ def offer():
         # A selected AUR helper would run in a terminal instead of through pkexec.
         system = [backend['id'] for backend in state['backends'] if backend['repo'] == 'system']
         assert system == ['pacman'], state['backends']
-        before |= {'found': update, 'backends': state['backends'], 'available_check': state['lastCheckUnix']}
+        before |= {'found': update, 'backends': state['backends'], 'available_check': state['lastSuccessUnix']}
         write_before(before)
         screenshot(AVAILABLE)
     except BaseException:
@@ -307,6 +311,7 @@ def bar_pills(path):
 def update_button(vm):
     """Locate the pill that appeared once Dux knew of updates."""
     before, after = bar_pills(vm.directory / NONE), bar_pills(vm.directory / AVAILABLE)
+    assert len(after) == len(before) + 1, ('Expected exactly one new bar pill', before, after)
     widths = [end - start for start, end in before]
 
     def same_widths(pills):
