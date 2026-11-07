@@ -6,6 +6,7 @@ import unittest
 from unittest.mock import patch
 
 from installer import install as installer
+from scripts.verification import boot
 from scripts.verification.boot import configured_cmdline
 
 
@@ -35,6 +36,17 @@ class MachineBootTests(unittest.TestCase):
                 self.assertEqual(fs_uuid, 'filesystem-id')
                 self.assertIn('noresume', snapshot_flags.split())
                 self.assertEqual(bool(skip), deferred)
+
+    def test_luks_pbkdf_rejects_the_old_pinned_memory(self):
+        old = 'PBKDF:      argon2id\n  Time cost:       4\n  Memory:          262144\n  Threads:         4\n'
+        with self.assertRaises(AssertionError):
+            boot.assert_luks_pbkdf(old)
+
+    def test_luks_pbkdf_accepts_cryptsetup_defaults(self):
+        new = 'PBKDF:      argon2id\n  Time cost:       4\n  Memory:          1048576\n  Threads:         4\n'
+        self.assertEqual(boot.assert_luks_pbkdf(new), [1048576])
+        with self.assertRaises(AssertionError):
+            boot.assert_luks_pbkdf('PBKDF:      pbkdf2\n  Memory:          1048576\n')
 
 
 if __name__ == '__main__':
