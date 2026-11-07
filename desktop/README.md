@@ -105,6 +105,37 @@ Each context preserves system and Nix PATH entries. No mise shims are added.
 The `session-path` stage of `make verify` checks the user-service environment,
 login shell and a real Niri-spawned wrapper without personal dotfiles.
 
+## Dux defaults and updates
+
+Before DMS starts, its packaged service drop-in runs
+`initialize-dux-settings.py` for new and existing accounts. Each feature seeds
+the keys missing from `settings.json` and every `config.d/*.json` file into its
+own `~/.config/dms/config.d/00-arch-niri-dux-*.json` file, once. Dux saves
+later changes back to that file, so change these settings in Dux Settings, in
+that file or in a later-sorting `config.d` file; `settings.json` loads first
+and loses to them. An emptied seed file stays in place so restarts don't undo
+an opt-out.
+
+The update seed puts Dux's Software Updates button on the main bar, right of
+the clock. It hides while Dux knows of no updates. Dux's server checks weekly
+for any pending package from the configured repositories, with no check at
+login. It schedules from its last check, saved in
+`~/.cache/dms/sysupdate.json`, so logins and reboots don't restart the week; a
+new account checks a few minutes after its first login. Failed checks, such as
+while offline, stay silent and retry every 5 minutes. Clicking the button opens
+Dux's updater; its Update All runs the same `pacman -Syu` that installs our
+packages and triggers migrations. A bar layout saved before the seed ran
+(`barConfigs` in a user file) is kept and gets no button. Dux only checks in
+the background while the button or update notifications hold its updater, so
+without either there are no checks. Move, remove or add the button in Dux
+Settings, Bar; Software Updates shows the weekly interval as a custom interval.
+
+Seeds never change a value that already exists. To change a shipped default for
+existing accounts, add a user migration that rewrites the key only where it
+still holds the old default, and update the seed for new accounts. The seeded
+bar copies Dux 2.1's default widget lists; re-sync `MAIN_BAR` when a Dux update
+changes its default bar.
+
 ## Firewall and mDNS
 
 `arch-niri-dux-firewall.service` loads `/usr/share/arch-niri-dux/firewall.nft`
@@ -175,16 +206,11 @@ after writing machine settings and EFI deferral.
 
 ## Locking and calendar transport
 
-Before DMS starts, its packaged service drop-in runs
-`initialize-lock-settings.py` for new and existing accounts. It seeds only
-missing lock choices into `~/.config/dms/config.d/00-arch-niri-dux-lock.json`.
-The defaults lock before suspend, retain the upstream logind lock integration, and lock
-on idle after 600 seconds on AC or battery. Explicit choices in `settings.json`
-or any `config.d/*.json` file are preserved. Future default changes do not rewrite an existing seed. The seed file is written once;
-keep it even if empty so later starts preserve disabled settings. Change the
-choices in Dux Settings or edit the user configuration. No administrator policy
-locks these controls. Existing running sessions acquire the defaults on the
-next DMS start.
+The [Dux defaults](#dux-defaults-and-updates) seeder writes the lock choices
+into `~/.config/dms/config.d/00-arch-niri-dux-lock.json`. The defaults lock
+before suspend, retain the upstream logind lock integration, and lock on idle
+after 600 seconds on AC or battery. No administrator policy locks these
+controls. Existing running sessions acquire the defaults on the next DMS start.
 
 This protects ordinary logind suspend, including normal lid-close suspend.
 Issue [#48](https://github.com/abdulrahman-aj/arch-niri-dux/issues/48) covers
