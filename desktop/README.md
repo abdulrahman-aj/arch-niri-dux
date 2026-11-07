@@ -172,3 +172,26 @@ serialized upstream rebuild implementation.
 The hook excludes first installation. The
 [installer](../installer/README.md#machine-configuration) rebuilds explicitly
 after writing machine settings and EFI deferral.
+
+## Locking and calendar transport
+
+Before DMS starts, its packaged service drop-in runs
+`initialize-lock-settings.py` for new and existing accounts. It seeds only
+missing lock choices into `~/.config/dms/config.d/00-arch-niri-dux-lock.json`.
+The defaults lock before suspend, enable logind lock integration, and lock
+on idle after 600 seconds on AC or battery. Explicit choices in `settings.json`
+or any `config.d/*.json` file are preserved. The seed file is written once;
+keep it even if empty so later starts preserve disabled settings. Change the
+choices in Dux Settings or edit the user configuration. No administrator policy
+locks these controls. Existing running sessions acquire the defaults on the
+next DMS start.
+
+This protects ordinary logind suspend, including normal lid-close suspend.
+Issue [#48](https://github.com/abdulrahman-aj/arch-niri-dux/issues/48) covers
+logind ignoring a lid close during its 30-second post-resume holdoff. Its
+separate Niri hook remains necessary for that window.
+
+The packaged `dcal.service` drop-in sets `DANKCAL_DISABLE_HTTP=true`. Dux's
+calendar backend and `dcal ipc` use the per-user Unix socket. The HTTP API is
+unneeded for this integration. To opt in, use `systemctl --user edit dcal` with
+`Environment=DANKCAL_DISABLE_HTTP=false` in `[Service]`, then restart dcal.

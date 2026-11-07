@@ -1,0 +1,6 @@
+{
+  "lockBeforeSuspend": true,
+  "loginctlLockIntegration": true,
+  "acLockTimeout": 600,
+  "batteryLockTimeout": 600
+}

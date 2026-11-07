@@ -238,6 +238,12 @@ def dux_components():
             f'{service} user service',
             lambda: user_command('systemctl', '--user', 'is-active', service, capture=True).stdout.strip() == 'active',
         )
+    dcal_pid = user_command(
+        'systemctl', '--user', 'show', 'dcal', '-p', 'MainPID', '--value', capture=True
+    ).stdout.strip()
+    listeners = run('ss', '-Hltnp', stdout=subprocess.PIPE).stdout
+    assert f'pid={dcal_pid},' not in listeners, listeners
+    Path('/run/verify/dcal-listeners.json').write_text(json.dumps({'pid': dcal_pid, 'tcp_listeners': listeners}))
     wait_until(
         'Upstream GTK theme initialization',
         lambda: Path('/home/tester/.local/state/arch-niri-dux/application-themes').is_file(),
