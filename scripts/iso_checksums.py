@@ -15,7 +15,6 @@ from verification.digest import digest
 
 
 REPOSITORY = 'abdulrahman-aj/arch-niri-dux'
-ASSETS = ('SHA256SUMS', 'SHA256SUMS.sig', 'integration-signing.gpg')
 
 
 def iso_name(tag):
@@ -44,22 +43,40 @@ def prepare(tag, iso, output):
     return content.decode('ascii')
 
 
-def validate_checkout(root, tag, sha256, commit):
-    content = checksums(tag, sha256)
+def validate_checkout(root, tag, sha256, commit, source_commit=None):
+    checksums(tag, sha256)
     if not re.fullmatch(r'[a-f0-9]{40}', commit):
-        raise ValueError('Expected a full source commit.')
+        raise ValueError('Expected a full workflow commit.')
 
     def git(*args):
         try:
             return subprocess.check_output(['git', '-C', str(root), *args], text=True).strip()
         except subprocess.CalledProcessError as error:
-            raise ValueError('Validation requires the checked-out tag and fetched origin/main refs.') from error
+            raise ValueError('Validation requires the fetched release tag and origin/main refs.') from error
 
-    if git('rev-parse', 'HEAD') != commit or git('rev-parse', f'refs/tags/{tag}^{{commit}}') != commit:
-        raise ValueError('Checkout and release tag must match the dispatched commit.')
-    git('rev-parse', '--verify', 'origin/main^{commit}')
+    if git('rev-parse', 'HEAD') != commit:
+        raise ValueError('Checkout must match the dispatched main commit.')
+    source = git('rev-parse', f'refs/tags/{tag}^{{commit}}')
+    if source_commit is not None and source != source_commit:
+        raise ValueError('Release tag changed after validation.')
     subprocess.run(['git', '-C', str(root), 'merge-base', '--is-ancestor', commit, 'origin/main'], check=True)
-    return f'ISO checksum authorization for `{tag}`\n\nSource commit: `{commit}`\n\n```text\n{content.decode()}```\n'
+    subprocess.run(['git', '-C', str(root), 'merge-base', '--is-ancestor', source, commit], check=True)
+    return source
+
+
+def validate_release(tag):
+    iso_name(tag)
+    release = json.loads(subprocess.check_output(['gh', 'api', f'repos/{REPOSITORY}/releases/tags/{tag}']))
+    if release['tag_name'] != tag or release['draft'] or release['prerelease']:
+        raise ValueError('Expected an existing published, non-prerelease package release.')
+
+
+def summary(tag, sha256, source, commit):
+    return (
+        f'ISO checksum authorization for `{tag}`\n\n'
+        f'ISO source commit: `{source}`\n\nWorkflow commit: `{commit}`\n\n'
+        f'```text\n{checksums(tag, sha256).decode()}```\n'
+    )
 
 
 def sign(root, directory, secret):
@@ -76,6 +93,7 @@ def sign(root, directory, secret):
                 [
                     'gpg',
                     '--batch',
+                    '--armor',
                     '--local-user',
                     signing_subkey(root) + '!',
                     '--digest-algo',
@@ -93,78 +111,11 @@ def sign(root, directory, secret):
             subprocess.run(['gpgconf', '--homedir', str(home), '--kill', 'all'], check=False)
 
 
-class GitHubRelease:
-    """Only add assets to an existing published release; never create or replace it."""
-
-    def __init__(self, tag):
-        iso_name(tag)
-        self.tag = tag
-        release = json.loads(self.api(f'repos/{REPOSITORY}/releases/tags/{tag}'))
-        if release['tag_name'] != tag or release['draft'] or release['prerelease']:
-            raise ValueError('Expected an existing published, non-prerelease package release.')
-        pages = json.loads(self.api(f'repos/{REPOSITORY}/releases/{release["id"]}/assets', '--paginate', '--slurp'))
-        self.entries = {}
-        for entry in (entry for page in pages for entry in page):
-            name = entry['name']
-            if name not in ASSETS:
-                continue
-            if name in self.entries or not 0 < entry['size'] <= 1024 * 1024:
-                raise ValueError('Duplicate or oversized ISO authorization asset.')
-            self.entries[name] = entry['id']
-
-    @staticmethod
-    def api(endpoint, *args):
-        return subprocess.check_output(['gh', 'api', endpoint, *args])
-
-    def names(self):
-        return set(self.entries)
-
-    def download(self, name, destination):
-        with destination.open('wb') as stream:
-            subprocess.run(
-                [
-                    'gh',
-                    'api',
-                    f'repos/{REPOSITORY}/releases/assets/{self.entries[name]}',
-                    '-H',
-                    'Accept: application/octet-stream',
-                ],
-                stdout=stream,
-                check=True,
-            )
-
-    def upload(self, path):
-        # gh refuses duplicate names without --clobber, including concurrent uploads.
-        subprocess.run(['gh', 'release', 'upload', self.tag, '--repo', REPOSITORY, str(path)], check=True)
-
-
-def publish(root, tag, sha256, release, secret=''):
+def sign_checksums(root, tag, sha256, output, secret):
     content = checksums(tag, sha256)
-    with tempfile.TemporaryDirectory(prefix='dux-iso-assets-') as temporary:
-        directory = Path(temporary)
-        expected = {
-            'SHA256SUMS': content,
-            'integration-signing.gpg': (root / 'keys/integration-signing.gpg').read_bytes(),
-        }
-        present = release.names()
-        for name, data in expected.items():
-            path = directory / name
-            if name in present:
-                release.download(name, path)
-                if path.read_bytes() != data:
-                    raise ValueError(f'Refusing to replace conflicting release asset: {name}')
-            else:
-                path.write_bytes(data)
-        if 'SHA256SUMS.sig' in present:
-            release.download('SHA256SUMS.sig', directory / 'SHA256SUMS.sig')
-            verify(root, directory / 'SHA256SUMS', current_signer=True)
-        else:
-            sign(root, directory, secret)
-        # Signatures include timestamps. Preserve an existing valid signature rather
-        # than generating different bytes on a retry. Validate everything before uploading.
-        for name in ASSETS:
-            if name not in present:
-                release.upload(directory / name)
+    output.mkdir(parents=True)
+    (output / 'SHA256SUMS').write_bytes(content)
+    sign(root, output, secret)
 
 
 def exit_on_signal(number, _frame):
@@ -175,30 +126,39 @@ def main():
     secret = os.environ.pop('PACKAGE_SIGNING_KEY', '')
     parser = argparse.ArgumentParser(description=__doc__)
     commands = parser.add_subparsers(dest='command', required=True)
-    for name in ('prepare', 'validate', 'publish'):
+    for name in ('prepare', 'validate', 'sign'):
         command = commands.add_parser(name)
         command.add_argument('--tag', required=True)
+        if name in ('prepare', 'sign'):
+            command.add_argument('--output', type=Path, default=Path('out/iso-checksums'))
         if name == 'prepare':
             command.add_argument('--iso', type=Path, required=True)
-            command.add_argument('--output', type=Path, default=Path('out/iso-checksums'))
         else:
             command.add_argument('--root', type=Path, default=Path.cwd())
             command.add_argument('--sha256', required=True)
             command.add_argument('--commit', required=True)
+        if name == 'sign':
+            command.add_argument('--source-commit', required=True)
     args = parser.parse_args()
     if args.command == 'prepare':
         print(prepare(args.tag, args.iso, args.output), end='')
         return
-    summary = validate_checkout(args.root, args.tag, args.sha256, args.commit)
-    if args.command == 'validate':
-        print(summary)
-        if summary_path := os.environ.get('GITHUB_STEP_SUMMARY'):
-            with open(summary_path, 'a', encoding='utf-8') as stream:
-                stream.write(summary)
-    else:
-        if os.environ.get('GITHUB_REPOSITORY') != REPOSITORY or os.environ.get('GITHUB_REF_TYPE') != 'tag':
-            raise ValueError('Publication requires this repository and a tag dispatch.')
-        publish(args.root, args.tag, args.sha256, GitHubRelease(args.tag), secret)
+    if os.environ.get('GITHUB_REPOSITORY') != REPOSITORY or os.environ.get('GITHUB_REF') != 'refs/heads/main':
+        raise ValueError('Authorization requires a dispatch at this repository main branch.')
+    source = validate_checkout(args.root, args.tag, args.sha256, args.commit, getattr(args, 'source_commit', None))
+    validate_release(args.tag)
+    text = summary(args.tag, args.sha256, source, args.commit)
+    if args.command == 'sign':
+        sign_checksums(args.root, args.tag, args.sha256, args.output, secret)
+        text += f'\nSHA256SUMS.sig\n\n```text\n{(args.output / "SHA256SUMS.sig").read_text()}```\n'
+        text += '\nDownload the run artifact and share both checksum files alongside the ISO.\n'
+    elif output_path := os.environ.get('GITHUB_OUTPUT'):
+        with open(output_path, 'a', encoding='utf-8') as stream:
+            stream.write(f'source_commit={source}\n')
+    print(text)
+    if summary_path := os.environ.get('GITHUB_STEP_SUMMARY'):
+        with open(summary_path, 'a', encoding='utf-8') as stream:
+            stream.write(text)
 
 
 if __name__ == '__main__':

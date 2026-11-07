@@ -3,6 +3,10 @@ name: ISO checksum authorization
 on:
   workflow_dispatch:
     inputs:
+      tag:
+        description: Published package release tag (for example v0.3.0-2)
+        required: true
+        type: string
       sha256:
         description: SHA-256 of the locally qualified release ISO (64 lowercase hex characters)
         required: true
@@ -12,14 +16,18 @@ permissions:
   contents: read
 
 concurrency:
-  group: iso-checksums-${{ github.ref }}
+  group: iso-checksums-${{ inputs.tag }}
   cancel-in-progress: false
 
 jobs:
   validate:
-    if: github.repository == 'abdulrahman-aj/arch-niri-dux' && github.ref_type == 'tag'
+    if: github.repository == 'abdulrahman-aj/arch-niri-dux' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-24.04
+    outputs:
+      source_commit: ${{ steps.authorization.outputs.source_commit }}
     env:
+      RELEASE_TAG: ${{ inputs.tag }}
+      GH_TOKEN: ${{ github.token }}
       ISO_SHA256: ${{ inputs.sha256 }}
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
@@ -36,17 +44,18 @@ jobs:
         with:
           install_url: file://${{ runner.temp }}/nix-install
       - name: Show exact authorization before environment approval
+        id: authorization
         run: |
           ./scripts/build-in-dev python3 scripts/iso_checksums.py validate \
-            --tag "$GITHUB_REF_NAME" --sha256 "$ISO_SHA256" --commit "$GITHUB_SHA"
+            --tag "$RELEASE_TAG" --sha256 "$ISO_SHA256" --commit "$GITHUB_SHA"
 
   sign:
     needs: validate
     runs-on: ubuntu-24.04
     environment: integration-release
-    permissions:
-      contents: write
     env:
+      RELEASE_TAG: ${{ inputs.tag }}
+      GH_TOKEN: ${{ github.token }}
       ISO_SHA256: ${{ inputs.sha256 }}
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
@@ -62,10 +71,18 @@ jobs:
       - uses: cachix/install-nix-action@75c75c31ebece974e48ebc36b4ad125bd97bd97b # v31
         with:
           install_url: file://${{ runner.temp }}/nix-install
-      - name: Sign and append immutable ISO authorization assets
+      - name: Sign checksum files for distribution with the ISO
         env:
           PACKAGE_SIGNING_KEY: ${{ secrets.PACKAGE_SIGNING_KEY }}
-          GH_TOKEN: ${{ github.token }}
         run: |
-          ./scripts/build-in-dev python3 scripts/iso_checksums.py publish \
-            --tag "$GITHUB_REF_NAME" --sha256 "$ISO_SHA256" --commit "$GITHUB_SHA"
+          ./scripts/build-in-dev python3 scripts/iso_checksums.py sign \
+            --tag "$RELEASE_TAG" --sha256 "$ISO_SHA256" --commit "$GITHUB_SHA" \
+            --source-commit "${{ needs.validate.outputs.source_commit }}" --output "$RUNNER_TEMP/iso-checksums"
+      - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
+        with:
+          name: iso-checksums-${{ inputs.tag }}-${{ github.run_attempt }}
+          path: |
+            ${{ runner.temp }}/iso-checksums/SHA256SUMS
+            ${{ runner.temp }}/iso-checksums/SHA256SUMS.sig
+          if-no-files-found: error
+          retention-days: 30

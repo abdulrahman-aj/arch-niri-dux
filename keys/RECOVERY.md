@@ -121,9 +121,11 @@ above applies to package and ISO authorizations.
 
 After a compromise, publish an advisory identifying affected ISO releases and
 halt their distribution. Rebuild and qualify fresh ISOs from trusted sources under
-new release tags. Do not re-sign suspect ISO bytes or overwrite historical release
-assets. Deliver the current public certificate and its new SHA-256 pin through
-the authenticated maintainer channel, and update the README verification block.
+new release tags. Do not re-sign suspect ISO bytes or replace previously
+distributed checksum files. Release assets and tags remain immutable; distribute
+the new checksum and signature beside the replacement ISO. Deliver the current
+public certificate and its new SHA-256 pin through the authenticated maintainer
+channel, and update the README verification block.
 Do the same pin update after routine certificate changes, including new subkey
 bindings, expiry updates and revocations. Keep the primary fingerprint unchanged
 unless performing a separate trust replacement.
