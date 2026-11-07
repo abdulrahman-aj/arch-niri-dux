@@ -10,6 +10,7 @@ import socket
 import struct
 import subprocess
 import threading
+import time
 
 from . import dispatch
 from .guest import run, wait_until
@@ -22,6 +23,8 @@ PORT = 8765
 PEER_NAME = 'verify-peer.local'
 LOCAL_RULE = Path('/etc/arch-niri-dux/firewall.d/90-verify.nft')
 MDNS_GROUP = '224.0.0.251'
+IGMP_GROUP = '239.255.0.17'
+UNIT = 'arch-niri-dux-firewall.service'
 
 
 def peer(*args, **kwargs):
@@ -72,7 +75,93 @@ def create_neighbour():
 
 
 def reload_firewall():
-    run('systemctl', 'reload', 'arch-niri-dux-firewall.service')
+    run('systemctl', 'reload', UNIT)
+
+
+def firewall_table():
+    return run('nft', 'list', 'table', 'inet', 'arch_niri_dux', capture_output=True).stdout
+
+
+def broken_policy_stays_closed():
+    """Return what a neighbour reaches while a firewall.d include is broken.
+
+    The include also opens PORT, so a partly applied batch would show as open.
+    """
+    before = firewall_table()
+    LOCAL_RULE.write_text(f'add rule inet arch_niri_dux input tcp dport {PORT} accept\nnot nft syntax\n')
+    try:
+        reload = subprocess.run(['systemctl', 'reload', UNIT], check=False).returncode
+        assert reload != 0, 'A broken include must fail the reload.'
+        assert firewall_table() == before, 'A failed reload must keep the running ruleset.'
+        after_reload = connect(HOST_V4, namespace=True)
+        # A start loads the policy as boot does, after the closed fallback.
+        start = subprocess.run(['systemctl', 'restart', UNIT], check=False).returncode
+        assert start != 0, 'A broken include must fail the start.'
+        after_start = connect(HOST_V4, namespace=True)
+        assert connect('127.0.0.1') == 'open', 'Loopback must stay reachable on the fallback.'
+    finally:
+        LOCAL_RULE.unlink()
+    run('systemctl', 'restart', UNIT)
+    return {'after_failed_reload': after_reload, 'after_failed_start': after_start}
+
+
+def inbound_while_stopped():
+    run('systemctl', 'stop', UNIT)
+    try:
+        return connect(HOST_V4, namespace=True)
+    finally:
+        run('systemctl', 'start', UNIT)
+
+
+def igmp_query_answered():
+    with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as member:
+        member.setsockopt(
+            socket.IPPROTO_IP,
+            socket.IP_ADD_MEMBERSHIP,
+            socket.inet_aton(IGMP_GROUP) + socket.inet_aton(HOST_V4),
+        )
+        query = ['ip', 'netns', 'exec', NAMESPACE, 'python', '-m', 'verification.network', 'igmp-query']
+        return subprocess.run(query, cwd='/run/verify', check=False).returncode == 0
+
+
+def checksum(data):
+    total = sum(struct.unpack(f'>{len(data) // 2}H', data))
+    total = (total & 0xFFFF) + (total >> 16)
+    return ~(total + (total >> 16)) & 0xFFFF
+
+
+def igmp_query():
+    """From the neighbour, send an IGMPv2 general query and await the host's report.
+
+    Snooping switches query like this and stop forwarding multicast to ports
+    that never answer. A v2 query draws v2 reports (type 0x16), so the host's
+    unsolicited v3 join reports cannot pass for an answer.
+    """
+    capture = socket.socket(socket.AF_PACKET, socket.SOCK_DGRAM, socket.htons(0x0800))
+    capture.bind(('eth0', 0))
+    capture.settimeout(1)
+    # A nonzero maximum response time (tenths of a second) marks v2.
+    query = struct.pack('>BBH4s', 0x11, 10, 0, bytes(4))
+    query = query[:2] + struct.pack('>H', checksum(query)) + query[4:]
+    with socket.socket(socket.AF_INET, socket.SOCK_RAW, socket.IPPROTO_IGMP) as sender:
+        sender.setsockopt(socket.IPPROTO_IP, socket.IP_MULTICAST_IF, socket.inet_aton(PEER_V4))
+        sender.setsockopt(socket.IPPROTO_IP, socket.IP_MULTICAST_TTL, 1)
+        sender.sendto(query, ('224.0.0.1', 0))
+    deadline = time.monotonic() + 5
+    while time.monotonic() < deadline:
+        try:
+            packet = capture.recv(2048)
+        except TimeoutError:
+            continue
+        igmp = packet[(packet[0] & 0xF) * 4 :]
+        if (
+            packet[9] == socket.IPPROTO_IGMP
+            and packet[12:16] == socket.inet_aton(HOST_V4)
+            and igmp[0] == 0x16
+            and igmp[4:8] == socket.inet_aton(IGMP_GROUP)
+        ):
+            return
+    raise SystemExit(f'No IGMP report for {IGMP_GROUP} from {HOST_V4}')
 
 
 def mdns_socket(address):
@@ -151,8 +240,8 @@ def own_name_resolves():
 
 
 def check():
-    run('systemctl', 'is-enabled', '--quiet', 'arch-niri-dux-firewall.service')
-    run('systemctl', 'is-active', '--quiet', 'arch-niri-dux-firewall.service')
+    run('systemctl', 'is-enabled', '--quiet', UNIT)
+    run('systemctl', 'is-active', '--quiet', UNIT)
     server = open_listener()
     threading.Thread(target=serve, args=(server,), daemon=True).start()
     processes = []
@@ -175,6 +264,14 @@ def check():
         LOCAL_RULE.unlink()
         reload_firewall()
         assert connect(HOST_V4, namespace=True) == 'dropped', 'Removing the local rule must close the port.'
+
+        broken = broken_policy_stays_closed()
+        assert set(broken.values()) == {'dropped'}, f'A broken policy must keep inbound closed: {broken}'
+        stopped = inbound_while_stopped()
+        assert stopped == 'open', f'Stopping the unit removes the policy, as documented; got {stopped}'
+
+        igmp_answered = igmp_query_answered()
+        assert igmp_answered, 'The host must answer IGMP membership queries.'
 
         received = mdns_admitted()
         assert received == ['response'], f'Only mDNS responses may reach the host, got {received}'
@@ -206,6 +303,9 @@ def check():
                     'inbound_from_neighbour': inbound,
                     'outbound_to_neighbour': dict.fromkeys((PEER_V4, PEER_V6), 'open'),
                     'local_rule_opened': opened,
+                    'inbound_with_broken_include': broken,
+                    'inbound_while_stopped': stopped,
+                    'igmp_query_answered': igmp_answered,
                     'mdns_admitted_from_neighbour': received,
                     'neighbour_name_resolved_over_mdns': True,
                     'own_hostname_published': published,
@@ -221,7 +321,7 @@ def check():
             process.wait()
         server.close()
         LOCAL_RULE.unlink(missing_ok=True)
-        subprocess.run(['systemctl', 'reload', 'arch-niri-dux-firewall.service'], check=False)
+        subprocess.run(['systemctl', 'restart', UNIT], check=False)
         subprocess.run(['ip', 'netns', 'delete', NAMESPACE], check=False)
 
 
@@ -256,4 +356,13 @@ def responder():
 
 
 if __name__ == '__main__':
-    dispatch('network', {'check': check, 'listener': listener, 'responder': responder, 'mdns-send': mdns_send})
+    dispatch(
+        'network',
+        {
+            'check': check,
+            'listener': listener,
+            'responder': responder,
+            'mdns-send': mdns_send,
+            'igmp-query': igmp_query,
+        },
+    )

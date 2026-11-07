@@ -7,6 +7,9 @@ Before=network-pre.target
 [Service]
 Type=oneshot
 RemainAfterExit=yes
+# A broken policy at start leaves the closed table instead of none. A broken
+# reload fails as one batch and keeps the running table.
+ExecStartPre=/usr/bin/nft -f /usr/share/arch-niri-dux/firewall-closed.nft
 ExecStart=/usr/bin/nft -f /usr/share/arch-niri-dux/firewall.nft
 ExecReload=/usr/bin/nft -f /usr/share/arch-niri-dux/firewall.nft
 ExecStop=/usr/bin/nft destroy table inet arch_niri_dux
