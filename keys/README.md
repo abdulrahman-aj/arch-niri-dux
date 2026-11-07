@@ -31,6 +31,12 @@ Only its public key enters that ISO, and the builder deletes the private key.
 Development keys do not authorize updates on installed systems.
 
 These checks assume the installer and its embedded public keys are intact. A
-whole-medium rewrite can replace both. Release-side ISO signing and verification
-on a trusted machine before flashing must address that threat. Package signatures
+whole-medium rewrite can replace both. The
+[ISO checksum workflow](../packages/RELEASING.md#authorize-and-distribute-an-iso)
+uses our existing CI-only release subkey to sign the maintainer-approved hash of
+one locally built release ISO. Friends must follow the [README verification
+steps](../README.md#verify-before-flashing) on a trusted machine before flashing.
+The certificate digest in those trusted instructions authenticates the public key.
+CI approval authorizes the chosen bytes; it does not prove their build provenance.
+Package signatures
 also do not prevent replay of an older signed package through a rewritten database.
