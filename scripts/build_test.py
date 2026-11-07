@@ -63,6 +63,69 @@ class PayloadTests(unittest.TestCase):
             self.assertFalse(signature.exists())
 
 
+class DownloadTests(unittest.TestCase):
+    def test_stalled_server_times_out_and_retries_then_cleans_up(self):
+        import http.server
+        import threading
+        import time
+
+        requests = []
+
+        class StallingHandler(http.server.BaseHTTPRequestHandler):
+            def do_GET(self):
+                requests.append(1)
+                time.sleep(10)
+
+            def log_message(self, *args):
+                pass
+
+        server = http.server.ThreadingHTTPServer(('127.0.0.1', 0), StallingHandler)
+        thread = threading.Thread(target=server.serve_forever, kwargs={'poll_interval': 0.05}, daemon=True)
+        thread.start()
+        try:
+            with tempfile.TemporaryDirectory() as directory:
+                dest = Path(directory) / 'base-1-any.pkg.tar.zst'
+                start = time.monotonic()
+                with self.assertRaises(RuntimeError):
+                    module.download(f'http://127.0.0.1:{server.server_port}/pkg', dest, timeout=1, attempts=3)
+                self.assertLess(time.monotonic() - start, 15)
+                self.assertEqual(len(requests), 3)
+                self.assertFalse(dest.exists())
+                self.assertEqual(list(Path(directory).iterdir()), [])
+        finally:
+            server.shutdown()
+            thread.join()
+            server.server_close()
+
+    def test_successful_download_writes_payload(self):
+        import http.server
+        import threading
+
+        class PayloadHandler(http.server.BaseHTTPRequestHandler):
+            def do_GET(self):
+                body = b'package-payload'
+                self.send_response(200)
+                self.send_header('Content-Length', str(len(body)))
+                self.end_headers()
+                self.wfile.write(body)
+
+            def log_message(self, *args):
+                pass
+
+        server = http.server.ThreadingHTTPServer(('127.0.0.1', 0), PayloadHandler)
+        thread = threading.Thread(target=server.serve_forever, kwargs={'poll_interval': 0.05}, daemon=True)
+        thread.start()
+        try:
+            with tempfile.TemporaryDirectory() as directory:
+                dest = Path(directory) / 'base-1-any.pkg.tar.zst'
+                module.download(f'http://127.0.0.1:{server.server_port}/pkg', dest, timeout=5, attempts=2)
+                self.assertEqual(dest.read_bytes(), b'package-payload')
+        finally:
+            server.shutdown()
+            thread.join()
+            server.server_close()
+
+
 class ReviewedRecipeTests(unittest.TestCase):
     def test_modified_recipe_is_rejected_before_execution(self):
         with tempfile.TemporaryDirectory() as directory:
