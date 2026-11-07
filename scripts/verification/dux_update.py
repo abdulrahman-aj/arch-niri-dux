@@ -47,6 +47,7 @@ WEEK = 7 * 24 * 60 * 60
 # Dux's minimum interval.
 SHORT = 5 * 60
 SCHEDULE = Path('/home/tester/.cache/dms/sysupdate.json')
+UPDATE_SEED = Path('/home/tester/.config/dms/config.d/00-arch-niri-dux-updates.json')
 
 
 def installed():
@@ -138,14 +139,29 @@ def set_interval(seconds):
         'dms', 'ipc', 'call', 'settings', 'set', 'updaterIntervalSeconds', str(seconds), capture=True
     ).stdout
     assert 'SUCCESS' in reply, reply
+
+    def saved():
+        # Dux saves on a debounce; a restart before then would drop the change.
+        return json.loads(UPDATE_SEED.read_text()).get('updaterIntervalSeconds') == seconds
+
+    wait_until('Dux saving the interval to its seed file', saved, timeout=30)
     relogin(seconds)
 
 
 def relogin(interval):
     """Restart the shell and its server as a logout and login do."""
     user_command('systemctl', '--user', 'restart', 'dms.service')
-    # The restarted shell re-sends its saved interval once it connects.
-    return wait_until('Dux server after login', lambda: state()['intervalSeconds'] == interval and state())
+
+    def connected():
+        # The restarted shell re-sends its saved interval once it connects.
+        current = state()
+        return current['intervalSeconds'] == interval and current
+
+    try:
+        return wait_until('Dux server after login', connected)
+    except TimeoutError:
+        (EVIDENCE / 'dux-update-state.json').write_text(json.dumps(state(), indent=2))
+        raise
 
 
 def scheduled_check(previous):
