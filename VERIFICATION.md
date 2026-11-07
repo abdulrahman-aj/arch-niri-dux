@@ -43,6 +43,8 @@ delivery against offline trust and exact release hashes. `--install-only` is
 a debug run and does not produce acceptance success. Full acceptance is
 required for installer changes and releases.
 
+Suspend qualification requires logind `LockedHint`, Niri lock events, an unchanged boot ID and kernel S3 entry/exit; post-resume QEMU GL screenshots are best-effort.
+
 ## `make verify-fast`
 
 `make verify-fast ARGS="--fixture out/accepted/disk.qcow2 --directory out/fast"`

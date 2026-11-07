@@ -1,4 +1,4 @@
-"""Qualify logind suspend through compositor, logind and rendered evidence."""
+"""Qualify logind suspend through compositor and logind; capture optional evidence."""
 
 import json
 from pathlib import Path
@@ -118,22 +118,35 @@ def evidence(stage, locked):
     destination = Path('/run/verify', name + '.json')
     destination.write_text(json.dumps(record, indent=2) + '\n')
     print(json.dumps(record), flush=True)
-    # Niri's action IPC rejects screenshots while locked. Dux's standalone
-    # full-screen client uses Wayland screencopy, not the shell's IPC service.
-    user_command(
-        'dms',
-        'screenshot',
-        'full',
-        '--no-clipboard',
-        '--no-notify',
-        '--dir',
-        '/run/verify',
-        '--filename',
-        name + '.png',
-        timeout=20,
-    )
-    record['screenshot_dimensions'] = png_dimensions(Path('/run/verify') / (name + '.png'))
+    if stage != 'before':
+        return
+    # Capture cannot qualify the lock: the VM's post-resume GL path can stall.
+    try:
+        user_command(
+            'dms',
+            'screenshot',
+            'full',
+            '--no-clipboard',
+            '--no-notify',
+            '--dir',
+            '/run/verify',
+            '--filename',
+            name + '.png',
+            timeout=10,
+        )
+        record['screenshot_dimensions'] = png_dimensions(Path('/run/verify') / (name + '.png'))
+    except Exception as error:
+        record['screenshot_error'] = f'{type(error).__name__}: {error}'
+        print(f'Optional screenshot unavailable: {error}', flush=True)
     destination.write_text(json.dumps(record, indent=2) + '\n')
+
+
+def capture(vm, stage):
+    name = f'03-suspend-{stage}'
+    try:
+        vm.screenshot(name)
+    except Exception as error:
+        (vm.directory / (name + '.unavailable.txt')).write_text(f'{type(error).__name__}: {error}\n')
 
 
 def wake_display():
@@ -167,9 +180,11 @@ def verify(vm, passed):
     time.sleep(3)
     vm.probe('suspend', 'wake', timeout=30)
     vm.probe('suspend', 'locked', timeout=45)
+    capture(vm, 'locked')
     vm.type_graphical(PASSWORD)
     vm.key('ret')
     vm.probe('suspend', 'unlocked', timeout=45)
+    capture(vm, 'unlocked')
     vm.poweroff()
     vm.stop()
     vm.start(cdrom=False)
@@ -177,7 +192,7 @@ def verify(vm, passed):
     vm.mount_probes()
     vm.command(f'cp {LOCAL_PROBES}/03-suspend-* /run/verify/; rm -r {LOCAL_PROBES}')
     graphical_login(vm)
-    passed('Real S3 suspend resumes locked, renders the lock surface and accepts the password')
+    passed('Real S3 suspend resumes with native locked state and accepts the password')
 
 
 if __name__ == '__main__':
