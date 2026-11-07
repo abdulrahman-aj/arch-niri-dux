@@ -4,6 +4,15 @@ cd "$(dirname "$0")/.."
 state=${BUILD_STATE:-${XDG_CACHE_HOME:-$HOME/.cache}/arch-niri-dux-build}
 mkdir -p "$state" out
 state=$(realpath "$state")
+# Verified immutable downloads outlive any one BUILD_STATE. Every use rechecks
+# their hashes or signatures, so builds share them without a lock.
+downloads=${XDG_CACHE_HOME:-$HOME/.cache}/arch-niri-dux-downloads
+mkdir -p "$downloads"
+downloads=$(realpath "$downloads")
+# The single source of the bootstrap release. Archiso labels its media by month.
+bootstrap_version=2026.10.01
+bootstrap_sha256=684ded26c63240ff4a41e8c25ee84ea6da233f557364821f13d12c2b0a9059a5
+bootstrap_label=ARCH_${bootstrap_version:0:4}${bootstrap_version:5:2}
 exec 9>"$state/build.lock"
 flock -n 9 || {
     echo 'Another ISO build is using this state directory' >&2
@@ -15,6 +24,7 @@ mode=${1:-release}
     exit 1
 }
 printf '%s\n' "$mode" >"$state/integration-mode"
+printf '%s\n' "$bootstrap_label" >"$state/bootstrap-label"
 # Linked worktrees point outside the guest's source mount. Resolve Git here.
 git log -1 --format=%ct >"$state/integration-epoch"
 [[ -s keys/integration-signing.gpg && -s keys/integration-signing.fingerprint ]] || {
@@ -31,8 +41,8 @@ for tool in qemu-system-x86_64 qemu-img bsdtar curl gpgv python3; do
         exit 1
     }
 done
-./scripts/build-fetch-bootstrap "$state"
-bsdtar -xf "$state/archlinux.iso" -C "$state" arch/boot/x86_64/vmlinuz-linux arch/boot/x86_64/initramfs-linux.img
+bootstrap=$(./scripts/build-fetch-bootstrap "$bootstrap_version" "$bootstrap_sha256" "$downloads" "$state")
+bsdtar -xf "$bootstrap" -C "$state" arch/boot/x86_64/vmlinuz-linux arch/boot/x86_64/initramfs-linux.img
 # The guest runs only the checked-in builder; no root access on the host.
 if [[ ! -e "$state/builder.qcow2" ]]; then qemu-img create -f qcow2 "$state/builder.qcow2" 40G; fi
 cp keys/trusted-packagers.gpg "$state/trusted-packagers.gpg"
@@ -44,10 +54,11 @@ fi
 cat >"$state/startup.sh" <<'START'
 #!/bin/bash
 set -euxo pipefail
-mkdir -p /source /state /cache
+mkdir -p /source /state /cache /downloads
 mount -t 9p -o trans=virtio,version=9p2000.L source /source
 mount -t 9p -o trans=virtio,version=9p2000.L state /state
 mount -t 9p -o trans=virtio,version=9p2000.L cache /cache
+mount -t 9p -o trans=virtio,version=9p2000.L downloads /downloads
 bash /source/scripts/build-guest > /state/guest-build.log 2>&1
 printf 'success\n' > /state/result
 poweroff -f
@@ -59,15 +70,16 @@ rm -f "$state/result"
 python3 -m http.server 18765 --bind 127.0.0.1 --directory "$state" >"$state/http.log" 2>&1 &
 server=$!
 trap 'kill "$server" 2>/dev/null || true' EXIT
-python3 scripts/verification/vm.py
+python3 scripts/wait-for-memory
 qemu-system-x86_64 -enable-kvm -cpu host -m 8192 -smp 4 -display none -serial "file:$state/serial.log" \
     -kernel "$state/arch/boot/x86_64/vmlinuz-linux" -initrd "$state/arch/boot/x86_64/initramfs-linux.img" \
-    -append 'archisobasedir=arch archisolabel=ARCH_202610 console=ttyS0 cow_spacesize=3G script=http://10.0.2.2:18765/startup.sh' \
-    -drive "file=$state/archlinux.iso,media=cdrom,readonly=on" \
+    -append "archisobasedir=arch archisolabel=$bootstrap_label console=ttyS0 cow_spacesize=3G script=http://10.0.2.2:18765/startup.sh" \
+    -drive "file=$bootstrap,media=cdrom,readonly=on" \
     -drive "file=$state/builder.qcow2,format=qcow2,if=virtio,discard=unmap" \
     -virtfs "local,path=$PWD,mount_tag=source,security_model=none" \
     -virtfs "local,path=$state,mount_tag=state,security_model=none" \
     -virtfs "local,path=$host_cache,mount_tag=cache,security_model=none,readonly=on" \
+    -virtfs "local,path=$downloads,mount_tag=downloads,security_model=none" \
     -nic user,model=virtio-net-pci -no-reboot
 [[ $(cat "$state/result" 2>/dev/null) == success ]] || {
     echo "Build failed; see $state/guest-build.log and serial.log" >&2

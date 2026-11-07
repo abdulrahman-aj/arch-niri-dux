@@ -2,12 +2,13 @@
 """Real Windows/Linux alongside acceptance; fixture contracts in ALONGSIDE.md."""
 
 import argparse
-import hashlib
 import json
 from pathlib import Path
 import shlex
 import shutil
 import subprocess
+
+from verification.digest import digest
 
 from verification.vm import VM, PASSWORD, installed_login, stage_probes
 from alongside_windows import WindowsVM, BootReports
@@ -47,8 +48,7 @@ def main():
     shutil.copyfile(args.firmware, directory / 'OVMF_VARS.fd')
     inputs = {}
     for name, path in [('iso', args.iso), ('fixture', args.fixture), ('firmware', args.firmware)]:
-        with path.open('rb') as stream:
-            inputs[name] = dict(path=str(path.resolve()), sha256=hashlib.file_digest(stream, 'sha256').hexdigest())
+        inputs[name] = dict(path=str(path.resolve()), sha256=digest(path))
     (directory / 'inputs.json').write_text(json.dumps(inputs, indent=2))
     reports = None
     if args.os == 'windows':
@@ -82,29 +82,13 @@ def main():
         vm.expect(r'root@archiso[^\n]*#', timeout=180)
         vm.mount_probes()
         for filename in ('install.py', 'configure-target.sh'):
-            digest = hashlib.sha256((ROOT / 'installer' / filename).read_bytes()).hexdigest()
+            expected_digest = digest(ROOT / 'installer' / filename)
             vm.command(
-                f'test "$(sha256sum /usr/local/lib/arch-niri-dux/installer/{filename} | cut -d " " -f 1)" = {digest}'
+                f'test "$(sha256sum /usr/local/lib/arch-niri-dux/installer/{filename} | cut -d " " -f 1)" = {expected_digest}'
             )
         # Plan through the ISO's own read-only inventory. The fixture must have
         # exactly one eligible region and one registered Debian bootloader.
-        plan_script = """import importlib.util,json,sys
-p='/usr/local/lib/arch-niri-dux/installer/install.py'
-s=importlib.util.spec_from_file_location('installer',p); m=importlib.util.module_from_spec(s);sys.modules[s.name]=m;s.loader.exec_module(m)
-v=m.Settings('DEVICE','tester','alongside','UTC','us','vm-verification-only','vm-verification-only',swap_gib=0,mode='alongside')
-t=m.alongside_snapshot(v.disk)
-assert len(t['regions'])==1
-boots=[n for n,b in t['boots'].items() if 'BOOTPATH' in b['path'].lower()]
-assert boots and len({(t['boots'][n]['guid'],t['boots'][n]['path'].lower()) for n in boots})==1
-boots.sort()
-v.free_region=t['regions'][0];v.existing_boot=boots[0];v.validate()
-c={k:getattr(v,k) for k in ('disk','username','hostname','timezone','keymap','passphrase','password','swap_gib','mode','free_region','existing_boot')}
-open('/run/verify/install.json','w').write(json.dumps(c))
-open('/run/verify/old-partitions.json','w').write(json.dumps(t['table']['partitions']))
-open('/run/verify/new-partitions.json','w').write(json.dumps(m.alongside_plan(v,t)))
-"""
-        plan_script = plan_script.replace('DEVICE', device).replace('BOOTPATH', 'microsoft' if reports else 'debian')
-        vm.command('python -c ' + shlex.quote(plan_script))
+        vm.probe('alongside', 'plan', device, args.os)
         vm.command('chmod 600 /run/verify/install.json')
         parts = json.loads((directory / 'old-partitions.json').read_text())
         devices = ' '.join(shlex.quote(part['node']) for part in parts)

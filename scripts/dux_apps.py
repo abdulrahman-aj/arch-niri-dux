@@ -2,7 +2,6 @@
 """Build the reviewed Dux app recipes and add them to an integration package directory."""
 
 import argparse
-import hashlib
 import json
 import os
 from pathlib import Path
@@ -11,12 +10,9 @@ import shutil
 import subprocess
 import tempfile
 
+from verification.digest import digest
+
 ARCH = 'x86_64'
-
-
-def digest(path):
-    with path.open('rb') as stream:
-        return hashlib.file_digest(stream, 'sha256').hexdigest()
 
 
 def validate_recipe(root, recipe):
@@ -91,7 +87,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('root', type=Path)
     parser.add_argument('workspace', type=Path)
-    parser.add_argument('destination', type=Path, help='Output of build-integration.py')
+    parser.add_argument('destination', type=Path, help='Output of integration_build.py')
     arguments = parser.parse_args()
     if os.geteuid() == 0:
         parser.error('Run package builds as an unprivileged user.')

@@ -2,19 +2,15 @@
 """Finish an ISO's offline repository and inventory after all producers complete."""
 
 import argparse
-import hashlib
 import json
 import os
 from pathlib import Path
 import re
 import subprocess
-import tarfile
 import tempfile
 
-
-def _digest(path):
-    with path.open('rb') as stream:
-        return hashlib.file_digest(stream, 'sha256').hexdigest()
+from package_lock import read_database
+from verification.digest import digest
 
 
 def _manifest(root, repository):
@@ -73,7 +69,7 @@ def _inventory(manifest, repository):
         path = repository / filename
         if path.is_symlink() or not path.is_file():
             raise ValueError(f'Package must be a regular file: {filename}')
-        if _digest(path) != checksum:
+        if digest(path) != checksum:
             raise ValueError(f'Package checksum mismatch: {filename}')
     if any(path.name != 'offline.db' for path in repository.glob('*.db')):
         raise ValueError('Unexpected repository database.')
@@ -82,18 +78,11 @@ def _inventory(manifest, repository):
 
 def _database_inventory(database):
     inventory = {}
-    with tarfile.open(database) as archive:
-        for member in archive:
-            if not member.name.endswith('/desc'):
-                continue
-            fields = {}
-            for section in archive.extractfile(member).read().decode().strip().split('\n\n'):
-                key, *values = section.splitlines()
-                fields[key] = values
-            name = fields['%NAME%'][0]
-            if name in inventory:
-                raise ValueError('Duplicate package in repository database inventory.')
-            inventory[name] = (fields['%FILENAME%'][0], fields['%SHA256SUM%'][0], fields['%VERSION%'][0])
+    for fields in read_database(database):
+        name = fields['NAME'][0]
+        if name in inventory:
+            raise ValueError('Duplicate package in repository database inventory.')
+        inventory[name] = (fields['FILENAME'][0], fields['SHA256SUM'][0], fields['VERSION'][0])
     return inventory
 
 
@@ -127,7 +116,7 @@ def finalize(root, repository):
         ):
             raise ValueError('Repository database inventory does not match the declared packages.')
         checksums = ''.join(f'{checksum}  {filename}\n' for filename, checksum, _ in sorted(inventory.values()))
-        checksums += f'{_digest(database)}  offline.db\n'
+        checksums += f'{digest(database)}  offline.db\n'
         # No final metadata is replaced until every package and database entry
         # agrees. A failed build must not publish a new inventory.
         for path in repository.glob('offline.*'):

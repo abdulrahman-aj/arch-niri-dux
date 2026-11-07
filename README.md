@@ -8,9 +8,11 @@ The live ISO is terminal-only and includes Fastfetch.
 ## Build and test
 
 Building requires Linux, Nix and Make. Allow 24 GiB of build space and about 2.5
-GiB for the ISO. VM verification also requires KVM access. Build cache goes in
+GiB for the ISO. VM verification also requires KVM access. Build state goes in
 `~/.cache/arch-niri-dux-build`. Use `BUILD_STATE=/path/with/space make iso` to
-change it.
+change it. Every build state shares the verified bootstrap ISO and packages in
+`~/.cache/arch-niri-dux-downloads`. Builds recheck each file's hash or
+signature before use. The cache never prunes old versions; deleting it is safe.
 
 ```sh
 make iso
@@ -56,7 +58,9 @@ sudo limine-snapper-restore
 ```
 
 Restore and reboot into the normal entry. `/home`, including personal config,
-stays untouched.
+stays untouched. After restoring an older snapshot, run a full system update
+before installing anything else. The restored system may trust signing keys
+that were revoked after the snapshot was taken.
 
 See [snapshot policy](desktop/README.md#system-policy) for transaction snapshots
 and recovery safeguards.

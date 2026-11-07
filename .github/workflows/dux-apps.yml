@@ -29,7 +29,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          summary=$(python scripts/bump-dux-apps.py "$GITHUB_WORKSPACE")
+          summary=$(python scripts/bump_dux_apps.py "$GITHUB_WORKSPACE")
           printf 'summary=%s\n' "$summary" >>"$GITHUB_OUTPUT"
       - name: Open a pull request for review
         if: steps.bump.outputs.summary != ''

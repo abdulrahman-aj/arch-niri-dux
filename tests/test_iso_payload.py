@@ -7,7 +7,10 @@ import tempfile
 import unittest
 
 from installer.install import verify_repository
-from scripts import iso_payload
+import sys
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'scripts'))
+import iso_payload
 
 
 class PayloadFinalizationTests(unittest.TestCase):
@@ -46,7 +49,7 @@ class PayloadFinalizationTests(unittest.TestCase):
             source_date_epoch=1234,
             packages=own,
             apps=self.apps,
-            tag='integration-v1-1',
+            tag='v1-1',
             source_commit='c' * 40,
         )
         self.save()

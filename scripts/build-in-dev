@@ -1,6 +1,10 @@
 #!/usr/bin/env bash
 set -euo pipefail
 cd "$(dirname "$0")/.."
+# Already inside a dev shell: entering another one per command only adds latency.
+if [[ -n ${IN_NIX_SHELL:-} ]]; then
+    exec "$@"
+fi
 # Copy only the flake inputs: a path flake over the whole checkout would copy
 # multi-gigabyte ISO outputs into /nix/store while files are still untracked.
 dev=${BUILD_STATE:-${XDG_CACHE_HOME:-$HOME/.cache}/arch-niri-dux-build}/dev-shell

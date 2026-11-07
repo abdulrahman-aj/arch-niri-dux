@@ -141,6 +141,13 @@ stock local-login stack and GNOME Keyring password/session integration. Its
 greeter session uses the same stack. See [package
 repositories](../packages/README.md#repositories) for online update sources.
 
+Do not run `dms-greeter sync` on arch-niri-dux. A full sync recursively grants
+the greeter account read access to parts of the home directory, including files
+unrelated to the login theme, and leaves the greeter cache group-writable. It
+also targets upstream's `/etc/greetd/config.toml` rather than our
+`/etc/greetd/dux.toml`, so greeter setup stays managed by this package and full
+sync is unsupported.
+
 `snap-pac` creates snapshots around package transactions. Recovery entries use
 `noresume` and block hibernation to prevent resuming a normal-root memory image
 over an older snapshot. Timeline snapshots are disabled. Number cleanup keeps 5
