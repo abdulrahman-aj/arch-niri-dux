@@ -88,6 +88,13 @@ class InstallerSafetyTests(unittest.TestCase):
                 self.assertEqual(installer.main(), 1)
                 install.assert_not_called()
 
+    def test_disk_labels_distinguish_identical_models(self):
+        first = disk(model='Same model', serial='SERIAL-A')
+        second = disk(model='Same model', serial='SERIAL-B')
+        self.assertNotEqual(installer.disk_label(first), installer.disk_label(second))
+        self.assertIn('SERIAL-A', installer.disk_label(first))
+        self.assertIn('WWN-A', installer.disk_label(disk(wwn='WWN-A')))
+
     def test_accepts_unused_disk(self):
         self.assertIsNone(installer.disk_rejection(disk(), set()))
 

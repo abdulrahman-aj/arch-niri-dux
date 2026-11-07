@@ -1,8 +1,11 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-dux_user=$1
-dux_timezone=$2
+dux_user=${1:-}
+dux_timezone=${2:-}
+[[ $dux_user =~ ^[a-z_][a-z0-9_-]{0,30}$ && ! $dux_user =~ ^(root|nobody|alpm)$ ]] || exit 1
+dux_zone=$(realpath -e -- "/usr/share/zoneinfo/$dux_timezone")
+[[ $dux_zone == /usr/share/zoneinfo/* && -f $dux_zone ]] || exit 1
 
 ln -sf "/usr/share/zoneinfo/$dux_timezone" /etc/localtime
 locale-gen

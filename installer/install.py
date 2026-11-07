@@ -585,6 +585,12 @@ def secret(label):
             print(error)
 
 
+def disk_label(disk):
+    identity = (disk.get('serial') or disk.get('wwn') or '').strip()
+    label = f'{disk["name"]}  {int(disk["size"]) / GIB:.1f} GiB  {(disk.get("model") or "").strip()}'.rstrip()
+    return f'{label}  ID: {identity}' if identity else label
+
+
 def wizard():
     print('\nArch + Niri + Dux — offline installation\n')
     print('Choose erasure or existing unallocated space. Secure Boot must be disabled.\n')
@@ -593,10 +599,7 @@ def wizard():
         raise ValueError('No unused writable disk of at least 32 GiB found. TTY2 is available for recovery.')
     if not shutil.which('fzf'):
         raise ValueError('The live installer is missing fzf, required for its selection menus.')
-    labels = {
-        f'{disk["name"]}  {int(disk["size"]) / GIB:.1f} GiB  {(disk.get("model") or "").strip()}'.rstrip(): disk
-        for disk in disks
-    }
+    labels = {disk_label(disk): disk for disk in disks}
     disk = labels[choose('Installation disk', list(labels))]
     mode = choose('Storage mode', ['Erase disk', 'Alongside in existing free space'])
     snapshot = None
@@ -661,8 +664,7 @@ def wizard():
     if require_disk(settings.disk) != settings.confirmed_device:
         raise ValueError('Disk identity changed while entering installation settings.')
     summary = (
-        f'ERASE ALL DATA on {settings.disk} ({int(disk["size"]) / GIB:.1f} GiB, '
-        f'{(disk.get("model") or "unknown model").strip()})\n'
+        f'ERASE ALL DATA on {disk_label(disk)}\n'
         f'User: {settings.username}    Host: {settings.hostname}\n'
         f'Timezone: {settings.timezone}    Keyboard: {settings.keymap}\n'
         'Storage: 4 GiB EFI + encrypted Btrfs, with separate /home\n'
@@ -671,7 +673,7 @@ def wizard():
     if snapshot:
         plan = alongside_plan(settings, snapshot)
         summary = (
-            f'ALONGSIDE on {settings.disk}; preserve every existing partition.\n'
+            f'ALONGSIDE on {disk_label(disk)}; preserve every existing partition.\n'
             + '\n'.join(
                 f'Create {partition_name(settings.disk, n)}: sectors {a}–{b}, '
                 f'{(b - a + 1) * snapshot["table"]["sectorsize"]} bytes, {label} ({kind})'
@@ -759,6 +761,17 @@ def verify_repository(repository):
         raise ValueError('Offline manifest does not cover every package and repository database.')
 
 
+def offline_pacman_config(repository, database):
+    # The database is assembled on the builder, without a release signing key.
+    # Require signatures on every package even when its metadata is rewritten.
+    return (
+        '[options]\nArchitecture = auto\nSigLevel = Required DatabaseNever TrustedOnly\n'
+        'LocalFileSigLevel = Required TrustedOnly\n'
+        f'GPGDir = {SHARE / "install-keyring"}\n'
+        f'[{database}]\nServer = file://{repository}\n'
+    )
+
+
 def install(settings):
     started_at = time.monotonic()
     settings.validate()
@@ -815,13 +828,8 @@ def install(settings):
     with tempfile.TemporaryDirectory(prefix='dux-install-', dir='/run') as staging:
         stage = Path(staging)
         offline_conf = stage / 'pacman.conf'
-        # The build verifies upstream signatures and pins hashes of the ISO payload.
-        # No remote repositories are enabled during installation.
         database = next(REPO.glob('*.db')).stem
-        offline_conf.write_text(
-            f'[options]\nArchitecture = auto\nSigLevel = Never\n'
-            f'LocalFileSigLevel = Never\n[{database}]\nServer = file://{REPO}\n'
-        )
+        offline_conf.write_text(offline_pacman_config(REPO, database))
         package_db = stage / 'db'
         package_db.mkdir()
         resolved = run(

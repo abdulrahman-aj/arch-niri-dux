@@ -67,6 +67,15 @@ else
         /build/integration-work /build/integration-packages --epoch "$integration_epoch"
     runuser -u nobody -- python /source/scripts/dux_apps.py /source \
         /build/integration-work /build/integration-packages
+    # Development builds have no release secret. Use a fresh build-only identity;
+    # only its public key enters the development ISO.
+    rm -rf /build/development-signing
+    install -d -m 0700 /build/development-signing
+    gpg --homedir /build/development-signing --batch --passphrase '' \
+        --quick-generate-key 'Dux development ISO' ed25519 sign 0
+    for package in /build/integration-packages/*.pkg.tar.zst; do
+        gpg --homedir /build/development-signing --batch --detach-sign "$package"
+    done
 fi
 cp /build/integration-packages/*.pkg.tar.zst /build/payload/repo/
 cp /build/integration-packages/integration.manifest.json /build/payload/repo/
@@ -97,6 +106,22 @@ SigLevel = Never
 [offline]
 Server = file:///build/payload/repo
 CONF
+# Installation trusts only the pinned package signers, plus our release identity
+# (or this development build's public identity). No signing secrets are shipped.
+install_keyring="$profile/airootfs/usr/local/share/arch-niri-dux/install-keyring"
+install -d -m 0700 "$install_keyring"
+gpg --homedir "$install_keyring" --batch --import /state/trusted-packagers.gpg /source/keys/integration-signing.gpg
+if [[ $integration_mode == development ]]; then
+    gpg --homedir /build/development-signing --export >/build/development-public.gpg
+    gpg --homedir "$install_keyring" --batch --import /build/development-public.gpg
+    gpgconf --homedir /build/development-signing --kill all
+    rm -rf /build/development-signing /build/development-public.gpg
+fi
+gpg --homedir "$install_keyring" --batch --with-colons --list-keys |
+    awk -F: '$1 == "pub" { primary = 1; next } primary && $1 == "fpr" { print $10 ":6:"; primary = 0 }' >/build/install-ownertrust
+gpg --homedir "$install_keyring" --batch --import-ownertrust /build/install-ownertrust
+gpg --homedir "$install_keyring" --batch --check-trustdb
+gpgconf --homedir "$install_keyring" --kill all
 # Installer runtime is deliberately text-only. Standard releng supplies UEFI
 # boot, serial recovery and archiso's tested initramfs setup.
 mkdir -p "$profile/airootfs/usr/local/lib/arch-niri-dux" "$profile/airootfs/usr/local/bin" "$profile/airootfs/usr/local/share/arch-niri-dux"
@@ -137,6 +162,7 @@ airootfs_image_type="squashfs"
 airootfs_image_tool_options=('-comp' 'zstd' '-Xcompression-level' '3')
 file_permissions+=(
  ["/usr/local/bin/arch-niri-install"]="0:0:755"
+ ["/usr/local/share/arch-niri-dux/install-keyring"]="0:0:700"
 )
 PROFILE
 # A separate bind mount places payload beside arch/ in the staging tree.
