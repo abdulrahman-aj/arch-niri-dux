@@ -15,12 +15,12 @@ build-test:
 	./scripts/build-in-dev python3 -m unittest discover -s scripts -p 'build_test.py'
 lint:
 	./scripts/build-in-dev actionlint
-	./scripts/build-in-dev ruff check . desktop/usr/bin/arch-niri-dux-migrate
-	./scripts/build-in-dev ruff format --check . desktop/usr/bin/arch-niri-dux-migrate
+	./scripts/build-in-dev ruff check . desktop/usr/bin/arch-niri-dux-migrate desktop/usr/bin/arch-niri-dux-keyring-recover
+	./scripts/build-in-dev ruff format --check . desktop/usr/bin/arch-niri-dux-migrate desktop/usr/bin/arch-niri-dux-keyring-recover
 	./scripts/build-in-dev python3 scripts/lint_shell.py
 	./scripts/build-in-dev python3 scripts/lint_shell.py --check-format
 fmt:
-	./scripts/build-in-dev ruff format . desktop/usr/bin/arch-niri-dux-migrate
+	./scripts/build-in-dev ruff format . desktop/usr/bin/arch-niri-dux-migrate desktop/usr/bin/arch-niri-dux-keyring-recover
 	./scripts/build-in-dev python3 scripts/lint_shell.py --format
 test: lint
 	./scripts/build-in-dev bash -c 'python3 -m unittest discover -s tests && python3 -m unittest discover -s scripts -p build_test.py'
