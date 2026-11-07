@@ -54,6 +54,8 @@ def listener():
 
 
 def create_neighbour():
+    # A crashed earlier run may have left its namespace and veth behind.
+    subprocess.run(['ip', 'netns', 'delete', NAMESPACE], check=False, stderr=subprocess.DEVNULL)
     run('ip', 'netns', 'add', NAMESPACE)
     run('ip', 'link', 'add', HOST_LINK, 'type', 'veth', 'peer', 'name', 'eth0', 'netns', NAMESPACE)
     # Keep NetworkManager from running DHCP on the test link.
@@ -71,6 +73,70 @@ def create_neighbour():
 
 def reload_firewall():
     run('systemctl', 'reload', 'arch-niri-dux-firewall.service')
+
+
+def mdns_socket(address):
+    sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+    sock.bind(('', 5353))
+    interface = socket.inet_aton(address)
+    sock.setsockopt(socket.IPPROTO_IP, socket.IP_ADD_MEMBERSHIP, socket.inet_aton(MDNS_GROUP) + interface)
+    sock.setsockopt(socket.IPPROTO_IP, socket.IP_MULTICAST_IF, interface)
+    sock.setsockopt(socket.IPPROTO_IP, socket.IP_MULTICAST_TTL, 255)
+    return sock
+
+
+def encoded_name():
+    return b''.join(bytes([len(label)]) + label.encode() for label in PEER_NAME.split('.')) + b'\0'
+
+
+def answer_packet():
+    # Flags 0x8400: response, authoritative. Class 0x8001: IN with cache-flush.
+    return (
+        struct.pack('>6H', 0, 0x8400, 0, 1, 0, 0)
+        + encoded_name()
+        + struct.pack('>HHIH', 1, 0x8001, 120, 4)
+        + socket.inet_aton(PEER_V4)
+    )
+
+
+def query_packet():
+    return struct.pack('>6H', 0, 0, 1, 0, 0, 0) + encoded_name() + struct.pack('>HH', 1, 1)
+
+
+def mdns_admitted():
+    """Return which mDNS packet kinds from the neighbour reach a host socket.
+
+    Avahi would answer nothing either way, so a test socket stands in for it
+    to observe the firewall alone.
+    """
+    avahi = ('avahi-daemon.socket', 'avahi-daemon.service')
+    run('systemctl', 'stop', *avahi)
+    try:
+        sock = mdns_socket(HOST_V4)
+        sock.settimeout(1)
+        with sock:
+            run(
+                'ip', 'netns', 'exec', NAMESPACE, 'python', '-m', 'verification.network', 'mdns-send', cwd='/run/verify'
+            )
+            kinds = set()
+            try:
+                while True:
+                    packet, (source, _) = sock.recvfrom(9000)
+                    if source == PEER_V4:
+                        kinds.add('response' if packet[2] & 0x80 else 'query')
+            except TimeoutError:
+                return sorted(kinds)
+    finally:
+        run('systemctl', 'start', *avahi)
+
+
+def mdns_send():
+    """Send one mDNS query and one response from the neighbour, a few times."""
+    with mdns_socket(PEER_V4) as sock:
+        for _ in range(3):
+            sock.sendto(query_packet(), (MDNS_GROUP, 5353))
+            sock.sendto(answer_packet(), (MDNS_GROUP, 5353))
 
 
 def own_name_resolves():
@@ -93,13 +159,14 @@ def check():
     try:
         create_neighbour()
         assert connect('127.0.0.1') == 'open', 'Loopback must stay reachable.'
-        inbound = {address: connect(address, namespace=True) for address in (HOST_V4, HOST_V6)}
-        assert set(inbound.values()) == {'dropped'}, inbound
-
         processes.append(peer('python', '-m', 'verification.network', 'listener', cwd='/run/verify'))
         # IPv6 needs neighbour advertisements from the peer before any SYN leaves.
+        # Outbound first also fills both neighbour caches, so a slow ARP or ND
+        # exchange cannot pass for a dropped SYN below.
         for address in (PEER_V4, PEER_V6):
             wait_until(f'Outbound TCP to {address}', lambda address=address: connect(address) == 'open')
+        inbound = {address: connect(address, namespace=True) for address in (HOST_V4, HOST_V6)}
+        assert set(inbound.values()) == {'dropped'}, inbound
 
         LOCAL_RULE.write_text(f'add rule inet arch_niri_dux input tcp dport {PORT} accept\n')
         reload_firewall()
@@ -108,6 +175,9 @@ def check():
         LOCAL_RULE.unlink()
         reload_firewall()
         assert connect(HOST_V4, namespace=True) == 'dropped', 'Removing the local rule must close the port.'
+
+        received = mdns_admitted()
+        assert received == ['response'], f'Only mDNS responses may reach the host, got {received}'
 
         processes.append(peer('python', '-m', 'verification.network', 'responder', cwd='/run/verify'))
         wait_until(
@@ -136,6 +206,7 @@ def check():
                     'inbound_from_neighbour': inbound,
                     'outbound_to_neighbour': dict.fromkeys((PEER_V4, PEER_V6), 'open'),
                     'local_rule_opened': opened,
+                    'mdns_admitted_from_neighbour': received,
                     'neighbour_name_resolved_over_mdns': True,
                     'own_hostname_published': published,
                     'inbound_on_tailscale0': 'open',
@@ -169,21 +240,8 @@ def name_labels(packet, offset):
 
 def responder():
     """Answer A queries for PEER_NAME, as a printer would, until killed."""
-    sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-    sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-    sock.bind(('', 5353))
-    interface = socket.inet_aton(PEER_V4)
-    sock.setsockopt(socket.IPPROTO_IP, socket.IP_ADD_MEMBERSHIP, socket.inet_aton(MDNS_GROUP) + interface)
-    sock.setsockopt(socket.IPPROTO_IP, socket.IP_MULTICAST_IF, interface)
-    sock.setsockopt(socket.IPPROTO_IP, socket.IP_MULTICAST_TTL, 255)
-    encoded = b''.join(bytes([len(label)]) + label.encode() for label in PEER_NAME.split('.')) + b'\0'
-    # Flags 0x8400: response, authoritative. Class 0x8001: IN with cache-flush.
-    answer = (
-        struct.pack('>6H', 0, 0x8400, 0, 1, 0, 0)
-        + encoded
-        + struct.pack('>HHIH', 1, 0x8001, 120, 4)
-        + socket.inet_aton(PEER_V4)
-    )
+    sock = mdns_socket(PEER_V4)
+    answer = answer_packet()
     while True:
         packet, _ = sock.recvfrom(9000)
         if len(packet) < 12 or packet[2] & 0x80:
@@ -198,4 +256,4 @@ def responder():
 
 
 if __name__ == '__main__':
-    dispatch('network', {'check': check, 'listener': listener, 'responder': responder})
+    dispatch('network', {'check': check, 'listener': listener, 'responder': responder, 'mdns-send': mdns_send})

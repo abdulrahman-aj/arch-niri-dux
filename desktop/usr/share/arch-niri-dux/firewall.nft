@@ -20,8 +20,9 @@ table inet arch_niri_dux {
         # IPv6 needs neighbour discovery, router advertisements and multicast
         # listener queries (switches snoop MLD before forwarding mDNS).
         icmpv6 type { nd-neighbor-solicit, nd-neighbor-advert, nd-router-advert, mld-listener-query } accept
-        # DHCPv6 replies go to the link-local address of a request that was
-        # sent to multicast, so connection tracking cannot pair them.
+        # DHCP replies answer requests sent to broadcast (IPv4 rebinding) or
+        # multicast (DHCPv6), so connection tracking cannot pair them.
+        udp sport 67 udp dport 68 accept
         ip6 daddr fe80::/64 udp sport 547 udp dport 546 accept
 
         # mDNS answers arrive by multicast, which connection tracking cannot
