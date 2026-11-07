@@ -122,6 +122,14 @@ def check():
         )
         published, own = own_name_resolves()
         assert not published, f'Avahi still answers for this host: {own.stdout}'
+
+        # Tailscale can't run offline; an interface with its name stands in.
+        # The ruleset loaded before it existed, as at boot. Renaming needs the
+        # link down, which drops its IPv6 addresses, so this checks IPv4.
+        run('ip', 'link', 'set', HOST_LINK, 'down')
+        run('ip', 'link', 'set', HOST_LINK, 'name', 'tailscale0')
+        run('ip', 'link', 'set', 'tailscale0', 'up')
+        wait_until('Inbound TCP on tailscale0', lambda: connect(HOST_V4, namespace=True) == 'open', timeout=20)
         Path('/run/verify/network-policy.json').write_text(
             json.dumps(
                 {
@@ -130,6 +138,7 @@ def check():
                     'local_rule_opened': opened,
                     'neighbour_name_resolved_over_mdns': True,
                     'own_hostname_published': published,
+                    'inbound_on_tailscale0': 'open',
                 },
                 indent=2,
             )

@@ -29,6 +29,12 @@ table inet arch_niri_dux {
         # neighbours cannot query this host or reach Avahi's query parser.
         udp sport 5353 udp dport 5353 @th,80,1 1 accept
 
+        # NetworkManager hotspots serve DHCP and DNS to their clients from a
+        # dnsmasq bound to the shared interface. The interface name is not
+        # known here; nothing else listens on these ports by default.
+        udp dport 67 accept
+        meta l4proto { tcp, udp } th dport 53 accept
+
         # Tailnet peers are authenticated and governed by Tailscale ACLs.
         iifname "tailscale0" accept
     }
