@@ -12,15 +12,26 @@ from .guest import run
 from .vm import installed_login, graphical_login
 
 
+def configured_cmdline(root):
+    # Evaluate the same Bash array and append operations as limine-entry-tool.
+    return run(
+        'bash',
+        '-c',
+        'source "$1"; printf "%s\\n" "${KERNEL_CMDLINE[default]}"',
+        'bash',
+        str(Path(root) / 'etc/default/limine'),
+        stdout=subprocess.PIPE,
+    ).stdout.split()
+
+
 def prepare(root):
     # Enable post-unlock test control without changing the production boot UI.
     plymouth_config(root)
-    cmdline = root / 'etc/kernel/cmdline'
     run('arch-chroot', str(root), 'systemctl', 'enable', 'serial-getty@ttyS0.service')
     configuration = json.loads(Path('/run/verify/install.json').read_text())
     if configuration.get('swap_gib') == 0:
         assert not (root / 'swap/swapfile').exists()
-        assert not any(token.startswith(('resume=', 'resume_offset=')) for token in cmdline.read_text().split())
+        assert not any(token.startswith(('resume=', 'resume_offset=')) for token in configured_cmdline(root))
         assert 'AllowHibernation=no' in (root / 'etc/systemd/sleep.conf.d/60-hibernation.conf').read_text()
 
 
@@ -29,11 +40,6 @@ def serial_console(enabled, root='/'):
     # instrument off while qualifying the actual graphical and fallback UI.
     root = Path(root)
     arguments = ['console=tty0', 'console=ttyS0,115200n8']
-    cmdline = root / 'etc/kernel/cmdline'
-    tokens = [token for token in cmdline.read_text().split() if token not in arguments]
-    if enabled:
-        tokens.extend(arguments)
-    cmdline.write_text(' '.join(tokens) + '\n')
     defaults = root / 'etc/default/limine'
     serial_line = 'KERNEL_CMDLINE[default]+=" ' + ' '.join(arguments) + '"'
     lines = [line for line in defaults.read_text().splitlines() if line != serial_line]
@@ -106,11 +112,7 @@ def plymouth_config(root='/'):
         contents = run('lsinitcpio', str(image), stdout=subprocess.PIPE).stdout.splitlines()
         for required in ('usr/lib/systemd/systemd', 'usr/bin/plymouth', 'usr/lib/systemd/systemd-cryptsetup'):
             assert required in contents, (image, required)
-    cmdline = (
-        (root / 'etc/kernel/cmdline').read_text().split()
-        if (root / 'etc/kernel/cmdline').is_file()
-        else Path('/proc/cmdline').read_text().split()
-    )
+    cmdline = configured_cmdline(root)
     assert 'quiet' in cmdline and 'splash' in cmdline, cmdline
     assert any(token.startswith('rd.luks.name=') for token in cmdline), cmdline
     assert 'plymouth.enable=0' not in cmdline, cmdline
@@ -181,14 +183,6 @@ def splash_fallback(disable, root='/'):
     # disables its splash so the plain console passphrase prompt is used.
     # Boot failures stay visible because only quiet+splash quiet the console.
     root = Path(root)
-    cmdline = root / 'etc/kernel/cmdline'
-    tokens = cmdline.read_text().split()
-    if disable:
-        if 'plymouth.enable=0' not in tokens:
-            tokens.append('plymouth.enable=0')
-    else:
-        tokens = [token for token in tokens if token != 'plymouth.enable=0']
-    cmdline.write_text(' '.join(tokens) + '\n')
     defaults = root / 'etc/default/limine'
     fallback_line = 'KERNEL_CMDLINE[default]+=" plymouth.enable=0"'
     lines = [line for line in defaults.read_text().splitlines() if line != fallback_line]

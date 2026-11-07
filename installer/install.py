@@ -697,6 +697,24 @@ def write(relative, contents, mode=0o644):
     path.chmod(mode)
 
 
+def write_boot_config(luks_uuid, filesystem_uuid, resume_offset, *, defer_efi=False):
+    cmdline = f'rd.luks.name={luks_uuid}=dux-root root=/dev/mapper/dux-root rootflags=subvol=@ rw quiet splash'
+    if resume_offset:
+        cmdline += f' resume=/dev/mapper/dux-root resume_offset={resume_offset}'
+    else:
+        write('/etc/systemd/sleep.conf.d/60-hibernation.conf', '[Sleep]\nAllowHibernation=no\n')
+    defaults = (
+        'ESP_PATH="/boot"\n'
+        f'KERNEL_CMDLINE[default]="{cmdline}"\n'
+        f'FS_UUID="{filesystem_uuid}"\n'
+        '# Snapshot recovery must not resume a normal-root memory image.\n'
+        'SNAPSHOT_KERNEL_PARAMETERS+=noresume\n'
+    )
+    if defer_efi:
+        defaults += 'SKIP_UEFI=yes\n'
+    write('/etc/default/limine', defaults)
+
+
 def partition_name(disk, number):
     return disk + ('p' if disk[-1].isdigit() else '') + str(number)
 
@@ -899,10 +917,11 @@ def install(settings):
             print('\n[3/6] Installing packages from the USB…', flush=True)
             # Delay snap-pac until Snapper and a bootable baseline exist.
             base_packages = [package for package in packages if package != 'snap-pac'] + ['arch-niri-dux']
-            if snapshot:
-                # Both EFI deployment and kernel hooks may invoke limine-install.
-                # Its documented skip setting covers every initial transaction.
-                write('/etc/default/limine', 'ESP_PATH="/boot"\nSKIP_UEFI=yes\n')
+            luks_uuid = run('blkid', '-s', 'UUID', '-o', 'value', encrypted, capture=True)
+            filesystem_uuid = run('blkid', '-s', 'UUID', '-o', 'value', mapped, capture=True)
+            # Both EFI deployment and kernel hooks may register firmware entries.
+            # Deferral must cover every transaction until preservation is verified.
+            write_boot_config(luks_uuid, filesystem_uuid, resume_offset, defer_efi=bool(snapshot))
             run('pacstrap', '-C', str(offline_conf), '-K', str(TARGET), *base_packages)
             fstab = run('genfstab', '-U', str(TARGET), capture=True)
             if size:
@@ -920,19 +939,11 @@ def install(settings):
             # arch-chroot mounts a fresh /run, so stage outside that mountpoint.
             target_script = TARGET / 'root/configure-target.sh'
             shutil.copy2(Path(__file__).with_name('configure-target.sh'), target_script)
-            luks_uuid = run('blkid', '-s', 'UUID', '-o', 'value', encrypted, capture=True)
-            filesystem_uuid = run('blkid', '-s', 'UUID', '-o', 'value', mapped, capture=True)
-            configure_arguments = [settings.username, settings.timezone, luks_uuid, filesystem_uuid, resume_offset]
-            if snapshot:
-                configure_arguments.append('defer-efi')
-            run('arch-chroot', str(TARGET), 'bash', '/root/configure-target.sh', *configure_arguments)
+            run('arch-chroot', str(TARGET), 'bash', '/root/configure-target.sh', settings.username, settings.timezone)
             target_script.unlink()
             run('arch-chroot', str(TARGET), 'chpasswd', data=f'{settings.username}:{settings.password}\n')
             print('\n[5/6] Preparing automatic snapshots and recovery…', flush=True)
-            if 'snap-pac' in packages:
-                run('pacstrap', '-C', str(offline_conf), '-G', '-M', str(TARGET), 'snap-pac', 'arch-niri-dux-baseline')
-            else:
-                run('pacstrap', '-C', str(offline_conf), '-G', '-M', str(TARGET), 'arch-niri-dux-baseline')
+            run('pacstrap', '-C', str(offline_conf), '-G', '-M', str(TARGET), 'arch-niri-dux-baseline')
             run(
                 'arch-chroot',
                 str(TARGET),
@@ -950,8 +961,7 @@ def install(settings):
             print('\n[6/6] Saving changes and unmounting the installation…', flush=True)
             if snapshot:
                 finish_alongside_boot(settings, snapshot, plan[0][0])
-                defaults = TARGET / 'etc/default/limine'
-                defaults.write_text(defaults.read_text().replace('SKIP_UEFI=yes\n', ''))
+                write_boot_config(luks_uuid, filesystem_uuid, resume_offset)
             run('sync')
         finally:
             if mounted:
