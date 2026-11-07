@@ -204,16 +204,11 @@ after writing machine settings and EFI deferral.
 
 ## Locking and calendar transport
 
-Before DMS starts, its packaged service drop-in runs
-`initialize-lock-settings.py` for new and existing accounts. It seeds only
-missing lock choices into `~/.config/dms/config.d/00-arch-niri-dux-lock.json`.
-The defaults lock before suspend, retain the upstream logind lock integration, and lock
-on idle after 600 seconds on AC or battery. Explicit choices in `settings.json`
-or any `config.d/*.json` file are preserved. Future default changes do not rewrite an existing seed. The seed file is written once;
-keep it even if empty so later starts preserve disabled settings. Change the
-choices in Dux Settings or edit the user configuration. No administrator policy
-locks these controls. Existing running sessions acquire the defaults on the
-next DMS start.
+The [Dux defaults](#dux-defaults-and-updates) seeder writes the lock choices
+into `~/.config/dms/config.d/00-arch-niri-dux-lock.json`. The defaults lock
+before suspend, retain the upstream logind lock integration, and lock on idle
+after 600 seconds on AC or battery. No administrator policy locks these
+controls. Existing running sessions acquire the defaults on the next DMS start.
 
 This protects ordinary logind suspend, including normal lid-close suspend.
 Issue [#48](https://github.com/abdulrahman-aj/arch-niri-dux/issues/48) covers

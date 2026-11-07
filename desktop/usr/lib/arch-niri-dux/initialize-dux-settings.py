@@ -35,6 +35,8 @@ MAIN_BAR = {
 }
 
 SEEDS = {
+    # Dux 2.1 defaults disable locking before suspend and idle locking.
+    '00-arch-niri-dux-lock.json': {'lockBeforeSuspend': True, 'acLockTimeout': 600, 'batteryLockTimeout': 600},
     # The bar button keeps Dux's server checking in the background. Weekly,
     # with no login check, keeps the button quiet on live Arch. Dux schedules
     # from its last check persisted in ~/.cache/dms, so reboots don't reset the
