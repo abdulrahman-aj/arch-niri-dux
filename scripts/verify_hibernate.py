@@ -2,12 +2,13 @@
 """Verify genuine memory resume on an already accepted, disposable VM disk."""
 
 import argparse
-import hashlib
 import json
 from pathlib import Path
 import re
 import subprocess
 import sys
+
+from verification.digest import digest
 
 from verification.vm import VM, PASSWORD, installed_login, stage_probes
 
@@ -21,9 +22,8 @@ def main():
         parser.error('Run full make verify first; this requires its disposable VM and evidence.')
     inputs = json.loads((directory / 'inputs.json').read_text())
     iso = Path(inputs['iso'])
-    with iso.open('rb') as stream:
-        if hashlib.file_digest(stream, 'sha256').hexdigest() != inputs['iso_sha256']:
-            parser.error('The ISO changed after acceptance; verify the new artifact first.')
+    if digest(iso) != inputs['iso_sha256']:
+        parser.error('The ISO changed after acceptance; verify the new artifact first.')
     disk = directory / 'disk.qcow2'
     info = json.loads(subprocess.check_output(['qemu-img', 'info', '--output=json', str(disk)], text=True))
     if info['format'] != 'qcow2' or not any(snapshot['name'] == 'pristine' for snapshot in info.get('snapshots', [])):

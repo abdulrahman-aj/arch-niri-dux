@@ -1,7 +1,6 @@
 """QEMU control, console transport and login for disposable acceptance VMs."""
 
 import csv
-import hashlib
 import json
 import os
 from pathlib import Path
@@ -14,6 +13,8 @@ import subprocess
 import struct
 import time
 import tempfile
+
+from .digest import digest
 
 PASSWORD = 'vm-verification-only'
 
@@ -392,11 +393,7 @@ def stage_probes(directory):
     shutil.copytree(
         source, directory / 'verification', ignore=shutil.ignore_patterns('__pycache__'), dirs_exist_ok=True
     )
-    builder = source.parent / 'build-integration.py'
+    builder = source.parent / 'integration_build.py'
     shutil.copyfile(builder, directory / builder.name)
     paths = sorted(source.glob('*.py')) + [builder]
-    return {str(path.relative_to(source.parent)): hashlib.sha256(path.read_bytes()).hexdigest() for path in paths}
-
-
-if __name__ == '__main__':
-    wait_for_memory()
+    return {str(path.relative_to(source.parent)): digest(path) for path in paths}

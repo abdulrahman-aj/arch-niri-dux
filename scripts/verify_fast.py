@@ -2,11 +2,12 @@
 """Build and qualify integration packages on an overlay of an accepted 0.3+ VM."""
 
 import argparse
-import importlib.util
 import json
 from pathlib import Path
 import shutil
 import subprocess
+
+from verification.digest import digest
 
 from verification.vm import VM, graphical_login, installed_login, stage_probes
 
@@ -32,9 +33,8 @@ def main():
     if args.kernel_package:
         shutil.copyfile(args.kernel_package, directory / 'kernel.pkg.tar.zst')
     probe_hashes = stage_probes(directory)
-    spec = importlib.util.spec_from_file_location('builder', ROOT / 'scripts/build-integration.py')
-    builder = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(builder)
+    import integration_build as builder
+
     source = directory / 'integration-input'
     source.mkdir()
     epoch = int(subprocess.check_output(['git', 'log', '-1', '--format=%ct'], cwd=ROOT, text=True))
@@ -42,11 +42,11 @@ def main():
     (directory / 'inputs.json').write_text(
         json.dumps(
             {
-                'kernel_sha256': builder.digest(directory / 'kernel.pkg.tar.zst') if args.kernel_package else None,
+                'kernel_sha256': digest(directory / 'kernel.pkg.tar.zst') if args.kernel_package else None,
                 'fixture': str(fixture),
                 'accepted_inputs': json.loads((accepted / 'inputs.json').read_text()),
-                'source_sha256': builder.digest(source / 'integration.tar'),
-                'verification_scripts': probe_hashes | {'verify-fast.py': builder.digest(Path(__file__))},
+                'source_sha256': digest(source / 'integration.tar'),
+                'verification_scripts': probe_hashes | {'verify_fast.py': digest(Path(__file__))},
             },
             indent=2,
         )
@@ -65,12 +65,11 @@ def main():
         vm.command(
             'mkdir -p /tmp/fast/source/packages/integration /tmp/fast/build /tmp/fast/packages; '
             'tar -xf /run/verify/integration-input/integration.tar -C /tmp/fast/source; '
-            'mv /tmp/fast/source/packages.target /tmp/fast/source/packages/; '
             'cp /run/verify/integration-input/PKGBUILD /tmp/fast/source/packages/integration/; '
             'chown -R tester:tester /tmp/fast'
         )
         vm.command(
-            f'runuser -u tester -- python /run/verify/build-integration.py '
+            f'runuser -u tester -- python /run/verify/integration_build.py '
             f'/tmp/fast/source /tmp/fast/build /tmp/fast/packages --epoch {epoch}',
             timeout=180,
         )
@@ -99,7 +98,7 @@ def main():
             json.dumps(
                 {
                     'fixture': str(fixture),
-                    'source_sha256': builder.digest(source / 'integration.tar'),
+                    'source_sha256': digest(source / 'integration.tar'),
                     'kernel_in_transaction': bool(args.kernel_package),
                     'checks': [
                         'ALPM boot policy regeneration',

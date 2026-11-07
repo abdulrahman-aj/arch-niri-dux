@@ -1,5 +1,5 @@
+import sys
 import gzip
-import importlib.util
 import json
 import os
 from pathlib import Path
@@ -7,13 +7,13 @@ import shutil
 import subprocess
 import tarfile
 import tempfile
+import uuid
 import unittest
 
 
 ROOT = Path(__file__).resolve().parents[1]
-spec = importlib.util.spec_from_file_location('release', ROOT / 'scripts/integration-release.py')
-release = importlib.util.module_from_spec(spec)
-spec.loader.exec_module(release)
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'scripts'))
+import integration_release as release
 
 
 class SignedReleaseTests(unittest.TestCase):
@@ -29,6 +29,11 @@ class SignedReleaseTests(unittest.TestCase):
         cls.fingerprint = next(line.split(':')[9] for line in listing.splitlines() if line.startswith('fpr:'))
         cls.gpg('--passphrase', '', '--quick-add-key', cls.fingerprint, 'ed25519', 'sign', '1d')
         cls.public = cls.gpg('--export', cls.fingerprint)
+        cls.signer = [
+            line.split(':')[9]
+            for line in cls.gpg('--with-colons', '--list-keys').decode().splitlines()
+            if line.startswith('fpr:')
+        ][-1]
 
     @classmethod
     def gpg(cls, *arguments):
@@ -53,6 +58,19 @@ class SignedReleaseTests(unittest.TestCase):
             (self.root / name).mkdir(parents=True)
         (self.root / 'keys/integration-signing.gpg').write_bytes(self.public)
         (self.root / 'keys/integration-signing.fingerprint').write_text(self.fingerprint + '\n')
+        (self.root / 'keys/integration-signing.subkey').write_text(self.signer)
+        (self.root / 'keys/integration-history-start.json').write_text(
+            json.dumps(
+                dict(
+                    tag='v0.1.0-1',
+                    packages={
+                        'arch-niri-dux': '0.1.0-1',
+                        'arch-niri-dux-baseline': '0.1.0-1',
+                        'dux-example-bin': '2.0.0-1',
+                    },
+                )
+            )
+        )
         (self.root / 'packages/packages.target').write_text('base\n')
         (self.root / 'desktop/usr/share/example').write_text('Packaged defaults\n')
         (self.root / 'packages/integration/PKGBUILD').write_text('pkgver=0.1.0\npkgrel=1\n')
@@ -121,13 +139,58 @@ class SignedReleaseTests(unittest.TestCase):
         return destination
 
     def publish(self, packages, history, output, commit='a' * 40):
-        release.publish(
-            self.root, packages, history, output, 'integration-v' + release.build.version(self.root), commit
+        release.publish(self.root, packages, history, output, 'v' + release.build.version(self.root), commit)
+
+    def test_split_signing_entrypoint_uses_disposable_secret_and_cleans_home(self):
+        import release_key
+
+        packages = self.packages(self.root / 'built')
+        scripts = self.root / 'scripts'
+        scripts.mkdir()
+        # Replace only network publication; run the real import, validation and signing path.
+        (scripts / 'publish-integration').write_text(
+            'set -euo pipefail\npython '
+            + str(ROOT / 'scripts/integration_release.py')
+            + ' publish "$1" "$2" "$3" "$4" --tag v0.1.0-1 --commit '
+            + 'a' * 40
+            + '\n'
         )
+        signing_home = Path('/tmp') / ('dux-signing-' + uuid.uuid4().hex)
+        ci = release_key.selected_secret(self.home, self.fingerprint, self.signer)
+        subprocess.run(
+            [
+                'bash',
+                str(ROOT / 'scripts/sign-integration'),
+                str(self.root),
+                str(packages),
+                str(self.root / 'history'),
+                str(self.root / 'signed'),
+            ],
+            check=True,
+            env=os.environ | {'GNUPGHOME': str(signing_home), 'PACKAGE_SIGNING_KEY': ci.decode()},
+        )
+        self.assertFalse(signing_home.exists())
+        release.verify(self.root, self.root / 'signed/integration.manifest.json', current_signer=True)
+
+    def test_history_boundary_rejects_direct_preincident_packages(self):
+        old = self.root / 'old'
+        self.publish(self.packages(self.root / 'first'), self.root / 'empty', old)
+        (self.root / 'packages/integration/PKGBUILD').write_text('pkgver=0.1.0\npkgrel=2\n')
+        self.app_recipe('2.1.0-2')
+        boundary = dict(
+            tag='v0.1.0-2',
+            packages={'arch-niri-dux': '0.1.0-2', 'arch-niri-dux-baseline': '0.1.0-2', 'dux-example-bin': '2.1.0-2'},
+        )
+        (self.root / 'keys/integration-history-start.json').write_text(json.dumps(boundary))
+        built = self.packages(self.root / 'fresh')
+        with self.assertRaises(ValueError):
+            self.publish(built, old, self.root / 'rejected')
+        self.publish(built, self.root / 'empty', self.root / 'replacement')
+        release.verify(self.root, self.root / 'replacement/integration.manifest.json', current_signer=True)
 
     def test_signed_release_roundtrip_tampering_and_identity(self):
         packages = self.packages(self.root / 'packages-built')
-        signed = self.root / 'releases/integration-v0.1.0-1'
+        signed = self.root / 'releases/v0.1.0-1'
         self.publish(packages, self.root / 'history', signed)
         release.fetch(self.root, self.root / 'fetched', (self.root / 'releases').as_uri())
         for path in signed.glob('*.pkg.tar.zst'):
@@ -316,6 +379,13 @@ class SignedReleaseTests(unittest.TestCase):
             release.verify(self.root, payload, historical=True)
             run('--quick-add-key', primary, 'ed25519', 'sign', '1d')
             (self.root / 'keys/integration-signing.gpg').write_bytes(run('--export', primary))
+            (self.root / 'keys/integration-signing.subkey').write_text(
+                [
+                    line.split(':')[9]
+                    for line in run('--with-colons', '--list-keys').decode().splitlines()
+                    if line.startswith('fpr:')
+                ][-1]
+            )
             release.verify(self.root, payload, historical=True)
             new = self.root / 'new-package'
             new.write_text('New package')

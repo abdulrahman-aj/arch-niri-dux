@@ -7,7 +7,7 @@ output=${4:?}
 tag=${GITHUB_REF_NAME:?}
 commit=${GITHUB_SHA:?}
 repository=${GITHUB_REPOSITORY:?}
-[[ $repository == abdulrahman-aj/arch-niri-dux && $tag =~ ^integration-v[0-9]+(\.[0-9]+)*-[0-9]+(\.[0-9]+)*$ ]]
+[[ $repository == abdulrahman-aj/arch-niri-dux && $tag =~ ^v[0-9]+(\.[0-9]+)*-[0-9]+(\.[0-9]+)*$ ]]
 git -c safe.directory="$root" -C "$root" merge-base --is-ancestor "$commit" origin/main
 
 temporary=$(mktemp -d)
@@ -26,26 +26,25 @@ if [[ $current != null ]]; then
     else
         # Reuse immutable published bytes when retrying a failed Pages deployment.
         packages=$temporary/packages
-        python "$root/scripts/integration-release.py" fetch "$root" "$packages"
+        python "$root/scripts/integration_release.py" fetch "$root" "$packages"
         published=true
     fi
 fi
 mkdir -p "$history"
+python "$root/scripts/integration_release.py" history-tags "$root" "$releases" --tag "$tag" >"$temporary/history-tags"
 while IFS= read -r previous; do
-    [[ $previous =~ ^integration-v[0-9]+(\.[0-9]+)*-[0-9]+(\.[0-9]+)*$ ]]
-    # Releases repeat unchanged Dux app versions with identical bytes.
     gh release download "$previous" --repo "$repository" --dir "$history" --skip-existing \
         --pattern 'arch-niri-dux-*.pkg.tar.zst' --pattern 'arch-niri-dux-*.pkg.tar.zst.sig' \
         --pattern 'dux-*.pkg.tar.zst' --pattern 'dux-*.pkg.tar.zst.sig'
-done < <(jq -r --arg tag "$tag" '.[][] | select((.draft or .prerelease) | not) |
-          .tag_name | select(startswith("integration-v") and . != $tag)' "$releases")
-python "$root/scripts/integration-release.py" publish "$root" "$packages" "$history" "$output" \
+done <"$temporary/history-tags"
+python "$root/scripts/integration_release.py" publish "$root" "$packages" "$history" "$output" \
     --tag "$tag" --commit "$commit"
 if [[ $published == false ]]; then
     assets=()
+    jq -er '.packages[].filename, .apps[].filename' "$output/integration.manifest.json" >"$temporary/assets"
     while IFS= read -r name; do
         assets+=("$output/$name" "$output/$name.sig")
-    done < <(jq -r '.packages[].filename, .apps[].filename' "$output/integration.manifest.json")
+    done <"$temporary/assets"
     assets+=("$output/integration.manifest.json" "$output/integration.manifest.json.sig"
         "$output/integration.tar" "$output/integration.PKGBUILD")
     gh release create "$tag" --repo "$repository" --draft --target "$commit" \

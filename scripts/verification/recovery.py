@@ -74,6 +74,9 @@ def snapshots():
     ).stdout.strip()
     Path('/run/verify/recovery-snapshot').write_text(number + '\n')
     migrations.after_snapshot()
+    from . import key_lifecycle
+
+    key_lifecycle.verify_installed()
     integration.verify_upgrade()
     home.write_text('home-created-after-snapshot\n')
     Path('/etc/dux-verification-version').write_text('changed-after-snapshot\n')

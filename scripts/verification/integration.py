@@ -1,13 +1,14 @@
 #!/usr/bin/env python3
 """Guest-only integration upgrade, baseline dependency and config preservation check."""
 
-import hashlib
 import json
 from pathlib import Path
 import pwd
 import re
 import subprocess
 import tempfile
+
+from .digest import digest
 
 from . import dispatch
 from .guest import run
@@ -48,7 +49,7 @@ def verify_upgrade():
     personal = [
         Path(user.pw_dir) / '.config' / name for name in ('niri/config.kdl', 'niri/dms/binds.kdl', 'xdg-terminals.list')
     ]
-    before = {str(path): hashlib.sha256(path.read_bytes()).hexdigest() for path in personal}
+    before = {str(path): digest(path) for path in personal}
     old_file = Path('/usr/share/arch-niri-dux/niri/dms/layout.kdl')
     new_file = Path('/usr/share/arch-niri-dux/upgrade-fixture')
     fake_name = 'dux-verification-app'
@@ -75,8 +76,6 @@ def verify_upgrade():
         session = source / 'desktop/usr/share/arch-niri-dux/session.kdl'
         session.write_text(session.read_text() + '\n// Verified package update\n')
         target_list = source / 'packages/packages.target'
-        target_list.parent.mkdir(parents=True, exist_ok=True)
-        (source / 'packages.target').rename(target_list)
         target_list.write_text(target_list.read_text() + fake_name + '\n')
         fake = work / 'app'
         fake.mkdir()
@@ -99,7 +98,7 @@ def verify_upgrade():
         output(
             *prefix,
             'python',
-            str(evidence / 'build-integration.py'),
+            str(evidence / 'integration_build.py'),
             str(source),
             str(work / 'build'),
             str(work / 'skipped-candidate'),
@@ -121,7 +120,7 @@ def verify_upgrade():
         output(
             *prefix,
             'python',
-            str(evidence / 'build-integration.py'),
+            str(evidence / 'integration_build.py'),
             str(source),
             str(work / 'build-next'),
             str(packages),
@@ -208,7 +207,7 @@ def verify_upgrade():
         output('pacman', '-R', '--noconfirm', fake_name)
         output('pacman', '--config', str(configuration), '-S', '--noconfirm', 'arch-niri-dux-baseline')
         for path in personal:
-            assert hashlib.sha256(path.read_bytes()).hexdigest() == before[str(path)], path
+            assert digest(path) == before[str(path)], path
         output(*prefix, 'niri', 'validate', '--config', str(personal[0]))
         output('pacman', '-Dk')
         for home in (signing, keyring):
@@ -269,7 +268,7 @@ def published_repository():
     personal = [
         Path('/home/tester/.config') / name for name in ('niri/config.kdl', 'niri/dms/binds.kdl', 'xdg-terminals.list')
     ]
-    before = {str(path): hashlib.sha256(path.read_bytes()).hexdigest() for path in personal}
+    before = {str(path): digest(path) for path in personal}
     manifest = json.loads((evidence / 'release-manifest.json').read_text())
     hashes = {}
     with tempfile.TemporaryDirectory(prefix='dux-published-repository-') as directory:
@@ -287,10 +286,10 @@ def published_repository():
         run('pacman', '--config', str(configuration), '-S', '--noconfirm', *(package['name'] for package in packages))
         for package in packages:
             payload = cache / package['filename']
-            hashes[package['name']] = hashlib.sha256(payload.read_bytes()).hexdigest()
+            hashes[package['name']] = digest(payload)
             assert hashes[package['name']] == package['sha256'], package['name']
     for path in personal:
-        assert hashlib.sha256(path.read_bytes()).hexdigest() == before[str(path)], path
+        assert digest(path) == before[str(path)], path
     run('pacman', '-Dk')
     (evidence / 'published-repository.json').write_text(
         json.dumps(

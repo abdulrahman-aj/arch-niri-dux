@@ -30,9 +30,35 @@ def pipewire_video_sources():
     return sources
 
 
+def snapshot_window():
+    return next((window for window in windows() if 'snapshot' in (window.get('app_id') or '').lower()), None)
+
+
 def focus_camera():
-    window = next(window for window in windows() if 'snapshot' in (window.get('app_id') or '').lower())
-    focus_window(window['id'])
+    # Snapshot's window can be briefly absent from Niri's list right after a
+    # capture, and may come back with a new id, so re-resolve and re-focus
+    # until the focus lands before any key is sent.
+    def focused_window():
+        window = snapshot_window()
+        if window is None:
+            return None
+        if not window.get('is_focused'):
+            focus_window(window['id'])
+            return None
+        return window
+
+    try:
+        wait_until('Snapshot window focused', focused_window, timeout=30)
+    except TimeoutError:
+        # Keep Snapshot's own log to tell a crash from a slow remap.
+        if Path('/tmp/snapshot.log').is_file():
+            shutil.copyfile('/tmp/snapshot.log', '/run/verify/snapshot.log')
+        raise
+
+
+def camera_ready():
+    focus_camera()
+    screenshot('02-snapshot.png')
 
 
 def camera_cleanup():
@@ -66,11 +92,7 @@ def camera():
             str(path) for folder in ('Pictures', 'Videos') for path in Path('/home/tester', folder, 'Camera').glob('*')
         ]
         user_command('sh', '-c', 'snapshot --debug >/tmp/snapshot.log 2>&1 &')
-        wait_until(
-            'Snapshot window',
-            lambda: any('snapshot' in (window.get('app_id') or '').lower() for window in windows()),
-            timeout=60,
-        )
+        wait_until('Snapshot window', snapshot_window, timeout=60)
         focus_camera()
         screenshot('02-snapshot.png')
         width, height = png_dimensions(Path('/run/verify/02-snapshot.png'))
@@ -137,7 +159,9 @@ def verify(vm, passed):
         else:
             raise TimeoutError('Snapshot did not request camera permission on the fresh installation.')
         time.sleep(3)
-        vm.probe('camera', 'camera-screen')
+        # The permission click leaves focus with the host pointer, so give it
+        # back to Snapshot before the first shutter key.
+        vm.probe('camera', 'camera-ready')
         # Use Snapshot 51's upstream shutter shortcut to exercise its own
         # capture path in both modes, rather than generating files separately.
         # https://github.com/GNOME/snapshot/blob/51.0/src/application.rs
@@ -160,6 +184,7 @@ if __name__ == '__main__':
             'camera-photo': camera_media,
             'camera-video': lambda: camera_media(video=True),
             'camera-screen': lambda: screenshot('02-snapshot.png'),
+            'camera-ready': camera_ready,
             'camera-cleanup': camera_cleanup,
         },
     )

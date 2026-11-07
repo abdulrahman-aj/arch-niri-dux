@@ -105,6 +105,32 @@ Each context preserves system and Nix PATH entries. No mise shims are added.
 The `session-path` stage of `make verify` checks the user-service environment,
 login shell and a real Niri-spawned wrapper without personal dotfiles.
 
+## Firewall and mDNS
+
+`arch-niri-dux-firewall.service` loads `/usr/share/arch-niri-dux/firewall.nft`
+into its own nftables table, leaving Tailscale, Docker and libvirt tables
+alone. It drops unsolicited inbound traffic. It accepts replies to outbound
+connections, loopback, the ICMPv6 and DHCPv6 traffic IPv6 needs, IGMP
+membership queries, mDNS responses, DHCP and DNS requests for NetworkManager hotspots, and everything
+arriving on `tailscale0`. Avahi runs resolve-only from
+`/usr/share/arch-niri-dux/avahi-daemon.conf`: printer discovery and `.local`
+names work, but the host advertises nothing.
+
+The ruleset includes `/etc/arch-niri-dux/firewall.d/*.nft`, which upgrades
+leave alone. To open a port, for example after enabling `sshd`, write
+`add rule inet arch_niri_dux input tcp dport 22 accept` to
+`/etc/arch-niri-dux/firewall.d/sshd.nft` and run `systemctl reload
+arch-niri-dux-firewall`. A broken include fails the reload and keeps the
+running rules. At start or boot it fails the unit and leaves a table that
+drops everything but loopback and replies, so new links get no DHCP until
+the include is fixed. Docker or libvirt guests that must reach host
+services need an `iifname` rule there for their bridge. Stopping the unit
+deletes its table and leaves inbound traffic open. To use another firewall,
+disable the unit; the stock `nftables.service` adds its own table, and a
+packet must pass both. To publish again, add a later-sorting
+`/etc/systemd/system/avahi-daemon.service.d/` drop-in that resets `ExecStart=`
+to `/usr/bin/avahi-daemon -s`, then allow inbound UDP 5353.
+
 ## System policy
 
 System policy belongs to the integration package: mkinitcpio's complete MODULES
@@ -118,6 +144,13 @@ Greetd selects `/usr/lib/pam.d/arch-niri-dux` for authentication, including the
 stock local-login stack and GNOME Keyring password/session integration. Its
 greeter session uses the same stack. See [package
 repositories](../packages/README.md#repositories) for online update sources.
+
+Do not run `dms-greeter sync` on arch-niri-dux. A full sync recursively grants
+the greeter account read access to parts of the home directory, including files
+unrelated to the login theme, and leaves the greeter cache group-writable. It
+also targets upstream's `/etc/greetd/config.toml` rather than our
+`/etc/greetd/dux.toml`, so greeter setup stays managed by this package and full
+sync is unsupported.
 
 `snap-pac` creates snapshots around package transactions. Recovery entries use
 `noresume` and block hibernation to prevent resuming a normal-root memory image

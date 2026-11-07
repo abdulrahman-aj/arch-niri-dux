@@ -16,20 +16,24 @@ virtio 3D acceleration; `QEMU_RENDER_NODE` defaults to `/dev/dri/renderD128`.
 ## `make verify`
 
 Full acceptance qualifies a fresh offline encrypted UEFI install on a
-disposable 48 GiB VM disk. The workspace (default under `/tmp`, overridable
-with `--directory`) records `install.json`, `inputs.json` with the ISO,
+disposable 48 GiB VM disk. The workspace (default `out/verify/dux-verify-*`
+on disk, overridable with `--directory`) records `install.json`, `inputs.json` with the ISO,
 package-manifest and verification-script hashes, `OVMF_VARS.fd`, serial and
 QEMU logs, screenshots and a milestone list. Only a full run writes
-`ACCEPTANCE-PASSED`.
+`ACCEPTANCE-PASSED`. A failed run deletes its disk and keeps the rest; a passed
+run keeps its ~6 GB disk as a fixture, so delete workspaces you no longer need.
 
 It boots the ISO with loopback as the only network interface, confirms the
 package manifest and installer payload hashes, then installs with
 `arch-niri-install` and qualifies graphical disk unlock with a
 wrong-passphrase retry, UEFI boot without the ISO, package presets with
-systemd policy and the PAM-unlocked keyring, Niri/Dux/terminal/editor/browser
+systemd policy and the PAM-unlocked keyring, the inbound firewall and
+resolve-only mDNS seen from a veth neighbour namespace, Niri/Dux/terminal/editor/browser
 smoke checks, desktop apps (manuals, archives, media playback, driverless
 printing to a loopback printer), PDF rendering, the synthetic camera, screen
 sharing, screen lock, migration ordering with retries and session triggers,
+an update started through Dux's updater (its pacman backend, `pkexec` and
+authentication dialog) running system and user migrations,
 an integration upgrade with Limine snapshot boot and restore preserving home,
 and the `plymouth.enable=0` text fallback with graphical unlock restored
 afterward. `make verify-release` additionally checks published HTTPS package

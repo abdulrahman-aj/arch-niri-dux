@@ -1,4 +1,4 @@
-# scripts/build-integration.py supplies the local source archive and its checksum.
+# scripts/integration_build.py supplies the local source archive and its checksum.
 pkgbase='arch-niri-dux'
 pkgname=(arch-niri-dux arch-niri-dux-baseline)
 pkgver=0.3.0
@@ -20,7 +20,7 @@ prepare() {
 package_arch-niri-dux() {
     depends=(bash python libnotify systemd pacman niri 'dux-shell>=2.1.0' dux-greeter-bin dux-search-bin dux-calendar-bin
              dux-files-bin greetd gnome-keyring matugen adw-gtk-theme gtk3
-             xdg-desktop-portal-gnome xdg-desktop-portal-gtk xdg-terminal-exec xdg-utils)
+             xdg-desktop-portal-gnome xdg-desktop-portal-gtk xdg-terminal-exec xdg-utils nftables)
     backup=(etc/snapper/configs/root etc/mkinitcpio.conf.d/arch-niri-dux.conf
             etc/fonts/conf.d/50-arabic.conf etc/greetd/dux.toml
             etc/profile.d/dux-localbin.sh etc/profile.d/dux-editor.sh
@@ -30,7 +30,10 @@ package_arch-niri-dux() {
             etc/xdg/xdg-terminals.list)
     cp -a "$srcdir/desktop/etc" "$srcdir/desktop/usr" "$pkgdir/"
     install -d "$pkgdir/usr/lib/arch-niri-dux/migrations/"{system,user}
-    chmod 0755 "$pkgdir/usr/bin/arch-niri-dux-migrate"
+    # Local firewall rules; the package ruleset includes *.nft from here.
+    install -d "$pkgdir/etc/arch-niri-dux/firewall.d"
+    chmod 0755 "$pkgdir/usr/bin/arch-niri-dux-migrate" \
+        "$pkgdir/usr/bin/arch-niri-dux-keyring-recover"
     # Vendor wants apply to already-installed systems too; /etc can override.
     install -d "$pkgdir/usr/lib/systemd/system/multi-user.target.wants" \
         "$pkgdir/usr/lib/systemd/user/graphical-session.target.wants"
@@ -56,5 +59,5 @@ package_arch-niri-dux-baseline() {
         package=${line%%#*}
         # The reviewed list contains one package per line, without whitespace.
         [[ -z $package ]] || depends+=("$package")
-    done <"$srcdir/packages.target"
+    done <"$srcdir/packages/packages.target"
 }

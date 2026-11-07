@@ -1,0 +1,15 @@
+#!/usr/bin/env bash
+set -euo pipefail
+: "${GNUPGHOME:?Use a disposable signing home}"
+[[ $GNUPGHOME == /tmp/integration-release-keyring || $GNUPGHOME == /tmp/dux-signing-* ]]
+[[ $(dirname -- "$GNUPGHOME") == /tmp && ! -e $GNUPGHOME && ! -L $GNUPGHOME ]]
+install -d -m 0700 "$GNUPGHOME"
+cleanup() {
+    gpgconf --homedir "$GNUPGHOME" --kill all || true
+    # The path checks above confine this to a fresh /tmp signing home.
+    rm -rf -- "$GNUPGHOME"
+}
+trap cleanup EXIT
+printf '%s' "${PACKAGE_SIGNING_KEY:?}" | gpg --batch --import
+unset PACKAGE_SIGNING_KEY
+bash "${1:?}/scripts/publish-integration" "$@"

@@ -1,19 +1,47 @@
 #!/usr/bin/env bash
+# Print the path of a verified Arch bootstrap ISO in the shared download cache.
 set -euo pipefail
-version=2026.10.01
-sha256=684ded26c63240ff4a41e8c25ee84ea6da233f557364821f13d12c2b0a9059a5
-base=https://geo.mirror.pkgbuild.com/iso/$version/archlinux-$version-x86_64.iso
-dest=${1:?Usage: build-fetch-bootstrap DESTINATION-DIRECTORY}
+usage='Usage: build-fetch-bootstrap VERSION SHA256 DOWNLOAD-CACHE PARTIAL-DIRECTORY'
+version=${1:?$usage}
+sha256=${2:?$usage}
+cache=${3:?$usage}
+partial_dir=${4:?$usage}
 root=$(cd "$(dirname "$0")/.." && pwd)
 keyring=$root/keys/trusted-packagers.gpg
 [[ -r "$keyring" ]] || {
     echo "Arch Linux keyring not readable: $keyring" >&2
     exit 1
 }
-mkdir -p "$dest"
-if ! printf '%s  %s\n' "$sha256" "$dest/archlinux.iso" | sha256sum --check --status 2>/dev/null; then
-    curl --fail --location --retry 5 --continue-at - "$base" -o "$dest/archlinux.iso"
+name=archlinux-$version-x86_64.iso
+url=https://geo.mirror.pkgbuild.com/iso/$version/$name
+iso=$cache/$name
+mkdir -p "$cache" "$partial_dir"
+
+# Cache entries are always complete: concurrent builds may read them at any
+# time, so files arrive by rename from a temporary name in the cache directory.
+publish() {
+    local temporary
+    temporary=$(mktemp "$cache/.$(basename "$2").XXXXXX")
+    mv -f "$1" "$temporary"
+    mv -f "$temporary" "$2"
+}
+
+if ! printf '%s  %s\n' "$sha256" "$iso" | sha256sum --check --status 2>/dev/null; then
+    # The partial download lives in the build's own state so an interrupted
+    # transfer resumes without two builds appending to one file.
+    part=$partial_dir/$name.part
+    curl --fail --location --retry 5 --speed-limit 1024 --speed-time 60 --continue-at - "$url" -o "$part"
+    if ! printf '%s  %s\n' "$sha256" "$part" | sha256sum --check --status; then
+        rm -f "$part"
+        echo "Bootstrap ISO checksum mismatch: $url" >&2
+        exit 1
+    fi
+    publish "$part" "$iso"
 fi
-curl --fail --location --retry 3 "$base.sig" -o "$dest/archlinux.iso.sig"
-printf '%s  %s\n' "$sha256" "$dest/archlinux.iso" | sha256sum --check --status
-gpgv --keyring "$keyring" "$dest/archlinux.iso.sig" "$dest/archlinux.iso"
+if ! gpgv --keyring "$keyring" "$iso.sig" "$iso" >/dev/null 2>&1; then
+    signature=$partial_dir/$name.sig
+    curl --fail --location --retry 3 --max-time 120 "$url.sig" -o "$signature"
+    gpgv --keyring "$keyring" "$signature" "$iso" >&2
+    publish "$signature" "$iso.sig"
+fi
+printf '%s\n' "$iso"

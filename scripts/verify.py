@@ -2,8 +2,6 @@
 """Run offline UEFI acceptance, optionally checking published delivery afterward."""
 
 import argparse
-import hashlib
-import importlib.util
 import json
 import os
 from pathlib import Path
@@ -13,7 +11,9 @@ import subprocess
 import sys
 import tempfile
 
-from verification import apps, boot, browser, camera, desktop, integration, pdf, recovery
+from verification.digest import digest
+
+from verification import apps, boot, browser, camera, desktop, dux_update, integration, pdf, recovery
 from verification.vm import VM, PASSWORD, stage_probes
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -22,7 +22,7 @@ ROOT = Path(__file__).resolve().parents[1]
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--iso', type=Path)
-    parser.add_argument('--directory', type=Path, help='Fresh verification workspace; default under /tmp')
+    parser.add_argument('--directory', type=Path, help='Fresh verification workspace; default under out/verify')
     parser.add_argument('--disk', type=Path, help='New disposable qcow2 path; default inside the workspace')
     parser.add_argument('--install-only', action='store_true', help='Debug only; does not produce acceptance success')
     parser.add_argument(
@@ -40,7 +40,11 @@ def main():
         parser.error('Build an ISO first with make iso, or pass --iso PATH.')
     if not os.access('/dev/kvm', os.R_OK | os.W_OK):
         parser.error('The VM verification requires access to /dev/kvm.')
-    directory = args.directory or Path(tempfile.mkdtemp(prefix='dux-verify-', dir='/tmp'))
+    directory = args.directory
+    if directory is None:
+        # Runs hold multi-gigabyte disks, and /tmp is often RAM-backed tmpfs.
+        (ROOT / 'out/verify').mkdir(parents=True, exist_ok=True)
+        directory = Path(tempfile.mkdtemp(prefix='dux-verify-', dir=ROOT / 'out/verify'))
     directory.mkdir(mode=0o700, parents=True, exist_ok=True)
     disk = args.disk or directory / 'disk.qcow2'
     if disk.exists():
@@ -60,11 +64,10 @@ def main():
     config_file = directory / 'install.json'
     config_file.write_text(json.dumps(configuration))
     config_file.chmod(0o600)
-    with iso.open('rb') as stream:
-        iso_digest = hashlib.file_digest(stream, 'sha256').hexdigest()
-    package_digest = hashlib.sha256((ROOT / 'out/packages.manifest.json').read_bytes()).hexdigest()
+    iso_digest = digest(iso)
+    package_digest = digest(ROOT / 'out/packages.manifest.json')
     probe_hashes = stage_probes(directory)
-    probe_hashes['verify.py'] = hashlib.sha256(Path(__file__).read_bytes()).hexdigest()
+    probe_hashes['verify.py'] = digest(Path(__file__))
     (directory / 'inputs.json').write_text(
         json.dumps(
             {
@@ -79,29 +82,25 @@ def main():
     )
     (directory / 'key').write_text(PASSWORD)
     (directory / 'key').chmod(0o600)
-    spec = importlib.util.spec_from_file_location('integration_builder', ROOT / 'scripts/build-integration.py')
-    builder = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(builder)
+
     source = directory / 'integration-input'
     source.mkdir()
     manifest = json.loads((ROOT / 'out/packages.manifest.json').read_text())['integration']
     (directory / 'release-manifest.json').write_text(json.dumps(manifest, indent=2) + '\n')
-    release_spec = importlib.util.spec_from_file_location(
-        'integration_release', ROOT / 'scripts/integration-release.py'
-    )
-    release = importlib.util.module_from_spec(release_spec)
-    release_spec.loader.exec_module(release)
+    import integration_release as release
+
     release.validate_manifest(ROOT, ROOT / 'out/integration')
     for filename, target, field in [
         ('integration.tar', 'integration.tar', 'source_sha256'),
         ('integration.PKGBUILD', 'PKGBUILD', 'recipe_sha256'),
     ]:
         original = ROOT / 'out/integration' / filename
-        if builder.digest(original) != manifest[field]:
+        if digest(original) != manifest[field]:
             raise ValueError(f'Integration build input changed: {filename}')
         shutil.copyfile(original, source / target)
     vm = VM(directory, iso.resolve(), disk)
     milestones = []
+    succeeded = False
 
     def passed(name):
         milestones.append(name)
@@ -124,7 +123,7 @@ def main():
             f'test "$(sha256sum /run/archiso/bootmnt/packages.manifest.json | cut -d " " -f 1)" = {package_digest}'
         )
         for filename in ('install.py', 'configure-target.sh'):
-            expected = hashlib.sha256((ROOT / 'installer' / filename).read_bytes()).hexdigest()
+            expected = digest(ROOT / 'installer' / filename)
             vm.command(
                 f'test "$(sha256sum /usr/local/lib/arch-niri-dux/installer/{filename} | cut -d " " -f 1)" = {expected}'
             )
@@ -145,10 +144,13 @@ def main():
         subprocess.run(['qemu-img', 'snapshot', '-c', 'pristine', str(disk)], check=True)
         if args.install_only:
             print('Install-only debug run complete. Full acceptance has NOT passed.', flush=True)
+            succeeded = True
             return 0
         boot.verify_boot(vm, passed, args.swap_gib)
         vm.probe('policy', 'check', timeout=180)
         passed('Package presets, systemd policy and PAM-unlocked keyring')
+        vm.probe('network', 'check', timeout=240)
+        passed('Inbound firewall and resolve-only mDNS')
         desktop.verify(vm, passed)
         apps.verify(vm, passed)
         pdf.verify(vm, passed)
@@ -157,12 +159,14 @@ def main():
         desktop.verify_lock(vm, passed)
         vm.probe('migrations', 'check', timeout=180)
         passed('Migration ordering, retries, session triggers and new-account baseline')
+        dux_update.verify(vm, passed)
         recovery.verify(vm, passed)
         boot.verify_fallback(vm, passed)
         if args.online_repository:
             integration.verify_published(vm, passed)
         (directory / 'ACCEPTANCE-PASSED').write_text('All acceptance stages passed.\n')
         print(f'Acceptance passed. Evidence: {directory}', flush=True)
+        succeeded = True
         return 0
     except Exception as error:
         try:
@@ -175,6 +179,10 @@ def main():
         return 1
     finally:
         vm.stop()
+        # A failed or interrupted run's disk can never become an accepted
+        # fixture; drop it and keep the logs and screenshots.
+        if not succeeded:
+            disk.unlink(missing_ok=True)
 
 
 if __name__ == '__main__':

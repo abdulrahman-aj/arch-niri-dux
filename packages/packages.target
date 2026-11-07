@@ -91,6 +91,7 @@ cups-filters
 cups-pk-helper
 avahi
 nss-mdns
+nftables
 exfatprogs
 ntfs-3g
 qt6-multimedia

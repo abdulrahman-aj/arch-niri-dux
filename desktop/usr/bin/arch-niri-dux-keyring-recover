@@ -1,0 +1,97 @@
+#!/usr/bin/env python3
+"""Merge an authenticated current release certificate into existing pacman trust."""
+
+import argparse
+import hashlib
+from pathlib import Path
+import re
+import subprocess
+import tempfile
+import time
+
+
+def gpg(home, *args, data=None):
+    return subprocess.check_output(['gpg', '--homedir', str(home), '--batch', *args], input=data)
+
+
+def keys(home):
+    result = []
+    for line in gpg(home, '--with-colons', '--list-keys').decode().splitlines():
+        fields = line.split(':')
+        if fields[0] in ('pub', 'sub'):
+            result.append(dict(kind=fields[0], validity=fields[1], expires=fields[6], capabilities=fields[11]))
+        elif fields[0] == 'fpr':
+            result[-1]['fingerprint'] = fields[9]
+    return result
+
+
+def recover(
+    certificate,
+    sha256,
+    anchor=Path('/usr/share/pacman/keyrings/arch-niri-dux.gpg'),
+    keyring=Path('/etc/pacman.d/gnupg'),
+):
+    # Read once: validate and import exactly the authenticated bytes.
+    with certificate.open('rb') as source:
+        data = source.read(64 * 1024 * 1024 + 1)
+    if len(data) > 64 * 1024 * 1024:
+        raise ValueError('Certificate exceeds 64 MiB.')
+    if not re.fullmatch('[a-fA-F0-9]{64}', sha256) or hashlib.sha256(data).hexdigest() != sha256.lower():
+        raise ValueError('Certificate authentication failed: SHA-256 mismatch.')
+    with tempfile.TemporaryDirectory(prefix='dux-keyring-recover-') as directory:
+        home = Path(directory)
+        home.chmod(0o700)
+        try:
+            gpg(home, '--import', data=anchor.read_bytes())
+            primaries = [key for key in keys(home) if key['kind'] == 'pub']
+            if len(primaries) != 1:
+                raise ValueError('Installed release trust must contain one primary.')
+            primary = primaries[0]['fingerprint']
+            # Validate candidate independently so old bindings cannot hide an incomplete input.
+            gpg(home, '--yes', '--delete-keys', primary)
+            gpg(home, '--import-options', 'import-clean', '--import', data=data)
+            candidate = keys(home)
+            if [key['fingerprint'] for key in candidate if key['kind'] == 'pub'] != [primary]:
+                raise ValueError('Certificate does not match installed release identity.')
+            if gpg(home, '--with-colons', '--list-secret-keys').strip():
+                raise ValueError('Recovery accepts public certificates only.')
+            usable = [
+                key['fingerprint']
+                for key in candidate
+                if key['kind'] == 'sub'
+                and key['validity'] not in ('r', 'e', 'd', 'i')
+                and 's' in key['capabilities']
+                and (not key['expires'] or int(key['expires']) > time.time())
+            ]
+            if candidate[0]['validity'] in ('r', 'e', 'd', 'i') or not usable:
+                raise ValueError('Certificate has no usable authorized signing subkey.')
+            installed = gpg(keyring, '--with-colons', '--list-keys', primary).decode()
+            if not any(line.startswith('pub:') and line.split(':')[1] in ('u', 'f') for line in installed.splitlines()):
+                raise ValueError('Release primary is not already trusted by pacman.')
+            validated = home / 'certificate.gpg'
+            validated.write_bytes(gpg(home, '--export', primary))
+            # Key import needs only the explicit keyring, independent of host repositories.
+            subprocess.run(
+                ['pacman-key', '--config', '/dev/null', '--gpgdir', str(keyring), '--add', str(validated)], check=True
+            )
+            gpg(keyring, '--check-trustdb')
+            revoked = [key['fingerprint'] for key in candidate if key['validity'] == 'r']
+            print(f'Primary: {primary}\nUsable signers: {", ".join(usable)}\nRevoked: {", ".join(revoked)}')
+            print('Certificate merged. Next run: pacman -Syu')
+        finally:
+            subprocess.run(['gpgconf', '--homedir', str(home), '--kill', 'all'], check=False)
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('certificate', type=Path)
+    parser.add_argument('--sha256', required=True, help='Current digest from an authenticated maintenance channel')
+    args = parser.parse_args()
+    try:
+        recover(args.certificate, args.sha256)
+    except (ValueError, OSError, subprocess.CalledProcessError) as error:
+        parser.exit(1, f'Recovery failed: {error}\n')
+
+
+if __name__ == '__main__':
+    main()
