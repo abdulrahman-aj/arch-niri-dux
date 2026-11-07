@@ -105,6 +105,26 @@ Each context preserves system and Nix PATH entries. No mise shims are added.
 The `session-path` stage of `make verify` checks the user-service environment,
 login shell and a real Niri-spawned wrapper without personal dotfiles.
 
+## Dux defaults and updates
+
+Before DMS starts, its packaged service drop-in runs
+`initialize-dux-settings.py` for new and existing accounts. Each feature seeds
+the keys missing from `settings.json` and every `config.d/*.json` file into its
+own `~/.config/dms/config.d/00-arch-niri-dux-*.json` file, once. Dux saves
+later changes back to that file, so Dux Settings and hand edits both win. An
+emptied seed file stays in place so restarts don't undo an opt-out.
+
+The update seed puts Dux's Software Updates button on the main bar, right of
+the clock. It hides while Dux knows of no updates. Dux's server checks at login
+and then every 6 hours, for any pending package from the configured
+repositories. Background failures, such as being offline, stay silent.
+Clicking the button opens Dux's updater; its Update button runs the same
+`pacman -Syu` that installs our packages and triggers migrations. A bar layout
+saved before the seed ran (`barConfigs` in a user file) is kept and gets no
+button. Dux only checks while something holds its updater open, so without the
+button there are no background checks. Move, remove or add the button in Dux
+Settings, Bar.
+
 ## Firewall and mDNS
 
 `arch-niri-dux-firewall.service` loads `/usr/share/arch-niri-dux/firewall.nft`
