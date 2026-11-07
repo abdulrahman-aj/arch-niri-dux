@@ -33,7 +33,7 @@ its separate stock `config.toml`. Pacman preserves local edits to `dux.toml`.
 
 Package construction generates Niri's stock configuration and terminal-resolved
 bindings in `/usr/share/arch-niri-dux/niri/defaults.kdl`. The home entrypoint loads package defaults, relative
-optional `dms/*.kdl` and `recent-windows.kdl` includes, package-owned `tail.kdl`
+optional `dms/*.kdl` includes, package-owned `tail.kdl`
 (session environment and file-dialog rules), then optional `overrides.kdl` last.
 Dux 2.1 ignores `~` includes. Relative home includes allow shortcut editing.
 Put personal Niri settings in `~/.config/niri/overrides.kdl`; initialization
@@ -43,9 +43,8 @@ only overrides. Dux generates `dms/binds-next.kdl` for the installed Niri. The
 entrypoint includes it before personal bindings. Keep that generated file local.
 Later bindings replace earlier ones, so a disabled shortcut
 can override its stock action with `spawn "true"`. This still consumes the key.
-An optional `recent-windows.kdl` loads before `dms/binds.kdl` for hand-managed
-MRU preferences. This avoids [Dux's shortcut-save bugs, still present in 2.1](https://github.com/abdulrahman-aj/arch-niri-dux/issues/33)
-until a fixed package is available. Generated `dms/alttab.kdl` controls appearance.
+Keep hand-managed MRU (`recent-windows`) bindings in `overrides.kdl` until Dux fixes [#33](https://github.com/abdulrahman-aj/arch-niri-dux/issues/33).
+Generated `dms/alttab.kdl` controls appearance.
 Rerunning user initialization preserves existing user Niri files. Generated
 layout/input files remain local, so Dux settings continue to control them.
 

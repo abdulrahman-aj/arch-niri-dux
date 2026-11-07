@@ -7,7 +7,6 @@ include optional=true "dms/outputs.kdl"
 include optional=true "dms/cursor.kdl"
 include optional=true "dms/input.kdl"
 include optional=true "dms/windowrules.kdl"
-include optional=true "recent-windows.kdl"
 include optional=true "dms/binds-next.kdl"
 include optional=true "dms/binds.kdl"
 

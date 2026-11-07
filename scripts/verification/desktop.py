@@ -59,8 +59,8 @@ def niri_overrides():
     )
     assert included['exists'] and included['included'], included
     before = bindings.read_bytes()
-    recent = bindings.parent.parent / 'recent-windows.kdl'
-    before_recent = recent.read_bytes() if recent.exists() else None
+    overrides = bindings.parent.parent / 'overrides.kdl'
+    before_overrides = overrides.read_bytes() if overrides.exists() else None
 
     def current():
         sheet = json.loads(user_command('dms', 'keybinds', 'show', 'niri', capture=True).stdout)
@@ -75,9 +75,14 @@ def niri_overrides():
     bindings.rename(tracked)
     bindings.symlink_to(tracked.name)
     try:
-        recent.write_text(
-            'recent-windows {\n    binds {\n        Alt+Tab { next-window scope="workspace"; }\n    }\n}\n'
-        )
+        fixture = 'recent-windows {\n    binds {\n        Alt+Tab { next-window scope="workspace"; }\n    }\n}\n'
+        if before_overrides is None:
+            overrides.write_text(fixture)
+        else:
+            text = before_overrides.decode()
+            if text and not text.endswith('\n'):
+                text += '\n'
+            overrides.write_text(text + fixture)
         assert current()['Alt+Tab']['action'] == 'next-window scope="workspace"'
         result = json.loads(user_command('dms', 'keybinds', 'set', 'niri', 'Mod+Q', 'spawn true', capture=True).stdout)
         assert result['success'], result
@@ -95,17 +100,17 @@ def niri_overrides():
         tracked.write_bytes(before)
         bindings.unlink()
         tracked.rename(bindings)
-        if before_recent is None:
-            recent.unlink(missing_ok=True)
+        if before_overrides is None:
+            overrides.unlink(missing_ok=True)
         else:
-            recent.write_bytes(before_recent)
+            overrides.write_bytes(before_overrides)
     Path('/run/verify/niri-overrides.json').write_text(
         json.dumps(
             {
                 'stock_inherited': True,
                 'override_effective': True,
                 'reset_restores_stock': True,
-                'manual_mru_preserved': True,
+                'overrides_mru_preserved': True,
                 'native_binds_next_included': included,
                 'alt_f4_inherited': True,
                 'tracked_override_link_preserved': True,
