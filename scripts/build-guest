@@ -4,7 +4,8 @@ trap 'echo "FAILED at line $LINENO"; echo failed > /state/result; poweroff -f' E
 # Refuse direct execution on the host before touching the virtual disk.
 mountpoint -q /source
 mountpoint -q /state
-grep -qw 'archisolabel=ARCH_202610' /proc/cmdline
+bootstrap_label=$(cat /state/bootstrap-label)
+grep -qw "archisolabel=$bootstrap_label" /proc/cmdline
 # Only the explicitly supplied disposable virtual disk is formatted.
 if ! blkid /dev/vda; then
     mkfs.ext4 -F /dev/vda
@@ -39,10 +40,8 @@ pacman-key --init
 pacman-key --populate archlinux
 # Import the existing host trust anchors only in the isolated build VM.
 gpg --homedir /etc/pacman.d/gnupg --import /state/trusted-packagers.gpg
-if [[ ! -f /source/packages/closure.lock.json ]]; then
-    pacman -Sy --noconfirm --needed archiso python
-fi
-python /source/scripts/package_lock.py /source /build/payload/repo
+python /source/scripts/package_lock.py fetch /source /build/payload/repo \
+    --keyring /state/trusted-packagers.gpg --downloads /downloads --host-cache /cache
 cat >/build/pacman-pinned.conf <<'CONF'
 [options]
 Architecture = auto
@@ -57,7 +56,10 @@ pacman -Sy --config /build/pacman-pinned.conf --noconfirm --needed archiso pytho
 rm -rf /build/integration-work /build/integration-packages
 mkdir -p /build/integration-work /build/integration-packages
 chown nobody:nobody /build/integration-work /build/integration-packages
-if [[ $(cat /state/integration-mode) == release ]]; then
+# A separate assignment lets errexit stop on a failed read instead of
+# silently selecting the development branch.
+integration_mode=$(cat /state/integration-mode)
+if [[ $integration_mode == release ]]; then
     python /source/scripts/integration_release.py fetch /source /build/integration-packages
 else
     integration_epoch=$(cat /state/integration-epoch)

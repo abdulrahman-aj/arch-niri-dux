@@ -1,4 +1,6 @@
-.PHONY: iso iso-development verify verify-fast verify-release verify-hibernate lint fmt test build-test verify-alongside provision-alongside fetch-alongside
+.PHONY: lock iso iso-development verify verify-fast verify-release verify-hibernate lint lint-in-dev fmt test build-test verify-alongside provision-alongside fetch-alongside
+lock:
+	./scripts/build-in-dev python3 scripts/package_lock.py resolve .
 iso:
 	./scripts/build-in-dev ./scripts/build-iso
 iso-development:
@@ -13,12 +15,15 @@ verify-hibernate:
 	./scripts/build-in-dev python3 scripts/verify_hibernate.py $(ARGS)
 build-test:
 	./scripts/build-in-dev python3 -m unittest discover -s scripts -p 'build_test.py'
+# One dev-shell entry per target; build-in-dev passes through inside it.
 lint:
-	./scripts/build-in-dev actionlint
-	./scripts/build-in-dev ruff check . desktop/usr/bin/arch-niri-dux-migrate
-	./scripts/build-in-dev ruff format --check . desktop/usr/bin/arch-niri-dux-migrate
-	./scripts/build-in-dev python3 scripts/lint_shell.py
-	./scripts/build-in-dev python3 scripts/lint_shell.py --check-format
+	./scripts/build-in-dev $(MAKE) --no-print-directory lint-in-dev
+lint-in-dev:
+	actionlint
+	ruff check . desktop/usr/bin/arch-niri-dux-migrate
+	ruff format --check . desktop/usr/bin/arch-niri-dux-migrate
+	python3 scripts/lint_shell.py
+	python3 scripts/lint_shell.py --check-format
 fmt:
 	./scripts/build-in-dev ruff format . desktop/usr/bin/arch-niri-dux-migrate
 	./scripts/build-in-dev python3 scripts/lint_shell.py --format

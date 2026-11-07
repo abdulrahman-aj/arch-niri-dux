@@ -7,9 +7,9 @@ import os
 from pathlib import Path
 import re
 import subprocess
-import tarfile
 import tempfile
 
+from package_lock import read_database
 from verification.digest import digest
 
 
@@ -78,18 +78,11 @@ def _inventory(manifest, repository):
 
 def _database_inventory(database):
     inventory = {}
-    with tarfile.open(database) as archive:
-        for member in archive:
-            if not member.name.endswith('/desc'):
-                continue
-            fields = {}
-            for section in archive.extractfile(member).read().decode().strip().split('\n\n'):
-                key, *values = section.splitlines()
-                fields[key] = values
-            name = fields['%NAME%'][0]
-            if name in inventory:
-                raise ValueError('Duplicate package in repository database inventory.')
-            inventory[name] = (fields['%FILENAME%'][0], fields['%SHA256SUM%'][0], fields['%VERSION%'][0])
+    for fields in read_database(database):
+        name = fields['NAME'][0]
+        if name in inventory:
+            raise ValueError('Duplicate package in repository database inventory.')
+        inventory[name] = (fields['FILENAME'][0], fields['SHA256SUM'][0], fields['VERSION'][0])
     return inventory
 
 
