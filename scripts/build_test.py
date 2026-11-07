@@ -205,6 +205,35 @@ class RepositoryDatabaseTests(unittest.TestCase):
                 self.assertEqual(fields['DEPENDS'], ['glibc', 'bash'])
 
 
+class ReviewedRecipeTests(unittest.TestCase):
+    def test_modified_recipe_is_rejected_before_execution(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            source = root / 'packages/aur/example-bin'
+            source.mkdir(parents=True)
+            for name in ('PKGBUILD', '.SRCINFO'):
+                (source / name).write_text('reviewed contents')
+            recipe = dict(name='example-bin', files={name: digest(source / name) for name in ('PKGBUILD', '.SRCINFO')})
+            self.assertEqual(aur.validate_recipe(root, recipe), source)
+            (source / 'PKGBUILD').write_text('changed contents')
+            with self.assertRaisesRegex(ValueError, 'recipe changed'):
+                aur.validate_recipe(root, recipe)
+
+    def test_recipe_cannot_read_outside_reviewed_directory(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            source = root / 'packages/aur/example-bin'
+            source.mkdir(parents=True)
+            for name in ('PKGBUILD', '.SRCINFO'):
+                (source / name).touch()
+            outside = root / 'packages/aur/outside'
+            outside.write_text('outside')
+            recipe = dict(name='example-bin', files={name: digest(source / name) for name in ('PKGBUILD', '.SRCINFO')})
+            recipe['files']['../outside'] = digest(outside)
+            with self.assertRaisesRegex(ValueError, 'recipe changed'):
+                aur.validate_recipe(root, recipe)
+
+
 class LiveKeyringTests(unittest.TestCase):
     def test_key_operations_wait_for_live_initializer_and_stop_if_it_fails(self):
         import os
