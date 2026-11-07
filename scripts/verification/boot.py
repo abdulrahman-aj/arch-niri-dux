@@ -27,6 +27,19 @@ def configured_cmdline(root):
 def prepare(root):
     # Enable post-unlock test control without changing the production boot UI.
     plymouth_config(root)
+    assert not (root / 'etc/kernel/cmdline').exists(), 'Machine cmdline must have one owner.'
+    expected = set(configured_cmdline(root))
+    entries = []
+    for line in (root / 'boot/limine.conf').read_text().splitlines():
+        if not re.match(r'\s*(?:kernel_cmdline|cmdline):', line):
+            continue
+        tokens = line.split(':', 1)[1].split()
+        assert expected - {token for token in expected if token.startswith('rootflags=')} <= set(tokens), tokens
+        snapshot = any('/@snapshots/' in token for token in tokens)
+        assert ('noresume' in tokens) == snapshot, tokens
+        entries.append(tokens)
+    assert entries and any('noresume' in entry for entry in entries), entries
+    Path('/run/verify/limine-cmdlines.json').write_text(json.dumps(entries, indent=2) + '\n')
     run('arch-chroot', str(root), 'systemctl', 'enable', 'serial-getty@ttyS0.service')
     configuration = json.loads(Path('/run/verify/install.json').read_text())
     if configuration.get('swap_gib') == 0:
