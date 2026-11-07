@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """Freeze a pacman-resolved closure and validate every payload before ISO assembly."""
+
 import base64
 import concurrent.futures
 import hashlib
@@ -51,7 +52,7 @@ def main():
     aur_names = {entry['name'] for entry in json.loads((root / 'packages/aur-recipes.json').read_text())}
     for source in json.loads((root / 'packages/desktop-sources.json').read_text()):
         if digest(root / source['path']) != source['sha256']:
-            raise ValueError(f"Upstream desktop asset changed: {source['path']}")
+            raise ValueError(f'Upstream desktop asset changed: {source["path"]}')
     requested = set()
     for file in ('packages/packages.target', 'archiso/packages.live'):
         requested.update(line.split('#')[0].strip() for line in (root / file).read_text().splitlines())
@@ -73,26 +74,63 @@ def main():
                     metadata[fields['FILENAME'][0]] = fields
         subprocess.run(['mkdir', '-p', '/build/resolve/local', '/build/resolve/sync'], check=True)
         subprocess.run(['cp', '-a', '/var/lib/pacman/sync/.', '/build/resolve/sync/'], check=True)
-        result = subprocess.check_output(['pacman', '-Sp', '--noconfirm', '--dbpath', '/build/resolve', '--print-format', '%n|%v|%f|%r', *sorted(requested)], text=True)
+        result = subprocess.check_output(
+            [
+                'pacman',
+                '-Sp',
+                '--noconfirm',
+                '--dbpath',
+                '/build/resolve',
+                '--print-format',
+                '%n|%v|%f|%r',
+                *sorted(requested),
+            ],
+            text=True,
+        )
         entries = []
         for line in result.splitlines():
             if line.count('|') != 3:
                 continue
             name, version, filename, repo = line.split('|')
             info = metadata[filename]
-            url = ('https://pkgs.omarchy.org/stable/x86_64/' if repo == 'omarchy' else f'https://geo.mirror.pkgbuild.com/{repo}/os/x86_64/') + filename
+            url = (
+                'https://pkgs.omarchy.org/stable/x86_64/'
+                if repo == 'omarchy'
+                else f'https://geo.mirror.pkgbuild.com/{repo}/os/x86_64/'
+            ) + filename
             if 'PGPSIG' not in info:
                 signature_path = pathlib.Path('/cache') / (filename + '.sig')
-                signature = signature_path.read_bytes() if signature_path.exists() else urllib.request.urlopen(url + '.sig', timeout=60).read()
+                signature = (
+                    signature_path.read_bytes()
+                    if signature_path.exists()
+                    else urllib.request.urlopen(url + '.sig', timeout=60).read()
+                )
                 info['PGPSIG'] = [base64.b64encode(signature).decode()]
-            entries.append(dict(name=name, version=version, filename=filename, sha256=info['SHA256SUM'][0], url=url, repository=repo, signature=info['PGPSIG'][0]))
+            entries.append(
+                dict(
+                    name=name,
+                    version=version,
+                    filename=filename,
+                    sha256=info['SHA256SUM'][0],
+                    url=url,
+                    repository=repo,
+                    signature=info['PGPSIG'][0],
+                )
+            )
         if not requested.issubset({e['name'] for e in entries}):
             raise ValueError('Incomplete resolution')
-        lock.write_text(json.dumps({'schema': 1, 'requested': sorted(requested), 'packages': sorted(entries, key=lambda e: e['name'])}, indent=2) + '\n')
+        lock.write_text(
+            json.dumps(
+                {'schema': 1, 'requested': sorted(requested), 'packages': sorted(entries, key=lambda e: e['name'])},
+                indent=2,
+            )
+            + '\n'
+        )
     payload = json.loads(lock.read_text())
     if sorted(requested) != payload['requested']:
         raise ValueError('Package lists changed; explicitly refresh the closure lock')
     dest.mkdir(parents=True, exist_ok=True)
+
     def fetch(entry):
         validate_entry(entry)
         package = dest / entry['filename']
@@ -110,12 +148,13 @@ def main():
                             if entry['repository'] not in ('core', 'extra'):
                                 raise
                             name = entry['name']
-                            archive = f"https://archive.archlinux.org/packages/{name[0]}/{name}/{entry['filename']}"
+                            archive = f'https://archive.archlinux.org/packages/{name[0]}/{name}/{entry["filename"]}'
                             urllib.request.urlretrieve(archive, str(package))
                         break
                     except Exception:
                         if attempt == 3:
                             raise
+
     with concurrent.futures.ThreadPoolExecutor(max_workers=6) as pool:
         list(pool.map(fetch, payload['packages']))
     for entry in payload['packages']:

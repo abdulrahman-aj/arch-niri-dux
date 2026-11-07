@@ -16,7 +16,7 @@ def boot_entry_path(text, snapshot=None):
         entry = re.match(r'^\s*(/+)(?:\+)?(.+)$', line)
         if entry:
             depth = len(entry.group(1))
-            names = names[:depth - 1] + [entry.group(2).strip()]
+            names = names[: depth - 1] + [entry.group(2).strip()]
         if re.match(r'\s*(?:kernel_cmdline|cmdline):', line):
             expected = f'/@snapshots/{snapshot}/snapshot' if snapshot else None
             matches = expected in line if snapshot else re.search(r'rootflags=subvol=/?@(?:\s|$)', line)
@@ -31,14 +31,18 @@ def select_boot_entry(path):
     # Only global options precede the first menu header.
     lines = text.splitlines()
     first_entry = next(index for index, line in enumerate(lines) if line.lstrip().startswith('/'))
-    global_options = [line for line in lines[:first_entry]
-                      if not re.match(r'\s*(default_entry|remember_last_entry|timeout|serial):', line)]
+    global_options = [
+        line
+        for line in lines[:first_entry]
+        if not re.match(r'\s*(default_entry|remember_last_entry|timeout|serial):', line)
+    ]
     global_options += [f'default_entry: {path}', 'remember_last_entry: no', 'timeout: 1', 'serial: yes']
     config.write_text('\n'.join(global_options + lines[first_entry:]) + '\n')
 
 
 def snapshots():
     from . import migrations
+
     run('systemctl', 'stop', 'snapper-cleanup.timer')
     home = Path('/home/tester/keep-this-file')
     home.write_text('home-must-survive-rollback\n')
@@ -46,7 +50,9 @@ def snapshots():
     stage = Path('/tmp/verify-package')
     (stage / 'etc').mkdir(parents=True, exist_ok=True)
     (stage / 'etc/dux-verification-version').write_text('known-good\n')
-    (stage / '.PKGINFO').write_text('pkgname = dux-verification\npkgver = 1-1\npkgdesc = Offline verification fixture\narch = any\nsize = 11\nlicense = MIT\n')
+    (stage / '.PKGINFO').write_text(
+        'pkgname = dux-verification\npkgver = 1-1\npkgdesc = Offline verification fixture\narch = any\nsize = 11\nlicense = MIT\n'
+    )
     package = '/tmp/dux-verification-1-1-any.pkg.tar.gz'
     run('tar', '-C', str(stage), '-czf', package, '.PKGINFO', 'etc')
     run('pacman', '-U', '--noconfirm', package)
@@ -54,8 +60,18 @@ def snapshots():
     if len(after.splitlines()) <= len(before.splitlines()):
         raise RuntimeError('The package transaction did not create automatic snapshots.')
     migrations.prepare_snapshot()
-    number = run('snapper', '-c', 'root', 'create', '--print-number', '--cleanup-algorithm', 'number',
-                 '--description', 'VM known-good', stdout=subprocess.PIPE).stdout.strip()
+    number = run(
+        'snapper',
+        '-c',
+        'root',
+        'create',
+        '--print-number',
+        '--cleanup-algorithm',
+        'number',
+        '--description',
+        'VM known-good',
+        stdout=subprocess.PIPE,
+    ).stdout.strip()
     Path('/run/verify/recovery-snapshot').write_text(number + '\n')
     migrations.after_snapshot()
     integration.verify_upgrade()
@@ -77,18 +93,25 @@ def recovery():
     cmdline = Path('/proc/cmdline').read_text()
     assert f'/@snapshots/{number}/snapshot' in cmdline
     assert 'noresume' in cmdline.split(), 'Recovery could resume a stale normal-root memory image.'
-    condition = subprocess.run(['systemd-analyze', 'condition', 'ConditionKernelCommandLine=!noresume'],
-                               text=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+    condition = subprocess.run(
+        ['systemd-analyze', 'condition', 'ConditionKernelCommandLine=!noresume'],
+        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+    )
     assert condition.returncode == 1, condition.stdout
     assert Path('/etc/dux-verification-version').read_text().strip() == 'known-good'
     assert Path('/home/tester/keep-this-file').read_text().strip() == 'home-created-after-snapshot'
     assert not Path('/etc/systemd/system/greetd.service').is_symlink()
     # Restore through the same upstream terminal interface the laptop will use.
-    run_interactive(['limine-snapper-restore'], [
-        (b'Choice [r/l/c]: ', b'r\n'),
-        (b'Description for backup subvolume @: ', b'VM pre-restore backup\n'),
-        (b'Restore complete. Reboot now? [Y/n]:', b'n\n'),
-    ])
+    run_interactive(
+        ['limine-snapper-restore'],
+        [
+            (b'Choice [r/l/c]: ', b'r\n'),
+            (b'Description for backup subvolume @: ', b'VM pre-restore backup\n'),
+            (b'Restore complete. Reboot now? [Y/n]:', b'n\n'),
+        ],
+    )
     select_boot_entry(boot_entry_path(Path('/boot/limine.conf').read_text()))
     run('limine-snapper-info')
     run('sync')
@@ -96,6 +119,7 @@ def recovery():
 
 def restored():
     from . import migrations
+
     migrations.restored()
     assert '/@snapshots/' not in Path('/proc/cmdline').read_text()
     assert Path('/etc/dux-verification-version').read_text().strip() == 'known-good'
@@ -129,8 +153,11 @@ def verify(vm, passed):
 
 
 if __name__ == '__main__':
-    dispatch('recovery', {
-        'snapshots': snapshots,
-        'recovery': recovery,
-        'restored': restored,
-    })
+    dispatch(
+        'recovery',
+        {
+            'snapshots': snapshots,
+            'recovery': recovery,
+            'restored': restored,
+        },
+    )

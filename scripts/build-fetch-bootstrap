@@ -6,7 +6,10 @@ base=https://geo.mirror.pkgbuild.com/iso/$version/archlinux-$version-x86_64.iso
 dest=${1:?Usage: build-fetch-bootstrap DESTINATION-DIRECTORY}
 root=$(cd "$(dirname "$0")/.." && pwd)
 keyring=$root/keys/trusted-packagers.gpg
-[[ -r "$keyring" ]] || { echo "Arch Linux keyring not readable: $keyring" >&2; exit 1; }
+[[ -r "$keyring" ]] || {
+    echo "Arch Linux keyring not readable: $keyring" >&2
+    exit 1
+}
 mkdir -p "$dest"
 if ! printf '%s  %s\n' "$sha256" "$dest/archlinux.iso" | sha256sum --check --status 2>/dev/null; then
     curl --fail --location --retry 5 --continue-at - "$base" -o "$dest/archlinux.iso"

@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """Real Windows/Linux alongside acceptance; fixture contracts in ALONGSIDE.md."""
+
 import argparse
 import hashlib
 import json
@@ -40,8 +41,9 @@ def main():
     args.directory.mkdir(mode=0o700)  # Never reuse evidence or fixture overlays.
     directory = args.directory.resolve()
     disk = directory / 'disk.qcow2'
-    subprocess.run(['qemu-img', 'create', '-f', 'qcow2', '-F', 'qcow2', '-b',
-                    str(args.fixture.resolve()), str(disk)], check=True)
+    subprocess.run(
+        ['qemu-img', 'create', '-f', 'qcow2', '-F', 'qcow2', '-b', str(args.fixture.resolve()), str(disk)], check=True
+    )
     shutil.copyfile(args.firmware, directory / 'OVMF_VARS.fd')
     inputs = {}
     for name, path in [('iso', args.iso), ('fixture', args.fixture), ('firmware', args.firmware)]:
@@ -81,10 +83,12 @@ def main():
         vm.mount_probes()
         for filename in ('install.py', 'configure-target.sh'):
             digest = hashlib.sha256((ROOT / 'installer' / filename).read_bytes()).hexdigest()
-            vm.command(f'test "$(sha256sum /usr/local/lib/arch-niri-dux/installer/{filename} | cut -d " " -f 1)" = {digest}')
+            vm.command(
+                f'test "$(sha256sum /usr/local/lib/arch-niri-dux/installer/{filename} | cut -d " " -f 1)" = {digest}'
+            )
         # Plan through the ISO's own read-only inventory. The fixture must have
         # exactly one eligible region and one registered Debian bootloader.
-        plan_script = '''import importlib.util,json,sys
+        plan_script = """import importlib.util,json,sys
 p='/usr/local/lib/arch-niri-dux/installer/install.py'
 s=importlib.util.spec_from_file_location('installer',p); m=importlib.util.module_from_spec(s);sys.modules[s.name]=m;s.loader.exec_module(m)
 v=m.Settings('DEVICE','tester','alongside','UTC','us','vm-verification-only','vm-verification-only',swap_gib=0,mode='alongside')
@@ -98,7 +102,7 @@ c={k:getattr(v,k) for k in ('disk','username','hostname','timezone','keymap','pa
 open('/run/verify/install.json','w').write(json.dumps(c))
 open('/run/verify/old-partitions.json','w').write(json.dumps(t['table']['partitions']))
 open('/run/verify/new-partitions.json','w').write(json.dumps(m.alongside_plan(v,t)))
-'''
+"""
         plan_script = plan_script.replace('DEVICE', device).replace('BOOTPATH', 'microsoft' if reports else 'debian')
         vm.command('python -c ' + shlex.quote(plan_script))
         vm.command('chmod 600 /run/verify/install.json')
@@ -113,14 +117,21 @@ open('/run/verify/new-partitions.json','w').write(json.dumps(m.alongside_plan(v,
         plan = json.loads((directory / 'new-partitions.json').read_text())
         separator = 'p' if device[-1].isdigit() else ''
         esp, encrypted = [device + separator + str(part[0]) for part in plan]
-        vm.command(f'cryptsetup open --key-file /run/verify/key {encrypted} dux-root; '
-                   'mkdir -p /mnt/verify; mount -o subvol=@ /dev/mapper/dux-root /mnt/verify; '
-                   f'mount {esp} /mnt/verify/boot')
-        vm.command('cd /run/verify && python -m verification.boot prepare /mnt/verify; '
-                   'cd /run/verify && python -m verification.boot serial-console-enable /mnt/verify; '
-                   'arch-chroot /mnt/verify limine-mkinitcpio', timeout=300)
-        vm.command('umount -R /mnt/verify; cryptsetup close dux-root; '
-                   'cp /run/archiso/bootmnt/repo/linux-[0-9]*.pkg.tar.zst /run/verify/; sync')
+        vm.command(
+            f'cryptsetup open --key-file /run/verify/key {encrypted} dux-root; '
+            'mkdir -p /mnt/verify; mount -o subvol=@ /dev/mapper/dux-root /mnt/verify; '
+            f'mount {esp} /mnt/verify/boot'
+        )
+        vm.command(
+            'cd /run/verify && python -m verification.boot prepare /mnt/verify; '
+            'cd /run/verify && python -m verification.boot serial-console-enable /mnt/verify; '
+            'arch-chroot /mnt/verify limine-mkinitcpio',
+            timeout=300,
+        )
+        vm.command(
+            'umount -R /mnt/verify; cryptsetup close dux-root; '
+            'cp /run/archiso/bootmnt/repo/linux-[0-9]*.pkg.tar.zst /run/verify/; sync'
+        )
         vm.poweroff()
         vm.start(cdrom=False)
         installed_login(vm)
@@ -130,9 +141,11 @@ open('/run/verify/new-partitions.json','w').write(json.dumps(m.alongside_plan(v,
         # snapshot generation rather than only editing the menu in place.
         vm.mount_probes()
         vm.command('pacman -U --noconfirm /run/verify/linux-[0-9]*.pkg.tar.zst', timeout=600)
-        vm.command('grep -A2 "^/Existing OS" /boot/limine.conf > /run/verify/chainload-after-update.txt; '
-                   'grep -q "path: guid(" /run/verify/chainload-after-update.txt; '
-                   'cp /boot/limine.conf /run/verify/limine-after-update.conf')
+        vm.command(
+            'grep -A2 "^/Existing OS" /boot/limine.conf > /run/verify/chainload-after-update.txt; '
+            'grep -q "path: guid(" /run/verify/chainload-after-update.txt; '
+            'cp /boot/limine.conf /run/verify/limine-after-update.conf'
+        )
         passed('Pinned kernel reinstall and snapshot hooks preserve the existing OS entry')
         vm.poweroff()
         vm.start(cdrom=False)
@@ -141,9 +154,11 @@ open('/run/verify/new-partitions.json','w').write(json.dumps(m.alongside_plan(v,
         passed('New encrypted installation boots after kernel package reinstall')
         # Explicit selection by entry path exercises the same chainloader as
         # manual menu selection without timing-dependent keyboard simulation.
-        vm.command('sed -i "1i default_entry: Existing OS (firmware ' +
-                   json.loads((directory / 'install.json').read_text())['existing_boot'].upper() +
-                   ')\\ntimeout: 1\\nremember_last_entry: no" /boot/limine.conf')
+        vm.command(
+            'sed -i "1i default_entry: Existing OS (firmware '
+            + json.loads((directory / 'install.json').read_text())['existing_boot'].upper()
+            + ')\\ntimeout: 1\\nremember_last_entry: no" /boot/limine.conf'
+        )
         vm.poweroff()
         vm.start(cdrom=False, network=bool(reports))
         if reports:

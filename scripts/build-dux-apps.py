@@ -36,8 +36,9 @@ def validate_recipe(root, recipe):
 def version(source):
     """Read the package version from the hash-pinned .SRCINFO without running the recipe."""
     fields = dict(re.findall(r'^\t(pkgver|pkgrel|epoch) = (\S+)$', (source / '.SRCINFO').read_text(), re.MULTILINE))
-    if 'epoch' in fields or not all(re.fullmatch(r'[0-9]+(?:\.[0-9]+)*', fields.get(key, ''))
-                                    for key in ('pkgver', 'pkgrel')):
+    if 'epoch' in fields or not all(
+        re.fullmatch(r'[0-9]+(?:\.[0-9]+)*', fields.get(key, '')) for key in ('pkgver', 'pkgrel')
+    ):
         raise ValueError(f'Expected a numeric pkgver/pkgrel without epoch: {source}')
     return f'{fields["pkgver"]}-{fields["pkgrel"]}'
 
@@ -67,17 +68,21 @@ def build(root, workspace, destination):
         # Copy only reviewed files; never execute stray files from a working tree.
         for name in recipe['files']:
             shutil.copy2(source / name, work / name)
-        environment = os.environ | {'PKGDEST': str(destination),
-                                    'SOURCE_DATE_EPOCH': str(recipe['source_date_epoch'])}
+        environment = os.environ | {'PKGDEST': str(destination), 'SOURCE_DATE_EPOCH': str(recipe['source_date_epoch'])}
         # These recipes only repackage pinned upstream binaries. Runtime deps are
         # resolved from the signed closure or offline repository at install time.
-        subprocess.run(['makepkg', '--config', str(config), '--nodeps', '--noconfirm', '--cleanbuild', '--force'],
-                       cwd=work, env=environment, check=True)
+        subprocess.run(
+            ['makepkg', '--config', str(config), '--nodeps', '--noconfirm', '--cleanbuild', '--force'],
+            cwd=work,
+            env=environment,
+            check=True,
+        )
         package = destination / filename
         if not package.is_file():
             raise ValueError(f'Expected {filename} from the reviewed recipe')
-        apps.append(dict(name=recipe['name'], version=version(source), filename=filename,
-                         sha256=digest(package), recipe=recipe))
+        apps.append(
+            dict(name=recipe['name'], version=version(source), filename=filename, sha256=digest(package), recipe=recipe)
+        )
     manifest['apps'] = apps
     manifest_path.write_text(json.dumps(manifest, indent=2) + '\n')
 

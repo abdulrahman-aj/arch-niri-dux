@@ -20,8 +20,7 @@ class LintDiscoveryTests(unittest.TestCase):
         self.write('.gitignore', '/out/\n')
 
     def git(self, *args):
-        subprocess.run(['git', *args], cwd=self.root, check=True,
-                       stdout=subprocess.DEVNULL, stderr=subprocess.PIPE)
+        subprocess.run(['git', *args], cwd=self.root, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE)
 
     def write(self, name, content):
         path = self.root / name
@@ -30,18 +29,22 @@ class LintDiscoveryTests(unittest.TestCase):
         return path
 
     def shellcheck(self, cwd=None):
-        return subprocess.run([sys.executable, str(ROOT / 'scripts/lint-shell.py')],
-                              cwd=cwd or self.root, text=True, capture_output=True)
+        return subprocess.run(
+            [sys.executable, str(ROOT / 'scripts/lint-shell.py')], cwd=cwd or self.root, text=True, capture_output=True
+        )
 
     def lint_shell(self, *args):
-        return subprocess.run([sys.executable, str(ROOT / 'scripts/lint-shell.py'), *args],
-                              cwd=self.root, text=True, capture_output=True)
+        return subprocess.run(
+            [sys.executable, str(ROOT / 'scripts/lint-shell.py'), *args], cwd=self.root, text=True, capture_output=True
+        )
 
     def test_new_shell_files_anywhere_are_checked_without_staging(self):
-        for name, prefix in [('new directory/out/extensionless', '#!/usr/bin/env bash\n'),
-                             ('portable', '#!/bin/sh\n'),
-                             ('env-s', '#!/usr/bin/env -S bash -eu\n'),
-                             ('--flag.sh', '# shellcheck shell=sh\n')]:
+        for name, prefix in [
+            ('new directory/out/extensionless', '#!/usr/bin/env bash\n'),
+            ('portable', '#!/bin/sh\n'),
+            ('env-s', '#!/usr/bin/env -S bash -eu\n'),
+            ('--flag.sh', '# shellcheck shell=sh\n'),
+        ]:
             with self.subTest(name=name):
                 file = self.write(name, prefix + 'echo $missing\n')
                 result = self.shellcheck()
@@ -71,9 +74,11 @@ class LintDiscoveryTests(unittest.TestCase):
         self.assertIn('SC2086', result.stdout)
 
     def test_makepkg_context_still_catches_real_shell_errors(self):
-        recipe = self.write('new package/PKGBUILD',
-                            "pkgbase='example-app'\npkgname=(example-app)\npkgver=1\n"
-                            'package() { mkdir -p "$pkgdir/usr"; echo "$srcdir"; }\n')
+        recipe = self.write(
+            'new package/PKGBUILD',
+            "pkgbase='example-app'\npkgname=(example-app)\npkgver=1\n"
+            'package() { mkdir -p "$pkgdir/usr"; echo "$srcdir"; }\n',
+        )
         self.assertEqual(self.shellcheck().returncode, 0)
         recipe.write_text(recipe.read_text() + 'echo $unquoted\n')
         result = self.shellcheck()
@@ -82,9 +87,10 @@ class LintDiscoveryTests(unittest.TestCase):
 
     def test_format_modes_cover_new_shell_files_but_not_pkgbuilds(self):
         script = self.write('formatted.sh', '#!/bin/sh\nif true; then\necho "checked"\nfi\n')
-        recipe = self.write('new package/PKGBUILD',
-                            "pkgname=(example-app)\ndepends=(bash\n         greetd)\n"
-                            'package() { mkdir -p "$pkgdir/usr"; }\n')
+        recipe = self.write(
+            'new package/PKGBUILD',
+            'pkgname=(example-app)\ndepends=(bash\n         greetd)\npackage() { mkdir -p "$pkgdir/usr"; }\n',
+        )
         self.assertEqual(self.shellcheck().returncode, 0)
         self.assertNotEqual(self.lint_shell('--check-format').returncode, 0)
         self.assertEqual(self.lint_shell('--format').returncode, 0)

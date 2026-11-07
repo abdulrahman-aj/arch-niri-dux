@@ -19,7 +19,9 @@ class SessionPathTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as home:
             output = subprocess.check_output(
                 [SHELL, '-c', '. "$1"; . "$1"; printf "%s" "$PATH"', 'sh', str(PROFILE)],
-                env={'HOME': home, 'PATH': START_PATH}, text=True)
+                env={'HOME': home, 'PATH': START_PATH},
+                text=True,
+            )
             self.assertEqual(output, START_PATH + ':' + home + '/.local/bin')
 
     @unittest.skipUnless(GENERATOR.is_file(), 'systemd environment generator unavailable')
@@ -30,16 +32,26 @@ class SessionPathTests(unittest.TestCase):
             shutil.copyfile(ENVIRONMENT, config / '90-dux.conf')
             # The real generator also reads the host distro (Ubuntu's
             # 99-environment.conf resets PATH). Isolate our fixture by masking it.
-            host_configs = {path.name for directory in ('/etc/environment.d', '/run/environment.d',
-                                                         '/usr/local/lib/environment.d', '/usr/lib/environment.d')
-                            for path in Path(directory).glob('*.conf')}
+            host_configs = {
+                path.name
+                for directory in (
+                    '/etc/environment.d',
+                    '/run/environment.d',
+                    '/usr/local/lib/environment.d',
+                    '/usr/lib/environment.d',
+                )
+                for path in Path(directory).glob('*.conf')
+            }
             for name in host_configs - {'90-dux.conf'}:
                 (config / name).symlink_to('/dev/null')
             output = subprocess.check_output(
-                [str(GENERATOR)], text=True,
-                env={'HOME': home, 'PATH': START_PATH, 'XDG_CONFIG_HOME': str(config.parent)})
-            path = next(line.removeprefix('PATH=') for line in output.splitlines()
-                        if line.startswith('PATH=')).split(':')
+                [str(GENERATOR)],
+                text=True,
+                env={'HOME': home, 'PATH': START_PATH, 'XDG_CONFIG_HOME': str(config.parent)},
+            )
+            path = next(line.removeprefix('PATH=') for line in output.splitlines() if line.startswith('PATH=')).split(
+                ':'
+            )
             existing = START_PATH.split(':')
             self.assertEqual([entry for entry in path if entry in existing], existing)
             self.assertEqual(path.count(home + '/.local/bin'), 1)

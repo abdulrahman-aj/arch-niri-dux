@@ -15,10 +15,19 @@ SHFMT = ['shfmt', '-i', '4', '-ci']
 def discover():
     root = subprocess.check_output(['git', 'rev-parse', '--show-toplevel'], text=True).rstrip('\n')
     os.chdir(root)
-    names = subprocess.check_output([
-        'git', 'ls-files', '-z', '--cached', '--others', '--exclude-standard', '--',
-        ':(exclude)out/**', ':(exclude)packages/aur/**',
-    ])
+    names = subprocess.check_output(
+        [
+            'git',
+            'ls-files',
+            '-z',
+            '--cached',
+            '--others',
+            '--exclude-standard',
+            '--',
+            ':(exclude)out/**',
+            ':(exclude)packages/aur/**',
+        ]
+    )
     scripts, recipes = [], []
     for name in sorted(set(names.split(b'\0')) - {b''}):
         path = Path(os.fsdecode(name))
@@ -30,8 +39,8 @@ def discover():
         with path.open('rb') as stream:
             first_line = stream.readline(256)
         if path.suffix in ('.sh', '.bash', '.ksh') or re.match(
-                rb'^#!\s*(?:/usr/bin/env\s+(?:-S\s+)?)?(?:/\S*/)?(?:bash|sh|dash|ksh)(?:\s|$)',
-                first_line):
+            rb'^#!\s*(?:/usr/bin/env\s+(?:-S\s+)?)?(?:/\S*/)?(?:bash|sh|dash|ksh)(?:\s|$)', first_line
+        ):
             scripts.append(str(path))
     return scripts, recipes
 
@@ -42,8 +51,7 @@ def lint(scripts, recipes):
     if recipes:
         # makepkg consumes metadata, supplies paths and makes pkgname scalar in
         # split-package functions. Those conventions aren't ordinary Bash dataflow.
-        subprocess.run(['shellcheck', '--shell=bash', '--exclude=SC2034,SC2154,SC2128',
-                        '--', *recipes], check=True)
+        subprocess.run(['shellcheck', '--shell=bash', '--exclude=SC2034,SC2154,SC2128', '--', *recipes], check=True)
 
 
 def format_shell(scripts, write):
@@ -60,10 +68,12 @@ def format_shell(scripts, write):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     group = parser.add_mutually_exclusive_group()
-    group.add_argument('--format', dest='format', action='store_true',
-                       help='write shfmt formatting to the discovered shell sources')
-    group.add_argument('--check-format', action='store_true',
-                       help='fail if shfmt would reformat any discovered shell source')
+    group.add_argument(
+        '--format', dest='format', action='store_true', help='write shfmt formatting to the discovered shell sources'
+    )
+    group.add_argument(
+        '--check-format', action='store_true', help='fail if shfmt would reformat any discovered shell source'
+    )
     args = parser.parse_args()
     scripts, recipes = discover()
     if args.format:

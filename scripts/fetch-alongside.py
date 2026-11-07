@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """Fetch official disposable OS media with a reserved host-space budget."""
+
 import argparse
 import hashlib
 import json
@@ -8,15 +9,25 @@ import shutil
 import urllib.request
 
 SOURCES = {
-    'linux': ('https://cloud.debian.org/images/cloud/trixie/20261026-2643/debian-13-genericcloud-amd64-20261026-2643.qcow2', 'debian.qcow2'),
-    'windows': ('https://go.microsoft.com/fwlink/?clcid=0x409&country=us&culture=en-us&linkid=2289029', 'windows11-ltsc-eval.iso'),
+    'linux': (
+        'https://cloud.debian.org/images/cloud/trixie/20261026-2643/debian-13-genericcloud-amd64-20261026-2643.qcow2',
+        'debian.qcow2',
+    ),
+    'windows': (
+        'https://go.microsoft.com/fwlink/?clcid=0x409&country=us&culture=en-us&linkid=2289029',
+        'windows11-ltsc-eval.iso',
+    ),
 }
 
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--os', choices=SOURCES, required=True)
-    parser.add_argument('--verify-existing', action='store_true', help='Record/verify already downloaded official media without downloading it again')
+    parser.add_argument(
+        '--verify-existing',
+        action='store_true',
+        help='Record/verify already downloaded official media without downloading it again',
+    )
     parser.add_argument('--directory', type=Path, required=True)
     args = parser.parse_args()
     args.directory.mkdir(parents=True, exist_ok=True)

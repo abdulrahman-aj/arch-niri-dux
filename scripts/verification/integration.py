@@ -30,11 +30,24 @@ def verify_upgrade():
         raise SystemExit('Requires the disposable installation verification fixture.')
     subprocess.run(['systemd-detect-virt', '--vm'], check=True)
     user = pwd.getpwnam('tester')
-    prefix = ['runuser', '-u', user.pw_name, '--', 'env', '-u', 'XDG_CONFIG_HOME',
-              '-u', 'XDG_STATE_HOME', '-u', 'XDG_DATA_HOME', f'HOME={user.pw_dir}']
+    prefix = [
+        'runuser',
+        '-u',
+        user.pw_name,
+        '--',
+        'env',
+        '-u',
+        'XDG_CONFIG_HOME',
+        '-u',
+        'XDG_STATE_HOME',
+        '-u',
+        'XDG_DATA_HOME',
+        f'HOME={user.pw_dir}',
+    ]
     versions = output('pacman', '-Q', 'arch-niri-dux', 'arch-niri-dux-baseline')
-    personal = [Path(user.pw_dir) / '.config' / name for name in
-                ('niri/config.kdl', 'niri/dms/binds.kdl', 'xdg-terminals.list')]
+    personal = [
+        Path(user.pw_dir) / '.config' / name for name in ('niri/config.kdl', 'niri/dms/binds.kdl', 'xdg-terminals.list')
+    ]
     before = {str(path): hashlib.sha256(path.read_bytes()).hexdigest() for path in personal}
     old_file = Path('/usr/share/arch-niri-dux/niri/dms/layout.kdl')
     new_file = Path('/usr/share/arch-niri-dux/upgrade-fixture')
@@ -46,8 +59,9 @@ def verify_upgrade():
         source.mkdir()
         output('tar', '-xf', str(evidence / 'integration-input/integration.tar'), '-C', str(source))
         recipe = (evidence / 'integration-input/PKGBUILD').read_text()
-        recipe, changes = re.subn(r'^pkgrel=(\d+)$', lambda match: f'pkgrel={int(match[1]) + 1}',
-                                 recipe, flags=re.MULTILINE)
+        recipe, changes = re.subn(
+            r'^pkgrel=(\d+)$', lambda match: f'pkgrel={int(match[1]) + 1}', recipe, flags=re.MULTILINE
+        )
         assert changes == 1
         # Remove a seed template only in this disposable release. The running
         # session uses its user-owned copy, so deletion cannot break recovery.
@@ -69,7 +83,8 @@ def verify_upgrade():
         (fake / 'PKGBUILD').write_text(
             f'pkgname={fake_name}\npkgver=1\npkgrel=1\narch=(any)\n'
             'pkgdesc="Disposable dependency fixture"\n'
-            'package() { install -Dm644 /dev/null "$pkgdir/usr/share/dux-verification-app"; }\n')
+            'package() { install -Dm644 /dev/null "$pkgdir/usr/share/dux-verification-app"; }\n'
+        )
         (fake / 'makepkg.conf').write_text('source /etc/makepkg.conf\nOPTIONS+=(!debug)\n')
         output('chown', '-R', f'{user.pw_uid}:{user.pw_gid}', str(work))
         packages = work / 'packages'
@@ -77,20 +92,53 @@ def verify_upgrade():
         system_effect = '/var/lib/arch-niri-dux/upgrade-migration-effects'
         user_effect = '"$HOME/.local/state/upgrade-migration-effects"'
         for scope, effect in [('system', system_effect), ('user', user_effect)]:
-            migrations.fixture(fixture_root, scope, 20,
-                               'test ! -e /var/lib/pacman/db.lck\n' + migrations.effect(effect, 'first'))
+            migrations.fixture(
+                fixture_root, scope, 20, 'test ! -e /var/lib/pacman/db.lck\n' + migrations.effect(effect, 'first')
+            )
         # Build the skipped candidate, then retain its script in the next one.
-        output(*prefix, 'python', str(evidence / 'build-integration.py'), str(source), str(work / 'build'),
-            str(work / 'skipped-candidate'), '--epoch', '1234')
-        recipe_path.write_text(re.sub(r'^pkgrel=(\d+)$', lambda match: f'pkgrel={int(match[1]) + 1}',
-                                     recipe_path.read_text(), flags=re.MULTILINE))
+        output(
+            *prefix,
+            'python',
+            str(evidence / 'build-integration.py'),
+            str(source),
+            str(work / 'build'),
+            str(work / 'skipped-candidate'),
+            '--epoch',
+            '1234',
+        )
+        recipe_path.write_text(
+            re.sub(
+                r'^pkgrel=(\d+)$',
+                lambda match: f'pkgrel={int(match[1]) + 1}',
+                recipe_path.read_text(),
+                flags=re.MULTILINE,
+            )
+        )
         for scope, effect in [('system', system_effect), ('user', user_effect)]:
-            migrations.fixture(fixture_root, scope, 21,
-                               'test ! -e /var/lib/pacman/db.lck\n' + migrations.effect(effect, 'second'))
-        output(*prefix, 'python', str(evidence / 'build-integration.py'), str(source), str(work / 'build-next'),
-            str(packages), '--epoch', '1234')
-        output(*prefix, 'env', f'PKGDEST={packages}', 'makepkg', '--config', str(fake / 'makepkg.conf'),
-            '--nodeps', '--noconfirm', cwd=fake)
+            migrations.fixture(
+                fixture_root, scope, 21, 'test ! -e /var/lib/pacman/db.lck\n' + migrations.effect(effect, 'second')
+            )
+        output(
+            *prefix,
+            'python',
+            str(evidence / 'build-integration.py'),
+            str(source),
+            str(work / 'build-next'),
+            str(packages),
+            '--epoch',
+            '1234',
+        )
+        output(
+            *prefix,
+            'env',
+            f'PKGDEST={packages}',
+            'makepkg',
+            '--config',
+            str(fake / 'makepkg.conf'),
+            '--nodeps',
+            '--noconfirm',
+            cwd=fake,
+        )
         signing = work / 'signing'
         keyring = work / 'keyring'
         signing.mkdir(mode=0o700)
@@ -102,8 +150,12 @@ def verify_upgrade():
         public = work / 'public.gpg'
         output(*gpg, '--output', str(public), '--export', fingerprint)
         output('gpg', '--homedir', str(keyring), '--batch', '--import', str(public))
-        subprocess.run(['gpg', '--homedir', str(keyring), '--batch', '--import-ownertrust'],
-                       input=f'{fingerprint}:6:\n', text=True, check=True)
+        subprocess.run(
+            ['gpg', '--homedir', str(keyring), '--batch', '--import-ownertrust'],
+            input=f'{fingerprint}:6:\n',
+            text=True,
+            check=True,
+        )
         for package in packages.glob('*.pkg.tar.zst'):
             output(*gpg, '--detach-sign', str(package))
         database = packages / 'upgrade.db.tar.gz'
@@ -116,13 +168,16 @@ def verify_upgrade():
         # The disposable signing identity never touches installed trust. The ISO's
         # production keyring bootstrap and refresh hook are exercised separately.
         # Keep fixture signatures out of the system cache, which survives restore.
-        configuration.write_text('[options]\nArchitecture = auto\nSigLevel = Required TrustedOnly\n'
-                                 f'GPGDir = {keyring}\nCacheDir = {cache}\n'
-                                 f'[upgrade]\nServer = file://{packages}\n')
+        configuration.write_text(
+            '[options]\nArchitecture = auto\nSigLevel = Required TrustedOnly\n'
+            f'GPGDir = {keyring}\nCacheDir = {cache}\n'
+            f'[upgrade]\nServer = file://{packages}\n'
+        )
         original = database.read_bytes()
         database.write_bytes(original + b'tampered')
-        rejected = subprocess.run(['pacman', '--config', str(configuration), '-Syu', '--noconfirm'],
-                                  capture_output=True, text=True)
+        rejected = subprocess.run(
+            ['pacman', '--config', str(configuration), '-Syu', '--noconfirm'], capture_output=True, text=True
+        )
         assert rejected.returncode != 0 and 'signature' in rejected.stderr.lower(), rejected
         assert output('pacman', '-Q', 'arch-niri-dux', 'arch-niri-dux-baseline') == versions
         database.write_bytes(original)
@@ -131,11 +186,17 @@ def verify_upgrade():
         assert 'Refreshing Arch Niri Dux release signing keys' in upgrade_output, upgrade_output
         updated = output('pacman', '-Q', 'arch-niri-dux', 'arch-niri-dux-baseline')
         assert updated != versions
-        wait_until('Direct upgrade system migrations', lambda: Path(system_effect).exists()
-                   and Path(system_effect).read_text().splitlines() == ['first', 'second'])
+        wait_until(
+            'Direct upgrade system migrations',
+            lambda: (
+                Path(system_effect).exists() and Path(system_effect).read_text().splitlines() == ['first', 'second']
+            ),
+        )
         user_effect_path = Path(user.pw_dir) / '.local/state/upgrade-migration-effects'
-        wait_until('Direct upgrade user migrations', lambda: user_effect_path.exists()
-                   and user_effect_path.read_text().splitlines() == ['first', 'second'])
+        wait_until(
+            'Direct upgrade user migrations',
+            lambda: user_effect_path.exists() and user_effect_path.read_text().splitlines() == ['first', 'second'],
+        )
         assert new_file.read_text() == 'Integration upgrade verified\n' and not old_file.exists()
         assert 'Verified package update' in Path('/usr/share/arch-niri-dux/session.kdl').read_text()
         output('pacman', '-Q', fake_name)
@@ -149,17 +210,30 @@ def verify_upgrade():
         output('pacman', '-Dk')
         for home in (signing, keyring):
             output('gpgconf', '--homedir', str(home), '--kill', 'all')
-        (evidence / 'integration-upgrade.json').write_text(json.dumps({
-            'before': versions.splitlines(), 'after': updated.splitlines(),
-            'personal_sha256': before, 'owned_file_added_and_removed': True,
-            'baseline_addition_installed': True, 'baseline_can_be_removed_independently': True,
-            'signed_packages_and_database': True, 'tampered_database_rejected': True,
-            'installed_keyring_refresh_hook_ran': True,
-            'direct_upgrade_across_two_migration_candidates': True,
-            'migrations_executed_after_transaction_lock_released': True,
-            'restoration': {'files_present': [str(old_file)], 'files_absent': [str(new_file)],
-                            'packages_absent': [fake_name]},
-        }, indent=2) + '\n')
+        (evidence / 'integration-upgrade.json').write_text(
+            json.dumps(
+                {
+                    'before': versions.splitlines(),
+                    'after': updated.splitlines(),
+                    'personal_sha256': before,
+                    'owned_file_added_and_removed': True,
+                    'baseline_addition_installed': True,
+                    'baseline_can_be_removed_independently': True,
+                    'signed_packages_and_database': True,
+                    'tampered_database_rejected': True,
+                    'installed_keyring_refresh_hook_ran': True,
+                    'direct_upgrade_across_two_migration_candidates': True,
+                    'migrations_executed_after_transaction_lock_released': True,
+                    'restoration': {
+                        'files_present': [str(old_file)],
+                        'files_absent': [str(new_file)],
+                        'packages_absent': [fake_name],
+                    },
+                },
+                indent=2,
+            )
+            + '\n'
+        )
 
 
 def assert_restored(root=Path('/'), evidence=Path('/run/verify')):
@@ -173,10 +247,9 @@ def assert_restored(root=Path('/'), evidence=Path('/run/verify')):
     for name in restoration['files_absent']:
         assert not (root / name.lstrip('/')).exists(), name
     for name in restoration['packages_absent']:
-        assert subprocess.run(['pacman', '-Q', name], stdout=subprocess.DEVNULL,
-                              stderr=subprocess.DEVNULL).returncode != 0, name
-
-
+        assert (
+            subprocess.run(['pacman', '-Q', name], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL).returncode != 0
+        ), name
 
 
 def published_repository():
@@ -187,8 +260,9 @@ def published_repository():
     signature = output('pacman-conf', '--repo', 'arch-niri-dux', 'SigLevel')
     assert 'PackageRequired' in signature and 'PackageTrustedOnly' in signature, signature
     repository = f'[arch-niri-dux]\nSigLevel = Required TrustedOnly\nServer = {server}\n'
-    personal = [Path('/home/tester/.config') / name for name in
-                ('niri/config.kdl', 'niri/dms/binds.kdl', 'xdg-terminals.list')]
+    personal = [
+        Path('/home/tester/.config') / name for name in ('niri/config.kdl', 'niri/dms/binds.kdl', 'xdg-terminals.list')
+    ]
     before = {str(path): hashlib.sha256(path.read_bytes()).hexdigest() for path in personal}
     manifest = json.loads((evidence / 'release-manifest.json').read_text())
     hashes = {}
@@ -199,14 +273,12 @@ def published_repository():
         configuration = work / 'pacman.conf'
         # Only our repository participates; do not pull unrelated Arch updates
         # into this release qualification. Default installed GPG trust is used.
-        configuration.write_text('[options]\nArchitecture = auto\n'
-                                 f'CacheDir = {cache}\n' + repository)
+        configuration.write_text(f'[options]\nArchitecture = auto\nCacheDir = {cache}\n' + repository)
         run('pacman', '--config', str(configuration), '-Syyu', '--noconfirm')
         # Force downloads into an empty cache even when this ISO already has
         # the current version. Package identity must match the signed ISO input.
         packages = manifest['packages'] + manifest['apps']
-        run('pacman', '--config', str(configuration), '-S', '--noconfirm',
-            *(package['name'] for package in packages))
+        run('pacman', '--config', str(configuration), '-S', '--noconfirm', *(package['name'] for package in packages))
         for package in packages:
             payload = cache / package['filename']
             hashes[package['name']] = hashlib.sha256(payload.read_bytes()).hexdigest()
@@ -214,11 +286,20 @@ def published_repository():
     for path in personal:
         assert hashlib.sha256(path.read_bytes()).hexdigest() == before[str(path)], path
     run('pacman', '-Dk')
-    (evidence / 'published-repository.json').write_text(json.dumps({
-        'version': manifest['version'], 'package_sha256': hashes, 'personal_sha256': before,
-        'offline_trust_used': True, 'database_and_packages_required_signed': True,
-        'https_delivery': True,
-    }, indent=2) + '\n')
+    (evidence / 'published-repository.json').write_text(
+        json.dumps(
+            {
+                'version': manifest['version'],
+                'package_sha256': hashes,
+                'personal_sha256': before,
+                'offline_trust_used': True,
+                'database_and_packages_required_signed': True,
+                'https_delivery': True,
+            },
+            indent=2,
+        )
+        + '\n'
+    )
 
 
 def verify_published(vm, passed):
@@ -232,7 +313,10 @@ def verify_published(vm, passed):
 
 
 if __name__ == '__main__':
-    dispatch('integration', {
-        'published-repository': published_repository,
-        'upgrade': verify_upgrade,
-    })
+    dispatch(
+        'integration',
+        {
+            'published-repository': published_repository,
+            'upgrade': verify_upgrade,
+        },
+    )

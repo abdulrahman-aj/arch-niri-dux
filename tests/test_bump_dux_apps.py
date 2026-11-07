@@ -36,14 +36,25 @@ def evaluate(pkgbuild, expression):
 class RecipeUpdateTests(unittest.TestCase):
     def test_new_version_resets_pkgrel_and_replaces_every_checksum_array(self):
         updated = bump.set_version(RECIPE, '2.2.0')
-        updated = bump.set_checksums(updated, "sha256sums=('1111')\nsha256sums_x86_64=('2222')\n"
-                                              "sha256sums_aarch64=('3333')\n")
-        values = evaluate(updated, 'echo "$pkgver-$pkgrel ${sha256sums[*]} ${sha256sums_x86_64[*]} '
-                                   '${sha256sums_aarch64[*]} ${source_x86_64[*]}"; declare -F package')
-        self.assertEqual(values.split(), [
-            '2.2.0-1', '1111', '2222', '3333',
-            'dex-2.2.0.gz::https://github.com/duxlabs-dev/dux-example/releases/download/v2.2.0/dex-linux-amd64.gz',
-            'package'])
+        updated = bump.set_checksums(
+            updated, "sha256sums=('1111')\nsha256sums_x86_64=('2222')\nsha256sums_aarch64=('3333')\n"
+        )
+        values = evaluate(
+            updated,
+            'echo "$pkgver-$pkgrel ${sha256sums[*]} ${sha256sums_x86_64[*]} '
+            '${sha256sums_aarch64[*]} ${source_x86_64[*]}"; declare -F package',
+        )
+        self.assertEqual(
+            values.split(),
+            [
+                '2.2.0-1',
+                '1111',
+                '2222',
+                '3333',
+                'dex-2.2.0.gz::https://github.com/duxlabs-dev/dux-example/releases/download/v2.2.0/dex-linux-amd64.gz',
+                'package',
+            ],
+        )
 
     def test_recipe_without_a_literal_version_is_refused(self):
         with self.assertRaisesRegex(ValueError, 'pkgver'):
@@ -55,10 +66,15 @@ class ReleaseDigestTests(unittest.TestCase):
         self.release = dict(tag_name='v2.2.0', assets=[dict(name='dex-linux-amd64.gz', digest='sha256:' + 'c' * 64)])
 
     def fields(self, asset_sum='c' * 64, asset_url=f'{REPOSITORY}/releases/download/v2.2.0/dex-linux-amd64.gz'):
-        return {'source': ['LICENSE::https://raw.githubusercontent.com/duxlabs-dev/dux-example/v2.2.0/LICENSE',
-                           'dsearch.service'],
-                'sha256sums': ['a' * 64, 'b' * 64],
-                'source_x86_64': [f'dex.gz::{asset_url}'], 'sha256sums_x86_64': [asset_sum]}
+        return {
+            'source': [
+                'LICENSE::https://raw.githubusercontent.com/duxlabs-dev/dux-example/v2.2.0/LICENSE',
+                'dsearch.service',
+            ],
+            'sha256sums': ['a' * 64, 'b' * 64],
+            'source_x86_64': [f'dex.gz::{asset_url}'],
+            'sha256sums_x86_64': [asset_sum],
+        }
 
     def test_sources_matching_the_release_are_accepted(self):
         bump.check_sources(self.fields(), REPOSITORY, self.release)
@@ -73,8 +89,10 @@ class ReleaseDigestTests(unittest.TestCase):
             bump.check_sources(self.fields(), REPOSITORY, self.release)
 
     def test_source_from_another_release_or_host_is_refused(self):
-        for url in (f'{REPOSITORY}/releases/download/v2.1.0/dex-linux-amd64.gz',
-                    'https://example.invalid/dex-linux-amd64.gz'):
+        for url in (
+            f'{REPOSITORY}/releases/download/v2.1.0/dex-linux-amd64.gz',
+            'https://example.invalid/dex-linux-amd64.gz',
+        ):
             with self.subTest(url=url), self.assertRaisesRegex(ValueError, 'not from the upstream release'):
                 bump.check_sources(self.fields(asset_url=url), REPOSITORY, self.release)
 

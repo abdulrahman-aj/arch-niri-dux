@@ -5,9 +5,15 @@ state=${BUILD_STATE:-${XDG_CACHE_HOME:-$HOME/.cache}/arch-niri-dux-build}
 mkdir -p "$state" out
 state=$(realpath "$state")
 exec 9>"$state/build.lock"
-flock -n 9 || { echo 'Another ISO build is using this state directory' >&2; exit 1; }
+flock -n 9 || {
+    echo 'Another ISO build is using this state directory' >&2
+    exit 1
+}
 mode=${1:-release}
-[[ $mode == release || $mode == development ]] || { echo 'Expected release or development mode' >&2; exit 1; }
+[[ $mode == release || $mode == development ]] || {
+    echo 'Expected release or development mode' >&2
+    exit 1
+}
 printf '%s\n' "$mode" >"$state/integration-mode"
 # Linked worktrees point outside the guest's source mount. Resolve Git here.
 git log -1 --format=%ct >"$state/integration-epoch"
@@ -15,9 +21,15 @@ git log -1 --format=%ct >"$state/integration-epoch"
     echo 'Provision the integration public signing identity before building an ISO.' >&2
     exit 1
 }
-[[ -r /dev/kvm && -w /dev/kvm ]] || { echo 'KVM is required' >&2; exit 1; }
+[[ -r /dev/kvm && -w /dev/kvm ]] || {
+    echo 'KVM is required' >&2
+    exit 1
+}
 for tool in qemu-system-x86_64 qemu-img bsdtar curl gpgv python3; do
-    command -v "$tool" >/dev/null || { echo "Missing required tool: $tool" >&2; exit 1; }
+    command -v "$tool" >/dev/null || {
+        echo "Missing required tool: $tool" >&2
+        exit 1
+    }
 done
 ./scripts/build-fetch-bootstrap "$state"
 bsdtar -xf "$state/archlinux.iso" -C "$state" arch/boot/x86_64/vmlinuz-linux arch/boot/x86_64/initramfs-linux.img
@@ -29,7 +41,7 @@ if [[ ! -d "$host_cache" ]]; then
     host_cache=$state/empty-cache
     mkdir -p "$host_cache"
 fi
-cat > "$state/startup.sh" <<'START'
+cat >"$state/startup.sh" <<'START'
 #!/bin/bash
 set -euxo pipefail
 mkdir -p /source /state /cache
@@ -44,18 +56,21 @@ chmod +x "$state/startup.sh"
 rm -f "$state/result"
 # archiso's script= hook downloads and executes startup.sh via the host-only
 # user network. The HTTP server is bound to loopback and serves only build state.
-python3 -m http.server 18765 --bind 127.0.0.1 --directory "$state" > "$state/http.log" 2>&1 &
+python3 -m http.server 18765 --bind 127.0.0.1 --directory "$state" >"$state/http.log" 2>&1 &
 server=$!
 trap 'kill "$server" 2>/dev/null || true' EXIT
 python3 scripts/verification/vm.py
 qemu-system-x86_64 -enable-kvm -cpu host -m 8192 -smp 4 -display none -serial "file:$state/serial.log" \
- -kernel "$state/arch/boot/x86_64/vmlinuz-linux" -initrd "$state/arch/boot/x86_64/initramfs-linux.img" \
- -append 'archisobasedir=arch archisolabel=ARCH_202610 console=ttyS0 cow_spacesize=3G script=http://10.0.2.2:18765/startup.sh' \
- -drive "file=$state/archlinux.iso,media=cdrom,readonly=on" \
- -drive "file=$state/builder.qcow2,format=qcow2,if=virtio,discard=unmap" \
- -virtfs "local,path=$PWD,mount_tag=source,security_model=none" \
- -virtfs "local,path=$state,mount_tag=state,security_model=none" \
- -virtfs "local,path=$host_cache,mount_tag=cache,security_model=none,readonly=on" \
- -nic user,model=virtio-net-pci -no-reboot
-[[ $(cat "$state/result" 2>/dev/null) == success ]] || { echo "Build failed; see $state/guest-build.log and serial.log" >&2; exit 1; }
+    -kernel "$state/arch/boot/x86_64/vmlinuz-linux" -initrd "$state/arch/boot/x86_64/initramfs-linux.img" \
+    -append 'archisobasedir=arch archisolabel=ARCH_202610 console=ttyS0 cow_spacesize=3G script=http://10.0.2.2:18765/startup.sh' \
+    -drive "file=$state/archlinux.iso,media=cdrom,readonly=on" \
+    -drive "file=$state/builder.qcow2,format=qcow2,if=virtio,discard=unmap" \
+    -virtfs "local,path=$PWD,mount_tag=source,security_model=none" \
+    -virtfs "local,path=$state,mount_tag=state,security_model=none" \
+    -virtfs "local,path=$host_cache,mount_tag=cache,security_model=none,readonly=on" \
+    -nic user,model=virtio-net-pci -no-reboot
+[[ $(cat "$state/result" 2>/dev/null) == success ]] || {
+    echo "Build failed; see $state/guest-build.log and serial.log" >&2
+    exit 1
+}
 sha256sum out/*.iso

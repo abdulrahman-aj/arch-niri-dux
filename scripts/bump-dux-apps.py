@@ -46,8 +46,8 @@ def set_checksums(pkgbuild, arrays):
     first = pattern.search(pkgbuild)
     if first is None:
         raise ValueError('Expected sha256sums arrays in the recipe.')
-    rest = pattern.sub('', pkgbuild[first.start():])
-    return pkgbuild[:first.start()] + arrays.strip() + '\n' + rest
+    rest = pattern.sub('', pkgbuild[first.start() :])
+    return pkgbuild[: first.start()] + arrays.strip() + '\n' + rest
 
 
 def check_sources(fields, repository, release):
@@ -74,7 +74,8 @@ def check_sources(fields, repository, release):
 def latest_release(repository):
     request = urllib.request.Request(
         repository.replace('https://github.com/', 'https://api.github.com/repos/') + '/releases/latest',
-        headers={'Accept': 'application/vnd.github+json'})
+        headers={'Accept': 'application/vnd.github+json'},
+    )
     if token := os.environ.get('GH_TOKEN'):
         request.add_header('Authorization', f'Bearer {token}')
     with urllib.request.urlopen(request, timeout=60) as response:

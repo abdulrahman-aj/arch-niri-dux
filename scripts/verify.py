@@ -18,14 +18,18 @@ from verification.vm import VM, PASSWORD, stage_probes
 
 ROOT = Path(__file__).resolve().parents[1]
 
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--iso', type=Path)
     parser.add_argument('--directory', type=Path, help='Fresh verification workspace; default under /tmp')
     parser.add_argument('--disk', type=Path, help='New disposable qcow2 path; default inside the workspace')
     parser.add_argument('--install-only', action='store_true', help='Debug only; does not produce acceptance success')
-    parser.add_argument('--online-repository', action='store_true',
-                        help='After offline acceptance, boot with networking and check published package delivery')
+    parser.add_argument(
+        '--online-repository',
+        action='store_true',
+        help='After offline acceptance, boot with networking and check published package delivery',
+    )
     parser.add_argument('--swap-gib', type=int, help='Override Auto swap sizing; 0 disables swap and hibernation')
     args = parser.parse_args()
     if args.swap_gib is not None and args.swap_gib < 0:
@@ -42,8 +46,15 @@ def main():
     if disk.exists():
         parser.error('Use a fresh verification directory; refusing to overwrite an existing VM disk.')
     subprocess.run(['qemu-img', 'create', '-f', 'qcow2', str(disk), '48G'], check=True)
-    configuration = dict(disk='/dev/vda', username='tester', hostname='dux-verify',
-                         timezone='UTC', keymap='us', passphrase=PASSWORD, password=PASSWORD)
+    configuration = dict(
+        disk='/dev/vda',
+        username='tester',
+        hostname='dux-verify',
+        timezone='UTC',
+        keymap='us',
+        passphrase=PASSWORD,
+        password=PASSWORD,
+    )
     if args.swap_gib is not None:
         configuration['swap_gib'] = args.swap_gib
     config_file = directory / 'install.json'
@@ -54,11 +65,18 @@ def main():
     package_digest = hashlib.sha256((ROOT / 'out/packages.manifest.json').read_bytes()).hexdigest()
     probe_hashes = stage_probes(directory)
     probe_hashes['verify.py'] = hashlib.sha256(Path(__file__).read_bytes()).hexdigest()
-    (directory / 'inputs.json').write_text(json.dumps({
-        'iso': str(iso.resolve()), 'iso_sha256': iso_digest,
-        'package_manifest_sha256': package_digest,
-        'verification_scripts': probe_hashes,
-    }, indent=2) + '\n')
+    (directory / 'inputs.json').write_text(
+        json.dumps(
+            {
+                'iso': str(iso.resolve()),
+                'iso_sha256': iso_digest,
+                'package_manifest_sha256': package_digest,
+                'verification_scripts': probe_hashes,
+            },
+            indent=2,
+        )
+        + '\n'
+    )
     (directory / 'key').write_text(PASSWORD)
     (directory / 'key').chmod(0o600)
     spec = importlib.util.spec_from_file_location('integration_builder', ROOT / 'scripts/build-integration.py')
@@ -68,43 +86,59 @@ def main():
     source.mkdir()
     manifest = json.loads((ROOT / 'out/packages.manifest.json').read_text())['integration']
     (directory / 'release-manifest.json').write_text(json.dumps(manifest, indent=2) + '\n')
-    release_spec = importlib.util.spec_from_file_location('integration_release', ROOT / 'scripts/integration-release.py')
+    release_spec = importlib.util.spec_from_file_location(
+        'integration_release', ROOT / 'scripts/integration-release.py'
+    )
     release = importlib.util.module_from_spec(release_spec)
     release_spec.loader.exec_module(release)
     release.validate_manifest(ROOT, ROOT / 'out/integration')
-    for filename, target, field in [('integration.tar', 'integration.tar', 'source_sha256'),
-                                     ('integration.PKGBUILD', 'PKGBUILD', 'recipe_sha256')]:
+    for filename, target, field in [
+        ('integration.tar', 'integration.tar', 'source_sha256'),
+        ('integration.PKGBUILD', 'PKGBUILD', 'recipe_sha256'),
+    ]:
         original = ROOT / 'out/integration' / filename
         if builder.digest(original) != manifest[field]:
             raise ValueError(f'Integration build input changed: {filename}')
         shutil.copyfile(original, source / target)
     vm = VM(directory, iso.resolve(), disk)
     milestones = []
+
     def passed(name):
         milestones.append(name)
         (directory / 'milestones.json').write_text(json.dumps(milestones, indent=2))
         print('PASS: ' + name, flush=True)
+
     try:
         print(f'VM evidence: {directory}', flush=True)
         vm.start()
         vm.expect(r'root@archiso[^\n]*#', timeout=180)
         # USB boot with enough RAM reproduces archiso's automatic-copy path.
         # The payload must stay on mounted media instead of disappearing.
-        vm.command('grep -qw copytoram=n /proc/cmdline; mountpoint -q /run/archiso/bootmnt; test ! -e /run/archiso/copytoram/airootfs.sfs')
+        vm.command(
+            'grep -qw copytoram=n /proc/cmdline; mountpoint -q /run/archiso/bootmnt; test ! -e /run/archiso/copytoram/airootfs.sfs'
+        )
         vm.mount_probes()
         vm.command('fastfetch --logo none --structure OS:Kernel')
         vm.command('test "$(ls /sys/class/net | tr "\\n" " ")" = "lo "')
-        vm.command(f'test "$(sha256sum /run/archiso/bootmnt/packages.manifest.json | cut -d " " -f 1)" = {package_digest}')
+        vm.command(
+            f'test "$(sha256sum /run/archiso/bootmnt/packages.manifest.json | cut -d " " -f 1)" = {package_digest}'
+        )
         for filename in ('install.py', 'configure-target.sh'):
             expected = hashlib.sha256((ROOT / 'installer' / filename).read_bytes()).hexdigest()
-            vm.command(f'test "$(sha256sum /usr/local/lib/arch-niri-dux/installer/{filename} | cut -d " " -f 1)" = {expected}')
-        installation_output = vm.command('arch-niri-install --config /run/verify/install.json --confirm-disk /dev/vda', timeout=2400)
+            vm.command(
+                f'test "$(sha256sum /usr/local/lib/arch-niri-dux/installer/{filename} | cut -d " " -f 1)" = {expected}'
+            )
+        installation_output = vm.command(
+            'arch-niri-install --config /run/verify/install.json --confirm-disk /dev/vda', timeout=2400
+        )
         elapsed = re.search(r'INSTALLATION COMPLETE[^\n]*took ([0-9]+) seconds', installation_output)
         if elapsed is None:
             raise RuntimeError('Installer did not report its elapsed completion time.')
         (directory / 'install-time-seconds').write_text(elapsed.group(1) + '\n')
         passed('Offline encrypted installation completed')
-        vm.command("cryptsetup open --key-file /run/verify/key /dev/vda2 dux-root; mkdir -p /mnt/verify; mount -o subvol=@ /dev/mapper/dux-root /mnt/verify; mount /dev/vda1 /mnt/verify/boot")
+        vm.command(
+            'cryptsetup open --key-file /run/verify/key /dev/vda2 dux-root; mkdir -p /mnt/verify; mount -o subvol=@ /dev/mapper/dux-root /mnt/verify; mount /dev/vda1 /mnt/verify/boot'
+        )
         vm.probe('boot', 'prepare', '/mnt/verify', timeout=300)
         vm.command('umount -R /mnt/verify; cryptsetup close dux-root; sync')
         vm.stop()

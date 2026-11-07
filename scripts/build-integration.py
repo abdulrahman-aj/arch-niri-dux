@@ -71,8 +71,7 @@ def prepare_source(root, workspace, epoch):
     recipe = root / 'packages/integration/PKGBUILD'
     # The input is our checkout, not downloaded upstream code. Record its exact
     # hash in both makepkg's checksum and the artifact provenance.
-    (workspace / 'PKGBUILD').write_text(
-        recipe.read_text() + f"\nsha256sums=('{digest(archive)}')\n")
+    (workspace / 'PKGBUILD').write_text(recipe.read_text() + f"\nsha256sums=('{digest(archive)}')\n")
     return archive
 
 
@@ -84,10 +83,12 @@ def build_packages(root, workspace, destination, epoch):
     command = ['makepkg', '--config', str(config)]
     # Only local text/config inputs; dependencies are installed by pacstrap from
     # the ISO's verified repository, not fetched during this build.
-    subprocess.run(command + ['--nodeps', '--noconfirm', '--cleanbuild', '--force'],
-                   cwd=workspace, env=environment, check=True)
-    packages = subprocess.check_output(command + ['--packagelist'], cwd=workspace,
-                                       env=environment, text=True).splitlines()
+    subprocess.run(
+        command + ['--nodeps', '--noconfirm', '--cleanbuild', '--force'], cwd=workspace, env=environment, check=True
+    )
+    packages = subprocess.check_output(
+        command + ['--packagelist'], cwd=workspace, env=environment, text=True
+    ).splitlines()
     result = []
     for filename in packages:
         path = Path(filename)
@@ -97,8 +98,13 @@ def build_packages(root, workspace, destination, epoch):
         result.append(dict(name=name, filename=path.name, sha256=digest(path)))
     if {entry['name'] for entry in result} != NAMES or len(result) != len(NAMES):
         raise ValueError('Expected both the integration and baseline packages.')
-    provenance = dict(version=version(root), source_sha256=digest(archive), recipe_sha256=digest(root / 'packages/integration/PKGBUILD'),
-                      source_date_epoch=epoch, packages=sorted(result, key=lambda entry: entry['name']))
+    provenance = dict(
+        version=version(root),
+        source_sha256=digest(archive),
+        recipe_sha256=digest(root / 'packages/integration/PKGBUILD'),
+        source_date_epoch=epoch,
+        packages=sorted(result, key=lambda entry: entry['name']),
+    )
     shutil.copyfile(archive, destination / 'integration.tar')
     shutil.copyfile(root / 'packages/integration/PKGBUILD', destination / 'integration.PKGBUILD')
     (destination / 'integration.manifest.json').write_text(json.dumps(provenance, indent=2) + '\n')

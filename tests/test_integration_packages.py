@@ -55,10 +55,15 @@ class ExistingUserTests(unittest.TestCase):
             config = home / '.config'
             state = home / '.local/state'
             data = home / '.local/share'
-            files = [config / 'niri/dms' / f'{name}.kdl'
-                     for name in ('colors', 'layout', 'alttab', 'input', 'binds')]
-            files += [config / 'niri/overrides.kdl', config / 'niri/config.kdl', config / 'xdg-terminals.list',
-                      config / 'mimeapps.list', config / 'environment.d/90-dux.conf', state / 'dms/session.json']
+            files = [config / 'niri/dms' / f'{name}.kdl' for name in ('colors', 'layout', 'alttab', 'input', 'binds')]
+            files += [
+                config / 'niri/overrides.kdl',
+                config / 'niri/config.kdl',
+                config / 'xdg-terminals.list',
+                config / 'mimeapps.list',
+                config / 'environment.d/90-dux.conf',
+                state / 'dms/session.json',
+            ]
             for index, file in enumerate(files):
                 file.parent.mkdir(parents=True, exist_ok=True)
                 file.write_text(f'Personal file {index}\n')
@@ -72,11 +77,16 @@ class ExistingUserTests(unittest.TestCase):
             manager.parent.mkdir(parents=True)
             manager.symlink_to('/missing/personal-manager.service')
             before = {file: (file.read_bytes(), file.stat().st_mode, file.stat().st_uid) for file in files}
-            environment = os.environ | {'HOME': str(home), 'XDG_CONFIG_HOME': str(config),
-                                        'XDG_STATE_HOME': str(state), 'XDG_DATA_HOME': str(data)}
+            environment = os.environ | {
+                'HOME': str(home),
+                'XDG_CONFIG_HOME': str(config),
+                'XDG_STATE_HOME': str(state),
+                'XDG_DATA_HOME': str(data),
+            }
             for _ in range(2):
-                subprocess.run(['bash', str(ROOT / 'desktop/usr/lib/arch-niri-dux/initialize-user')],
-                               env=environment, check=True)
+                subprocess.run(
+                    ['bash', str(ROOT / 'desktop/usr/lib/arch-niri-dux/initialize-user')], env=environment, check=True
+                )
             for file, value in before.items():
                 self.assertEqual((file.read_bytes(), file.stat().st_mode, file.stat().st_uid), value)
             self.assertTrue(bindings.is_symlink())

@@ -1,4 +1,5 @@
 """Acceptance fixture contracts: fail closed on a boot without OS evidence."""
+
 import importlib.util
 import json
 from pathlib import Path
@@ -11,7 +12,9 @@ from unittest.mock import patch
 import xml.etree.ElementTree as ET
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'scripts'))
-spec = importlib.util.spec_from_file_location('alongside_windows', Path(__file__).resolve().parents[1] / 'scripts/alongside_windows.py')
+spec = importlib.util.spec_from_file_location(
+    'alongside_windows', Path(__file__).resolve().parents[1] / 'scripts/alongside_windows.py'
+)
 windows = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(windows)
 
@@ -38,10 +41,17 @@ class WindowsFixtureTests(unittest.TestCase):
             reports = windows.BootReports(Path(directory), 'fixture-token')
             self.addCleanup(reports.close)
             port = reports.server.server_port
-            valid = dict(caption='Microsoft Windows 11 Enterprise LTSC Evaluation', build='26100', sentinel='preserve-existing-windows')
-            for token, body, status in [('wrong', valid, 403), ('fixture-token', valid | {'caption': 'EFI stub'}, 422),
-                                        ('fixture-token', valid | {'build': '19045'}, 422),
-                                        ('fixture-token', valid | {'sentinel': 'missing'}, 422)]:
+            valid = dict(
+                caption='Microsoft Windows 11 Enterprise LTSC Evaluation',
+                build='26100',
+                sentinel='preserve-existing-windows',
+            )
+            for token, body, status in [
+                ('wrong', valid, 403),
+                ('fixture-token', valid | {'caption': 'EFI stub'}, 422),
+                ('fixture-token', valid | {'build': '19045'}, 422),
+                ('fixture-token', valid | {'sentinel': 'missing'}, 422),
+            ]:
                 request = urllib.request.Request(f'http://127.0.0.1:{port}/{token}', data=json.dumps(body).encode())
                 with self.assertRaises(urllib.error.HTTPError) as caught:
                     urllib.request.urlopen(request)
@@ -51,10 +61,12 @@ class WindowsFixtureTests(unittest.TestCase):
                 self.assertEqual(response.status, 200)
             self.assertEqual(reports.reports.get_nowait(), valid)
 
+
 class WindowsTPMRestartTests(unittest.TestCase):
     def test_a_second_boot_restarts_the_emulator_and_retains_its_state_directory(self):
         import shutil
         import socket
+
         self.assertIsNotNone(shutil.which('swtpm'), 'Run tests through the project Nix shell.')
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)

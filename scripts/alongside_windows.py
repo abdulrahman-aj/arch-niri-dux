@@ -1,4 +1,5 @@
 """Windows fixture guest reporting over QEMU's host-only user network."""
+
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import json
 import queue
@@ -15,6 +16,7 @@ PORT = 18769
 
 class WindowsVM(VM):
     """Keep the same TPM state while restarting its emulator for each QEMU run."""
+
     def __init__(self, directory, iso, disk, tpm_source=None):
         super().__init__(directory, iso, disk)
         self.optical_interface = 'sata'
@@ -40,16 +42,33 @@ class WindowsVM(VM):
         self.stop_tpm()
         control = self.control_path('tpm.sock')
         control.unlink(missing_ok=True)
-        self.tpm_process = subprocess.Popen(['swtpm', 'socket', '--tpm2', '--tpmstate',
-            f'dir={self.tpm_state}', '--ctrl', f'type=unixio,path={control}', '--flags', 'not-need-init'])
+        self.tpm_process = subprocess.Popen(
+            [
+                'swtpm',
+                'socket',
+                '--tpm2',
+                '--tpmstate',
+                f'dir={self.tpm_state}',
+                '--ctrl',
+                f'type=unixio,path={control}',
+                '--flags',
+                'not-need-init',
+            ]
+        )
         for attempt in range(100):
             if control.exists():
                 break
             if self.tpm_process.poll() is not None:
                 raise RuntimeError('TPM emulator exited before its control socket appeared.')
             time.sleep(0.1)
-        tpm_args = ['-chardev', f'socket,id=chrtpm,path={control}', '-tpmdev',
-                    'emulator,id=tpm0,chardev=chrtpm', '-device', 'tpm-tis,tpmdev=tpm0']
+        tpm_args = [
+            '-chardev',
+            f'socket,id=chrtpm,path={control}',
+            '-tpmdev',
+            'emulator,id=tpm0,chardev=chrtpm',
+            '-device',
+            'tpm-tis,tpmdev=tpm0',
+        ]
         saved = self.extra_args
         self.extra_args = saved + tpm_args
         try:
@@ -81,9 +100,11 @@ class BootReports:
                     self.send_error(413)
                     return
                 report = json.loads(self.rfile.read(length))
-                if ('Windows 11' not in report.get('caption', '')
-                        or int(report.get('build', '0')) < 22000
-                        or report.get('sentinel') != 'preserve-existing-windows'):
+                if (
+                    'Windows 11' not in report.get('caption', '')
+                    or int(report.get('build', '0')) < 22000
+                    or report.get('sentinel') != 'preserve-existing-windows'
+                ):
                     self.send_error(422)
                     return
                 owner.reports.put(report)
@@ -129,7 +150,7 @@ class BootReports:
 
 
 def powershell_script(token):
-    return f'''$ErrorActionPreference = 'Stop'
+    return f"""$ErrorActionPreference = 'Stop'
 $o = Get-CimInstance Win32_OperatingSystem
 $s = (Get-Content C:\\alongside-sentinel -Raw).Trim()
 $r = @{{ caption=$o.Caption; build=$o.BuildNumber; version=$o.Version; sentinel=$s; boot=[guid]::NewGuid().ToString(); partitions=@(Get-Partition | Select-Object PartitionNumber,Size,Offset,Type) }} | ConvertTo-Json -Depth 5
@@ -138,12 +159,12 @@ for ($i=0; $i -lt 120; $i++) {{
   catch {{ Start-Sleep -Seconds 2 }}
 }}
 exit 1
-'''
+"""
 
 
 def unattended():
     command = r'cmd /c C:\setup-verify.cmd'
-    return f'''<?xml version="1.0" encoding="utf-8"?>
+    return f"""<?xml version="1.0" encoding="utf-8"?>
 <unattend xmlns="urn:schemas-microsoft-com:unattend" xmlns:wcm="http://schemas.microsoft.com/WMIConfig/2002/State">
 <settings pass="specialize"><component name="Microsoft-Windows-Shell-Setup" processorArchitecture="amd64" publicKeyToken="31bf3856ad364e35" language="neutral" versionScope="nonSxS"><ComputerName>alongside-win11</ComputerName></component>
 <component name="Microsoft-Windows-SecureStartup-FilterDriver" processorArchitecture="amd64" publicKeyToken="31bf3856ad364e35" language="neutral" versionScope="nonSxS"><PreventDeviceEncryption>true</PreventDeviceEncryption></component></settings>
@@ -153,14 +174,14 @@ def unattended():
 <UserAccounts><LocalAccounts><LocalAccount wcm:action="add"><Name>tester</Name><Group>Administrators</Group><Password><Value>vm-verification-only</Value><PlainText>true</PlainText></Password></LocalAccount></LocalAccounts></UserAccounts>
 <AutoLogon><Enabled>true</Enabled><LogonCount>2</LogonCount><Username>tester</Username><Password><Value>vm-verification-only</Value><PlainText>true</PlainText></Password></AutoLogon>
 <FirstLogonCommands><SynchronousCommand wcm:action="add"><Order>1</Order><Description>Record real Windows boot and preserve sentinel</Description><CommandLine>{escape(command)}</CommandLine></SynchronousCommand></FirstLogonCommands>
-</component></settings></unattend>'''
+</component></settings></unattend>"""
 
 
 def deployment_unattended():
     command = r'cmd /c for %d in (D E F G H I J K L M N O P) do if exist %d:\deploy.cmd call %d:\deploy.cmd'
-    return f'''<?xml version="1.0" encoding="utf-8"?>
+    return f"""<?xml version="1.0" encoding="utf-8"?>
 <unattend xmlns="urn:schemas-microsoft-com:unattend" xmlns:wcm="http://schemas.microsoft.com/WMIConfig/2002/State">
-<settings pass="windowsPE"><component name="Microsoft-Windows-Setup" processorArchitecture="amd64" publicKeyToken="31bf3856ad364e35" language="neutral" versionScope="nonSxS"><RunSynchronous><RunSynchronousCommand wcm:action="add"><Order>1</Order><Path>{escape(command)}</Path></RunSynchronousCommand></RunSynchronous></component></settings></unattend>'''
+<settings pass="windowsPE"><component name="Microsoft-Windows-Setup" processorArchitecture="amd64" publicKeyToken="31bf3856ad364e35" language="neutral" versionScope="nonSxS"><RunSynchronous><RunSynchronousCommand wcm:action="add"><Order>1</Order><Path>{escape(command)}</Path></RunSynchronousCommand></RunSynchronous></component></settings></unattend>"""
 
 
 DISKPART = """select disk 0
