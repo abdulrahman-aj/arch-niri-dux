@@ -73,7 +73,10 @@ history before those boundaries. Review version increases against the last trust
 release: a boundary reset deliberately removes the older comparison history.
 Do not re-sign old bytes authenticated only by the compromised key. Immutable
 GitHub archives remain historical records; issue an advisory identifying them.
-Old cached transactions cease to be supported across the boundary.
+Old cached transactions cease to be supported across the boundary. Tell users
+in the advisory not to restore snapshots taken before the revocation, and ship
+the revocation release with a system migration that deletes root snapshots
+older than the revocation.
 
 An emergency transition signed by the compromised subkey cannot establish trust.
 Affected clients must recover their certificate before upgrading. Offline clients
