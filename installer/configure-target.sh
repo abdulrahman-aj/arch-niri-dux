@@ -56,7 +56,8 @@ limine-mkinitcpio
 
 systemctl preset NetworkManager.service bluetooth.service snapper-cleanup.timer \
     limine-snapper-sync.service systemd-timesyncd.service power-profiles-daemon.service \
-    getty@tty2.service cups.service avahi-daemon.service snapper-timeline.timer greetd.service
+    getty@tty2.service cups.service avahi-daemon.service arch-niri-dux-firewall.service \
+    snapper-timeline.timer greetd.service
 
 # Resolve printer .local names before unicast DNS, preserving other NSS sources.
 if ! grep -Eq '^[[:space:]]*hosts:.*mdns' /etc/nsswitch.conf 2>/dev/null; then

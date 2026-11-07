@@ -143,6 +143,8 @@ def main():
         boot.verify_boot(vm, passed, args.swap_gib)
         vm.probe('policy', 'check', timeout=180)
         passed('Package presets, systemd policy and PAM-unlocked keyring')
+        vm.probe('network', 'check', timeout=240)
+        passed('Inbound firewall and resolve-only mDNS')
         desktop.verify(vm, passed)
         apps.verify(vm, passed)
         pdf.verify(vm, passed)

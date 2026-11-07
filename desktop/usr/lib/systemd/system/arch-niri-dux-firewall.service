@@ -1,0 +1,17 @@
+[Unit]
+Description=Arch Niri Dux inbound firewall
+Documentation=man:nft(8)
+Wants=network-pre.target
+Before=network-pre.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/bin/nft -f /usr/share/arch-niri-dux/firewall.nft
+ExecReload=/usr/bin/nft -f /usr/share/arch-niri-dux/firewall.nft
+ExecStop=/usr/bin/nft destroy table inet arch_niri_dux
+ProtectSystem=full
+ProtectHome=yes
+
+[Install]
+WantedBy=multi-user.target

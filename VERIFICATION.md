@@ -26,7 +26,8 @@ It boots the ISO with loopback as the only network interface, confirms the
 package manifest and installer payload hashes, then installs with
 `arch-niri-install` and qualifies graphical disk unlock with a
 wrong-passphrase retry, UEFI boot without the ISO, package presets with
-systemd policy and the PAM-unlocked keyring, Niri/Dux/terminal/editor/browser
+systemd policy and the PAM-unlocked keyring, the inbound firewall and
+resolve-only mDNS seen from a veth neighbour namespace, Niri/Dux/terminal/editor/browser
 smoke checks, desktop apps (manuals, archives, media playback, driverless
 printing to a loopback printer), PDF rendering, the synthetic camera, screen
 sharing, screen lock, migration ordering with retries and session triggers,

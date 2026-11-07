@@ -1,0 +1,44 @@
+#!/usr/bin/nft -f
+# Package-owned inbound policy loaded by arch-niri-dux-firewall.service.
+# A private table, replaced atomically, leaves Tailscale, Docker and libvirt
+# tables alone. The input chain holds only accepts so local rules appended from
+# /etc/arch-niri-dux/firewall.d still take effect before the drop policy.
+# There is no forward chain; forwarding stays with the tools that enable it.
+
+destroy table inet arch_niri_dux
+
+table inet arch_niri_dux {
+    chain input {
+        type filter hook input priority filter; policy drop;
+
+        # Replies to our own traffic, including ICMP errors such as
+        # packet-too-big, arrive as established or related.
+        ct state established,related accept
+        ct state invalid drop
+        iif lo accept
+
+        # IPv6 needs neighbour discovery, router advertisements and multicast
+        # listener queries (switches snoop MLD before forwarding mDNS).
+        icmpv6 type { nd-neighbor-solicit, nd-neighbor-advert, nd-router-advert, mld-listener-query } accept
+        # DHCP replies answer requests sent to broadcast (IPv4 rebinding) or
+        # multicast (DHCPv6), so connection tracking cannot pair them.
+        udp sport 67 udp dport 68 accept
+        ip6 daddr fe80::/64 udp sport 547 udp dport 546 accept
+
+        # mDNS answers arrive by multicast, which connection tracking cannot
+        # pair with our queries. Accept only responses (DNS header QR bit) so
+        # neighbours cannot query this host or reach Avahi's query parser.
+        udp sport 5353 udp dport 5353 @th,80,1 1 accept
+
+        # NetworkManager hotspots serve DHCP and DNS to their clients from a
+        # dnsmasq bound to the shared interface. The interface name is not
+        # known here; nothing else listens on these ports by default.
+        udp dport 67 accept
+        meta l4proto { tcp, udp } th dport 53 accept
+
+        # Tailnet peers are authenticated and governed by Tailscale ACLs.
+        iifname "tailscale0" accept
+    }
+}
+
+include "/etc/arch-niri-dux/firewall.d/*.nft"
