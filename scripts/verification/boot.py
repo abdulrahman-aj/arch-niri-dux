@@ -24,6 +24,35 @@ def configured_cmdline(root):
     ).stdout.split()
 
 
+# cryptsetup used to pin 256 MiB here; the installer now lets it benchmark its
+# default (~1 GiB, capped by RAM). Anything at or below the old pin is a regression.
+OLD_PINNED_MEMORY_KIB = 262144
+
+
+def parse_luks_memories(dump):
+    assert re.search(r'PBKDF:\s+argon2id', dump), dump
+    memories = [int(value) for value in re.findall(r'Memory:\s+(\d+)', dump)]
+    assert memories, dump
+    return memories
+
+
+def assert_luks_pbkdf(dump):
+    memories = parse_luks_memories(dump)
+    assert min(memories) > OLD_PINNED_MEMORY_KIB, dump
+    return memories
+
+
+def luks_pbkdf():
+    status = run('cryptsetup', 'status', 'dux-root', stdout=subprocess.PIPE).stdout
+    device = re.search(r'device:\s+(\S+)', status)
+    assert device, status
+    dump = run('cryptsetup', 'luksDump', device.group(1), stdout=subprocess.PIPE).stdout
+    memories = assert_luks_pbkdf(dump)
+    Path('/run/verify/luks-pbkdf.json').write_text(
+        json.dumps({'device': device.group(1), 'pbkdf': 'argon2id', 'memory_kib': memories}, indent=2) + '\n'
+    )
+
+
 def prepare(root):
     # Enable post-unlock test control without changing the production boot UI.
     plymouth_config(root)
@@ -69,6 +98,7 @@ def storage():
     assert 'noresume' not in cmdline, 'Normal boot retained the recovery noresume flag.'
     status = run('cryptsetup', 'status', 'dux-root', stdout=subprocess.PIPE).stdout
     assert re.search(r'type:\s+LUKS2', status), status
+    luks_pbkdf()
     swaps = [line.split() for line in Path('/proc/swaps').read_text().splitlines()[1:]]
     if configuration.get('swap_gib') == 0:
         assert not swaps, swaps
@@ -237,6 +267,8 @@ def verify_boot(vm, passed, swap_gib):
     vm.probe('boot', 'plymouth-status')
     passed('Plymouth configuration and boot services are active')
     graphical_login(vm)
+    vm.probe('boot', 'luks-pbkdf')
+    passed('LUKS2 argon2id uses cryptsetup defaults, not the old 256 MiB pin')
     vm.probe('boot', 'storage')
     passed(
         'No-swap installation disables hibernation'
@@ -281,6 +313,7 @@ if __name__ == '__main__':
         {
             'prepare': lambda: prepare(Path(sys.argv[2])),
             'storage': storage,
+            'luks-pbkdf': luks_pbkdf,
             'plymouth-config': lambda: plymouth_config(sys.argv[2] if len(sys.argv) > 2 else '/'),
             'plymouth-status': plymouth_status,
             'prepare-hibernate': prepare_hibernate,

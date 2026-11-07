@@ -124,6 +124,8 @@ def main():
         # Reinstall the pinned kernel: exercise actual package hooks and
         # snapshot generation rather than only editing the menu in place.
         vm.mount_probes()
+        vm.probe('boot', 'luks-pbkdf')
+        passed('LUKS2 argon2id uses cryptsetup defaults, not the old 256 MiB pin')
         vm.command('pacman -U --noconfirm /run/verify/linux-[0-9]*.pkg.tar.zst', timeout=600)
         vm.command(
             'grep -A2 "^/Existing OS" /boot/limine.conf > /run/verify/chainload-after-update.txt; '

@@ -885,8 +885,6 @@ def install(settings):
                 '--batch-mode',
                 '--type',
                 'luks2',
-                '--pbkdf-memory',
-                '262144',
                 '--key-file',
                 '-',
                 encrypted,

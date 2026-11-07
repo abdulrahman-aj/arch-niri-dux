@@ -15,7 +15,9 @@ The live ISO must provide `fzf` for selection menus, plus:
   machine and applies package-owned service presets. Installation downloads
   nothing.
 
-Partitioning uses a 4 GiB FAT32 ESP and a LUKS2 Btrfs root. Independent root,
+Partitioning uses a 4 GiB FAT32 ESP and a LUKS2 Btrfs root. LUKS2 uses
+cryptsetup's default argon2id parameters (benchmarked memory, about 1 GiB on
+the install machine) with no pinned memory limit. Independent root,
 home, logs, package cache, and snapshots subvolumes keep recovery away from home.
 Upstream Limine tools manage the kernel and initramfs. Snapshot boot
 uses their systemd Btrfs overlay hook, and restoration uses their `replace` method.
