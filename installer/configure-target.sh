@@ -28,7 +28,10 @@ plymouth-set-default-theme bgrt
 limine-install --fallback
 limine-mkinitcpio
 
-systemctl preset-all
+# Select only our policy's units; preset-all also enables upstream defaults.
+mapfile -t dux_system_units < <(awk '$1 == "enable" || $1 == "disable" { print $2 }' \
+    /usr/lib/systemd/system-preset/50-arch-niri-dux.preset)
+systemctl preset "${dux_system_units[@]}"
 
 # Resolve printer .local names before unicast DNS, preserving other NSS sources.
 if ! grep -Eq '^[[:space:]]*hosts:.*mdns' /etc/nsswitch.conf 2>/dev/null; then
@@ -43,7 +46,9 @@ fi
 arch-niri-dux-migrate baseline
 runuser -u "$dux_user" -- env -u XDG_CONFIG_HOME -u XDG_STATE_HOME -u XDG_DATA_HOME \
     bash /usr/lib/arch-niri-dux/initialize-user
-systemctl --global preset-all
+mapfile -t dux_user_units < <(awk '$1 == "enable" || $1 == "disable" { print $2 }' \
+    /usr/lib/systemd/user-preset/50-arch-niri-dux.preset)
+systemctl --global preset "${dux_user_units[@]}"
 systemd-tmpfiles --create /usr/lib/tmpfiles.d/dms-greeter.conf
 # The installer stays offline; enable online repositories only on the target.
 pacman-key --populate omarchy
