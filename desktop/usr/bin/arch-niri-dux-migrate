@@ -114,6 +114,12 @@ def execute(queue, state, baseline=False):
     (state / 'failure').unlink(missing_ok=True)
 
 
+def record_failure(state, error):
+    failure = state / 'failure'
+    if not failure.exists() or failure.read_text().strip() != str(error):
+        write(failure, str(error), atomic=False)
+
+
 def notify(message, state):
     print(message, file=sys.stderr, flush=True)
     # Manual CLI retries need journal entries too; services already capture stderr.
@@ -200,14 +206,24 @@ def main():
             return 0
         try:
             with lock(state):
-                process(args.action, scope, state)
-                (state / 'notified').unlink(missing_ok=True)
+                try:
+                    process(args.action, scope, state)
+                    (state / 'notified').unlink(missing_ok=True)
+                except (OSError, RuntimeError) as error:
+                    # Publish failure before releasing the queue, so a
+                    # successful concurrent retry cannot be overwritten by a
+                    # stale failure.
+                    record_failure(state, error)
+                    notify(str(error), state)
+                    return 1
         except (OSError, RuntimeError) as error:
-            # Publish failure before releasing the queue, so a successful
-            # concurrent retry cannot be overwritten by a stale failure.
-            failure = state / 'failure'
-            if not failure.exists() or failure.read_text().strip() != str(error):
-                write(failure, str(error), atomic=False)
+            # Lock acquisition itself failed (for example the bounded wait
+            # expired while another runner held the queue). There is no
+            # exclusion to preserve, so record and report outside the lock.
+            try:
+                record_failure(state, error)
+            except OSError:
+                pass
             notify(str(error), state)
             return 1
         return 0

@@ -11,7 +11,7 @@ After=local-fs.target multi-user.target
 [Service]
 Type=oneshot
 ExecStart=/usr/bin/arch-niri-dux-migrate run
-# The pacman wait plus the migration-lock wait bound startup work below this.
+# Covers the bounded pacman and migration-lock waits plus execution time.
 TimeoutStartSec=600
 UMask=0022
 

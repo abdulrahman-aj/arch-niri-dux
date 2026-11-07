@@ -135,7 +135,9 @@ class Migrations(unittest.TestCase):
         failure = (self.state / 'failure').read_text().strip()
         self.assertIn('lock', failure.lower())
         notifier.assert_called_once()
-        # The run failed at the deadline instead of hanging on the holder.
+        # The run waited out the deadline instead of failing instantly or
+        # hanging on the holder.
+        self.assertGreaterEqual(elapsed, 1)
         self.assertLess(elapsed, 10)
 
     def test_fresh_user_baseline_while_system_pending(self):
