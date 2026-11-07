@@ -5,7 +5,7 @@ _binname=dms-greeter
 
 pkgname=dux-greeter-bin
 pkgver=2.1.0
-pkgrel=1
+pkgrel=2
 pkgdesc='Greetd login screen with the Dux Shell aesthetic (prebuilt binary)'
 arch=('x86_64' 'aarch64')
 _barch=('amd64' 'arm64')

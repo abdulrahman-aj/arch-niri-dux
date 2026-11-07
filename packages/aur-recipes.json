@@ -3,9 +3,9 @@
     "name": "dux-greeter-bin",
     "source_date_epoch": 1793756880,
     "files": {
-      ".SRCINFO": "4fc9989db6e2f79dbf10f5ffa06595c090e3e793c56f63024991c85940be12f4",
-      "PKGBUILD": "3498ede7be1bf4b85bfbd38b21d4833085dfbab47aec9e4a55b1c9f661ea89e5",
-      "dux-greeter.install": "1f93e096453193c7842ad9599e8ab7ff89ff3da2549800e790fceb8c712773f6"
+      ".SRCINFO": "e02844fbe37d2892124ae1a34ac861e4d674647584ba52b228a5feb725ba00cd",
+      "PKGBUILD": "7231fbdea3b3d75f3fb66e61755fec04b59d1afcba7c889ed3a27554a9e41938",
+      "dux-greeter.install": "115f1e98517114e83b12a8e985f53779932f63b24ff6d3d2436a91fea7716505"
     }
   },
   {

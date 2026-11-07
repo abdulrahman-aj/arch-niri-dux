@@ -14,9 +14,7 @@ Edit /etc/greetd/config.toml and set:
 
 You can replace 'niri' with 'hyprland' or 'sway' if desired.
 
-==> Apply your DMS theme and settings to the greeter:
-
-    sudo dms-greeter sync
+==> Greeter setup is managed by arch-niri-dux; full 'dms-greeter sync' is unsupported.
 
 ==> Enable the greeter:
 
@@ -34,9 +32,7 @@ post_upgrade() {
 
     command = "/usr/bin/dms-greeter --command COMPOSITOR"
 
-==> Re-apply your DMS theme and settings:
-
-    sudo dms-greeter sync
+==> Greeter setup is managed by arch-niri-dux; full 'dms-greeter sync' is unsupported.
 
 MSG
 }
