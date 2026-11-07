@@ -207,7 +207,10 @@ def fetch_package(entry, dest, downloads, host_cache):
 
 
 def fetch(root, dest, keyring, downloads, host_cache):
-    payload = json.loads((root / 'packages/closure.lock.json').read_text())
+    lock = root / 'packages/closure.lock.json'
+    if not lock.exists():
+        raise ValueError('No closure lock; create it with `make lock`')
+    payload = json.loads(lock.read_text())
     if requested_packages(root) != payload['requested']:
         raise ValueError('Package lists changed; refresh the closure lock with `make lock`')
     dest.mkdir(parents=True, exist_ok=True)
