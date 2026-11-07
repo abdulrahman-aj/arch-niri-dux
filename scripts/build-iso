@@ -83,6 +83,10 @@ for _ in $(seq 1 100); do
     }
     sleep 0.05
 done
+if [[ ! -s "$port_file" ]]; then
+    echo 'Build HTTP server failed to publish its port; see http.log' >&2
+    exit 1
+fi
 port=$(cat "$port_file")
 python3 scripts/wait-for-memory
 for _ in $(seq 1 100); do
