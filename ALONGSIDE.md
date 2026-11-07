@@ -106,9 +106,8 @@ Only test instrumentation adds a serial console to the new Arch installation.
 Evidence includes input hashes, serial/QEMU logs, original partition hashes,
 firmware listings, menu configuration, Windows guest reports and a milestone
 list. Only a full run writes `SUCCESS`. Never treat a screenshot or a loader
-stub as proof of a successful old-OS boot. See [current
-verification](VERIFICATION.md#alongside-acceptance) for accepted inputs and
-results.
+stub as proof of a successful old-OS boot. See [the alongside
+tier](VERIFICATION.md#make-verify-alongside) for coverage and accepted runs.
 
 Keep at least 8 GiB host headroom. Guest waits and Windows report waits stop at a
 9 GiB threshold to protect that headroom. Media downloads reserve it before writing. Monitor

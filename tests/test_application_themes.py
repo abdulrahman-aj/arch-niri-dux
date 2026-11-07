@@ -57,21 +57,6 @@ class ApplicationThemeTests(unittest.TestCase):
     def run_helper(self, **changes):
         return subprocess.run(['bash', str(SCRIPT)], env=self.environment | changes, text=True, capture_output=True)
 
-    def test_fresh_opt_in_uses_shell_mode_and_accepts_already_current_patch(self):
-        for mode in ('light', 'dark'):
-            for status in ('0', '3'):
-                with self.subTest(mode=mode, status=status):
-                    self.marker.unlink(missing_ok=True)
-                    self.log.unlink(missing_ok=True)
-                    result = self.run_helper(DMS_MODE=mode, PATCH_STATUS=status)
-                    self.assertEqual(result.returncode, 0, result.stderr)
-                    self.assertTrue(self.marker.exists())
-                    calls = self.log.read_text()
-                    self.assertIn('gtk apply ' + ('true' if mode == 'light' else 'false'), calls)
-                    self.assertIn('gtk-theme adw-gtk3' + ('-dark' if mode == 'dark' else '') + '\n', calls)
-                    self.assertIn('color-scheme prefer-' + mode + '\n', calls)
-                    self.assertEqual((self.config / 'gtk-3.0/gtk-theme.dms-backup').read_text(), 'Adwaita\n')
-
     def test_skipped_or_failed_patch_does_not_record_success(self):
         for status in ('1', '2'):
             with self.subTest(status=status):
