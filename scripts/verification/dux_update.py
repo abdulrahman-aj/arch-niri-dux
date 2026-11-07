@@ -6,7 +6,8 @@ the session's DMS server. With no AUR helper installed the server selects its
 pacman backend and runs `pkexec pacman -Syu --needed --noconfirm`, answered by
 Dux's own polkit agent. This stage sends the same server requests, types the
 password into Dux's real authentication dialog, and checks the migration
-contract end to end. Only the QML button press is skipped.
+contract end to end. QML-side wiring (the buttons and the parameters they
+build from user settings) is replaced by the same server requests.
 """
 
 import json
@@ -126,9 +127,22 @@ def prepare():
             'fakeroot': shutil.which('fakeroot'),
         }
         (WORK / 'before.json').write_text(json.dumps(before, indent=2) + '\n')
-        # The shell's own check entry point, which asks the server to refresh.
-        reply = user_command('dms', 'ipc', 'call', 'systemupdater', 'updatestatus', capture=True).stdout
-        assert 'SUCCESS' in reply, reply
+        # Dux's defaults (no bar update widget, no update notifications) leave
+        # SystemUpdateService without backends until a user opens its Settings
+        # tab, which is where friends start updates. Its own notifications link
+        # there the same way.
+        reply = user_command('dms', 'ipc', 'call', 'settings', 'openWith', 'updater', capture=True).stdout
+        assert 'SETTINGS_OPEN_SUCCESS' in reply, reply
+
+        def check_started():
+            # The shell's own check entry point, which asks the server to refresh.
+            reply = user_command('dms', 'ipc', 'call', 'systemupdater', 'updatestatus', capture=True).stdout
+            if reply.startswith('SUCCESS'):
+                return True
+            print(reply.strip(), flush=True)
+            return False
+
+        wait_until('Software Updates tab loading the backends', check_started, timeout=30)
 
         def found():
             state = daemon_request('sysupdate.getState')
@@ -151,6 +165,9 @@ def prepare():
         state = daemon_request('sysupdate.getState')
         before['found'] = update
         before['backends'] = state['backends']
+        # A selected AUR helper would run in a terminal instead of through pkexec.
+        system = [backend['id'] for backend in state['backends'] if backend['repo'] == 'system']
+        assert system == ['pacman'], state['backends']
         (WORK / 'before.json').write_text(json.dumps(before, indent=2) + '\n')
         # The same parameters SystemUpdateService.runUpdates sends by default.
         daemon_request('sysupdate.upgrade', {'includeFlatpak': True, 'includeAUR': True, 'terminal': '', 'ignored': []})
@@ -192,18 +209,22 @@ def check():
         journal = subprocess.check_output(
             ['journalctl', '-b', '--no-pager', '-o', 'cat', '_COMM=pkexec'], text=True
         ).strip()
+        # The transaction came from Dux's backend argv, not another upgrade.
+        assert 'COMMAND=/usr/bin/pacman -Syu --needed --noconfirm' in journal, journal
         (EVIDENCE / 'dux-update.json').write_text(
             json.dumps(
                 {
                     'trigger': 'DMS server sysupdate.refresh via shell IPC, then sysupdate.upgrade',
-                    'check_mechanism': 'checkupdates' if before['checkupdates'] else 'fakeroot private database',
+                    'check_mechanism_present': 'checkupdates'
+                    if before['checkupdates']
+                    else 'fakeroot private database',
                     'backends': before['backends'],
                     'found': before['found'],
                     'before': before['packages'],
                     'after': after,
                     'upgrade_log': state.get('recentLog', []),
                     'pkexec_journal': journal.splitlines(),
-                    'polkit_prompt_answered_in_session': True,
+                    'authentication_dialog_answered': True,
                     'system_migration_recorded': True,
                     'generation': {'before': before['generation'], 'after': generation},
                     'user_migration_via_path_unit': True,
@@ -214,6 +235,7 @@ def check():
         )
     finally:
         restore_pacman_conf()
+        user_command('dms', 'ipc', 'call', 'settings', 'close')
     SYSTEM_EFFECT.unlink()
     USER_EFFECT.unlink()
     shutil.rmtree(WORK)
