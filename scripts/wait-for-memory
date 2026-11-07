@@ -1,0 +1,6 @@
+#!/usr/bin/env python3
+"""Wait for enough host memory to start a build VM."""
+
+from verification.vm import wait_for_memory
+
+wait_for_memory()

@@ -26,7 +26,7 @@ if [[ $current != null ]]; then
     else
         # Reuse immutable published bytes when retrying a failed Pages deployment.
         packages=$temporary/packages
-        python "$root/scripts/integration-release.py" fetch "$root" "$packages"
+        python "$root/scripts/integration_release.py" fetch "$root" "$packages"
         published=true
     fi
 fi
@@ -39,7 +39,7 @@ while IFS= read -r previous; do
         --pattern 'dux-*.pkg.tar.zst' --pattern 'dux-*.pkg.tar.zst.sig'
 done < <(jq -r --arg tag "$tag" '.[][] | select((.draft or .prerelease) | not) |
           .tag_name | select(startswith("integration-v") and . != $tag)' "$releases")
-python "$root/scripts/integration-release.py" publish "$root" "$packages" "$history" "$output" \
+python "$root/scripts/integration_release.py" publish "$root" "$packages" "$history" "$output" \
     --tag "$tag" --commit "$commit"
 if [[ $published == false ]]; then
     assets=()

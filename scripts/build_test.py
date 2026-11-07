@@ -1,16 +1,15 @@
-import importlib.util
+"""Build artifact unit tests."""
+
 from pathlib import Path
 import tempfile
 import unittest
 from unittest.mock import patch
 
-spec = importlib.util.spec_from_file_location('build_lock', Path(__file__).with_name('build-lock.py'))
-module = importlib.util.module_from_spec(spec)
-spec.loader.exec_module(module)
+import package_lock as module
 
-aur_spec = importlib.util.spec_from_file_location('build_dux_apps', Path(__file__).with_name('build-dux-apps.py'))
-aur = importlib.util.module_from_spec(aur_spec)
-aur_spec.loader.exec_module(aur)
+from verification.digest import digest
+
+import dux_apps as aur
 
 
 class PayloadTests(unittest.TestCase):
@@ -41,9 +40,9 @@ class PayloadTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / 'payload'
             path.write_bytes(b'original')
-            before = module.digest(path)
+            before = digest(path)
             path.write_bytes(b'corrupted')
-            self.assertNotEqual(before, module.digest(path))
+            self.assertNotEqual(before, digest(path))
 
     def test_unreadable_cache_falls_back_to_download(self):
         with patch.object(module, 'digest', side_effect=PermissionError):
@@ -134,9 +133,7 @@ class ReviewedRecipeTests(unittest.TestCase):
             source.mkdir(parents=True)
             for name in ('PKGBUILD', '.SRCINFO'):
                 (source / name).write_text('reviewed contents')
-            recipe = dict(
-                name='example-bin', files={name: aur.digest(source / name) for name in ('PKGBUILD', '.SRCINFO')}
-            )
+            recipe = dict(name='example-bin', files={name: digest(source / name) for name in ('PKGBUILD', '.SRCINFO')})
             self.assertEqual(aur.validate_recipe(root, recipe), source)
             (source / 'PKGBUILD').write_text('changed contents')
             with self.assertRaisesRegex(ValueError, 'recipe changed'):
@@ -151,10 +148,8 @@ class ReviewedRecipeTests(unittest.TestCase):
                 (source / name).touch()
             outside = root / 'packages/aur/outside'
             outside.write_text('outside')
-            recipe = dict(
-                name='example-bin', files={name: aur.digest(source / name) for name in ('PKGBUILD', '.SRCINFO')}
-            )
-            recipe['files']['../outside'] = aur.digest(outside)
+            recipe = dict(name='example-bin', files={name: digest(source / name) for name in ('PKGBUILD', '.SRCINFO')})
+            recipe['files']['../outside'] = digest(outside)
             with self.assertRaisesRegex(ValueError, 'recipe changed'):
                 aur.validate_recipe(root, recipe)
 

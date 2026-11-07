@@ -1,4 +1,4 @@
-import importlib.util
+import sys
 from pathlib import Path
 import subprocess
 import tempfile
@@ -7,9 +7,8 @@ from unittest.mock import patch
 
 
 ROOT = Path(__file__).resolve().parents[1]
-spec = importlib.util.spec_from_file_location('release_key', ROOT / 'scripts/setup-release-key.py')
-key = importlib.util.module_from_spec(spec)
-spec.loader.exec_module(key)
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'scripts'))
+import release_key as key
 
 
 class RecoveryTests(unittest.TestCase):

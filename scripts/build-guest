@@ -42,7 +42,7 @@ gpg --homedir /etc/pacman.d/gnupg --import /state/trusted-packagers.gpg
 if [[ ! -f /source/packages/closure.lock.json ]]; then
     pacman -Sy --noconfirm --needed archiso python
 fi
-python /source/scripts/build-lock.py /source /build/payload/repo
+python /source/scripts/package_lock.py /source /build/payload/repo
 cat >/build/pacman-pinned.conf <<'CONF'
 [options]
 Architecture = auto
@@ -58,12 +58,12 @@ rm -rf /build/integration-work /build/integration-packages
 mkdir -p /build/integration-work /build/integration-packages
 chown nobody:nobody /build/integration-work /build/integration-packages
 if [[ $(cat /state/integration-mode) == release ]]; then
-    python /source/scripts/integration-release.py fetch /source /build/integration-packages
+    python /source/scripts/integration_release.py fetch /source /build/integration-packages
 else
     integration_epoch=$(cat /state/integration-epoch)
-    runuser -u nobody -- python /source/scripts/build-integration.py /source \
+    runuser -u nobody -- python /source/scripts/integration_build.py /source \
         /build/integration-work /build/integration-packages --epoch "$integration_epoch"
-    runuser -u nobody -- python /source/scripts/build-dux-apps.py /source \
+    runuser -u nobody -- python /source/scripts/dux_apps.py /source \
         /build/integration-work /build/integration-packages
 fi
 cp /build/integration-packages/*.pkg.tar.zst /build/payload/repo/

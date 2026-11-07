@@ -2,8 +2,6 @@
 """Run offline UEFI acceptance, optionally checking published delivery afterward."""
 
 import argparse
-import hashlib
-import importlib.util
 import json
 import os
 from pathlib import Path
@@ -12,6 +10,8 @@ import shutil
 import subprocess
 import sys
 import tempfile
+
+from verification.digest import digest
 
 from verification import apps, boot, browser, camera, desktop, integration, pdf, recovery
 from verification.vm import VM, PASSWORD, stage_probes
@@ -60,11 +60,10 @@ def main():
     config_file = directory / 'install.json'
     config_file.write_text(json.dumps(configuration))
     config_file.chmod(0o600)
-    with iso.open('rb') as stream:
-        iso_digest = hashlib.file_digest(stream, 'sha256').hexdigest()
-    package_digest = hashlib.sha256((ROOT / 'out/packages.manifest.json').read_bytes()).hexdigest()
+    iso_digest = digest(iso)
+    package_digest = digest(ROOT / 'out/packages.manifest.json')
     probe_hashes = stage_probes(directory)
-    probe_hashes['verify.py'] = hashlib.sha256(Path(__file__).read_bytes()).hexdigest()
+    probe_hashes['verify.py'] = digest(Path(__file__))
     (directory / 'inputs.json').write_text(
         json.dumps(
             {
@@ -79,25 +78,20 @@ def main():
     )
     (directory / 'key').write_text(PASSWORD)
     (directory / 'key').chmod(0o600)
-    spec = importlib.util.spec_from_file_location('integration_builder', ROOT / 'scripts/build-integration.py')
-    builder = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(builder)
+
     source = directory / 'integration-input'
     source.mkdir()
     manifest = json.loads((ROOT / 'out/packages.manifest.json').read_text())['integration']
     (directory / 'release-manifest.json').write_text(json.dumps(manifest, indent=2) + '\n')
-    release_spec = importlib.util.spec_from_file_location(
-        'integration_release', ROOT / 'scripts/integration-release.py'
-    )
-    release = importlib.util.module_from_spec(release_spec)
-    release_spec.loader.exec_module(release)
+    import integration_release as release
+
     release.validate_manifest(ROOT, ROOT / 'out/integration')
     for filename, target, field in [
         ('integration.tar', 'integration.tar', 'source_sha256'),
         ('integration.PKGBUILD', 'PKGBUILD', 'recipe_sha256'),
     ]:
         original = ROOT / 'out/integration' / filename
-        if builder.digest(original) != manifest[field]:
+        if digest(original) != manifest[field]:
             raise ValueError(f'Integration build input changed: {filename}')
         shutil.copyfile(original, source / target)
     vm = VM(directory, iso.resolve(), disk)
@@ -124,7 +118,7 @@ def main():
             f'test "$(sha256sum /run/archiso/bootmnt/packages.manifest.json | cut -d " " -f 1)" = {package_digest}'
         )
         for filename in ('install.py', 'configure-target.sh'):
-            expected = hashlib.sha256((ROOT / 'installer' / filename).read_bytes()).hexdigest()
+            expected = digest(ROOT / 'installer' / filename)
             vm.command(
                 f'test "$(sha256sum /usr/local/lib/arch-niri-dux/installer/{filename} | cut -d " " -f 1)" = {expected}'
             )

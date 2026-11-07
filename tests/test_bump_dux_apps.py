@@ -1,13 +1,12 @@
-import importlib.util
+import sys
 from pathlib import Path
 import subprocess
 import tempfile
 import unittest
 
 ROOT = Path(__file__).resolve().parents[1]
-spec = importlib.util.spec_from_file_location('bump', ROOT / 'scripts/bump-dux-apps.py')
-bump = importlib.util.module_from_spec(spec)
-spec.loader.exec_module(bump)
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'scripts'))
+import bump_dux_apps as bump
 
 REPOSITORY = 'https://github.com/duxlabs-dev/dux-example'
 RECIPE = """pkgname=dux-example-bin
