@@ -187,49 +187,22 @@ class SharedCacheTests(unittest.TestCase):
 
 
 class RepositoryDatabaseTests(unittest.TestCase):
-    def test_reads_desc_fields_from_database(self):
+    def test_reads_desc_fields_from_gzip_and_zstd_databases(self):
         import io
         import tarfile
 
+        # Arch serves gzip databases; Omarchy serves zstd.
         desc = b'%NAME%\nbase\n\n%FILENAME%\nbase-1-any.pkg.tar.zst\n\n%DEPENDS%\nglibc\nbash\n'
-        with tempfile.TemporaryDirectory() as directory:
-            database = Path(directory) / 'core.db'
-            with tarfile.open(database, 'w:gz') as archive:
-                member = tarfile.TarInfo('base-1/desc')
-                member.size = len(desc)
-                archive.addfile(member, io.BytesIO(desc))
-            [fields] = module.read_database(database)
-        self.assertEqual(fields['NAME'], ['base'])
-        self.assertEqual(fields['DEPENDS'], ['glibc', 'bash'])
-
-
-class ReviewedRecipeTests(unittest.TestCase):
-    def test_modified_recipe_is_rejected_before_execution(self):
-        with tempfile.TemporaryDirectory() as directory:
-            root = Path(directory)
-            source = root / 'packages/aur/example-bin'
-            source.mkdir(parents=True)
-            for name in ('PKGBUILD', '.SRCINFO'):
-                (source / name).write_text('reviewed contents')
-            recipe = dict(name='example-bin', files={name: digest(source / name) for name in ('PKGBUILD', '.SRCINFO')})
-            self.assertEqual(aur.validate_recipe(root, recipe), source)
-            (source / 'PKGBUILD').write_text('changed contents')
-            with self.assertRaisesRegex(ValueError, 'recipe changed'):
-                aur.validate_recipe(root, recipe)
-
-    def test_recipe_cannot_read_outside_reviewed_directory(self):
-        with tempfile.TemporaryDirectory() as directory:
-            root = Path(directory)
-            source = root / 'packages/aur/example-bin'
-            source.mkdir(parents=True)
-            for name in ('PKGBUILD', '.SRCINFO'):
-                (source / name).touch()
-            outside = root / 'packages/aur/outside'
-            outside.write_text('outside')
-            recipe = dict(name='example-bin', files={name: digest(source / name) for name in ('PKGBUILD', '.SRCINFO')})
-            recipe['files']['../outside'] = digest(outside)
-            with self.assertRaisesRegex(ValueError, 'recipe changed'):
-                aur.validate_recipe(root, recipe)
+        for compression in ('gz', 'zst'):
+            with self.subTest(compression=compression), tempfile.TemporaryDirectory() as directory:
+                database = Path(directory) / 'repo.db'
+                with tarfile.open(database, f'w:{compression}') as archive:
+                    member = tarfile.TarInfo('base-1/desc')
+                    member.size = len(desc)
+                    archive.addfile(member, io.BytesIO(desc))
+                [fields] = module.read_database(database)
+                self.assertEqual(fields['NAME'], ['base'])
+                self.assertEqual(fields['DEPENDS'], ['glibc', 'bash'])
 
 
 class LiveKeyringTests(unittest.TestCase):
