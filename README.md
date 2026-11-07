@@ -8,11 +8,11 @@ The live ISO is terminal-only and includes Fastfetch.
 ## Build and test
 
 Building requires Linux, Nix and Make. Allow at least 30 GiB of free build space and about 2.5
-GiB for the ISO. VM verification also requires KVM access. Build state goes in
-`~/.cache/arch-niri-dux-build-<checkout-path-hash>`. Use `BUILD_STATE=/path/with/space make iso` to
+GiB for the ISO. VM verification also requires KVM access. Build state defaults to
+`~/.cache/arch-niri-dux-build-<checkout-path-hash>` (`$XDG_CACHE_HOME` when set). Use `BUILD_STATE=/path/with/space make iso` to
 change it. An explicit `BUILD_STATE` wins and is yours to manage; GC leaves
 it alone. Every build state shares the verified bootstrap ISO and packages in
-`~/.cache/arch-niri-dux-downloads`. Builds recheck each file's hash or
+the shared downloads cache (`$XDG_CACHE_HOME/arch-niri-dux-downloads`, default `~/.cache`). Builds recheck each file's hash or
 signature before use. The cache never prunes old versions; deleting it is safe.
 
 ```sh
@@ -29,8 +29,8 @@ The build writes the ISO and checksums to `out/`.
 
 Signed binary packages and reviewed Dux app recipes use separate pins. See
 [package inputs](packages/README.md) and [desktop
-configuration](desktop/README.md#niri-configuration) for details. Pinned inputs
-do not produce byte-identical rebuilds.
+configuration](desktop/README.md#niri-configuration) for details. Rebuilding our packages from pinned inputs
+does not produce byte-identical packages.
 
 ## Install
 
