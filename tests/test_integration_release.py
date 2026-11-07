@@ -356,6 +356,81 @@ class SignedReleaseTests(unittest.TestCase):
         finally:
             subprocess.run(['gpgconf', '--homedir', str(target / 'gnupg'), '--kill', 'all'], check=True)
 
+    def test_installer_rejects_unsigned_and_tampered_packages_with_rewritten_database(self):
+        from installer import install as installer
+        from unittest.mock import patch
+
+        repository = self.root / 'offline'
+        repository.mkdir()
+        package = self.fixture_package(repository, 'fixture', '1-1', 'any', 'Signed original')
+        archive = repository / package['filename']
+        self.gpg('--detach-sign', str(archive))
+        original = archive.read_bytes()
+        signature = Path(str(archive) + '.sig')
+        signed = signature.read_bytes()
+        target = self.root / 'disposable-root'
+        for name in ('db', 'cache'):
+            (target / name).mkdir(parents=True)
+        # The same config used by both pacstrap transactions, with a disposable
+        # trusted keyring substituted for the ISO's pinned public keys.
+        with patch.object(installer, 'SHARE', self.root):
+            conf = target / 'pacman.conf'
+            conf.write_text(installer.offline_pacman_config(repository, 'offline'))
+        shutil.copytree(self.home, self.root / 'install-keyring', ignore=shutil.ignore_patterns('S.*'))
+        self.addCleanup(
+            subprocess.run, ['gpgconf', '--homedir', str(self.root / 'install-keyring'), '--kill', 'all'], check=True
+        )
+        pacman = [
+            'fakeroot',
+            'pacman',
+            '--root',
+            str(target),
+            '--dbpath',
+            str(target / 'db'),
+            '--cachedir',
+            str(target / 'cache'),
+            '--logfile',
+            str(target / 'log'),
+            '--config',
+            str(conf),
+        ]
+        for state in ('signed', 'unsigned', 'tampered'):
+            with self.subTest(state=state):
+                archive.write_bytes(original)
+                signature.write_bytes(signed)
+                if state == 'unsigned':
+                    signature.unlink()
+                elif state == 'tampered':
+                    # A valid replacement archive, with its original signature.
+                    self.fixture_package(repository, 'fixture', '1-1', 'any', 'Attacker replacement')
+                for path in repository.glob('offline.*'):
+                    path.unlink()
+                subprocess.run(
+                    ['repo-add', str(repository / 'offline.db.tar.gz'), str(archive)],
+                    check=True,
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL,
+                )
+                # Rewriting the same-medium checksums must not bypass signatures.
+                (repository / 'SHA256SUMS').write_text(
+                    ''.join(
+                        f'{release.build.digest(path)}  {path.name}\n' for path in (archive, repository / 'offline.db')
+                    )
+                )
+                installer.verify_repository(repository)
+                for path in (target / 'cache').iterdir():
+                    path.unlink()
+                result = subprocess.run(
+                    pacman + ['-Syy', '--noconfirm', 'fixture'], capture_output=True, text=True, check=False
+                )
+                if state == 'signed':
+                    self.assertEqual(result.returncode, 0, result.stderr)
+                else:
+                    self.assertNotEqual(result.returncode, 0)
+                    self.assertIn('signature', result.stderr.lower())
+                installed = subprocess.check_output(pacman + ['-Q', 'fixture'], text=True)
+                self.assertEqual(installed.strip(), 'fixture 1-1')
+
     def test_expired_historical_subkey_survives_replacement_under_same_identity(self):
         home = self.root / 'expired-key'
         home.mkdir(mode=0o700)
