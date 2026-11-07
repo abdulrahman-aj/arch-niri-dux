@@ -6,10 +6,39 @@ import concurrent.futures
 import hashlib
 import json
 import pathlib
+import shutil
 import subprocess
 import sys
 import tarfile
+import tempfile
+import time
 import urllib.request
+
+
+DOWNLOAD_TIMEOUT = 60
+DOWNLOAD_ATTEMPTS = 4
+
+
+def download(url, dest, timeout=DOWNLOAD_TIMEOUT, attempts=DOWNLOAD_ATTEMPTS):
+    dest = pathlib.Path(dest)
+    last_error = None
+    for attempt in range(attempts):
+        tmp_path = None
+        try:
+            with urllib.request.urlopen(url, timeout=timeout) as response:
+                with tempfile.NamedTemporaryFile(delete=False, dir=dest.parent, prefix=dest.name + '.') as tmp:
+                    tmp_path = pathlib.Path(tmp.name)
+                    shutil.copyfileobj(response, tmp)
+            tmp_path.replace(dest)
+            return
+        except Exception as exc:
+            last_error = exc
+            if tmp_path is not None:
+                tmp_path.unlink(missing_ok=True)
+            if attempt + 1 >= attempts:
+                break
+            time.sleep(2**attempt)
+    raise RuntimeError(f'Failed to download {url} after {attempts} attempts: {last_error}') from last_error
 
 
 def digest(path):
@@ -140,20 +169,14 @@ def main():
                 subprocess.run(['cp', str(cached), str(package)], check=True)
             else:
                 print('Downloading', entry['filename'], flush=True)
-                for attempt in range(4):
-                    try:
-                        try:
-                            urllib.request.urlretrieve(entry['url'], str(package))
-                        except Exception:
-                            if entry['repository'] not in ('core', 'extra'):
-                                raise
-                            name = entry['name']
-                            archive = f'https://archive.archlinux.org/packages/{name[0]}/{name}/{entry["filename"]}'
-                            urllib.request.urlretrieve(archive, str(package))
-                        break
-                    except Exception:
-                        if attempt == 3:
-                            raise
+                try:
+                    download(entry['url'], package)
+                except Exception:
+                    if entry['repository'] not in ('core', 'extra'):
+                        raise
+                    name = entry['name']
+                    archive = f'https://archive.archlinux.org/packages/{name[0]}/{name}/{entry["filename"]}'
+                    download(archive, package)
 
     with concurrent.futures.ThreadPoolExecutor(max_workers=6) as pool:
         list(pool.map(fetch, payload['packages']))
