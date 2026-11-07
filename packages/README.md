@@ -14,9 +14,10 @@ packages, and pacman tracks their files.
 ## Repositories
 
 `closure.lock.json` pins the signed Arch/Omarchy binary packages. The installed
-repository order is core and extra through
-`https://geo.mirror.pkgbuild.com/$repo/os/$arch`, then omarchy, then
-arch-niri-dux at `https://abdulrahman-aj.github.io/arch-niri-dux/x86_64`.
+repository order is arch-niri-dux at
+`https://abdulrahman-aj.github.io/arch-niri-dux/x86_64`, then core and extra
+through `https://geo.mirror.pkgbuild.com/$repo/os/$arch`, then omarchy.
+Our repository comes first so another repository cannot shadow our packages.
 Omarchy uses `https://pkgs.omarchy.org/stable/$arch`. The package ships this
 configuration in `/etc/pacman.d/arch-niri-dux.conf`. The integration repository
 retains `Required TrustedOnly`; other repositories inherit `Required
@@ -38,8 +39,10 @@ use the AUR.
 
 The scheduled `dux-apps.yml` workflow tracks upstream GitHub releases rather
 than the AUR, so updates do not wait for or trust it. When Dux tags a
-release, `scripts/bump_dux_apps.py` changes only `pkgver`, `pkgrel`, checksums,
-recipe hashes and `source_date_epoch`. Release-asset checksums must equal
+release, `scripts/bump_dux_apps.py` updates `pkgver`, `pkgrel`, checksums,
+recipe hashes, `source_date_epoch` and the vendored upstream trust files.
+Policy, service, desktop, portal and greeter configuration files are local
+sources next to their recipes, so upstream changes appear as readable PR diffs. Release-asset checksums must equal
 GitHub's published digests. Repository files at the release tag have no
 published digest. The workflow opens a PR and never merges or publishes.
 

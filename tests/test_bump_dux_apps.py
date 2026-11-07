@@ -96,5 +96,37 @@ class ReleaseDigestTests(unittest.TestCase):
                 bump.check_sources(self.fields(asset_url=url), REPOSITORY, self.release)
 
 
+class VendoredSourceTests(unittest.TestCase):
+    def test_refresh_overwrites_local_policy_with_release_tag_content(self):
+        from io import BytesIO
+        from unittest.mock import patch
+
+        with tempfile.TemporaryDirectory() as directory:
+            work = Path(directory)
+            policy = work / 'dev.duxlabs.files.policy'
+            policy.write_bytes(b'old policy')
+            contents = {
+                f'https://raw.githubusercontent.com/duxlabs-dev/dux-files/v2.2.0/{upstream}': filename.encode()
+                for filename, upstream in bump.VENDORED_SOURCES['dux-files-bin'].items()
+            }
+
+            def download(url, timeout):
+                self.assertEqual(timeout, 60)
+                return BytesIO(contents[url])
+
+            with patch.object(bump.urllib.request, 'urlopen', side_effect=download):
+                bump.refresh_vendored(work, 'dux-files-bin', 'https://github.com/duxlabs-dev/dux-files', 'v2.2.0')
+            self.assertEqual(policy.read_bytes(), b'dev.duxlabs.files.policy')
+            self.assertEqual(len(list(work.iterdir())), len(contents))
+
+    def test_local_search_service_is_not_refreshed(self):
+        with tempfile.TemporaryDirectory() as directory:
+            work = Path(directory)
+            service = work / 'dsearch.service'
+            service.write_bytes(b'local service override')
+            bump.refresh_vendored(work, 'dux-search-bin', REPOSITORY, 'v2.2.0')
+            self.assertEqual(service.read_bytes(), b'local service override')
+
+
 if __name__ == '__main__':
     unittest.main()

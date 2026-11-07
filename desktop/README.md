@@ -144,6 +144,8 @@ Greetd selects `/usr/lib/pam.d/arch-niri-dux` for authentication, including the
 stock local-login stack and GNOME Keyring password/session integration. Its
 greeter session uses the same stack. See [package
 repositories](../packages/README.md#repositories) for online update sources.
+The repository order is arch-niri-dux, core, extra, then omarchy. Keeping our
+repository first prevents other repositories from shadowing our packages.
 
 Do not run `dms-greeter sync` on arch-niri-dux. A full sync recursively grants
 the greeter account read access to parts of the home directory, including files

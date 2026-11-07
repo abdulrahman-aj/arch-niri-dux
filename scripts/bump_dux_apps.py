@@ -2,7 +2,7 @@
 """Update the vendored Dux app recipes to their latest upstream GitHub releases.
 
 Prints a one-line summary of the updated apps, or nothing when all are current.
-The recipes stay ours: only pkgver, pkgrel and checksums change, and every
+The recipes stay ours: versions, checksums and vendored trust files change, and every
 release-asset checksum must equal the digest GitHub publishes for that asset.
 """
 
@@ -21,6 +21,28 @@ from verification.digest import digest
 
 ARCHES = ('', '_x86_64', '_aarch64')
 import dux_apps as apps
+
+# Stable local filenames keep upstream policy and service changes visible in bump PRs.
+VENDORED_SOURCES = {
+    'dux-calendar-bin': {
+        'dev.duxlabs.calendar.desktop': 'assets/dev.duxlabs.calendar.desktop',
+        'dcal.service': 'assets/systemd/dcal.service',
+    },
+    'dux-files-bin': {
+        'dev.duxlabs.files.desktop': 'assets/dev.duxlabs.files.desktop',
+        'dev.duxlabs.files.metainfo.xml': 'assets/dev.duxlabs.files.metainfo.xml',
+        'dev.duxlabs.files.policy': 'assets/dev.duxlabs.files.policy',
+        'dev.duxlabs.files.FileManager1.service': 'assets/dbus/dev.duxlabs.files.FileManager1.service',
+        'org.freedesktop.impl.portal.desktop.dfiles.service': 'assets/dbus/org.freedesktop.impl.portal.desktop.dfiles.service',
+        'dfiles.portal': 'assets/portal/dfiles.portal',
+        'dfiles.service': 'assets/systemd/dfiles.service',
+    },
+    'dux-greeter-bin': {
+        'tmpfiles-dms-greeter.conf': 'assets/systemd/tmpfiles-dms-greeter.conf',
+        'dms-niri.kdl': 'assets/examples/dms-niri.kdl',
+        'dms-hypr.lua': 'assets/examples/dms-hypr.lua',
+    },
+}
 
 
 def srcinfo(text):
@@ -70,6 +92,13 @@ def check_sources(fields, repository, release):
                 raise ValueError(f'Source is not from the upstream release {tag}: {url}')
 
 
+def refresh_vendored(work, name, repository, tag):
+    raw = repository.replace('https://github.com/', 'https://raw.githubusercontent.com/')
+    for filename, upstream in VENDORED_SOURCES.get(name, {}).items():
+        with urllib.request.urlopen(f'{raw}/{tag}/{upstream}', timeout=60) as response:
+            (work / filename).write_bytes(response.read())
+
+
 def latest_release(repository):
     request = urllib.request.Request(
         repository.replace('https://github.com/', 'https://api.github.com/repos/') + '/releases/latest',
@@ -109,6 +138,7 @@ def bump(root, recipe):
         if os.geteuid() == 0:
             for path in (work, *work.iterdir()):
                 shutil.chown(path, 'nobody')
+        refresh_vendored(work, recipe['name'], repository, release['tag_name'])
         # makepkg -g downloads every architecture's sources and prints their checksums.
         (work / 'PKGBUILD').write_text(set_checksums(pkgbuild, unprivileged(work, 'makepkg', '-g')))
         text = unprivileged(work, 'makepkg', '--printsrcinfo')
