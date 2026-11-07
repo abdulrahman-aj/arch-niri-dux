@@ -25,15 +25,15 @@ QEMU logs, screenshots and a milestone list. Only a full run writes
 `ACCEPTANCE-PASSED`. A failed run deletes its disk and keeps the rest; a passed
 run keeps its ~6 GB disk as a fixture, so delete workspaces you no longer need.
 
-It boots the ISO with loopback as the only network interface, confirms the
+It boots the ISO with loopback as the only network interface. It confirms the
 package manifest and installer payload hashes, then installs with
-`arch-niri-install` and qualifies graphical disk unlock with a
-wrong-passphrase retry, UEFI boot without the ISO, package presets with
+`arch-niri-install`. It qualifies graphical disk unlock with a
+wrong-passphrase retry and UEFI boot without the ISO. It checks package presets with
 systemd policy and the PAM-unlocked keyring, the inbound firewall and
-resolve-only mDNS seen from a veth neighbour namespace, Niri/Dux/terminal/editor/browser
-smoke checks, desktop apps (manuals, archives, media playback, driverless
+resolve-only mDNS seen from a veth neighbour namespace, and Niri/Dux/terminal/editor/browser
+smoke checks. It checks desktop apps (manuals, archives, media playback, driverless
 printing to a loopback printer), PDF rendering, the synthetic camera, screen
-sharing, screen lock, migration ordering with retries and session triggers,
+sharing, and screen lock. It checks migration ordering with retries and session triggers,
 an update started through Dux's updater (its pacman backend, `pkexec` and
 authentication dialog) running system and user migrations,
 an integration upgrade with Limine snapshot boot and restore preserving home,
@@ -43,14 +43,14 @@ delivery against offline trust and exact release hashes. `--install-only` is
 a debug run and does not produce acceptance success. Full acceptance is
 required for installer changes and releases.
 
-Suspend qualification requires logind `LockedHint=yes`, Niri's lock event, an unchanged boot ID and kernel S3 entry/exit; post-resume QEMU GL/input and shutdown stalls leave screenshots best-effort and password unlock unqualified, so the probe syncs the guest before a host-forced restart.
+Suspend qualification requires logind `LockedHint=yes`, Niri's lock event, an unchanged boot ID and kernel S3 entry/exit. Post-resume QEMU GL/input and shutdown can stall, so screenshots stay best-effort and this stage does not qualify password unlock. The probe syncs the guest before the host restarts it.
 
 ## `make verify-fast`
 
 `make verify-fast ARGS="--fixture out/accepted/disk.qcow2 --directory out/fast"`
 builds current integration packages inside a disposable overlay of a completed
-`make verify` image. Use an accepted 0.3+ fixture. Keep `ACCEPTANCE-PASSED`,
-`install.json`, `inputs.json` and `OVMF_VARS.fd` next to it. It checks ALPM
+`make verify` image. Use an accepted 0.3+ fixture with a fresh `--directory`. Keep `ACCEPTANCE-PASSED`,
+`install.json`, `inputs.json` and `OVMF_VARS.fd` next to the fixture disk. It checks ALPM
 regeneration of the active Limine initramfs and boot menu without a manual
 rebuild, Niri validation, Dux shortcut editing/cheatsheet, enabled units and
 presets, greetd login, unlocked GNOME Keyring, loaded vendor systemd drop-ins

@@ -24,7 +24,7 @@ retains `Required TrustedOnly`; other repositories inherit `Required
 DatabaseOptional`. New entries extend the closure. A lock refresh can change
 existing pins.
 
-Run `make lock` after changing `packages.target` or `archiso/packages.live`.
+Run `make lock` after changing `packages/packages.target` or `archiso/packages.live`.
 It resolves the closure on the host from the current mirror databases and
 rewrites the lock. Builds only fetch locked packages and refuse a stale lock.
 

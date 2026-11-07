@@ -31,8 +31,9 @@ release qualification are covered in [the migrations skill](../.agents/skills/mi
 The Greetd service selects our `/etc/greetd/dux.toml`. Arch retains ownership of
 its separate stock `config.toml`. Pacman preserves local edits to `dux.toml`.
 
-Package construction generates Niri's stock configuration and terminal-resolved
-bindings in `/usr/share/arch-niri-dux/niri/defaults.kdl`. The home entrypoint loads package defaults, relative
+Package construction generates Niri's stock configuration in `/usr/share/arch-niri-dux/niri/defaults.kdl`
+and terminal-resolved bindings in `/usr/share/arch-niri-dux/niri/binds.kdl`. The home entrypoint (`niri-user.kdl`
+installed as `~/.config/niri/config.kdl`) loads package defaults, selected relative
 optional `dms/*.kdl` includes, package-owned `tail.kdl`
 (session environment and file-dialog rules), then optional `overrides.kdl` last.
 Dux 2.1 ignores `~` includes. Relative home includes allow shortcut editing.
