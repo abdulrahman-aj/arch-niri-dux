@@ -95,7 +95,7 @@ def verify(vm, passed):
         vm.key('f4')
         time.sleep(1)
         vm.chord('shift', 'equal')
-        for attempt in range(15):
+        for _attempt in range(15):
             vm.probe('pdf', 'files-pdf-capture')
             text = subprocess.check_output(
                 ['tesseract', str(vm.directory / '02-dfiles-pdf.png'), 'stdout'], text=True, stderr=subprocess.DEVNULL

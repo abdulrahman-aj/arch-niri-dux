@@ -50,7 +50,9 @@ def check():
         assert output('pacman', '-Qqo', path) == 'arch-niri-dux', path
     for unit in SYSTEM_UNITS:
         assert output('systemctl', 'is-enabled', unit) == 'enabled', unit
-    disabled = subprocess.run(['systemctl', 'is-enabled', 'snapper-timeline.timer'], text=True, capture_output=True)
+    disabled = subprocess.run(
+        ['systemctl', 'is-enabled', 'snapper-timeline.timer'], text=True, capture_output=True, check=False
+    )
     assert disabled.returncode != 0 and disabled.stdout.strip() == 'disabled', disabled
     for unit in USER_UNITS:
         assert output('systemctl', '--global', 'is-enabled', unit) == 'enabled', unit
@@ -62,7 +64,10 @@ def check():
         run('loginctl', 'enable-linger', 'preset-check')
         wait_until(
             'New user manager',
-            lambda: subprocess.run(['systemctl', 'is-active', '--quiet', f'user@{uid}.service']).returncode == 0,
+            lambda: (
+                subprocess.run(['systemctl', 'is-active', '--quiet', f'user@{uid}.service'], check=False).returncode
+                == 0
+            ),
         )
         for unit in USER_UNITS:
             assert (
@@ -86,7 +91,7 @@ def check():
         run('systemctl', 'stop', f'user@{uid}.service')
         wait_until(
             'Temporary user processes stopped',
-            lambda: subprocess.run(['pgrep', '-u', str(uid)], stdout=subprocess.DEVNULL).returncode == 1,
+            lambda: subprocess.run(['pgrep', '-u', str(uid)], stdout=subprocess.DEVNULL, check=False).returncode == 1,
         )
         run('userdel', '-r', 'preset-check')
     after = output('systemctl', 'show', 'greetd.service', '--property=After', '--value').split()

@@ -565,6 +565,7 @@ def printing():
                         ['ipptool', uri, '/usr/share/cups/ipptool/get-printer-attributes.test'],
                         stdout=log,
                         stderr=subprocess.STDOUT,
+                        check=False,
                     ).returncode
                     == 0
                 )
@@ -637,7 +638,7 @@ def verify(vm, passed):
 if __name__ == '__main__':
     if (
         not (EVIDENCE / 'install.json').is_file()
-        or subprocess.run(['systemd-detect-virt', '--vm', '--quiet']).returncode != 0
+        or subprocess.run(['systemd-detect-virt', '--vm', '--quiet'], check=False).returncode != 0
     ):
         raise SystemExit('Run this probe only inside the disposable verification VM.')
     action = sys.argv[1]

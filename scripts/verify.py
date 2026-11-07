@@ -166,9 +166,8 @@ def main():
         return 0
     except Exception as error:
         try:
-            if vm.process and vm.process.poll() is None:
-                if vm.screenshot('failure') is None:
-                    vm.probe('desktop', 'failure-screenshot', timeout=15)
+            if vm.process and vm.process.poll() is None and vm.screenshot('failure') is None:
+                vm.probe('desktop', 'failure-screenshot', timeout=15)
         except Exception:
             pass
         (directory / 'FAILURE.txt').write_text(str(error) + '\n')

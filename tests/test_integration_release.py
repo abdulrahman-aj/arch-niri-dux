@@ -277,7 +277,7 @@ class SignedReleaseTests(unittest.TestCase):
             database = second / 'arch-niri-dux.db'
             original = database.read_bytes()
             database.write_bytes(original + b'tampered')
-            failed = subprocess.run(pacman + ['-Syyu', '--noconfirm'], capture_output=True, text=True)
+            failed = subprocess.run(pacman + ['-Syyu', '--noconfirm'], capture_output=True, text=True, check=False)
             self.assertNotEqual(failed.returncode, 0)
             self.assertIn('signature', failed.stderr.lower())
             installed = subprocess.check_output(pacman + ['-Q'], text=True)

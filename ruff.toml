@@ -5,8 +5,31 @@ line-length = 120
 extend-exclude = ["out/**", "packages/aur"]
 
 [lint]
-# Correctness and unused code, without imposing a formatting/style rewrite.
-select = ["F", "ARG001", "RUF059"]
+# F/ARG: catch undefined names and unused code.
+# B: catch common bugs; retain existing exception traceback presentation.
+# UP: use the Python 3.13 APIs and spellings we already require.
+# SIM: flatten redundant control flow; explicit exception handlers remain readable.
+# PIE: remove redundant expressions and duplicate operations.
+# RET: make return paths explicit.
+# C4: simplify comprehensions; named dict(...) fields remain readable.
+# PERF: avoid unnecessary collection work.
+# PLW1510: make subprocess failure handling explicit.
+# RUF: catch Python-specific mistakes and stale suppressions, without spelling/style churn.
+# ISC: catch accidental implicit string concatenation.
+select = ["F", "ARG001", "B", "UP", "SIM", "PIE", "RET", "C4", "PERF", "PLW1510", "RUF", "ISC"]
+ignore = [
+    "B904",  # Existing chained tracebacks are intentional; diagnostic presentation is outside this cleanup.
+    "SIM117",  # Nested patch/assertion scopes keep test setup and expectations distinct.
+    "SIM105",  # Explicit try/except is useful for documenting best-effort operations.
+    "C408",  # dict(field=value) keeps named records readable.
+    "RUF001", "RUF002", "RUF003",  # Human-facing typography is intentional.
+    "RUF005",  # List concatenation and unpacking are both clear.
+]
+
+[lint.per-file-ignores]
+# These callbacks run synchronously before the next iteration; no late binding escapes.
+"scripts/verification/desktop.py" = ["B023"]
+"tests/test_installer.py" = ["B023"]
 
 [format]
 # The codebase is overwhelmingly single-quoted; keep that style.

@@ -68,6 +68,7 @@ class PublisherCheckoutTests(unittest.TestCase):
                 env=environment,
                 text=True,
                 capture_output=True,
+                check=False,
             )
             self.assertIn('dubious ownership', (checkout / 'control.log').read_text())
             self.assertEqual(result.returncode, 17, result.stderr)
@@ -127,6 +128,7 @@ esac
                     env=environment,
                     capture_output=True,
                     text=True,
+                    check=False,
                 )
                 self.assertEqual(result.returncode, expected, result.stderr)
                 self.assertEqual(list(scratch.iterdir()), [])

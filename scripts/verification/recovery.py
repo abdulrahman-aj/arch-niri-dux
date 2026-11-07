@@ -98,6 +98,7 @@ def recovery():
         text=True,
         stdout=subprocess.PIPE,
         stderr=subprocess.STDOUT,
+        check=False,
     )
     assert condition.returncode == 1, condition.stdout
     assert Path('/etc/dux-verification-version').read_text().strip() == 'known-good'

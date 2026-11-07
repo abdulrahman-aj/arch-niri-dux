@@ -188,7 +188,7 @@ class LiveKeyringTests(unittest.TestCase):
                     'PATH': str(root) + ':' + os.environ['PATH'],
                     'KEYRING_TEST_STATE': str(root),
                 }
-                result = subprocess.run(['bash', '-e', '-c', preparation], env=environment)
+                result = subprocess.run(['bash', '-e', '-c', preparation], env=environment, check=False)
                 self.assertEqual(result.returncode, status)
                 operations = root / 'operations'
                 if status == 0:

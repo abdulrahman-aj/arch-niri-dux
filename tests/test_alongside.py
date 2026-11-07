@@ -122,7 +122,7 @@ class AlongsideDiskTests(unittest.TestCase):
     def assert_old_data(self):
         self.assertEqual(digest_range(self.disk, 0, 446), self.mbr_hash)
         current = table(self.disk)['partitions']
-        for original, expected in zip(self.original, self.hashes):
+        for original, expected in zip(self.original, self.hashes, strict=False):
             self.assertIn(original, current)
             self.assertEqual(digest_range(self.disk, original['start'] * 512, original['size'] * 512), expected)
 
@@ -164,7 +164,7 @@ class AlongsideDiskTests(unittest.TestCase):
                 self.assert_old_data_except_name()
 
     def assert_old_data_except_name(self):
-        for original, expected in zip(self.original, self.hashes):
+        for original, expected in zip(self.original, self.hashes, strict=False):
             self.assertEqual(digest_range(self.disk, original['start'] * 512, original['size'] * 512), expected)
 
     def test_identity_or_firmware_change_aborts(self):
@@ -391,6 +391,7 @@ class FirmwareRegistrationTests(unittest.TestCase):
                 return self.guid
             if args == ('efibootmgr', '--verbose'):
                 return next(outputs)
+            return None
 
         if path is None:
             path = (2, self.guid, r'\EFI\limine\limine_x64.efi')

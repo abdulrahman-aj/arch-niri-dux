@@ -57,7 +57,10 @@ def check():
         wait_until(
             'System service waiting for transaction',
             lambda: (
-                subprocess.run(['systemctl', 'is-active', '--quiet', 'arch-niri-dux-migrate.service']).returncode == 0
+                subprocess.run(
+                    ['systemctl', 'is-active', '--quiet', 'arch-niri-dux-migrate.service'], check=False
+                ).returncode
+                == 0
                 or subprocess.check_output(
                     ['systemctl', 'show', '-p', 'ActiveState', '--value', 'arch-niri-dux-migrate.service'], text=True
                 ).strip()
@@ -79,7 +82,7 @@ def check():
     ready = Path('/var/lib/arch-niri-dux/verification-ready')
     failed = fixture(CODE, 'system', 3, f'test -e {ready}')
     last = fixture(CODE, 'system', 4, effect(system_effect, 'last'))
-    result = subprocess.run(['systemctl', 'restart', 'arch-niri-dux-migrate.service'])
+    result = subprocess.run(['systemctl', 'restart', 'arch-niri-dux-migrate.service'], check=False)
     assert result.returncode != 0
     assert not (STATE / (failed.name + '.json')).exists()
     assert not (STATE / (last.name + '.json')).exists()
@@ -98,11 +101,11 @@ def check():
     assert system_effect.read_text().splitlines() == ['first', 'second', 'last']
     unsafe = fixture(CODE, 'system', 5, effect(system_effect, 'unsafe'))
     unsafe.chmod(0o666)
-    assert subprocess.run([COMMAND, 'run']).returncode != 0
+    assert subprocess.run([COMMAND, 'run'], check=False).returncode != 0
     assert system_effect.read_text().splitlines() == ['first', 'second', 'last']
     unsafe.unlink()
     unsafe.symlink_to('/home/tester/.profile')
-    assert subprocess.run([COMMAND, 'run']).returncode != 0
+    assert subprocess.run([COMMAND, 'run'], check=False).returncode != 0
     unsafe.unlink()
     run(COMMAND, 'run')
     # Skips preserve customized files and links, including their referents.
@@ -156,7 +159,10 @@ def check():
         run('systemctl', 'stop', f'user@{account.pw_uid}.service')
         wait_until(
             'Second user processes stopped',
-            lambda: subprocess.run(['pgrep', '-u', str(account.pw_uid)], stdout=subprocess.DEVNULL).returncode == 1,
+            lambda: (
+                subprocess.run(['pgrep', '-u', str(account.pw_uid)], stdout=subprocess.DEVNULL, check=False).returncode
+                == 1
+            ),
         )
         Path('/etc/systemd/user/migration-verification.target').unlink(missing_ok=True)
         run('userdel', '-r', account.pw_name)

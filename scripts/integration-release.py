@@ -47,8 +47,7 @@ def verify(root, path, *, historical=False):
             str(path),
         ],
         check=True,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
+        capture_output=True,
         text=True,
     )
     signatures = [line.split() for line in result.stdout.splitlines() if line.startswith('[GNUPG:] VALIDSIG ')]
@@ -188,7 +187,7 @@ def publish(root, packages, history, destination, tag, commit):
         raise ValueError('Repository output must be empty.')
     destination.mkdir(parents=True, exist_ok=True)
     app_entries = {entry['name']: entry for entry in manifest['apps']}
-    versions = {name: (version, 'any') for name in build.NAMES}
+    versions = dict.fromkeys(build.NAMES, (version, 'any'))
     versions |= {name: (entry['version'], apps.ARCH) for name, entry in app_entries.items()}
     reused = {}
     for old in history.glob('*.pkg.tar.zst'):
