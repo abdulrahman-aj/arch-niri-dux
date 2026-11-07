@@ -7,5 +7,6 @@ enable power-profiles-daemon.service
 enable getty@tty2.service
 enable cups.service
 enable avahi-daemon.service
+enable arch-niri-dux-firewall.service
 enable greetd.service
 disable snapper-timeline.timer

@@ -20,7 +20,7 @@ prepare() {
 package_arch-niri-dux() {
     depends=(bash python libnotify systemd pacman niri 'dux-shell>=2.1.0' dux-greeter-bin dux-search-bin dux-calendar-bin
              dux-files-bin greetd gnome-keyring matugen adw-gtk-theme gtk3
-             xdg-desktop-portal-gnome xdg-desktop-portal-gtk xdg-terminal-exec xdg-utils)
+             xdg-desktop-portal-gnome xdg-desktop-portal-gtk xdg-terminal-exec xdg-utils nftables)
     backup=(etc/snapper/configs/root etc/mkinitcpio.conf.d/arch-niri-dux.conf
             etc/fonts/conf.d/50-arabic.conf etc/greetd/dux.toml
             etc/profile.d/dux-localbin.sh etc/profile.d/dux-editor.sh
@@ -30,6 +30,8 @@ package_arch-niri-dux() {
             etc/xdg/xdg-terminals.list)
     cp -a "$srcdir/desktop/etc" "$srcdir/desktop/usr" "$pkgdir/"
     install -d "$pkgdir/usr/lib/arch-niri-dux/migrations/"{system,user}
+    # Local firewall rules; the package ruleset includes *.nft from here.
+    install -d "$pkgdir/etc/arch-niri-dux/firewall.d"
     chmod 0755 "$pkgdir/usr/bin/arch-niri-dux-migrate"
     # Vendor wants apply to already-installed systems too; /etc can override.
     install -d "$pkgdir/usr/lib/systemd/system/multi-user.target.wants" \

@@ -105,6 +105,24 @@ Each context preserves system and Nix PATH entries. No mise shims are added.
 The `session-path` stage of `make verify` checks the user-service environment,
 login shell and a real Niri-spawned wrapper without personal dotfiles.
 
+## Firewall and mDNS
+
+`arch-niri-dux-firewall.service` loads `/usr/share/arch-niri-dux/firewall.nft`
+into its own nftables table, leaving Tailscale, Docker and libvirt tables
+alone. It drops unsolicited inbound traffic. It accepts replies to outbound
+connections, loopback, the ICMPv6 and DHCPv6 traffic IPv6 needs, mDNS
+responses, and everything arriving on `tailscale0`. Avahi runs resolve-only
+from `/usr/share/arch-niri-dux/avahi-daemon.conf`: printer discovery and
+`.local` names work, but the host advertises nothing. To open a port, add a
+rule such as `add rule inet arch_niri_dux input tcp dport 22 accept` to
+`/etc/arch-niri-dux/firewall.d/*.nft` and run `systemctl reload
+arch-niri-dux-firewall`. Docker or libvirt guests that must reach host
+services need an `iifname` rule there for their bridge. To use another
+firewall, disable the unit; the stock `nftables.service` flushes every table
+when it starts. To publish again, add a later-sorting
+`/etc/systemd/system/avahi-daemon.service.d/` drop-in that resets `ExecStart=`
+to `/usr/bin/avahi-daemon -s`, then allow inbound UDP 5353.
+
 ## System policy
 
 System policy belongs to the integration package: mkinitcpio's complete MODULES
