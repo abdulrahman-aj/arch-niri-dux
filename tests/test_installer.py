@@ -8,6 +8,7 @@ import unittest
 from unittest.mock import patch
 
 from installer import install as installer
+from installer import storage
 
 
 def settings(**changes):
@@ -62,8 +63,8 @@ class InstallerSafetyTests(unittest.TestCase):
                 ):
                     if message is None:
                         self.assertEqual(installer.main(), 0)
-                        wizard.assert_called_once_with()
-                        installation.assert_called_once_with(wizard.return_value)
+                        wizard.assert_called_once()
+                        installation.assert_called_once_with(wizard.return_value, wizard.call_args.args[0])
                     else:
                         with self.assertRaises(SystemExit) as stopped:
                             installer.main()
@@ -96,20 +97,20 @@ class InstallerSafetyTests(unittest.TestCase):
         self.assertIn('WWN-A', installer.disk_label(disk(wwn='WWN-A')))
 
     def test_accepts_unused_disk(self):
-        self.assertIsNone(installer.disk_rejection(disk(), set()))
+        self.assertIsNone(storage.disk_rejection(disk(), set()))
 
     def test_refuses_live_usb_with_mounted_descendant(self):
         device = disk(children=[dict(name='/dev/vda1', type='part', mountpoints=['/run/archiso/bootmnt'])])
-        self.assertIn('mounted', installer.disk_rejection(device, set()))
+        self.assertIn('mounted', storage.disk_rejection(device, set()))
 
     def test_refuses_active_swap(self):
         device = disk(children=[dict(name='/dev/vda2', type='part', mountpoints=[None])])
-        self.assertIn('swap', installer.disk_rejection(device, {'/dev/vda2'}))
+        self.assertIn('swap', storage.disk_rejection(device, {'/dev/vda2'}))
 
     def test_refuses_readonly_small_and_partition_targets(self):
         for device in (disk(ro=True), disk(size=1024**3), disk(type='part')):
             with self.subTest(device=device):
-                self.assertIsNotNone(installer.disk_rejection(device, set()))
+                self.assertIsNotNone(storage.disk_rejection(device, set()))
 
     def test_input_validation_blocks_unsafe_identity_values(self):
         for change in (
@@ -139,7 +140,7 @@ class InstallerSafetyTests(unittest.TestCase):
             ('/dev/sda', '/dev/sda2'),
             ('/dev/vda', '/dev/vda2'),
         ):
-            self.assertEqual(installer.partition_name(drive, 2), expected)
+            self.assertEqual(storage.partition_name(drive, 2), expected)
 
     def test_fstab_uses_subvolume_paths_so_root_can_be_replaced(self):
         original = '# root\nUUID=abc / btrfs rw,subvolid=256,subvol=/@ 0 0\nUUID=abc /home btrfs rw,subvolid=257,subvol=/@home 0 0\n'
@@ -158,7 +159,7 @@ class InstallerSafetyTests(unittest.TestCase):
                 patch.object(installer, 'SHARE', root),
                 patch.object(installer, 'REPO', root),
                 patch.object(installer, 'TARGET', root / 'target'),
-                patch.object(installer, 'require_disk', side_effect=[1, 2]),
+                patch.object(storage, 'require_disk', side_effect=[1, 2]),
                 patch.object(installer, 'verify_repository'),
                 patch.object(installer.shutil, 'which', return_value='/usr/bin/tool'),
                 patch.object(installer, 'run') as run,
@@ -173,7 +174,7 @@ class InstallerSafetyTests(unittest.TestCase):
             (root / 'packages.target').write_text('base\n--root=/\n')
             with (
                 patch.object(installer, 'SHARE', root),
-                patch.object(installer, 'require_disk', return_value=1),
+                patch.object(storage, 'require_disk', return_value=1),
                 patch.object(installer, 'run') as run,
             ):
                 with self.assertRaisesRegex(ValueError, 'package list'):
@@ -192,24 +193,25 @@ class InstallerSafetyTests(unittest.TestCase):
                 patch.object(installer, 'SHARE', root),
                 patch.object(installer, 'REPO', root),
                 patch.object(installer, 'TARGET', root / 'target'),
-                patch.object(installer, 'require_disk', return_value=1),
+                patch.object(storage, 'require_disk', return_value=1),
                 patch.object(installer, 'run') as run,
             ):
                 value = settings()
+                state = installer.InstallationState()
                 with self.assertRaisesRegex(ValueError, 'repository database'):
-                    installer.install(value)
+                    installer.install(value, state)
                 run.assert_not_called()
-                self.assertFalse(value.installation_started)
+                self.assertFalse(state.installation_started)
 
     def test_disk_replacement_after_wizard_confirmation_is_rejected(self):
         value = settings()
-        value.confirmed_device = (1, 2, 64 * 1024**3)
+        state = installer.InstallationState(confirmed_device=(1, 2, 64 * 1024**3))
         with (
-            patch.object(installer, 'require_disk', return_value=(1, 3, 64 * 1024**3)),
+            patch.object(storage, 'require_disk', return_value=(1, 3, 64 * 1024**3)),
             patch.object(installer, 'run') as run,
         ):
             with self.assertRaisesRegex(ValueError, 'confirmed disk was replaced'):
-                installer.install(value)
+                installer.install(value, state)
             run.assert_not_called()
 
     def test_picker_starts_with_cancel_and_escape_cancels(self):
@@ -223,8 +225,8 @@ class InstallerSafetyTests(unittest.TestCase):
         for started in (False, True):
             value = settings(swap_gib=0)
 
-            def fail_install(_settings):
-                _settings.installation_started = started
+            def fail_install(_settings, state):
+                state.installation_started = started
                 raise ValueError('fixture failure')
 
             output = io.StringIO()
@@ -254,11 +256,11 @@ class InstallerSafetyTests(unittest.TestCase):
 
     def test_swap_auto_custom_disabled_and_capacity(self):
         with patch.object(installer, 'memory_gib', return_value=16):
-            self.assertEqual(installer.swap_size(settings(), 64 * installer.GIB), 18)
-            self.assertEqual(installer.swap_size(settings(swap_gib=8), 64 * installer.GIB), 8)
-            self.assertEqual(installer.swap_size(settings(swap_gib=0), 32 * installer.GIB), 0)
+            self.assertEqual(installer.swap_size(None, 64 * installer.GIB), 18)
+            self.assertEqual(installer.swap_size(8, 64 * installer.GIB), 8)
+            self.assertEqual(installer.swap_size(0, 32 * installer.GIB), 0)
             with self.assertRaisesRegex(ValueError, 'will not fit'):
-                installer.swap_size(settings(), 32 * installer.GIB)
+                installer.swap_size(None, 32 * installer.GIB)
         for value in (-1, 1.5, True, '18'):
             with self.subTest(value=value), self.assertRaises(ValueError):
                 settings(swap_gib=value).validate()

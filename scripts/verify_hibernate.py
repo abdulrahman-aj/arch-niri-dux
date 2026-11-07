@@ -9,6 +9,7 @@ import subprocess
 import sys
 
 from verification.digest import digest
+from verification.evidence import Evidence
 
 from verification.vm import VM, PASSWORD, installed_login, stage_probes
 
@@ -20,7 +21,8 @@ def main():
     directory = args.directory.resolve()
     if not (directory / 'ACCEPTANCE-PASSED').is_file():
         parser.error('Run full make verify first; this requires its disposable VM and evidence.')
-    inputs = json.loads((directory / 'inputs.json').read_text())
+    evidence = Evidence(directory, exist_ok=True)
+    inputs = evidence.inputs()
     iso = Path(inputs['iso'])
     if digest(iso) != inputs['iso_sha256']:
         parser.error('The ISO changed after acceptance; verify the new artifact first.')

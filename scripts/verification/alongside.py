@@ -24,7 +24,7 @@ def plan():
         swap_gib=0,
         mode='alongside',
     )
-    snapshot = install.alongside_snapshot(settings.disk)
+    snapshot = install.storage.alongside_snapshot(settings.disk)
     assert len(snapshot['regions']) == 1
     boot_path = {'linux': 'debian', 'windows': 'microsoft'}[os_name]
     boots = [number for number, boot in snapshot['boots'].items() if boot_path in boot['path'].lower()]
@@ -51,7 +51,7 @@ def plan():
     evidence = Path('/run/verify')
     (evidence / 'install.json').write_text(json.dumps(configuration))
     (evidence / 'old-partitions.json').write_text(json.dumps(snapshot['table']['partitions']))
-    (evidence / 'new-partitions.json').write_text(json.dumps(install.alongside_plan(settings, snapshot)))
+    (evidence / 'new-partitions.json').write_text(json.dumps(install.storage.alongside_plan(settings, snapshot)))
 
 
 if __name__ == '__main__':

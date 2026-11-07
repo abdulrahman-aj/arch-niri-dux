@@ -8,6 +8,7 @@ import shutil
 import subprocess
 
 from verification.digest import digest
+from verification.evidence import Evidence
 
 from verification.vm import VM, graphical_login, installed_login, stage_probes
 
@@ -27,7 +28,7 @@ def main():
     if not fixture.is_file() or not (accepted / 'ACCEPTANCE-PASSED').is_file():
         parser.error('Fixture must be a disk from a completed full acceptance run.')
     directory = args.directory.resolve()
-    directory.mkdir(mode=0o700, parents=True, exist_ok=False)
+    evidence = Evidence(directory, parents=True)
     for name in ('OVMF_VARS.fd', 'install.json'):
         shutil.copyfile(accepted / name, directory / name)
     if args.kernel_package:
@@ -39,18 +40,14 @@ def main():
     source.mkdir()
     epoch = int(subprocess.check_output(['git', 'log', '-1', '--format=%ct'], cwd=ROOT, text=True))
     builder.prepare_source(ROOT, source, epoch)
-    (directory / 'inputs.json').write_text(
-        json.dumps(
-            {
-                'kernel_sha256': digest(directory / 'kernel.pkg.tar.zst') if args.kernel_package else None,
-                'fixture': str(fixture),
-                'accepted_inputs': json.loads((accepted / 'inputs.json').read_text()),
-                'source_sha256': digest(source / 'integration.tar'),
-                'verification_scripts': probe_hashes | {'verify_fast.py': digest(Path(__file__))},
-            },
-            indent=2,
-        )
-        + '\n'
+    evidence.inputs(
+        {
+            'kernel_sha256': digest(directory / 'kernel.pkg.tar.zst') if args.kernel_package else None,
+            'fixture': str(fixture),
+            'accepted_inputs': json.loads((accepted / 'inputs.json').read_text()),
+            'source_sha256': digest(source / 'integration.tar'),
+            'verification_scripts': probe_hashes | {'verify_fast.py': digest(Path(__file__))},
+        }
     )
     disk = directory / 'disk.qcow2'
     subprocess.run(['qemu-img', 'create', '-f', 'qcow2', '-F', 'qcow2', '-b', str(fixture), str(disk)], check=True)

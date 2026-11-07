@@ -13,7 +13,8 @@ import tempfile
 import unittest
 from unittest.mock import patch
 
-from test_installer import installer, settings
+from test_installer import settings
+from installer import storage as installer
 
 
 def table(path):
@@ -127,7 +128,7 @@ class AlongsideDiskTests(unittest.TestCase):
             self.assertEqual(digest_range(self.disk, original['start'] * 512, original['size'] * 512), expected)
 
     def test_adds_only_two_partitions_and_preserves_all_old_bytes_and_metadata(self):
-        result = installer.create_alongside_partitions(self.value, self.snapshot, self.identity)
+        result = installer.create_alongside_partitions(self.value, self.snapshot, self.identity, lambda: None)
         self.assertEqual(result, (str(self.disk) + '2', str(self.disk) + '3'))
         current = table(self.disk)['partitions']
         self.assertEqual(len(current), 4)
@@ -144,7 +145,7 @@ class AlongsideDiskTests(unittest.TestCase):
             stream.write(bytes(440) + struct.pack('<I', 0x6086B967) + bytes(2))
         self.mbr_hash = digest_range(self.disk, 0, 446)
         snapshot = installer.alongside_snapshot(self.value.disk)
-        installer.create_alongside_partitions(self.value, snapshot, self.identity)
+        installer.create_alongside_partitions(self.value, snapshot, self.identity, lambda: None)
         with self.disk.open('rb') as stream:
             stream.seek(440)
             self.assertEqual(stream.read(4), struct.pack('<I', 0x6086B967))
@@ -158,7 +159,7 @@ class AlongsideDiskTests(unittest.TestCase):
                 before = table(self.disk)
                 self.commands.clear()
                 with self.assertRaisesRegex(ValueError, 'changed'):
-                    installer.create_alongside_partitions(self.value, self.snapshot, self.identity)
+                    installer.create_alongside_partitions(self.value, self.snapshot, self.identity, lambda: None)
                 self.assertEqual(table(self.disk), before)
                 self.assertFalse(any(c[0] == 'sgdisk' and '--verify' not in c for c in self.commands))
                 self.assert_old_data_except_name()
@@ -170,10 +171,10 @@ class AlongsideDiskTests(unittest.TestCase):
     def test_identity_or_firmware_change_aborts(self):
         with patch.object(installer, 'require_disk', return_value=(99, 2, self.identity[2])):
             with self.assertRaisesRegex(ValueError, 'identity'):
-                installer.create_alongside_partitions(self.value, self.snapshot, self.identity)
+                installer.create_alongside_partitions(self.value, self.snapshot, self.identity, lambda: None)
         self.firmware = self.firmware.replace('BootOrder: 0001,0000', 'BootOrder: 0000,0001')
         with self.assertRaisesRegex(ValueError, 'firmware'):
-            installer.create_alongside_partitions(self.value, self.snapshot, self.identity)
+            installer.create_alongside_partitions(self.value, self.snapshot, self.identity, lambda: None)
         self.assert_old_data()
 
     def test_hybrid_mbr_is_rejected_without_repair(self):
@@ -215,7 +216,7 @@ class AlongsideDiskTests(unittest.TestCase):
 
         with patch.object(installer, 'run', side_effect=command):
             with self.assertRaises((ValueError, subprocess.CalledProcessError)):
-                installer.create_alongside_partitions(self.value, self.snapshot, self.identity)
+                installer.create_alongside_partitions(self.value, self.snapshot, self.identity, lambda: None)
         self.assert_old_data()
 
     def test_post_creation_bootstrap_change_is_rejected(self):
@@ -230,7 +231,7 @@ class AlongsideDiskTests(unittest.TestCase):
 
         with patch.object(installer, 'run', side_effect=command):
             with self.assertRaisesRegex(ValueError, 'MBR bootstrap changed'):
-                installer.create_alongside_partitions(self.value, self.snapshot, self.identity)
+                installer.create_alongside_partitions(self.value, self.snapshot, self.identity, lambda: None)
         self.assert_old_data_except_name()
 
     def test_old_raw_gpt_entry_padding_is_preserved_even_when_json_would_hide_a_change(self):
@@ -262,7 +263,7 @@ class AlongsideDiskTests(unittest.TestCase):
 
         with patch.object(installer, 'run', side_effect=command):
             with self.assertRaisesRegex(ValueError, 'Original GPT entries'):
-                installer.create_alongside_partitions(self.value, self.snapshot, self.identity)
+                installer.create_alongside_partitions(self.value, self.snapshot, self.identity, lambda: None)
         for part in self.original:
             self.assertIn(part, table(self.disk)['partitions'])
         self.assert_old_data()
@@ -396,11 +397,10 @@ class FirmwareRegistrationTests(unittest.TestCase):
         if path is None:
             path = (2, self.guid, r'\EFI\limine\limine_x64.efi')
         with (
-            patch.object(installer, 'TARGET', self.target),
             patch.object(installer, 'run', side_effect=command),
             patch.object(installer, 'firmware_boot_path', return_value=path),
         ):
-            installer.finish_alongside_boot(self.settings, self.snapshot, 2)
+            installer.finish_alongside_boot(self.settings, self.snapshot, 2, self.target)
 
     def test_retains_original_entries_and_chainloads_the_original_esp(self):
         self.finish([self.before, self.after, self.final])
