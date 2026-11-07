@@ -39,8 +39,10 @@ Build it yourself with `make iso` (see [Build and test](#build-and-test)); the I
 ### Verify a prebuilt ISO
 
 If you got a prebuilt `arch-niri-dux-0.3.0-x86_64.iso` from someone else, verify it before flashing.
-Download `SHA256SUMS`, `SHA256SUMS.sig` and `integration-signing.gpg` from the
-[0.3.0 release](https://github.com/abdulrahman-aj/arch-niri-dux/releases) and put them next to the ISO.
+Get `SHA256SUMS` and `SHA256SUMS.sig` from whoever shares the ISO, all three files
+together. Download the public key separately from this repository's
+[`keys/integration-signing.gpg`](https://raw.githubusercontent.com/abdulrahman-aj/arch-niri-dux/v0.3.0-2/keys/integration-signing.gpg)
+and save it as `integration-signing.gpg` next to those files.
 Take these instructions from this repository, not from whoever sent the ISO: a public key
 supplied beside an ISO is not enough without this independent check.
 

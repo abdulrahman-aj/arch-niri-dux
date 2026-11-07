@@ -34,8 +34,9 @@ These checks assume the installer and its embedded public keys are intact. A
 whole-medium rewrite can replace both. The
 [ISO checksum workflow](../packages/RELEASING.md#authorize-and-distribute-an-iso)
 uses our existing CI-only release subkey to sign the maintainer-approved hash of
-one locally built release ISO. Friends must follow the [README verification
-steps](../README.md#verify-before-flashing) on a trusted machine before flashing.
+one locally built release ISO. Its checksum and signature travel with the ISO;
+the public key remains in this directory. Friends must follow the [README
+verification steps](../README.md#verify-a-prebuilt-iso) on a trusted machine before flashing.
 The certificate digest in those trusted instructions authenticates the public key.
 CI approval authorizes the chosen bytes; it does not prove their build provenance.
 Package signatures
