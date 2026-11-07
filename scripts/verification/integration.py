@@ -176,7 +176,10 @@ def verify_upgrade():
         original = database.read_bytes()
         database.write_bytes(original + b'tampered')
         rejected = subprocess.run(
-            ['pacman', '--config', str(configuration), '-Syu', '--noconfirm'], capture_output=True, text=True
+            ['pacman', '--config', str(configuration), '-Syu', '--noconfirm'],
+            capture_output=True,
+            text=True,
+            check=False,
         )
         assert rejected.returncode != 0 and 'signature' in rejected.stderr.lower(), rejected
         assert output('pacman', '-Q', 'arch-niri-dux', 'arch-niri-dux-baseline') == versions
@@ -248,7 +251,10 @@ def assert_restored(root=Path('/'), evidence=Path('/run/verify')):
         assert not (root / name.lstrip('/')).exists(), name
     for name in restoration['packages_absent']:
         assert (
-            subprocess.run(['pacman', '-Q', name], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL).returncode != 0
+            subprocess.run(
+                ['pacman', '-Q', name], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=False
+            ).returncode
+            != 0
         ), name
 
 

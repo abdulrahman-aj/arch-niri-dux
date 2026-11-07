@@ -323,7 +323,7 @@ def alongside_snapshot(disk):
     firmware = run('efibootmgr', '--verbose', capture=True)
     entries = firmware_entries(firmware)
     boots = {}
-    for number, entry in entries.items():
+    for number in entries:
         boot_path = firmware_boot_path(number)
         if boot_path is None:
             continue
@@ -444,7 +444,7 @@ def create_alongside_partitions(settings, snapshot, identity):
         or any(part not in current['partitions'] for part in snapshot['table']['partitions'])
     ):
         raise ValueError('Partition creation did not preserve the original GPT entries; refusing to format.')
-    for number, first, last, kind, label in plan:
+    for number, first, last, kind, _label in plan:
         part = next((p for p in current['partitions'] if p['node'] == partition_name(settings.disk, number)), None)
         expected_type = ESP_TYPE if kind == 'ef00' else LUKS_TYPE
         if (
@@ -458,7 +458,7 @@ def create_alongside_partitions(settings, snapshot, identity):
 
 
 def verify_partition_nodes(settings, plan, sector_size):
-    for number, first, last, kind, label in plan:
+    for number, first, last, _kind, _label in plan:
         node = partition_name(settings.disk, number)
         sysfs = Path('/sys/class/block') / Path(node).name
         if (
@@ -562,6 +562,7 @@ def choose(label, choices, default=None, header=''):
         input='\n'.join(choices) + '\n',
         text=True,
         stdout=subprocess.PIPE,
+        check=False,
     )
     if result.returncode in (1, 130):
         raise Cancelled()

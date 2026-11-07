@@ -60,7 +60,7 @@ def check_sources(fields, repository, release):
         sources, sums = fields.get('source' + arch, []), fields.get('sha256sums' + arch, [])
         if len(sources) != len(sums):
             raise ValueError('Every source needs a SHA-256 checksum.')
-        for source, checksum in zip(sources, sums):
+        for source, checksum in zip(sources, sums, strict=False):
             url = source.split('::', 1)[-1]
             if url.startswith(assets):
                 if digests.get(url.removeprefix(assets)) != f'sha256:{checksum}':

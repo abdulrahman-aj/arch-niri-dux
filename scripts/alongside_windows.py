@@ -55,7 +55,7 @@ class WindowsVM(VM):
                 'not-need-init',
             ]
         )
-        for attempt in range(100):
+        for _attempt in range(100):
             if control.exists():
                 break
             if self.tpm_process.poll() is not None:

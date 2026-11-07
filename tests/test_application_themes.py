@@ -55,7 +55,9 @@ class ApplicationThemeTests(unittest.TestCase):
         }
 
     def run_helper(self, **changes):
-        return subprocess.run(['bash', str(SCRIPT)], env=self.environment | changes, text=True, capture_output=True)
+        return subprocess.run(
+            ['bash', str(SCRIPT)], env=self.environment | changes, text=True, capture_output=True, check=False
+        )
 
     def test_skipped_or_failed_patch_does_not_record_success(self):
         for status in ('1', '2'):

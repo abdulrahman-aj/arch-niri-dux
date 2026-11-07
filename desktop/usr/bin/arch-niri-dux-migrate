@@ -81,7 +81,7 @@ def execute(queue, state, baseline=False):
             outcome = {'outcome': 'baseline', 'reason': 'Fresh installation'}
         else:
             # Preserve stderr in the journal; stdout is also the skip-reason channel.
-            result = subprocess.run(['/bin/bash', str(path)], text=True, stdout=subprocess.PIPE)
+            result = subprocess.run(['/bin/bash', str(path)], text=True, stdout=subprocess.PIPE, check=False)
             print(result.stdout, end='', flush=True)
             if result.returncode == 0:
                 outcome = {'outcome': 'success'}

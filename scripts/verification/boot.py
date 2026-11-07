@@ -20,9 +20,7 @@ def prepare(root):
     configuration = json.loads(Path('/run/verify/install.json').read_text())
     if configuration.get('swap_gib') == 0:
         assert not (root / 'swap/swapfile').exists()
-        assert not any(
-            token.startswith('resume=') or token.startswith('resume_offset=') for token in cmdline.read_text().split()
-        )
+        assert not any(token.startswith(('resume=', 'resume_offset=')) for token in cmdline.read_text().split())
         assert 'AllowHibernation=no' in (root / 'etc/systemd/sleep.conf.d/60-hibernation.conf').read_text()
 
 
@@ -55,7 +53,7 @@ def storage():
     swaps = [line.split() for line in Path('/proc/swaps').read_text().splitlines()[1:]]
     if configuration.get('swap_gib') == 0:
         assert not swaps, swaps
-        assert not any(token.startswith('resume=') or token.startswith('resume_offset=') for token in cmdline)
+        assert not any(token.startswith(('resume=', 'resume_offset=')) for token in cmdline)
         disabled = run('systemd-analyze', 'cat-config', 'systemd/sleep.conf', stdout=subprocess.PIPE).stdout
         assert 'AllowHibernation=no' in disabled
         return

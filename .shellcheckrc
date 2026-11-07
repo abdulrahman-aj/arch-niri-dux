@@ -1,0 +1,4 @@
+# Catch misspelled environment names and hidden errexit suppression.
+enable=check-unassigned-uppercase,check-set-e-suppressed
+# Keep quoting consistent as variable values and command lookup evolve.
+enable=quote-safe-variables,deprecate-which
