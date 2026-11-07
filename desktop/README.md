@@ -107,14 +107,14 @@ login shell and a real Niri-spawned wrapper without personal dotfiles.
 
 ## Dux defaults and updates
 
-Before DMS starts, its packaged service drop-in runs `initialize-dux-
-settings.py` for new and existing accounts. Each feature seeds the keys missing
-from `settings.json` and every `config.d/*.json` file into its own
-`~/.config/dms/config.d/00-arch-niri-dux-*.json` file, once. Dux saves later
-changes back to that file, so change these settings in Dux Settings, in that
-file or in a later-sorting `config.d` file; `settings.json` loads first and
-loses to them. An emptied seed file stays in place so restarts don't undo an
-opt-out.
+Before DMS starts, its packaged service drop-in runs
+`initialize-dux-settings.py` for new and existing accounts. Each feature seeds
+the keys missing from `settings.json` and every `config.d/*.json` file into its
+own `~/.config/dms/config.d/00-arch-niri-dux-*.json` file, once. Dux saves
+later changes back to that file, so change these settings in Dux Settings, in
+that file or in a later-sorting `config.d` file; `settings.json` loads first
+and loses to them. An emptied seed file stays in place so restarts don't undo
+an opt-out.
 
 The update seed puts Dux's Software Updates button on the main bar, right of
 the clock. It hides while Dux knows of no updates. Dux's server checks at login
