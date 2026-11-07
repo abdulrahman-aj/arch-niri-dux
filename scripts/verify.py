@@ -16,7 +16,7 @@ from workspace import disk_guard, own
 from verification.digest import digest
 from verification.evidence import Evidence
 
-from verification import apps, boot, browser, camera, desktop, dux_update, integration, pdf, recovery
+from verification import apps, boot, browser, camera, desktop, dux_update, integration, pdf, recovery, suspend
 from verification.vm import VM, PASSWORD, stage_probes
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -151,6 +151,7 @@ def main():
         camera.verify(vm, passed)
         browser.verify(vm, passed)
         desktop.verify_lock(vm, passed)
+        suspend.verify(vm, passed)
         vm.probe('migrations', 'check', timeout=180)
         passed('Migration ordering, retries, session triggers and new-account baseline')
         dux_update.verify(vm, passed)
