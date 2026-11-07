@@ -16,8 +16,8 @@ Pass verification arguments through `ARGS='...'`. Evidence defaults to
 `out/verify/`; see [VERIFICATION.md](VERIFICATION.md) for fixture requirements.
 
 [scripts/workspace.py](scripts/workspace.py) gives each checkout its own
-`BUILD_STATE` by default; an explicit `BUILD_STATE` wins. It requires 30 GiB
-free before builds and VM disk creation. Heavy make targets refuse when
+`BUILD_STATE` by default; an explicit `BUILD_STATE` wins and is yours to manage.
+It requires 30 GiB free before builds and VM disk creation. Heavy make targets refuse when
 `AGENT_HEAVY_JOBS=deny`.
 
 Run `make gc ARGS=--dry-run` before `make gc`. GC uses ownership markers

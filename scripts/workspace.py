@@ -75,6 +75,8 @@ def collect(cache, checkout, dry_run=False):
     freed = 0
     removed = []
     protected = [cache / 'arch-niri-dux-downloads', cache / 'arch-niri-dux-states']
+    if os.environ.get('BUILD_STATE'):
+        protected.append(build_state())
     for path in candidates(cache, checkout):
         if not path.exists():
             continue
@@ -126,7 +128,8 @@ def main():
             disk_guard(state)
             disk_guard(ROOT / 'out')
         state.mkdir(parents=True, exist_ok=True)
-        own(state)
+        if not os.environ.get('BUILD_STATE'):
+            own(state)
         print(state)
 
 

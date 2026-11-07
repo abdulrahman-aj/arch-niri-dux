@@ -21,6 +21,40 @@ class WorkspaceTests(unittest.TestCase):
             with patch.dict(os.environ, {'BUILD_STATE': temp}):
                 self.assertEqual(workspace.build_state(), Path(temp))
 
+    def test_explicit_state_is_user_managed(self):
+        for populated in (False, True):
+            with self.subTest(populated=populated), tempfile.TemporaryDirectory() as temp:
+                cache = Path(temp)
+                state = cache / 'arch-niri-dux-build-private'
+                if populated:
+                    state.mkdir()
+                    (state / 'payload').write_bytes(b'preserve')
+                with patch.dict(os.environ, {'XDG_CACHE_HOME': temp, 'BUILD_STATE': str(state)}):
+                    with patch.object(sys, 'argv', ['workspace.py', 'state']):
+                        with contextlib.redirect_stdout(io.StringIO()):
+                            workspace.main()
+                    self.assertTrue(state.is_dir())
+                    self.assertFalse((state / workspace.MARKER).exists())
+                    self.assertFalse((cache / 'arch-niri-dux-states').exists())
+                    # GC must also keep it when BUILD_STATE is no longer set.
+                    with patch.dict(os.environ, {'BUILD_STATE': ''}):
+                        with contextlib.redirect_stdout(io.StringIO()):
+                            self.assertEqual(workspace.collect(cache, cache / 'gone'), [])
+                    self.assertTrue(state.is_dir())
+                    if populated:
+                        self.assertEqual((state / 'payload').read_bytes(), b'preserve')
+
+    def test_explicit_state_with_an_existing_marker_is_protected(self):
+        with tempfile.TemporaryDirectory() as temp, patch.dict(os.environ, {'XDG_CACHE_HOME': temp}):
+            cache = Path(temp)
+            state = cache / 'arch-niri-dux-build-private'
+            state.mkdir()
+            workspace.own(state, cache / 'gone')
+            with patch.dict(os.environ, {'BUILD_STATE': str(state)}):
+                with contextlib.redirect_stdout(io.StringIO()):
+                    self.assertEqual(workspace.collect(cache, cache / 'checkout'), [])
+            self.assertTrue(state.is_dir())
+
     def test_gc_only_deletes_owned_orphans_and_dry_run_preserves_them(self):
         with tempfile.TemporaryDirectory() as temp, patch.dict(os.environ, {'XDG_CACHE_HOME': temp}):
             cache = Path(temp)
