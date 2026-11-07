@@ -26,7 +26,7 @@ def record(name, value):
     (EVIDENCE / (name + '.json')).write_text(json.dumps(value, indent=2) + '\n')
 
 
-def daemon_request(method):
+def daemon_request(method, params=None):
     session = Path('/run/user') / str(pwd.getpwnam('tester').pw_uid)
     api = next(session.glob('dms*.sock'))
     with socket.socket(socket.AF_UNIX) as connection:
@@ -34,7 +34,8 @@ def daemon_request(method):
         connection.connect(str(api))
         stream = connection.makefile('rwb')
         json.loads(stream.readline())  # Initial capabilities greeting.
-        stream.write((json.dumps({'id': 1, 'method': method}) + '\n').encode())
+        request = {'id': 1, 'method': method} | ({'params': params} if params else {})
+        stream.write((json.dumps(request) + '\n').encode())
         stream.flush()
         response = json.loads(stream.readline())
     assert not response.get('error'), response
