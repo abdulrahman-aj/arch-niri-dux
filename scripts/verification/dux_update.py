@@ -39,6 +39,7 @@ AVAILABLE = 'dux-update-available.png'
 PANEL = 'dux-update-panel.png'
 # A row through the middle of Dux's default top bar, in screenshot pixels.
 BAR_MIDDLE = 22
+BAR_ABOVE_PILLS = 6
 
 
 def installed():
@@ -291,8 +292,8 @@ def bar_pills(path):
     """Return (start, end) columns of the widget pills on the top bar."""
     rows = png_top_rows(path, BAR_MIDDLE + 1)
     row = rows[BAR_MIDDLE]
-    # Bar background is the most common color between pills.
-    background = max(set(row), key=row.count)
+    # Pills are inset from the bar's top edge, so that strip is bar background.
+    background = max(set(rows[BAR_ABOVE_PILLS]), key=rows[BAR_ABOVE_PILLS].count)
     pills, start = [], None
     for x, pixel in enumerate(row + [background]):
         if pixel != background and start is None:
