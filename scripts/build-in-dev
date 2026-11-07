@@ -7,7 +7,7 @@ if [[ -n ${IN_NIX_SHELL:-} ]]; then
 fi
 # Copy only the flake inputs: a path flake over the whole checkout would copy
 # multi-gigabyte ISO outputs into /nix/store while files are still untracked.
-dev=${BUILD_STATE:-${XDG_CACHE_HOME:-$HOME/.cache}/arch-niri-dux-build}/dev-shell
+dev=$(python3 scripts/workspace.py state)/dev-shell
 mkdir -p "$dev"
 cp flake.nix flake.lock "$dev/"
 exec nix --extra-experimental-features 'nix-command flakes' develop "path:$(realpath "$dev")" --command "$@"

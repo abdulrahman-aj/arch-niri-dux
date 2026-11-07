@@ -8,6 +8,8 @@ import re
 import subprocess
 import sys
 
+from workspace import disk_guard
+
 from verification.digest import digest
 from verification.evidence import Evidence
 
@@ -21,6 +23,7 @@ def main():
     directory = args.directory.resolve()
     if not (directory / 'ACCEPTANCE-PASSED').is_file():
         parser.error('Run full make verify first; this requires its disposable VM and evidence.')
+    disk_guard(directory)
     evidence = Evidence(directory, exist_ok=True)
     inputs = evidence.inputs()
     iso = Path(inputs['iso'])

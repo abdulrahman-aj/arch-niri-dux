@@ -7,6 +7,8 @@ from pathlib import Path
 import shutil
 import subprocess
 
+from workspace import disk_guard, own
+
 from verification.digest import digest
 from verification.evidence import Evidence
 
@@ -28,7 +30,9 @@ def main():
     if not fixture.is_file() or not (accepted / 'ACCEPTANCE-PASSED').is_file():
         parser.error('Fixture must be a disk from a completed full acceptance run.')
     directory = args.directory.resolve()
+    disk_guard(args.directory)
     evidence = Evidence(directory, parents=True)
+    own(args.directory)
     for name in ('OVMF_VARS.fd', 'install.json'):
         shutil.copyfile(accepted / name, directory / name)
     if args.kernel_package:

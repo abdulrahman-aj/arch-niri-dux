@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 cd "$(dirname "$0")/.."
-state=${BUILD_STATE:-${XDG_CACHE_HOME:-$HOME/.cache}/arch-niri-dux-build}
+state=$(python3 scripts/workspace.py prepare-build)
 mkdir -p "$state" out
 state=$(realpath "$state")
 # Verified immutable downloads outlive any one BUILD_STATE. Every use rechecks
