@@ -3,6 +3,7 @@
 
 import argparse
 from contextlib import contextmanager
+import errno
 import fcntl
 import hashlib
 import json
@@ -19,6 +20,7 @@ SCRIPTS = Path('/usr/lib/arch-niri-dux/migrations')
 SYSTEM = Path('/var/lib/arch-niri-dux/migrations')
 PACMAN_LOCK = Path('/var/lib/pacman/db.lck')
 TRANSACTION_WAIT = 120
+LOCK_WAIT = 120
 
 
 def trusted(path):
@@ -58,8 +60,25 @@ def write(path, value, atomic=True):
 
 @contextmanager
 def lock(state, shared=False):
+    # A hung or hostile holder must not stall migrations silently forever, so
+    # acquisition retries non-blocking until a deadline and then raises into
+    # the caller's failure-record path. This makes the stall visible; it does
+    # not stop a persistent holder from denying future attempts.
     with (state / 'lock').open('r' if shared else 'a') as stream:
-        fcntl.flock(stream, fcntl.LOCK_SH if shared else fcntl.LOCK_EX)
+        operation = fcntl.LOCK_SH if shared else fcntl.LOCK_EX
+        deadline = time.monotonic() + LOCK_WAIT
+        while True:
+            try:
+                fcntl.flock(stream, operation | fcntl.LOCK_NB)
+                break
+            except OSError as error:
+                if error.errno not in (errno.EACCES, errno.EAGAIN):
+                    raise
+                if time.monotonic() >= deadline:
+                    raise RuntimeError(
+                        f'Migration lock still held after {LOCK_WAIT} seconds; retry with arch-niri-dux-migrate run'
+                    ) from error
+                time.sleep(1)
         yield
 
 
@@ -179,18 +198,18 @@ def main():
         if args.action == 'status':
             process(args.action, scope, state)
             return 0
-        with lock(state):
-            try:
+        try:
+            with lock(state):
                 process(args.action, scope, state)
                 (state / 'notified').unlink(missing_ok=True)
-            except (OSError, RuntimeError) as error:
-                # Publish failure before releasing the queue, so a successful
-                # concurrent retry cannot be overwritten by a stale failure.
-                failure = state / 'failure'
-                if not failure.exists() or failure.read_text().strip() != str(error):
-                    write(failure, str(error), atomic=False)
-                notify(str(error), state)
-                return 1
+        except (OSError, RuntimeError) as error:
+            # Publish failure before releasing the queue, so a successful
+            # concurrent retry cannot be overwritten by a stale failure.
+            failure = state / 'failure'
+            if not failure.exists() or failure.read_text().strip() != str(error):
+                write(failure, str(error), atomic=False)
+            notify(str(error), state)
+            return 1
         return 0
     except (OSError, RuntimeError) as error:
         notify(str(error), state)
