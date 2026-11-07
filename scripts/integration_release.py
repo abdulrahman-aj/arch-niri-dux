@@ -28,7 +28,29 @@ def fingerprint(root):
     return value
 
 
-def verify(root, path, *, historical=False):
+def signing_subkey(root):
+    value = (root / 'keys/integration-signing.subkey').read_text().strip()
+    if not re.fullmatch(r'[A-F0-9]{40}', value):
+        raise ValueError('Invalid signing subkey fingerprint.')
+    return value
+
+
+def history_boundary(root):
+    boundary = json.loads((root / 'keys/integration-history-start.json').read_text())
+    if not re.fullmatch(r'v[0-9]+(?:\.[0-9]+)*-[0-9]+(?:\.[0-9]+)*', boundary['tag']):
+        raise ValueError('Invalid history boundary tag.')
+    if boundary['tag'][1:] != boundary['packages']['arch-niri-dux']:
+        raise ValueError('History boundary tag must match the integration package floor.')
+    names = build.NAMES | {recipe['name'] for recipe, _, _ in apps.recipes(root)}
+    if set(boundary['packages']) != names:
+        raise ValueError('History boundary must cover every package.')
+    for version in boundary['packages'].values():
+        if not re.fullmatch(r'[0-9]+(?:\.[0-9]+)*-[0-9]+(?:\.[0-9]+)*', version):
+            raise ValueError('Invalid history boundary version.')
+    return boundary
+
+
+def verify(root, path, *, historical=False, current_signer=False):
     if path.is_symlink() or Path(str(path) + '.sig').is_symlink():
         raise ValueError('Release assets must be regular files, not links.')
     result = subprocess.run(
@@ -52,6 +74,8 @@ def verify(root, path, *, historical=False):
     expected = fingerprint(root)
     if not any(expected in (line[2], line[-1]) for line in signatures):
         raise ValueError('Release signature does not belong to the pinned identity.')
+    if current_signer and not any(line[2] == signing_subkey(root) for line in signatures):
+        raise ValueError('Release signature does not use the selected signing subkey.')
 
 
 def validate_manifest(root, directory):
@@ -113,7 +137,7 @@ def fetch(root, destination, base_url=RELEASES):
     if destination.exists() and (not destination.is_dir() or any(destination.iterdir())):
         raise ValueError('Release download destination must be empty.')
     destination.mkdir(parents=True, exist_ok=True)
-    base = f'{base_url}/integration-v{build.version(root)}'
+    base = f'{base_url}/v{build.version(root)}'
     for name in ('integration.manifest.json', 'integration.manifest.json.sig'):
         download(f'{base}/{name}', destination / name)
     verify(root, destination / 'integration.manifest.json')
@@ -141,7 +165,7 @@ def sign(root, path):
             '--pinentry-mode',
             'loopback',
             '--local-user',
-            fingerprint(root),
+            signing_subkey(root) + '!',
             '--output',
             str(path) + '.sig',
             '--detach-sign',
@@ -149,7 +173,7 @@ def sign(root, path):
         ],
         check=True,
     )
-    verify(root, path)
+    verify(root, path, current_signer=True)
 
 
 def contents(path):
@@ -171,7 +195,7 @@ def contents(path):
 
 def publish(root, packages, history, destination, tag, commit):
     version = build.version(root)
-    if tag != f'integration-v{version}' or not re.fullmatch(r'[a-f0-9]{40}', commit):
+    if tag != f'v{version}' or not re.fullmatch(r'[a-f0-9]{40}', commit):
         raise ValueError('Release tag/commit must identify this package version.')
     if not os.environ.get('GNUPGHOME'):
         raise ValueError('Signing requires a dedicated GNUPGHOME.')
@@ -184,6 +208,10 @@ def publish(root, packages, history, destination, tag, commit):
     app_entries = {entry['name']: entry for entry in manifest['apps']}
     versions = dict.fromkeys(build.NAMES, (version, 'any'))
     versions |= {name: (entry['version'], apps.ARCH) for name, entry in app_entries.items()}
+    boundary = history_boundary(root)
+    for name, (current_version, _) in versions.items():
+        if int(subprocess.check_output(['vercmp', current_version, boundary['packages'][name]], text=True)) < 0:
+            raise ValueError('Current package predates the history boundary.')
     reused = {}
     for old in history.glob('*.pkg.tar.zst'):
         if old.is_symlink() or not old.is_file():
@@ -200,9 +228,11 @@ def publish(root, packages, history, destination, tag, commit):
         )
         if name is None:
             raise ValueError('Unexpected historical package name.')
-        verify(root, old, historical=True)
         current_version, arch = versions[name]
         old_version = old.name.removeprefix(name + '-').removesuffix(f'-{arch}.pkg.tar.zst')
+        if int(subprocess.check_output(['vercmp', old_version, boundary['packages'][name]], text=True)) < 0:
+            raise ValueError('Historical package predates the history boundary.')
+        verify(root, old, historical=True)
         newer = int(subprocess.check_output(['vercmp', current_version, old_version], text=True))
         if name in build.NAMES:
             if newer <= 0:
@@ -248,9 +278,26 @@ def publish(root, packages, history, destination, tag, commit):
     sign(root, manifest_path)
 
 
+def history_tags(root, releases, tag):
+    start = history_boundary(root)['tag'][1:]
+    for page in json.loads(releases.read_text()):
+        for release in page:
+            previous = release['tag_name']
+            if release['draft'] or release['prerelease'] or previous == tag:
+                continue
+            if not re.fullmatch(r'v[0-9]+(?:\.[0-9]+)*-[0-9]+(?:\.[0-9]+)*', previous):
+                continue
+            if int(subprocess.check_output(['vercmp', previous[1:], start], text=True)) >= 0:
+                print(previous)
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     commands = parser.add_subparsers(dest='command', required=True)
+    history = commands.add_parser('history-tags')
+    history.add_argument('root', type=Path)
+    history.add_argument('releases', type=Path)
+    history.add_argument('--tag', required=True)
     acquire = commands.add_parser('fetch')
     acquire.add_argument('root', type=Path)
     acquire.add_argument('destination', type=Path)
@@ -262,7 +309,9 @@ def main():
     release.add_argument('--tag', required=True)
     release.add_argument('--commit', required=True)
     arguments = parser.parse_args()
-    if arguments.command == 'fetch':
+    if arguments.command == 'history-tags':
+        history_tags(arguments.root, arguments.releases, arguments.tag)
+    elif arguments.command == 'fetch':
         fetch(arguments.root.resolve(), arguments.destination.resolve())
     else:
         publish(

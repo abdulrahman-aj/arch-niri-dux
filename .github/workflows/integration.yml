@@ -5,14 +5,14 @@ on:
     branches: [main]
   push:
     branches: [main]
-    tags: ['integration-v*']
+    tags: ['v*']
 
 permissions:
   contents: read
 
 concurrency:
-  group: integration-${{ startsWith(github.ref, 'refs/tags/integration-v') && 'release' || github.ref }}
-  cancel-in-progress: ${{ !startsWith(github.ref, 'refs/tags/integration-v') }}
+  group: integration-${{ startsWith(github.ref, 'refs/tags/v') && 'release' || github.ref }}
+  cancel-in-progress: ${{ !startsWith(github.ref, 'refs/tags/v') }}
 
 jobs:
   checks:
@@ -50,17 +50,16 @@ jobs:
           if-no-files-found: error
 
   publish:
-    if: startsWith(github.ref, 'refs/tags/integration-v')
+    if: startsWith(github.ref, 'refs/tags/v')
     needs: [checks, packages]
     runs-on: ubuntu-24.04
-    container: archlinux:base-devel@sha256:767de6eaa40dcfeda5263a48737ea03a782caabdf3a403b6e6a203c7fd333681
     environment: integration-release
     permissions:
       contents: write
     env:
       GNUPGHOME: /tmp/integration-release-keyring
     steps:
-      - run: pacman -Syu --noconfirm --needed python git github-cli jq gnupg
+      - uses: cachix/install-nix-action@75c75c31ebece974e48ebc36b4ad125bd97bd97b # v31
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
           fetch-depth: 0
@@ -75,23 +74,14 @@ jobs:
           PACKAGE_SIGNING_KEY: ${{ secrets.PACKAGE_SIGNING_KEY }}
           GH_TOKEN: ${{ github.token }}
         run: |
-          install -d -m 0700 "$GNUPGHOME"
-          printf '%s' "$PACKAGE_SIGNING_KEY" | gpg --batch --import
-          unset PACKAGE_SIGNING_KEY
-          bash scripts/publish-integration "$GITHUB_WORKSPACE" "$RUNNER_TEMP/packages" \
+          ./scripts/build-in-dev bash scripts/sign-integration "$GITHUB_WORKSPACE" "$RUNNER_TEMP/packages" \
             "$RUNNER_TEMP/history" "$RUNNER_TEMP/site/x86_64"
-      - name: Remove private signing material
-        if: always()
-        shell: bash
-        run: |
-          gpgconf --kill all || true
-          rm -rf "$GNUPGHOME"
       - uses: actions/upload-pages-artifact@7b1f4a764d45c48632c6b24a0339c27f5614fb0b # v4
         with:
           path: ${{ runner.temp }}/site
 
   deploy:
-    if: startsWith(github.ref, 'refs/tags/integration-v')
+    if: startsWith(github.ref, 'refs/tags/v')
     needs: publish
     runs-on: ubuntu-24.04
     environment:

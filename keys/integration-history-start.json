@@ -1,0 +1,11 @@
+{
+  "tag": "v0.3.0-2",
+  "packages": {
+    "arch-niri-dux": "0.3.0-2",
+    "arch-niri-dux-baseline": "0.3.0-2",
+    "dux-greeter-bin": "2.1.0-1",
+    "dux-search-bin": "2.1.0-1",
+    "dux-calendar-bin": "2.1.0-1",
+    "dux-files-bin": "2.1.0-1"
+  }
+}
