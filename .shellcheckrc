@@ -2,3 +2,5 @@
 enable=check-unassigned-uppercase,check-set-e-suppressed
 # Keep quoting consistent as variable values and command lookup evolve.
 enable=quote-safe-variables,deprecate-which
+# Fail on masked return values in command and process substitution (SC2312).
+enable=check-extra-masked-returns

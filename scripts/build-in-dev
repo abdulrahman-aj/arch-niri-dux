@@ -10,4 +10,7 @@ fi
 dev=$(python3 scripts/workspace.py state)/dev-shell
 mkdir -p "$dev"
 cp flake.nix flake.lock "$dev/"
-exec nix --extra-experimental-features 'nix-command flakes' develop "path:$(realpath "$dev")" --command "$@"
+# Resolve separately so errexit fails on a bad state dir instead of asking
+# nix for an empty flake path.
+dev_path=$(realpath "$dev")
+exec nix --extra-experimental-features 'nix-command flakes' develop "path:$dev_path" --command "$@"
