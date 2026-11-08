@@ -92,10 +92,11 @@ select another installed terminal through Dux or `~/.config/xdg-terminals.list`.
 Dux Files handles folders and portal file dialogs, with GTK as fallback. The
 GNOME portal handles screen sharing. Nautilus remains its Arch dependency.
 
-Logind suspends on lid-close when undocked and permits docked use. Niri already
-controls the built-in panel according to the lid switch. Intermittent wakeups
-still need [physical laptop evidence](https://github.com/abdulrahman-aj/arch-niri-dux/issues/48): `journalctl -b -u systemd-logind -u
-systemd-suspend` and `systemd-inhibit --list` show sleep events and inhibitors.
+Logind suspends on lid-close when undocked and permits docked use. During its
+30-second boot/resume holdoff, a Niri hook locks Dux and powers off the monitors,
+even if Dux is already locked. Opening the lid powers the monitors back on at
+the lock screen. The hook skips docked use and suspend already in progress;
+logind still controls suspend timing.
 
 The session adds `~/.local/bin` to PATH for POSIX login shells, systemd user
 services and Niri spawns. Login shells read `/etc/profile.d/dux-localbin.sh`.

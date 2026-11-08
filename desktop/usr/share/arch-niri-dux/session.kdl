@@ -9,3 +9,8 @@ window-rule {
     match app-id=r#"^dev\.duxlabs\.files$"# title=r#"^(Open|Save|Select|Upload|Export|Import)"#
     open-floating true
 }
+
+switch-events {
+    lid-close { spawn "/usr/lib/arch-niri-dux/lid-close"; }
+    lid-open { spawn "niri" "msg" "action" "power-on-monitors"; }
+}

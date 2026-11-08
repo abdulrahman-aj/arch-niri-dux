@@ -116,7 +116,12 @@ qualify later signed release bytes or hardware behavior.
 - Physical fingerprint enrollment, monitor DDC, drive-health readings, Wi-Fi
   hotspots, USB device access, LAN printer discovery and paper output need
   hardware checks.
-- Plymouth firmware-logo/backlight behavior and [intermittent lid-close wakeups](https://github.com/abdulrahman-aj/arch-niri-dux/issues/48)
-  need physical laptop evidence. VM hibernation does not qualify every device.
+- Check undocked lid closes within 30 seconds of boot and resume, both unlocked
+  and already locked: the panel must go dark immediately, reopening must show
+  the lock screen, and logind must still suspend after its holdoff. Repeat
+  outside the holdoff and check docked use with the built-in panel off. These
+  [lid checks](https://github.com/abdulrahman-aj/arch-niri-dux/issues/48) and Plymouth
+  firmware-logo/backlight behavior need physical laptop evidence. VM hibernation
+  does not qualify every device.
 - Synthetic audio, camera, network and printer checks qualify software paths.
   Package and ISO verification do not change physical machines.
