@@ -1,11 +1,11 @@
 # Arch + Niri + Dux
 
 An offline installer that sets up Arch Linux with the Niri compositor and the Dux desktop shell on an
-encrypted, snapshotted disk. Signed updates and migrations keep installed machines current after setup.
+encrypted disk with Btrfs snapshots. Signed updates and migrations keep installed machines current after setup.
 
 The desktop software comes from upstream: Arch, Niri, Dux, Limine and snapper. This project chooses the
 defaults, wires the pieces together, tests the result in a VM before every release and ships fixes to
-machines that are already installed.
+machines that are already installed. The live ISO itself is terminal-only.
 
 ## What you get
 
@@ -26,9 +26,9 @@ through suspend, updates and snapshot restore.
 
 ## What it isn't
 
-- A general Arch installer. It installs this one desktop with these choices.
-- Mature. It is young, and only x86_64 UEFI machines are supported.
-- Frozen. It follows the live Arch repositories and takes a few packages from the Omarchy repository.
+- It isn't a general Arch installer. It installs this one desktop with these choices.
+- It is young, and only x86_64 UEFI machines are supported.
+- It isn't frozen. It follows the live Arch repositories and takes a few packages from the Omarchy repository.
 
 ## Install
 
@@ -75,8 +75,8 @@ advisory](keys/RECOVERY.md#iso-verification-and-recovery) before installing.
 
 ## Update
 
-Click the update button next to the clock when it appears, or run `sudo pacman -Syu`. Both run any pending
-migrations.
+Click the update button next to the clock when it appears, or run `sudo pacman -Syu`. Migrations that an update
+brings run right after it finishes, or at the next boot.
 
 ## Recover
 
