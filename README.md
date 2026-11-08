@@ -9,17 +9,27 @@ machines that are already installed. The live ISO itself is terminal-only.
 
 ## What you get
 
-- A Niri and Dux desktop with its [apps and device support](desktop/README.md#applications-and-session-defaults)
-  set up, including printing, the camera, screen sharing, a keyring that unlocks at login, and hibernation.
-- Full-disk encryption (LUKS2 with Argon2id) on Btrfs.
-- A snapshot before every package change. You can boot an older snapshot from the boot menu and restore it.
-- A firewall that drops unsolicited inbound connections and still accepts Tailscale.
-- A screen that locks before suspend and goes dark when you close the lid.
-- An install that checks package signatures, and releases signed with a project key.
-- Updates through Dux's updater. When a release must change existing machines, a migration runs once on each
-  machine or account during the update.
-- Your own settings in `~/.config/niri/overrides.kdl` and Dux Settings. Updates change the defaults, never
-  your files.
+- The live ISO installs the full desktop with no network and checks its signed on-medium repository before it partitions.
+- The wizard lists only disks of at least 32 GiB, excludes the live USB, defaults the final prompt to Cancel and rechecks
+  disk identity before writing.
+- Erase mode creates a 4 GiB ESP and one LUKS2 Btrfs volume with separate subvolumes for home, logs, the package cache and
+  snapshots, so a rollback keeps your files.
+- Alongside mode uses only existing unallocated space, keeps the old system bootable from Limine, and refuses BitLocker,
+  dynamic disks, BIOS boot and damaged GPT before changing anything.
+- You unlock the disk at a graphical prompt that lets you retry a mistyped passphrase and falls back to text. Encrypted
+  swap, chosen with one installer question, powers hibernate and resume.
+- You log in from the Dux greeter straight into Niri, with the GNOME keyring already unlocked, so browsers ask for no
+  second password.
+- PDFs open in Papers, images in Loupe, video in Celluloid, audio in Decibels, links in Chromium and folders in Dux Files.
+- Picking light or dark in Dux switches GTK, Qt and Chromium together, and file pickers open the floating Dux Files dialog.
+- Closing the lid suspends the laptop when undocked and keeps it running on an external display when docked. The screen
+  locks before suspend and after 10 idle minutes.
+- The firewall drops unsolicited inbound traffic and still lets printer discovery, `.local` names, hotspots and Tailscale
+  work.
+- Every package change takes a snapshot that you can boot from Limine and restore without touching your home directory.
+- Updates come from signed repositories, ours first. Dux shows an update button only when updates are waiting, and
+  migrations apply one-time fixes during the update.
+- Your settings in `~/.config/niri/overrides.kdl` and Dux Settings survive updates, which only change the defaults.
 
 Every release installs in a VM and passes the [acceptance checks](VERIFICATION.md) first, from disk unlock
 through suspend, updates and snapshot restore.
