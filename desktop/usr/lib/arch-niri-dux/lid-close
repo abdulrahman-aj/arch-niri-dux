@@ -1,0 +1,41 @@
+#!/usr/bin/env bash
+# logind ignores lid closes for 30 seconds after boot or resume. Niri handles
+# screen locking and power in that window; logind still owns suspend policy.
+set -euo pipefail
+
+logind() {
+    busctl get-property org.freedesktop.login1 /org/freedesktop/login1 \
+        org.freedesktop.login1.Manager "$1"
+}
+
+# Niri can receive the switch event before logind updates LidClosed. Resume
+# also produces spurious close/open pairs, so require a confirmed closed lid.
+for ((attempt = 0; attempt < 20; attempt++)); do
+    lid_closed=$(logind LidClosed)
+    [[ $lid_closed == 'b true' ]] && break
+    sleep 0.05
+done
+lid_closed=$(logind LidClosed)
+[[ $lid_closed == 'b true' ]] || exit 0
+# Docked: logind ignores the lid by policy and Niri already handles the panel.
+docked=$(logind Docked)
+[[ $docked == 'b false' ]] || exit 0
+# Dux already locks before sleep when logind is suspending.
+preparing_for_sleep=$(logind PreparingForSleep)
+[[ $preparing_for_sleep == 'b false' ]] || exit 0
+
+locked=$(dms ipc call lock isLocked)
+if [[ $locked != true ]]; then
+    dms ipc call lock lock
+    # Locking is asynchronous; let the lock screen appear before powering off.
+    for ((attempt = 0; attempt < 20; attempt++)); do
+        locked=$(dms ipc call lock isLocked)
+        [[ $locked == true ]] && break
+        sleep 0.05
+    done
+fi
+# A lid-open event may have powered the panel on while we waited for the lock.
+lid_closed=$(logind LidClosed)
+[[ $lid_closed == 'b true' ]] || exit 0
+# Dux's combined lock/power action does nothing when already locked.
+exec niri msg action power-off-monitors
