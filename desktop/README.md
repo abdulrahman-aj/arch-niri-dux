@@ -118,19 +118,33 @@ that file or in a later-sorting `config.d` file; `settings.json` loads first
 and loses to them. An emptied seed file stays in place so restarts don't undo
 an opt-out.
 
-The update seed puts Dux's Software Updates button on the main bar, right of
-the clock. It hides while Dux knows of no updates. Dux's server checks weekly
-for any pending package from the configured repositories, with no check at
-login. It schedules from its last check, saved in
+The update seed puts our release button on the main bar, right of the clock. It
+appears only when a newer arch-niri-dux release is available in our package
+repository; any other pending package alone keeps it hidden. The packaged
+system plugin at `/etc/xdg/quickshell/dms-plugins/archNiriDuxRelease` polls
+`/usr/lib/arch-niri-dux/release-update-check` every 6 hours, which downloads
+our repository database to a temporary directory (never touching
+`/var/lib/pacman`) and `vercmp`s its arch-niri-dux version against the
+installed one. The plugin also holds Dux's updater alive, so its weekly
+background checks continue without the built-in button. Offline machines and
+malformed databases stay silent and hidden.
+Clicking the button toggles Dux's updater panel, the same panel
+`dms ipc call systemupdater open` shows; its Update All runs the same
+`pacman -Syu` that installs our packages and triggers migrations. Dux's
+server still checks weekly for any pending package from the configured
+repositories, with no check at login. It schedules from its last check, saved in
 `~/.cache/dms/sysupdate.json`, so logins and reboots don't restart the week; a
 new account checks a few minutes after its first login. Failed checks, such as
-while offline, stay silent and retry every 5 minutes. Clicking the button opens
-Dux's updater; its Update All runs the same `pacman -Syu` that installs our
+while offline, stay silent and retry every 5 minutes. Dux's updater panel;
+its Update All runs the same `pacman -Syu` that installs our
 packages and triggers migrations. A bar layout saved before the seed ran
-(`barConfigs` in a user file) is kept and gets no button. Dux only checks in
-the background while the button or update notifications hold its updater, so
-without either there are no checks. Move, remove or add the button in Dux
-Settings, Bar; Software Updates shows the weekly interval as a custom interval.
+(`barConfigs` in a user file) is kept and gets no button. The seeder also
+enables the system plugin in `~/.config/dms/plugin_settings.json` without
+overwriting an existing choice; system plugins ignore
+`AdminPolicy.disableUserPlugins`, and the directory watcher picks up the
+packaged plugin on a fresh session without a manual rescan. Move, remove or
+add the button in Dux Settings, Bar; Software Updates shows the weekly
+interval as a custom interval.
 
 Seeds never change a value that already exists. To change a shipped default for
 existing accounts, add a user migration that rewrites the key only where it

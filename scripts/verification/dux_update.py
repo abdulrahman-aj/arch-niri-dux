@@ -1,16 +1,20 @@
 """Dux announces pending updates on its own schedule; its updater installs them.
 
-The packaged defaults put Dux's Software Updates button on the bar, hidden
-while nothing is pending, and make Dux's server check weekly, with no check at
-login. Dux schedules from its last check, persisted in ~/.cache/dms, so
-logins and reboots don't reset the week. This stage shortens the interval to
-Dux's 5-minute minimum the way a user would, lets the scheduled check find a
-fixture repository with nothing newer, re-logs in before the interval to show
-no extra check runs, then offers our packages one pkgrel newer and lets the
-next scheduled check find them. The host clicks the button, sends Update All's
-request, types the password into Dux's real authentication dialog, and checks
-the migration contract end to end. Dux runs `pkexec pacman -Syu --needed
---noconfirm` through its pacman backend because no AUR helper is installed.
+The packaged defaults put our release button on the bar, hidden while no
+newer arch-niri-dux release is available, and make Dux's server check weekly,
+with no check at login. Dux schedules from its last check, persisted in
+~/.cache/dms, so logins and reboots don't reset the week. This stage shortens
+the interval to Dux's 5-minute minimum the way a user would, lets the
+scheduled check find a fixture repository with nothing newer, re-logs in
+before the interval to show no extra check runs, then offers our packages one
+pkgrel newer and lets the next scheduled check find them. The release button's
+checker polls our repository database every 6 hours and runs immediately on
+login; the stage rescans the plugin after the offer so the button appears
+without waiting out the interval. The host clicks the button, sends Update
+All's request, types the password into Dux's real authentication dialog, and
+checks the migration contract end to end. Dux runs `pkexec pacman -Syu
+--needed --noconfirm` through its pacman backend because no AUR helper is
+installed.
 """
 
 import json
@@ -48,6 +52,8 @@ WEEK = 7 * 24 * 60 * 60
 SHORT = 5 * 60
 SCHEDULE = Path('/home/tester/.cache/dms/sysupdate.json')
 UPDATE_SEED = Path('/home/tester/.config/dms/config.d/00-arch-niri-dux-updates.json')
+RELEASE_CHECK = Path('/usr/lib/arch-niri-dux/release-update-check')
+PLUGIN_ID = 'archNiriDuxRelease'
 
 
 def installed():
@@ -97,6 +103,14 @@ def build_candidate():
         '1234',
     )
     run('repo-add', str(packages / f'{REPOSITORY}.db.tar.gz'), *map(str, packages.glob('*.pkg.tar.zst')))
+    # Our release checker probes arch-niri-dux.db on every configured server
+    # when [arch-niri-dux] is absent (as in this fixture). Link it to the
+    # fixture database so the button qualifies the same candidate.
+    link = packages / 'arch-niri-dux.db'
+    target = packages / f'{REPOSITORY}.db.tar.gz'
+    if link.is_symlink() or link.exists():
+        link.unlink()
+    link.symlink_to(target.name)
     return packages
 
 
@@ -119,6 +133,18 @@ def use_fixture_repository(packages):
 def restore_pacman_conf():
     if SAVED_CONF.exists():
         PACMAN_CONF.write_text(SAVED_CONF.read_text())
+
+
+def release_check_result():
+    """Run the packaged release checker; True when it exits 0 (show button)."""
+    completed = subprocess.run([str(RELEASE_CHECK)], check=False, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    return completed.returncode == 0
+
+
+def plugin_listed():
+    """Whether Dux knows our system plugin (available, regardless of load)."""
+    reply = user_command('dms', 'ipc', 'call', 'plugin-scan', 'list', capture=True).stdout
+    return any(line.split('\t', 1)[0] == PLUGIN_ID for line in reply.splitlines() if '\t' in line)
 
 
 def database():
@@ -213,6 +239,11 @@ def prepare():
         later = state()
         assert later['lastCheckUnix'] == none['lastCheckUnix'], (none, later)
         assert later['nextCheckUnix'] >= none['lastCheckUnix'] + SHORT, later
+        # The release button shares the fixture: nothing newer, so its checker
+        # stays hidden. The system plugin needs no manual rescan; the directory
+        # watcher lists it on the fresh login above.
+        assert plugin_listed(), 'Release system plugin missing from plugin-scan list'
+        assert not release_check_result(), 'Release checker should hide with nothing newer'
         write_before(
             {
                 'packages': installed().splitlines(),
@@ -233,7 +264,7 @@ def prepare():
 
 
 def offer():
-    """Dux's next scheduled check finds our newer packages."""
+    """Dux's next scheduled check finds our newer packages, then the button shows."""
     try:
         before = json.loads((WORK / 'before.json').read_text())
         # Taken just before the offer so the clock rarely changes width
@@ -254,6 +285,23 @@ def offer():
         # A selected AUR helper would run in a terminal instead of through pkexec.
         system = [backend['id'] for backend in found['backends'] if backend['repo'] == 'system']
         assert system == ['pacman'], found['backends']
+        # The button polls every 6 hours; rescan the plugin to re-run its
+        # visibility check now. Rescanning briefly drops its updater hold, so
+        # wait for Dux's next scheduled check to repopulate the panel list.
+        reply = user_command('dms', 'ipc', 'call', 'plugin-scan', 'rescan', PLUGIN_ID, capture=True).stdout
+        assert 'RESCAN_TRIGGERED' in reply, reply
+        assert release_check_result(), 'Release checker should show with a newer candidate'
+        time.sleep(10)
+        found = scheduled_check(found['lastSuccessUnix'])
+        update = next(
+            (
+                package
+                for package in found['packages']
+                if package['name'] == 'arch-niri-dux' and package['toVersion'] == before['candidate']
+            ),
+            None,
+        )
+        assert update, found
         before |= {'found': update, 'backends': found['backends'], 'available_check': found['lastSuccessUnix']}
         write_before(before)
         screenshot(AVAILABLE)
@@ -273,6 +321,22 @@ def upgrade():
     except BaseException:
         restore_pacman_conf()
         raise
+
+
+def debug():
+    """Capture plugin status and shell logs for a panel that never opened."""
+    try:
+        status = user_command('dms', 'ipc', 'call', 'plugin-scan', 'status', PLUGIN_ID, capture=True).stdout
+        (EVIDENCE / 'dux-update-plugin-status.txt').write_text(status)
+    except BaseException as error:
+        (EVIDENCE / 'dux-update-plugin-status.txt').write_text(f'plugin-scan status failed: {error}\n')
+    try:
+        journal = user_command(
+            'journalctl', '--user', '-u', 'dms.service', '--no-pager', '-n', '200', capture=True
+        ).stdout
+        (EVIDENCE / 'dux-update-dms-journal.txt').write_text(journal)
+    except BaseException as error:
+        (EVIDENCE / 'dux-update-dms-journal.txt').write_text(f'journal capture failed: {error}\n')
 
 
 def check():
@@ -367,7 +431,7 @@ def bar_pills(path):
 
 
 def update_button(vm):
-    """Locate the pill that appeared once Dux knew of updates."""
+    """Locate the release pill that appeared once a newer release was offered."""
     before, after = bar_pills(vm.directory / NONE), bar_pills(vm.directory / AVAILABLE)
     assert len(after) == len(before) + 1, ('Expected exactly one new bar pill', before, after)
     widths = [end - start for start, end in before]
@@ -387,9 +451,13 @@ def update_button(vm):
 
 def verify(vm, passed):
     vm.probe('dux_update', 'prepare', timeout=600)
-    vm.probe('dux_update', 'offer', timeout=300)
-    passed("Dux's scheduled checks found no update with the button hidden, skipped a re-login, then showed ours")
-    vm.click(*update_button(vm))
+    vm.probe('dux_update', 'offer', timeout=900)
+    passed('Scheduled checks found no release with the button hidden, skipped a re-login, then showed it for ours')
+    vm.key('esc')
+    time.sleep(1)
+    button = update_button(vm)
+    vm.click(*button)
+    time.sleep(2)
     # The button opens Dux's updater panel. OCR cannot read its buttons, so the
     # upgrade is the same server request its Update All sends.
     deadline = time.monotonic() + 30
@@ -398,6 +466,10 @@ def verify(vm, passed):
         if screen_shows(vm.directory / PANEL, 'updates', 'arch-niri-dux'):
             break
         if time.monotonic() > deadline:
+            try:
+                vm.probe('dux_update', 'debug', timeout=60)
+            except BaseException:
+                pass
             raise TimeoutError(f"Dux's updater panel did not list our package; see {PANEL}.")
         time.sleep(1)
     vm.key('esc')
@@ -427,5 +499,6 @@ if __name__ == '__main__':
             'panel-screenshot': lambda: screenshot(PANEL),
             'prompt-screenshot': lambda: screenshot(PROMPT),
             'check': check,
+            'debug': debug,
         },
     )

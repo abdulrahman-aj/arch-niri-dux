@@ -43,7 +43,10 @@ package_arch-niri-dux() {
         "$pkgdir/usr/lib/systemd/user/graphical-session.target.wants/"
     chmod 0755 "$pkgdir/usr/lib/arch-niri-dux/initialize-user" \
         "$pkgdir/usr/lib/arch-niri-dux/initialize-application-themes" \
-        "$pkgdir/usr/lib/arch-niri-dux/lid-close"
+        "$pkgdir/usr/lib/arch-niri-dux/lid-close" \
+        "$pkgdir/usr/lib/arch-niri-dux/release-update-check"
+    chmod 0644 "$pkgdir/etc/xdg/quickshell/dms-plugins/archNiriDuxRelease/plugin.json" \
+        "$pkgdir/etc/xdg/quickshell/dms-plugins/archNiriDuxRelease/ReleaseWidget.qml"
     install -Dm644 "$srcdir/desktop/usr/share/arch-niri-dux/DUX-LICENSE" \
         "$pkgdir/usr/share/licenses/$pkgname/DUX-LICENSE"
     # Originals remain pinned source inputs; sessions load the generated files.
