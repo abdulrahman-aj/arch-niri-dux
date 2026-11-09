@@ -1,10 +1,10 @@
 [
   {
     "name": "dux-greeter-bin",
-    "source_date_epoch": 1793984626,
+    "source_date_epoch": 1794152821,
     "files": {
-      ".SRCINFO": "66c4f475c25203efbf6785350f1d9bed6a6eb797020e84618a1c63efa27e1914",
-      "PKGBUILD": "61679fb36b8833438fb37e69158f6589a5047a490aaa1ef4c8fb2a6203d6b0a9",
+      ".SRCINFO": "1fa0e0cf57e28010840fdcf34eaa1199256a1a2b58930b75d0f6ef753bfb08f2",
+      "PKGBUILD": "c42cb490fad33ddd4272aaa046f1af90aa7be4330cf18d322f758c77b62a0078",
       "dux-greeter.install": "115f1e98517114e83b12a8e985f53779932f63b24ff6d3d2436a91fea7716505",
       "tmpfiles-dms-greeter.conf": "3dc267a18f22d06f595a80fb77275db56fe88c48b838db364ba3a1d307572a50",
       "dms-niri.kdl": "0376981f71a7331e3a8e5fdf71628f8c0e3881328969011f31fc1da6d54036c0",
@@ -22,20 +22,20 @@
   },
   {
     "name": "dux-calendar-bin",
-    "source_date_epoch": 1793984679,
+    "source_date_epoch": 1794152901,
     "files": {
-      ".SRCINFO": "dccfe8d8946b12d4051a64f466347f918705b56561d3a0c225339ceb8cda00b8",
-      "PKGBUILD": "331eebc25961c41d847d9f854e35a428ae62f1bc74e42407b566782af1399c83",
+      ".SRCINFO": "a2e18a347521cca71b9ca779dee96e38cb0cc72da4c8eba9b0d86c02e901c20a",
+      "PKGBUILD": "17c18956d418bc2f9737440b945147d2cadcd50a5725fc16c3e094afa27ce771",
       "dev.duxlabs.calendar.desktop": "49ab0353bd4a915c43adae4d11ff49730e13a2af530aaf6b918a3d8e430c9acf",
       "dcal.service": "4ca116a3853362bfe7513ebe10be3c06fb244520e5cca997c66d8d562d03fc12"
     }
   },
   {
     "name": "dux-files-bin",
-    "source_date_epoch": 1793984654,
+    "source_date_epoch": 1794152840,
     "files": {
-      ".SRCINFO": "bd96c0ccaed9e3dd00728303bea93a1823281ad00e9cbc2b79ee69c09a92b61a",
-      "PKGBUILD": "57cf64bef9892606341d578032ab920cf26141183050639f94a00c9dc4418343",
+      ".SRCINFO": "5ac8560a3295db9035cc0e3dbe425a9a07ff795340d3f674f4cde1cbffef285b",
+      "PKGBUILD": "80b0a09de420f9393173dc6cc00b848f74fb249617194565f7d9623173a55ea6",
       "dev.duxlabs.files.desktop": "0f230c913a248cbac737341ef5ee0a9e6ccfdda08b459ca14b5af99dd49f773d",
       "dev.duxlabs.files.metainfo.xml": "3fca7d27b64bd0c81e93868f4c3c5ac3ef71790c95b58608890e9c022be62ed0",
       "dev.duxlabs.files.policy": "52fa30b44fefa5a632996075e370923c83b911cd198ffcff959a79789d1e5e17",
