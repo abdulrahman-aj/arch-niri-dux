@@ -430,21 +430,29 @@ def bar_pills(path):
     return pills
 
 
+def added_pill(before, after):
+    """Return the (start, end) span of the one pill the after screenshot gained.
+
+    Dux's bar lays out pills with a fixed gap, so inserting a widget makes the
+    new pill start at the same column as the pill it displaces, and every
+    later pill shifts right with its width intact. The clock can still resize
+    on a minute or date rollover, so widths are not the invariant; displaced
+    left edges are. Ambiguity raises instead of guessing a click.
+    """
+    assert len(after) == len(before) + 1, ('Expected exactly one new bar pill', before, after)
+    lefts = [start for start, _ in before]
+    added = [
+        (start, end)
+        for start, end in after
+        if (start, end) not in before and any(abs(start - left) <= 2 for left in lefts)
+    ]
+    assert len(added) == 1, ('Release pill is not uniquely identified', before, after, added)
+    return added[0]
+
+
 def update_button(vm):
     """Locate the release pill that appeared once a newer release was offered."""
-    before, after = bar_pills(vm.directory / NONE), bar_pills(vm.directory / AVAILABLE)
-    assert len(after) == len(before) + 1, ('Expected exactly one new bar pill', before, after)
-    widths = [end - start for start, end in before]
-
-    def same_widths(pills):
-        return len(pills) == len(widths) and all(
-            abs(end - start - w) <= 2 for (start, end), w in zip(pills, widths, strict=True)
-        )
-
-    # Every other pill keeps its width; the button is the one extra pill.
-    added = [pill for index, pill in enumerate(after) if same_widths(after[:index] + after[index + 1 :])]
-    assert len(added) == 1, (before, after)
-    start, end = added[0]
+    start, end = added_pill(bar_pills(vm.directory / NONE), bar_pills(vm.directory / AVAILABLE))
     width, height = png_dimensions(vm.directory / AVAILABLE)
     return (start + end) / 2 / width, BAR_MIDDLE / height
 
