@@ -1,4 +1,4 @@
-.PHONY: lock iso iso-development iso-checksums verify verify-fast verify-release verify-hibernate lint lint-in-dev fmt test build-test verify-alongside provision-alongside fetch-alongside
+.PHONY: lock iso iso-development iso-checksums verify verify-fast verify-focus verify-release verify-hibernate lint lint-in-dev fmt test build-test verify-alongside provision-alongside fetch-alongside
 lock:
 	./scripts/build-in-dev python3 scripts/package_lock.py resolve .
 iso:
@@ -9,6 +9,8 @@ verify:
 	./scripts/build-in-dev python3 scripts/verify.py $(ARGS)
 verify-fast:
 	./scripts/build-in-dev python3 scripts/verify_fast.py $(ARGS)
+verify-focus:
+	./scripts/build-in-dev python3 scripts/verify_focus.py $(ARGS)
 verify-release:
 	./scripts/build-in-dev python3 scripts/verify.py --online-repository $(ARGS)
 verify-hibernate:
@@ -37,7 +39,7 @@ fetch-alongside:
 	./scripts/build-in-dev python3 scripts/fetch_alongside.py $(ARGS)
 
 .PHONY: heavy-guard gc
-lock iso iso-development verify verify-fast verify-release verify-hibernate verify-alongside provision-alongside fetch-alongside: | heavy-guard
+lock iso iso-development verify verify-fast verify-focus verify-release verify-hibernate verify-alongside provision-alongside fetch-alongside: | heavy-guard
 heavy-guard:
 	@python3 scripts/workspace.py heavy-guard
 gc:

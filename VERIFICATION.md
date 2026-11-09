@@ -59,6 +59,29 @@ and alongside qualification. Pass `--kernel-package PATH` to reinstall a
 local kernel archive in the same transaction and exercise both boot rebuild
 hooks.
 
+## `make verify-focus`
+
+`make verify-focus ARGS="--fixture out/accepted/disk.qcow2 --directory out/focus"`
+is the focused debug tier for the release button. It exports the fixture's
+internal `pristine` post-install snapshot into the workspace, installs the
+current integration packages built from the checkout (including uncommitted
+edits) once into that base, and then runs each invocation on a fresh
+disposable overlay: the packaged checker hides the button with nothing
+newer, a newer fixture release shows the pill after a supported plugin
+rescan, a supported manual update check re-primes the pending list, and a
+physical click opens Dux's updater panel. No ISO rebuild, fresh install or
+scheduler wait per iteration; preparation and iteration timings are recorded
+separately in each run's `focus-results.json`.
+
+The fixture disk is only read and its hash is asserted unchanged. Iterations
+delete their overlay disk and keep screenshots, click coordinates, plugin
+status, shell logs and timings under `run-NN/`; the prepared base is reused
+until the integration source hash changes, which rebuilds it automatically.
+Each run writes `FOCUS-PASSED`, never an acceptance marker: scheduled
+checks, authentication, upgrades, migrations and fresh installs remain with
+full acceptance. Remove the workspace with `--clean` when finished; `make gc`
+cannot collect a live checkout's iterations.
+
 ## `make verify-hibernate`
 
 `make verify-hibernate` checks encrypted swap hibernate and resume on a
