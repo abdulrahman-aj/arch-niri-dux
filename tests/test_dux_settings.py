@@ -2,7 +2,9 @@
 
 import importlib.util
 import json
+import os
 from pathlib import Path
+import stat
 import tempfile
 import unittest
 
@@ -63,6 +65,79 @@ class DuxSettingsTest(unittest.TestCase):
         module.initialize(self.config, {'00-seed.json': {'x': True}})
         self.assertEqual(settings.read_text(), '{invalid')
         self.assertFalse((self.directory / '00-seed.json').exists())
+
+
+class DuxPluginSeedTest(unittest.TestCase):
+    def setUp(self):
+        temporary = tempfile.TemporaryDirectory()
+        self.addCleanup(temporary.cleanup)
+        self.config = Path(temporary.name)
+
+    def plugin_file(self):
+        return self.config / 'dms/plugin_settings.json'
+
+    def test_fresh_account_enables_plugin(self):
+        module.initialize(self.config, {})
+        self.assertEqual(json.loads(self.plugin_file().read_text()), {module.PLUGIN_ID: {'enabled': True}})
+
+    def test_explicit_opt_out_survives(self):
+        self.plugin_file().parent.mkdir(parents=True)
+        self.plugin_file().write_text(json.dumps({module.PLUGIN_ID: {'enabled': False}}))
+        module.initialize(self.config, {})
+        self.assertEqual(json.loads(self.plugin_file().read_text()), {module.PLUGIN_ID: {'enabled': False}})
+
+    def test_other_plugins_preserved(self):
+        self.plugin_file().parent.mkdir(parents=True)
+        self.plugin_file().write_text(json.dumps({'otherPlugin': {'enabled': True, 'variant': 'wide'}}))
+        module.initialize(self.config, {})
+        self.assertEqual(
+            json.loads(self.plugin_file().read_text()),
+            {'otherPlugin': {'enabled': True, 'variant': 'wide'}, module.PLUGIN_ID: {'enabled': True}},
+        )
+
+    def test_partial_entry_gains_enabled_without_losing_keys(self):
+        self.plugin_file().parent.mkdir(parents=True)
+        self.plugin_file().write_text(json.dumps({module.PLUGIN_ID: {'variant': 'wide'}}))
+        module.initialize(self.config, {})
+        self.assertEqual(
+            json.loads(self.plugin_file().read_text()),
+            {module.PLUGIN_ID: {'variant': 'wide', 'enabled': True}},
+        )
+
+    def test_symlink_untouched(self):
+        self.plugin_file().parent.mkdir(parents=True)
+        target = self.config / 'elsewhere.json'
+        target.write_text(json.dumps({module.PLUGIN_ID: {'enabled': False}}))
+        self.plugin_file().symlink_to(target)
+        module.initialize(self.config, {})
+        self.assertTrue(self.plugin_file().is_symlink())
+        self.assertEqual(json.loads(target.read_text()), {module.PLUGIN_ID: {'enabled': False}})
+
+    def test_malformed_file_does_not_crash_login(self):
+        self.plugin_file().parent.mkdir(parents=True)
+        self.plugin_file().write_text('{invalid')
+        module.initialize(self.config)
+        self.assertEqual(self.plugin_file().read_text(), '{invalid')
+
+    def test_bar_seed_uses_release_widget(self):
+        module.initialize(self.config)
+        merged = effective(self.config)
+        center = next(bar for bar in merged['barConfigs'] if bar['id'] == 'default')['centerWidgets']
+        ids = [entry if isinstance(entry, str) else entry.get('id') for entry in center]
+        self.assertIn(module.PLUGIN_ID, ids)
+        self.assertNotIn('systemUpdate', ids)
+        self.assertEqual(merged['updaterIntervalSeconds'], 6 * 60 * 60)
+
+    def test_plugin_seed_preserves_file_mode(self):
+        self.plugin_file().parent.mkdir(parents=True)
+        self.plugin_file().write_text(json.dumps({'otherPlugin': {'enabled': True}}))
+        os.chmod(self.plugin_file(), 0o600)
+        module.initialize(self.config, {})
+        self.assertEqual(stat.S_IMODE(self.plugin_file().stat().st_mode), 0o600)
+        self.assertEqual(
+            json.loads(self.plugin_file().read_text()),
+            {'otherPlugin': {'enabled': True}, module.PLUGIN_ID: {'enabled': True}},
+        )
 
 
 if __name__ == '__main__':
