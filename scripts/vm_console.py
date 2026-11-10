@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Drive a kept verify-fast VM: attach to its sockets and run one verb.
+"""Drive a kept VM (verify --keep or verify-fast --keep): attach to its sockets and run one verb.
 
 The guest mounts this evidence directory at /run/verify, so files reach it
 without a push verb: copy on the host, then sh 'cp /run/verify/<name> <dest>'.
@@ -7,6 +7,7 @@ One driver at a time; the serial marker protocol does not multiplex.
 """
 
 import argparse
+import importlib
 from pathlib import Path
 import re
 import sys
@@ -34,7 +35,7 @@ def clean_output(output):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--directory', required=True, type=Path, help='Evidence directory of a kept (--keep) VM')
-    parser.add_argument('verb', choices=('sh', 'probe', 'shot', 'click', 'key', 'poweroff'))
+    parser.add_argument('verb', choices=('sh', 'probe', 'shot', 'click', 'key', 'poweroff', 'stage'))
     parser.add_argument('args', nargs='*', help='Verb arguments')
     args = parser.parse_args()
     directory = args.directory.resolve()
@@ -86,6 +87,24 @@ def main():
             if args.args:
                 parser.error('poweroff takes no arguments.')
             vm.poweroff()
+        elif args.verb == 'stage':
+            if len(args.args) != 1:
+                parser.error('stage needs a verification module name.')
+            name = args.args[0]
+            if not re.fullmatch(r'[A-Za-z_][A-Za-z0-9_]*', name):
+                parser.error(f'invalid stage module: {name!r}.')
+            try:
+                module = importlib.import_module('verification.' + name)
+            except ImportError:
+                parser.error(f'unknown stage module: {name}.')
+            verify = getattr(module, 'verify', None)
+            if not callable(verify):
+                parser.error(f'stage {name} has no verify(vm, passed) entrypoint.')
+
+            def passed(message):
+                print('PASS: ' + message, flush=True)
+
+            verify(vm, passed)
     finally:
         vm.stop()
 

@@ -11,7 +11,7 @@ import subprocess
 import sys
 import tempfile
 
-from workspace import disk_guard, newest_accepted_fixture, own
+from workspace import disk_guard, kept_running, newest_accepted_fixture, own, socket_guard
 
 from verification.digest import digest
 from verification.evidence import Evidence
@@ -34,6 +34,11 @@ def main():
         help='After offline acceptance, boot with networking and check published package delivery',
     )
     parser.add_argument('--swap-gib', type=int, help='Override Auto swap sizing; 0 disables swap and hibernation')
+    parser.add_argument(
+        '--keep',
+        action='store_true',
+        help='On failure keep the guest running for debugging; the disk is still unlinked',
+    )
     args = parser.parse_args()
     if args.swap_gib is not None and args.swap_gib < 0:
         parser.error('--swap-gib must be zero or a positive number of GiB.')
@@ -102,6 +107,9 @@ def main():
         shutil.copyfile(original, source / target)
     vm = VM(directory, iso.resolve(), disk)
     succeeded = False
+    if args.keep:
+        vm.socket_directory = directory / '.sockets'
+        vm.socket_directory.mkdir(exist_ok=True)
 
     passed = evidence.passed
 
@@ -171,15 +179,26 @@ def main():
             pass
         (directory / 'FAILURE.txt').write_text(str(error) + '\n')
         print(f'Verification failed: {error}\nEvidence: {directory}', file=sys.stderr)
-        if newest_accepted_fixture() is not None:
-            print("Next: make verify-fast ARGS='--keep' (auto-finds the newest accepted fixture)", file=sys.stderr)
         return 1
     finally:
-        vm.stop()
         # A failed or interrupted run's disk can never become an accepted
-        # fixture; drop it and keep the logs and screenshots.
+        # fixture; drop it and keep the logs and screenshots. QEMU keeps the
+        # unlinked file open, so the space frees at poweroff, not here.
+        kept = args.keep and not succeeded and vm.process is not None and vm.process.poll() is None
         if not succeeded:
             disk.unlink(missing_ok=True)
+        if kept:
+            console = f'./scripts/build-in-dev python3 scripts/vm_console.py --directory {directory}'
+            print(f'VM kept running in {directory} (sockets under {directory}/.sockets).')
+            print(f"  Shell:  {console} sh '<command>'")
+            print(f'  Stage:  {console} stage <module>')
+            print(f'  Stop:   {console} poweroff')
+        else:
+            vm.stop()
+            if not succeeded and newest_accepted_fixture() is not None:
+                print("Next: make verify-fast ARGS='--keep' (auto-finds the newest accepted fixture)", file=sys.stderr)
+        if succeeded and args.keep:
+            shutil.rmtree(directory / '.sockets', ignore_errors=True)
 
 
 if __name__ == '__main__':
