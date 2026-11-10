@@ -5,8 +5,9 @@ changed: updaterIntervalSeconds 604800 becomes 21600, and a main bar identical
 to our old seed gets our new bar. Anything the user changed stays untouched.
 Missing files are left to the seeder, which covers fresh accounts.
 
-Exit 0 after applying changes, exit 77 with a stdout reason when there is
-nothing to do, so the migration queue records a skip instead of failing.
+Exit 0 after applying changes. Exit 77 with a stdout reason whenever the seed is
+left untouched (customized state, or an unreadable or unwritable seed), so the
+queue records a skip instead of stalling later migrations.
 """
 
 import copy
