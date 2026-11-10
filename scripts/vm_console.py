@@ -17,6 +17,11 @@ from verification.vm import VM
 ANSI_RE = re.compile(r'\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)|\x1b\[[0-?]*[ -/]*[@-~]|\x1b[@-Z\\-_]')
 MARKER_RE = re.compile(r'__VERIFY_[0-9A-Fa-f]+__:[0-9]+')
 ECHO_RE = re.compile(r'__VERIFY_[0-9A-Fa-f]+__:%s')
+# Stages whose verify(vm, passed) never restarts QEMU. Suspend and recovery
+# power the guest off and start a new QEMU on the evidence disk, which a kept
+# failed-verify run has already unlinked; running them would destroy the
+# debug session instead of qualifying anything.
+STAGES = ('apps', 'browser', 'camera', 'desktop', 'dux_update', 'pdf')
 
 
 def clean_output(output):
@@ -91,20 +96,14 @@ def main():
             if len(args.args) != 1:
                 parser.error('stage needs a verification module name.')
             name = args.args[0]
-            if not re.fullmatch(r'[A-Za-z_][A-Za-z0-9_]*', name):
-                parser.error(f'invalid stage module: {name!r}.')
-            try:
-                module = importlib.import_module('verification.' + name)
-            except ImportError:
-                parser.error(f'unknown stage module: {name}.')
-            verify = getattr(module, 'verify', None)
-            if not callable(verify):
-                parser.error(f'stage {name} has no verify(vm, passed) entrypoint.')
+            if name not in STAGES:
+                parser.error(f'unknown stage: {name!r} (choose from {", ".join(STAGES)}).')
+            module = importlib.import_module('verification.' + name)
 
             def passed(message):
                 print('PASS: ' + message, flush=True)
 
-            verify(vm, passed)
+            module.verify(vm, passed)
     finally:
         vm.stop()
 
