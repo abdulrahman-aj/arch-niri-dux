@@ -20,6 +20,8 @@ def main():
     parser.add_argument('args', nargs='*', help='Verb arguments')
     args = parser.parse_args()
     directory = args.directory.resolve()
+    if not (directory / '.sockets').is_dir():
+        parser.error(f'No kept VM sockets in {directory / ".sockets"}; start one with verify-fast --keep first.')
     vm = VM(directory, None, directory / 'disk.qcow2')
     vm.socket_directory = directory / '.sockets'
     try:

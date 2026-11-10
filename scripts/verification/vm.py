@@ -67,21 +67,25 @@ class VM:
         return base / name
 
     def attach(self, timeout=5):
-        """Reconnect to a kept VM's sockets and confirm the guest answers."""
+        """Reconnect to a kept VM's sockets and confirm QEMU answers."""
         missing = [name for name in ('serial.sock', 'qmp.sock') if not self.control_path(name).exists()]
         if missing:
             raise RuntimeError(
                 f'No kept VM sockets in {self.control_path(missing[0]).parent}; '
                 'start one with verify-fast --keep first.'
             )
+        serial = None
         try:
-            self.serial = self.connect('serial.sock', timeout=timeout)
+            serial = self.connect('serial.sock', timeout=timeout)
             qmp_socket = self.connect('qmp.sock', timeout=timeout)
         except TimeoutError as error:
+            if serial is not None:
+                serial.close()
             raise RuntimeError(
                 f'No kept VM running in {self.control_path("qmp.sock").parent}; '
                 'start one with verify-fast --keep first.'
             ) from error
+        self.serial = serial
         qmp_socket.settimeout(30)
         self.qmp = qmp_socket.makefile('rwb', buffering=0)
         self.qmp.readline()

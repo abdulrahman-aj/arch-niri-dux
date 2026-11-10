@@ -9,6 +9,7 @@ from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'scripts'))
 from verification import vm as verify
+import verify_fast
 import vm_console
 
 
@@ -75,6 +76,36 @@ class AttachedConsoleTests(unittest.TestCase):
                 machine.log.close()
 
 
+class KeptRunningGuardTests(unittest.TestCase):
+    def test_live_qmp_socket_counts_as_running(self):
+        with tempfile.TemporaryDirectory() as root:
+            sockets = Path(root) / '.sockets'
+            sockets.mkdir()
+            listener = socket.socket(socket.AF_UNIX)
+            try:
+                listener.bind(str(sockets / 'qmp.sock'))
+                listener.listen(1)
+                self.assertTrue(verify_fast.kept_running(Path(root)))
+            finally:
+                listener.close()
+
+    def test_stale_socket_file_counts_as_not_running(self):
+        with tempfile.TemporaryDirectory() as root:
+            sockets = Path(root) / '.sockets'
+            sockets.mkdir()
+            stale = socket.socket(socket.AF_UNIX)
+            stale.bind(str(sockets / 'qmp.sock'))
+            stale.close()
+            try:
+                self.assertFalse(verify_fast.kept_running(Path(root)))
+            finally:
+                (sockets / 'qmp.sock').unlink(missing_ok=True)
+
+    def test_missing_sockets_counts_as_not_running(self):
+        with tempfile.TemporaryDirectory() as root:
+            self.assertFalse(verify_fast.kept_running(Path(root)))
+
+
 class ConsoleDispatchTests(unittest.TestCase):
     def run_console(self, *argv):
         with patch.object(sys, 'argv', ['vm_console', *argv]), patch.object(vm_console, 'VM') as factory:
@@ -88,6 +119,7 @@ class ConsoleDispatchTests(unittest.TestCase):
 
     def test_missing_vm_exits_nonzero(self):
         with tempfile.TemporaryDirectory() as root:
+            (Path(root) / '.sockets').mkdir()
             argv = ['vm_console', '--directory', root, 'sh', 'true']
             with patch.object(vm_console.VM, 'attach', side_effect=RuntimeError('no kept VM')):
                 with patch.object(sys, 'argv', argv):
