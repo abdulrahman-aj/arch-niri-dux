@@ -5,6 +5,7 @@ import argparse
 import json
 from pathlib import Path
 import shutil
+import socket
 import subprocess
 
 from workspace import disk_guard, own
@@ -17,6 +18,21 @@ from verification.vm import VM, graphical_login, installed_login, stage_probes
 ROOT = Path(__file__).resolve().parents[1]
 
 
+def kept_running(directory):
+    sock = directory / '.sockets' / 'qmp.sock'
+    if not sock.exists():
+        return False
+    probe = socket.socket(socket.AF_UNIX)
+    try:
+        probe.settimeout(2)
+        probe.connect(str(sock))
+        return True
+    except OSError:
+        return False
+    finally:
+        probe.close()
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--fixture', required=True, type=Path, help='disk.qcow2 from a full accepted make verify run')
@@ -24,12 +40,21 @@ def main():
     parser.add_argument(
         '--kernel-package', type=Path, help='Also reinstall this kernel archive in the same package transaction'
     )
+    parser.add_argument(
+        '--keep',
+        action='store_true',
+        help='Keep the VM running after the run (pass or fail) for interactive debugging',
+    )
     args = parser.parse_args()
     fixture = args.fixture.resolve()
     accepted = fixture.parent
     if not fixture.is_file() or not (accepted / 'ACCEPTANCE-PASSED').is_file():
         parser.error('Fixture must be a disk from a completed full acceptance run.')
     directory = args.directory.resolve()
+    if args.keep and len(str(directory / '.sockets' / 'serial.sock')) > 107:
+        parser.error('Kept-VM socket path exceeds the 107-byte Unix socket limit; use a shorter --directory.')
+    if kept_running(directory):
+        parser.error(f'Kept VM still running in {directory}; power it off first.')
     disk_guard(args.directory)
     evidence = Evidence(directory, parents=True)
     own(args.directory)
@@ -56,8 +81,13 @@ def main():
     disk = directory / 'disk.qcow2'
     subprocess.run(['qemu-img', 'create', '-f', 'qcow2', '-F', 'qcow2', '-b', str(fixture), str(disk)], check=True)
     vm = VM(directory, None, disk)
+    if args.keep:
+        vm.socket_directory = directory / '.sockets'
+        vm.socket_directory.mkdir(exist_ok=True)
+    started = False
     try:
         vm.start(cdrom=False)
+        started = True
         installed_login(vm)
         vm.mount_probes()
         # Pre-0.3 installer-owned files need manual repair. This tier deliberately
@@ -94,7 +124,8 @@ def main():
         vm.probe('policy', 'check', timeout=180)
         vm.probe('desktop', 'niri-overrides', timeout=180)
         vm.probe('migrations', 'check', timeout=180)
-        vm.poweroff()
+        if not args.keep:
+            vm.poweroff()
         (directory / 'FAST-PASSED').write_text(
             json.dumps(
                 {
@@ -115,7 +146,20 @@ def main():
             + '\n'
         )
     finally:
-        vm.stop()
+        if args.keep and started and vm.process is not None and vm.process.poll() is None:
+            # The VM outlives this process: sockets stay under the evidence
+            # directory, so vm_console.py can attach. Wanted especially on
+            # failure, which is when the live guest is most useful.
+            console = f'./scripts/build-in-dev python3 scripts/vm_console.py --directory {directory}'
+            print(f'VM kept running in {directory} (holds 8 GiB guest RAM until stopped).')
+            print(f"  Shell:      {console} sh '<command>'")
+            print(f'  Screenshot: {console} shot <name.png>')
+            print(f'  Click/key:  {console} click <x_frac> <y_frac> | key <qcode>')
+            print(f'  Probe:      {console} probe <module> <function>')
+            print(f"  Files:      cp <src> {directory}/, then sh 'cp /run/verify/<name> <dest>'")
+            print(f'  Stop:       {console} poweroff')
+        else:
+            vm.stop()
 
 
 if __name__ == '__main__':

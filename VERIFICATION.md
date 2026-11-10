@@ -59,6 +59,43 @@ and alongside qualification. Pass `--kernel-package PATH` to reinstall a
 local kernel archive in the same transaction and exercise both boot rebuild
 hooks.
 
+## Debugging loop (kept verify-fast VM)
+
+Rule: QML/probe-only changes never rerun full `make verify`; full verify is
+final qualification. Iterate on a kept VM, then qualify once.
+
+`make verify-fast ARGS="--fixture out/accepted/disk.qcow2 --directory out/debug --keep"`
+writes `FAST-PASSED` as usual, then keeps the VM running with its serial/QMP
+sockets under `out/debug/.sockets` and prints paste-ready attach commands
+(the same block prints if the run fails, when the live guest is most useful).
+Without `--keep`, behavior is unchanged.
+
+Drive the kept VM with `scripts/vm_console.py` (one driver at a time):
+
+```
+./scripts/build-in-dev python3 scripts/vm_console.py --directory out/debug sh '<command>'
+./scripts/build-in-dev python3 scripts/vm_console.py --directory out/debug shot <name.png>
+./scripts/build-in-dev python3 scripts/vm_console.py --directory out/debug click <x_frac> <y_frac>
+./scripts/build-in-dev python3 scripts/vm_console.py --directory out/debug key <qcode>
+./scripts/build-in-dev python3 scripts/vm_console.py --directory out/debug probe <module> <function>
+./scripts/build-in-dev python3 scripts/vm_console.py --directory out/debug poweroff
+```
+
+Per iteration there is no ISO rebuild, reinstall or scheduler wait. The
+evidence directory is mounted in the guest at `/run/verify`, so copy a changed
+file into `out/debug/` on the host, then e.g.
+`sh 'cp /run/verify/ReleaseWidget.qml /etc/xdg/quickshell/dms-plugins/archNiriDuxRelease/ReleaseWidget.qml'`.
+For multi-line guest work, write a small script into `out/debug/` on the host
+and run `sh 'sh /run/verify/x.sh'` to avoid nested quoting. Commands needing
+the tester user's environment are best run as probes (`probe <module>
+<function>`), which get the full environment from `guest.user_command`.
+`shot <name.png>` takes a real desktop screenshot via the guest.
+The verbs assume a logged-in guest; on a failure before login, rerun rather
+than attach.
+
+A kept VM holds 8 GiB guest RAM; power it off before builds or other VMs and
+remove the directory when finished.
+
 ## `make verify-hibernate`
 
 `make verify-hibernate` checks encrypted swap hibernate and resume on a
