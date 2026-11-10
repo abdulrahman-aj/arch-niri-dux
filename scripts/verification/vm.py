@@ -90,6 +90,7 @@ class VM:
         self.qmp = qmp_socket.makefile('rwb', buffering=0)
         self.qmp.readline()
         self.qmp_command('qmp_capabilities')
+        # Liveness check: confirm QMP answers before declaring attach good.
         self.qmp_command('query-status')
         self.transcript = ''
         self.read_cursor = 0

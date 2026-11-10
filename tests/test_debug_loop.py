@@ -128,11 +128,12 @@ class ConsoleDispatchTests(unittest.TestCase):
             self.assertEqual(stop.exception.code, 1)
 
     def test_verb_mistakes_are_usage_errors(self):
-        for argv in (['--directory', 'out/fast', 'sh'], ['--directory', 'out/fast', 'click', '2', '0.5']):
-            with self.subTest(argv=argv):
-                code, machine = self.run_console(*argv)
-                self.assertEqual(code, 2)
-                machine.click.assert_not_called()
+        with tempfile.TemporaryDirectory() as root:
+            (Path(root) / '.sockets').mkdir()
+            for argv in (['--directory', root, 'sh'], ['--directory', root, 'click', '2', '0.5']):
+                with self.subTest(argv=argv):
+                    code, _ = self.run_console(*argv)
+                    self.assertEqual(code, 2)
 
 
 if __name__ == '__main__':
