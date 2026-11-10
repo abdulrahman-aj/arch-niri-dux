@@ -215,7 +215,7 @@ class VM:
                 self.log.write(text)
                 self.log.flush()
             except TimeoutError:
-                if self.process.poll() is not None:
+                if self.process is not None and self.process.poll() is not None:
                     raise RuntimeError('QEMU exited; inspect serial.log and qemu.log.')
         raise TimeoutError(f'VM did not produce {pattern!r}; inspect serial.log.')
 
