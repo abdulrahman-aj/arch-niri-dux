@@ -1,0 +1,12 @@
+{
+    "id": "archNiriDuxRelease",
+    "name": "Arch Niri Dux Release",
+    "description": "Shows an update button only when a newer arch-niri-dux release is available",
+    "version": "1.0.0",
+    "author": "Arch Niri Dux",
+    "type": "widget",
+    "capabilities": ["dankbar-widget"],
+    "component": "./ReleaseWidget.qml",
+    "icon": "system_update_alt",
+    "requires_dms": ">=2.1.0"
+}

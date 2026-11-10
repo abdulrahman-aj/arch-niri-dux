@@ -1,16 +1,18 @@
 """Dux announces pending updates on its own schedule; its updater installs them.
 
-The packaged defaults put Dux's Software Updates button on the bar, hidden
-while nothing is pending, and make Dux's server check weekly, with no check at
-login. Dux schedules from its last check, persisted in ~/.cache/dms, so
-logins and reboots don't reset the week. This stage shortens the interval to
-Dux's 5-minute minimum the way a user would, lets the scheduled check find a
-fixture repository with nothing newer, re-logs in before the interval to show
-no extra check runs, then offers our packages one pkgrel newer and lets the
-next scheduled check find them. The host clicks the button, sends Update All's
-request, types the password into Dux's real authentication dialog, and checks
-the migration contract end to end. Dux runs `pkexec pacman -Syu --needed
---noconfirm` through its pacman backend because no AUR helper is installed.
+The packaged defaults put our release button on the bar, hidden while no
+newer arch-niri-dux release is available, and make Dux's server check every 6
+hours, with no check at login. Dux schedules from its last check, persisted in
+~/.cache/dms, so logins and reboots don't reset the interval. This stage
+shortens the interval to Dux's 5-minute minimum the way a user would, lets the
+scheduled check find a fixture repository with nothing newer, re-logs in
+before the interval to show no extra check runs, then offers our packages one
+pkgrel newer and lets the next scheduled check find them. The pill appears when
+Dux's own check finds the newer arch-niri-dux, with no rescan or visibility
+workaround. The host clicks the button, sends Update All's request, types the
+password into Dux's real authentication dialog, and checks the migration
+contract end to end. Dux runs `pkexec pacman -Syu --needed --noconfirm`
+through its pacman backend because no AUR helper is installed.
 """
 
 import json
@@ -43,7 +45,8 @@ PANEL = 'dux-update-panel.png'
 # A row through the middle of Dux's default top bar, in screenshot pixels.
 BAR_MIDDLE = 22
 BAR_ABOVE_PILLS = 6
-WEEK = 7 * 24 * 60 * 60
+# The packaged seed interval; the stage shortens it to SHORT and restores it.
+SIX_HOURS = 6 * 60 * 60
 # Dux's minimum interval.
 SHORT = 5 * 60
 SCHEDULE = Path('/home/tester/.cache/dms/sysupdate.json')
@@ -188,7 +191,7 @@ def prepare():
     # A fresh account's first check runs shortly after its first login, long
     # before this stage, without anything opening Settings.
     initial = state()
-    assert initial['lastCheckUnix'] > 0 and initial['intervalSeconds'] == WEEK, initial
+    assert initial['lastCheckUnix'] > 0 and initial['intervalSeconds'] == SIX_HOURS, initial
     assert not initial.get('error'), initial
     # The schedule must outlive reboots, so its state can't be on tmpfs.
     filesystem = subprocess.check_output(['findmnt', '-n', '-o', 'FSTYPE', '-T', str(SCHEDULE)], text=True).strip()
@@ -257,6 +260,12 @@ def offer():
         before |= {'found': update, 'backends': found['backends'], 'available_check': found['lastSuccessUnix']}
         write_before(before)
         screenshot(AVAILABLE)
+        # Our plugin holds Dux's updater alive, so the status query that used
+        # to report "no package manager available" without the native widget
+        # must now answer from fetched state. It triggers a background check,
+        # so assert only after the evidence above is captured.
+        status = user_command('dms', 'ipc', 'call', 'systemupdater', 'updatestatus', capture=True).stdout
+        assert 'ERROR' not in status, status
     except BaseException:
         restore_pacman_conf()
         raise
@@ -336,8 +345,8 @@ def check():
         )
     finally:
         restore_pacman_conf()
-    # Back to the shipped weekly interval for later stages.
-    set_interval(WEEK)
+    # Back to the shipped 6-hour interval for later stages.
+    set_interval(SIX_HOURS)
     SYSTEM_EFFECT.unlink()
     USER_EFFECT.unlink()
     shutil.rmtree(WORK)
@@ -366,21 +375,29 @@ def bar_pills(path):
     return pills
 
 
-def update_button(vm):
-    """Locate the pill that appeared once Dux knew of updates."""
-    before, after = bar_pills(vm.directory / NONE), bar_pills(vm.directory / AVAILABLE)
+def added_pill(before, after):
+    """Return the (start, end) span of the one pill the after screenshot gained.
+
+    Dux's bar lays out pills with a fixed gap, so inserting a widget makes the
+    new pill start at the same column as the pill it displaces, and every
+    later pill shifts right with its width intact. The clock can still resize
+    on a minute or date rollover, so widths are not the invariant; displaced
+    left edges are. Ambiguity raises instead of guessing a click.
+    """
     assert len(after) == len(before) + 1, ('Expected exactly one new bar pill', before, after)
-    widths = [end - start for start, end in before]
+    lefts = [start for start, _ in before]
+    added = [
+        (start, end)
+        for start, end in after
+        if (start, end) not in before and any(abs(start - left) <= 2 for left in lefts)
+    ]
+    assert len(added) == 1, ('Release pill is not uniquely identified', before, after, added)
+    return added[0]
 
-    def same_widths(pills):
-        return len(pills) == len(widths) and all(
-            abs(end - start - w) <= 2 for (start, end), w in zip(pills, widths, strict=True)
-        )
 
-    # Every other pill keeps its width; the button is the one extra pill.
-    added = [pill for index, pill in enumerate(after) if same_widths(after[:index] + after[index + 1 :])]
-    assert len(added) == 1, (before, after)
-    start, end = added[0]
+def update_button(vm):
+    """Locate the release pill that appeared once a newer release was offered."""
+    start, end = added_pill(bar_pills(vm.directory / NONE), bar_pills(vm.directory / AVAILABLE))
     width, height = png_dimensions(vm.directory / AVAILABLE)
     return (start + end) / 2 / width, BAR_MIDDLE / height
 
@@ -388,7 +405,9 @@ def update_button(vm):
 def verify(vm, passed):
     vm.probe('dux_update', 'prepare', timeout=600)
     vm.probe('dux_update', 'offer', timeout=300)
-    passed("Dux's scheduled checks found no update with the button hidden, skipped a re-login, then showed ours")
+    passed(
+        "Dux's scheduled checks found no release with the button hidden, skipped a re-login, then showed it for ours"
+    )
     vm.click(*update_button(vm))
     # The button opens Dux's updater panel. OCR cannot read its buttons, so the
     # upgrade is the same server request its Update All sends.

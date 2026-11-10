@@ -118,19 +118,24 @@ that file or in a later-sorting `config.d` file; `settings.json` loads first
 and loses to them. An emptied seed file stays in place so restarts don't undo
 an opt-out.
 
-The update seed puts Dux's Software Updates button on the main bar, right of
-the clock. It hides while Dux knows of no updates. Dux's server checks weekly
-for any pending package from the configured repositories, with no check at
+The update seed puts our release button on the main bar, right of the clock. It
+appears only when Dux's own updater reports a newer arch-niri-dux release; any
+other pending package alone keeps it hidden. The button is a system plugin that
+holds Dux's updater alive, so its background checks keep running without the
+built-in Software Updates widget, and `dms ipc call systemupdater updatestatus`
+keeps reporting state. Dux's server checks every 6 hours, with no check at
 login. It schedules from its last check, saved in
-`~/.cache/dms/sysupdate.json`, so logins and reboots don't restart the week; a
-new account checks a few minutes after its first login. Failed checks, such as
-while offline, stay silent and retry every 5 minutes. Clicking the button opens
-Dux's updater; its Update All runs the same `pacman -Syu` that installs our
-packages and triggers migrations. A bar layout saved before the seed ran
-(`barConfigs` in a user file) is kept and gets no button. Dux only checks in
-the background while the button or update notifications hold its updater, so
-without either there are no checks. Move, remove or add the button in Dux
-Settings, Bar; Software Updates shows the weekly interval as a custom interval.
+`~/.cache/dms/sysupdate.json`, so logins and reboots don't restart the
+interval; a new account checks a few minutes after its first login. Failed
+checks, such as while offline, stay silent and retry every 5 minutes. Clicking
+the button opens Dux's updater; its Update All runs the same `pacman -Syu`
+that installs our packages and triggers migrations. A bar layout saved before
+the seed ran (`barConfigs` in a user file) is kept and gets no button. The
+seeder also enables the plugin in `~/.config/dms/plugin_settings.json` unless
+a choice is already recorded there. A user migration moves the interval and the
+bar entry to the button only where they still hold our previous seed. Move,
+remove or add the button in Dux Settings, Bar; Software Updates shows the
+6-hour interval as a custom interval.
 
 Seeds never change a value that already exists. To change a shipped default for
 existing accounts, add a user migration that rewrites the key only where it
