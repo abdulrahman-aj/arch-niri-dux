@@ -8,6 +8,7 @@ reaches accounts that already have older seeds.
 
 import json
 import os
+import stat
 import sys
 from pathlib import Path
 
@@ -78,7 +79,7 @@ def _seed(config, name, defaults):
     temporary.replace(target)
 
 
-def _seed_plugin(config, plugin_id=PLUGIN_ID):
+def _seed_plugin(config):
     target = config / 'dms/plugin_settings.json'
     # Never replace a user-owned file or link that already records a choice.
     if target.is_symlink():
@@ -87,18 +88,21 @@ def _seed_plugin(config, plugin_id=PLUGIN_ID):
         value = json.loads(target.read_text())
         if not isinstance(value, dict):
             raise ValueError(f'Expected a JSON object in {target}')
-        entry = value.get(plugin_id)
+        entry = value.get(PLUGIN_ID)
         if isinstance(entry, dict) and 'enabled' in entry:
             return
         updated = dict(value)
         merged = dict(entry) if isinstance(entry, dict) else {}
         merged['enabled'] = True
-        updated[plugin_id] = merged
+        updated[PLUGIN_ID] = merged
     else:
-        updated = {plugin_id: {'enabled': True}}
+        updated = {PLUGIN_ID: {'enabled': True}}
     target.parent.mkdir(parents=True, exist_ok=True)
     temporary = target.parent / '.plugin_settings.json.tmp'
     temporary.write_text(json.dumps(updated, indent=2) + '\n')
+    if target.exists():
+        # Keep the user's file mode; the temporary file has the umask default.
+        os.chmod(temporary, stat.S_IMODE(target.stat().st_mode))
     temporary.replace(target)
 
 

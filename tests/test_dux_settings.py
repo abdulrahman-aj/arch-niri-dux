@@ -2,7 +2,9 @@
 
 import importlib.util
 import json
+import os
 from pathlib import Path
+import stat
 import tempfile
 import unittest
 
@@ -119,15 +121,23 @@ class DuxPluginSeedTest(unittest.TestCase):
 
     def test_bar_seed_uses_release_widget(self):
         module.initialize(self.config)
-        merged = {}
-        for path in sorted((self.config / 'dms/config.d').glob('*.json')):
-            merged.update(json.loads(path.read_text()))
-        bars = merged['barConfigs']
-        center = next(bar for bar in bars if bar['id'] == 'default')['centerWidgets']
+        merged = effective(self.config)
+        center = next(bar for bar in merged['barConfigs'] if bar['id'] == 'default')['centerWidgets']
         ids = [entry if isinstance(entry, str) else entry.get('id') for entry in center]
         self.assertIn(module.PLUGIN_ID, ids)
         self.assertNotIn('systemUpdate', ids)
         self.assertEqual(merged['updaterIntervalSeconds'], 6 * 60 * 60)
+
+    def test_plugin_seed_preserves_file_mode(self):
+        self.plugin_file().parent.mkdir(parents=True)
+        self.plugin_file().write_text(json.dumps({'otherPlugin': {'enabled': True}}))
+        os.chmod(self.plugin_file(), 0o600)
+        module.initialize(self.config, {})
+        self.assertEqual(stat.S_IMODE(self.plugin_file().stat().st_mode), 0o600)
+        self.assertEqual(
+            json.loads(self.plugin_file().read_text()),
+            {'otherPlugin': {'enabled': True}, module.PLUGIN_ID: {'enabled': True}},
+        )
 
 
 if __name__ == '__main__':

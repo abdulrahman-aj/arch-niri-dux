@@ -44,27 +44,10 @@ OLD_MAIN_BAR = {
     ],
 }
 
-# Frozen record of the bar this migration installs: the same bar with our
-# release button in place of the built-in systemUpdate entry.
-NEW_MAIN_BAR = {
-    'id': 'default',
-    'name': 'Main Bar',
-    'enabled': True,
-    'position': 0,
-    'screenPreferences': ['all'],
-    'showOnLastDisplay': True,
-    'leftWidgets': ['launcherButton', 'workspaceSwitcher', 'focusedWindow'],
-    'centerWidgets': ['music', 'clock', NEW_BUTTON, 'weather'],
-    'rightWidgets': [
-        'systemTray',
-        'clipboard',
-        'cpuUsage',
-        'memUsage',
-        'notificationButton',
-        'battery',
-        'controlCenterButton',
-    ],
-}
+# The bar this migration installs: the historical bar with our release button
+# in place of the built-in systemUpdate entry, derived so nothing else drifts.
+NEW_MAIN_BAR = copy.deepcopy(OLD_MAIN_BAR)
+NEW_MAIN_BAR['centerWidgets'] = ['music', 'clock', NEW_BUTTON, 'weather']
 
 
 def seed_path():
@@ -73,7 +56,10 @@ def seed_path():
 
 
 def migrate(target):
-    """Rewrite untouched old seed values. Return a summary, or None if untouched."""
+    """Rewrite untouched old seed values.
+
+    Return (summary, None) after rewriting, or (None, reason) when untouched.
+    """
     if target.is_symlink():
         return None, 'seed is a symlink; left untouched'
     if not target.exists():
@@ -105,7 +91,12 @@ def migrate(target):
 
 
 def main():
-    changed, reason = migrate(seed_path())
+    try:
+        changed, reason = migrate(seed_path())
+    except OSError as error:
+        # An unreadable or unwritable seed must not stall the migration queue.
+        print(f'seed unreadable or unwritable; left untouched ({error})')
+        return 77
     if reason is not None:
         print(reason)
         return 77

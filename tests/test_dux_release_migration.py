@@ -118,6 +118,14 @@ class ReleaseButtonMigrationTest(unittest.TestCase):
         self.assertEqual(self.run_main(), 0)
         self.assertEqual(stat.S_IMODE(self.target.stat().st_mode), 0o600)
 
+    def test_unreadable_seed_skips(self):
+        # A directory in the seed's place makes the read fail with OSError,
+        # which must skip rather than stall the migration queue.
+        self.target.parent.mkdir(parents=True, exist_ok=True)
+        self.target.mkdir()
+        self.assertEqual(self.run_main(), 77)
+        self.assertTrue(self.target.is_dir())
+
 
 if __name__ == '__main__':
     unittest.main()
