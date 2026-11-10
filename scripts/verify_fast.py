@@ -51,6 +51,8 @@ def main():
     if not fixture.is_file() or not (accepted / 'ACCEPTANCE-PASSED').is_file():
         parser.error('Fixture must be a disk from a completed full acceptance run.')
     directory = args.directory.resolve()
+    if args.keep and len(str(directory / '.sockets' / 'serial.sock')) > 107:
+        parser.error('Kept-VM socket path exceeds the 107-byte Unix socket limit; use a shorter --directory.')
     if kept_running(directory):
         parser.error(f'Kept VM still running in {directory}; power it off first.')
     disk_guard(args.directory)
@@ -144,7 +146,7 @@ def main():
             + '\n'
         )
     finally:
-        if args.keep and started:
+        if args.keep and started and vm.process is not None and vm.process.poll() is None:
             # The VM outlives this process: sockets stay under the evidence
             # directory, so vm_console.py can attach. Wanted especially on
             # failure, which is when the live guest is most useful.

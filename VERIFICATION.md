@@ -91,6 +91,8 @@ and run `sh 'sh /run/verify/x.sh'` to avoid nested quoting. Commands needing
 the tester user's environment are best run as probes (`probe <module>
 <function>`), which get the full environment from `guest.user_command`.
 `shot <name.png>` takes a real desktop screenshot via the guest.
+The verbs assume a logged-in guest; on a failure before login, rerun rather
+than attach.
 
 A kept VM holds 8 GiB guest RAM; power it off before builds or other VMs and
 remove the directory when finished.
