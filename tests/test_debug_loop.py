@@ -256,6 +256,13 @@ class StdinScriptTests(unittest.TestCase):
             self.assertIn("it's $HOME", output)
             self.assertNotIn('__VERIFY_', output)
 
+    def test_attach_failure_exits_nonzero(self):
+        with tempfile.TemporaryDirectory() as temp:
+            (Path(temp) / '.sockets').mkdir()
+            with self.assertRaises(SystemExit) as stop:
+                self.run_main(['vm_console', '--directory', temp, 'sh', 'true'], io.StringIO(''))
+            self.assertEqual(stop.exception.code, 1)
+
     def test_empty_stdin_is_a_usage_error(self):
         with tempfile.TemporaryDirectory() as temp:
             argv = self.kept_argv(temp)

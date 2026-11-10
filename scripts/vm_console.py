@@ -44,11 +44,11 @@ def main():
     vm = VM(directory, None, directory / 'disk.qcow2')
     vm.socket_directory = directory / '.sockets'
     try:
-        vm.attach()
-    except RuntimeError as error:
-        print(f'vm_console: {error}', file=sys.stderr)
-        raise SystemExit(1)
-    try:
+        try:
+            vm.attach()
+        except RuntimeError as error:
+            print(f'vm_console: {error}', file=sys.stderr)
+            raise SystemExit(1)
         if args.verb == 'sh':
             if args.args:
                 script = ' '.join(args.args)

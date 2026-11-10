@@ -52,6 +52,7 @@ class VM:
         self.process = None
         self.serial = None
         self.qmp = None
+        self.qmp_socket = None
         self.transcript = ''
         self.read_cursor = 0
         self.log = (directory / 'serial.log').open('a')
@@ -87,6 +88,7 @@ class VM:
             ) from error
         self.serial = serial
         qmp_socket.settimeout(30)
+        self.qmp_socket = qmp_socket
         self.qmp = qmp_socket.makefile('rwb', buffering=0)
         self.qmp.readline()
         self.qmp_command('qmp_capabilities')
@@ -189,6 +191,7 @@ class VM:
         self.serial = self.connect('serial.sock')
         qmp_socket = self.connect('qmp.sock')
         qmp_socket.settimeout(30)
+        self.qmp_socket = qmp_socket
         self.qmp = qmp_socket.makefile('rwb', buffering=0)
         self.qmp.readline()
         self.qmp_command('qmp_capabilities')
@@ -329,6 +332,9 @@ class VM:
             self.serial.close()
         if self.qmp:
             self.qmp.close()
+        if self.qmp_socket is not None:
+            self.qmp_socket.close()
+            self.qmp_socket = None
         # Only private tempdirs are removed; a caller-chosen directory (kept
         # VM sockets under the evidence dir) survives so attach() still works.
         if self.socket_directory is not None:

@@ -66,7 +66,7 @@ def main():
         parser.error('Kept-VM socket path exceeds the 107-byte Unix socket limit; use a shorter --directory.')
     if kept_running(directory):
         parser.error(f'Kept VM still running in {directory}; power it off first.')
-    disk_guard(args.directory or ROOT / 'out')
+    disk_guard(directory)
     evidence = Evidence(directory, parents=True)
     own(directory)
     for name in ('OVMF_VARS.fd', 'install.json'):
