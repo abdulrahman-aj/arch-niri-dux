@@ -2,28 +2,28 @@
 
 Enter the Nix dev shell with `nix develop`. Make targets enter it automatically.
 
-| Targets | Purpose |
+| Change | Check |
 | --- | --- |
-| `lint`, `fmt`, `test`, `build-test` | Light work: check, format, run unit tests |
-| `iso`, `iso-development` | Heavy: build the release or development ISO |
-| `lock` | Heavy: resolve package inputs |
-| `verify`, `verify-release` | Heavy: full offline acceptance, optionally check published delivery |
-| `verify-fast`, `verify-hibernate` | Heavy: qualify package changes on an accepted fixture, or test resume |
-| `fetch-alongside`, `provision-alongside`, `verify-alongside` | Heavy: fetch inputs, prepare fixtures, test alongside installs |
-| `gc` | Delete storage owned by checkouts that no longer exist |
+| Docs or CI config | `make lint` (~1 s) |
+| Scripts or tests | `make test` (~37 s) |
+| Desktop or package content | `make verify-fast` to a kept VM (~50 s) |
+| A probe or stage | kept VM, then one full `make verify` |
+| Installer, archiso, or release | `make iso-development` (4–7 min) + `make verify` (16–21 min) |
 
-Run `make lint` and `make test` before every PR. They are light and run on any
-machine, including one with `AGENT_HEAVY_JOBS=deny`.
+`make lint` and `make test` are light: run them before every PR, on any
+machine, including one with `AGENT_HEAVY_JOBS=deny`. The rest are heavy: run
+them on your build machine, where heavy targets refuse when
+`AGENT_HEAVY_JOBS=deny`.
 
 Pass verification arguments through `ARGS='...'`. Evidence defaults to
 `out/verify/`; see [VERIFICATION.md](VERIFICATION.md) for fixture requirements.
 For QML/probe-only iteration, keep the fast VM instead of rerunning full
 acceptance: [VERIFICATION.md](VERIFICATION.md#debugging-loop-kept-verify-fast-vm).
 
+Keep job logs and scratch evidence under `out/` in your worktree.
+
 [scripts/workspace.py](scripts/workspace.py) gives each checkout its own
 `BUILD_STATE` by default; an explicit `BUILD_STATE` wins and is yours to manage.
-It requires 30 GiB free before builds and VM disk creation. Heavy make targets refuse when
-`AGENT_HEAVY_JOBS=deny`.
 
 Run `make gc ARGS=--dry-run` before `make gc`. GC uses ownership markers
 and a cache registry, including custom verification paths. It keeps storage owned by live

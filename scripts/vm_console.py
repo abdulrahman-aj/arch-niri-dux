@@ -8,9 +8,27 @@ One driver at a time; the serial marker protocol does not multiplex.
 
 import argparse
 from pathlib import Path
+import re
 import sys
 
 from verification.vm import VM
+
+ANSI_RE = re.compile(r'\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)|\x1b\[[0-?]*[ -/]*[@-~]|\x1b[@-Z\\-_]')
+MARKER_RE = re.compile(r'__VERIFY_[0-9A-Fa-f]+__:[0-9]+')
+
+
+def clean_output(output):
+    """Drop the serial command's completion marker line and terminal escapes."""
+    lines = output.split('\n')
+    if lines and lines[-1] == '':
+        lines.pop()
+    kept = []
+    for line in lines:
+        text = ANSI_RE.sub('', line).replace('\r', '')
+        if MARKER_RE.fullmatch(text.strip()):
+            continue
+        kept.append(text)
+    return '\n'.join(kept)
 
 
 def main():
@@ -31,13 +49,19 @@ def main():
         raise SystemExit(1)
     try:
         if args.verb == 'sh':
-            if not args.args:
-                parser.error('sh needs a guest command.')
-            print(vm.command(' '.join(args.args)), end='')
+            if args.args:
+                script = ' '.join(args.args)
+            else:
+                if sys.stdin.isatty():
+                    parser.error('sh needs a guest command or a script on stdin.')
+                script = sys.stdin.read()
+                if not script.strip():
+                    parser.error('sh needs a guest command or a script on stdin.')
+            print(clean_output(vm.command(script)), end='')
         elif args.verb == 'probe':
             if len(args.args) < 2:
                 parser.error('probe needs a module and a function.')
-            print(vm.probe(args.args[0], *args.args[1:]), end='')
+            print(clean_output(vm.probe(args.args[0], *args.args[1:])), end='')
         elif args.verb == 'shot':
             if len(args.args) != 1:
                 parser.error('shot needs a screenshot name.')

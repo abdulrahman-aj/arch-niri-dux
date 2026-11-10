@@ -53,6 +53,28 @@ def own(directory, checkout=ROOT):
     (registry / key).write_text(str(directory) + '\n')
 
 
+def accepted_fixtures(registry=None):
+    """Accepted full-verify workspaces, newest first: ACCEPTANCE-PASSED plus a disk."""
+    registry = Path(registry) if registry is not None else cache_root() / 'arch-niri-dux-states'
+    found = []
+    if registry.is_dir():
+        for record in registry.iterdir():
+            if record.is_file() and not record.is_symlink():
+                value = record.read_text().strip()
+                if not Path(value).is_absolute():
+                    continue
+                directory = Path(value)
+                if (directory / 'ACCEPTANCE-PASSED').is_file() and (directory / 'disk.qcow2').is_file():
+                    found.append(directory)
+    return sorted(found, key=lambda path: path.stat().st_mtime, reverse=True)
+
+
+def newest_accepted_fixture(registry=None):
+    """Newest accepted disk.qcow2, or None when no full run has passed."""
+    fixtures = accepted_fixtures(registry)
+    return fixtures[0] / 'disk.qcow2' if fixtures else None
+
+
 def candidates(cache, checkout):
     paths = set(cache.glob('arch-niri-dux-build*'))
     verification = cache / 'arch-niri-dux-verification'

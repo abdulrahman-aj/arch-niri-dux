@@ -1,7 +1,8 @@
 # Building and testing
 
-Building requires Linux, Nix and Make. Allow at least 30 GiB of free disk space for the build and about
-2.5 GiB for the ISO. VM verification also needs KVM.
+Building requires Linux, Nix and Make. Allow free disk space for the build and
+about 2.5 GiB for the ISO; the free-space guard is documented under
+[Verification](VERIFICATION.md). VM verification also needs KVM.
 
 ```sh
 make iso

@@ -171,6 +171,7 @@ def main():
             pass
         (directory / 'FAILURE.txt').write_text(str(error) + '\n')
         print(f'Verification failed: {error}\nEvidence: {directory}', file=sys.stderr)
+        print("Next: make verify-fast ARGS='--keep' (auto-finds the newest accepted fixture)", file=sys.stderr)
         return 1
     finally:
         vm.stop()

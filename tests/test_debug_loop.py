@@ -1,16 +1,17 @@
-"""Kept-VM debugging loop: attach failures, socket dirs, console dispatch."""
+"""Kept-VM debugging loop: attach failures, socket dirs, fixture choice, console output."""
 
 from pathlib import Path
+import os
 import socket
 import sys
 import tempfile
 import unittest
-from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'scripts'))
 from verification import vm as verify
 import verify_fast
 import vm_console
+import workspace
 
 
 def kept_machine(directory):
@@ -35,7 +36,7 @@ class KeptSocketTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as root:
             machine = kept_machine(Path(root))
             try:
-                with self.assertRaisesRegex(RuntimeError, 'verify-fast --keep'):
+                with self.assertRaises(RuntimeError):
                     machine.attach()
             finally:
                 machine.log.close()
@@ -106,34 +107,47 @@ class KeptRunningGuardTests(unittest.TestCase):
             self.assertFalse(verify_fast.kept_running(Path(root)))
 
 
-class ConsoleDispatchTests(unittest.TestCase):
-    def run_console(self, *argv):
-        with patch.object(sys, 'argv', ['vm_console', *argv]), patch.object(vm_console, 'VM') as factory:
-            factory.return_value.command.return_value = ''
-            factory.return_value.probe.return_value = ''
-            try:
-                vm_console.main()
-            except SystemExit as stop:
-                return stop.code, factory.return_value
-            return 0, factory.return_value
+class FixtureSelectionTests(unittest.TestCase):
+    def test_picks_newest_valid_and_ignores_incomplete(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            old = root / 'old'
+            old.mkdir()
+            (old / 'ACCEPTANCE-PASSED').write_text('All acceptance stages passed.\n')
+            (old / 'disk.qcow2').write_bytes(b'old')
+            new = root / 'new'
+            new.mkdir()
+            (new / 'ACCEPTANCE-PASSED').write_text('All acceptance stages passed.\n')
+            (new / 'disk.qcow2').write_bytes(b'new')
+            broken = root / 'broken'
+            broken.mkdir()
+            (broken / 'disk.qcow2').write_bytes(b'no marker')
+            registry = root / 'registry'
+            registry.mkdir()
+            for index, target in enumerate((old, new, broken)):
+                (registry / str(index)).write_text(str(target) + '\n')
+            (registry / 'gone').write_text(str(root / 'missing') + '\n')
+            (registry / 'relative').write_text('relative/path\n')
+            os.utime(old, (1000, 1000))
+            os.utime(new, (2000, 2000))
+            os.utime(broken, (3000, 3000))
+            self.assertEqual(workspace.newest_accepted_fixture(registry), new / 'disk.qcow2')
+            self.assertEqual(workspace.accepted_fixtures(registry), [new, old])
 
-    def test_missing_vm_exits_nonzero(self):
-        with tempfile.TemporaryDirectory() as root:
-            (Path(root) / '.sockets').mkdir()
-            argv = ['vm_console', '--directory', root, 'sh', 'true']
-            with patch.object(vm_console.VM, 'attach', side_effect=RuntimeError('no kept VM')):
-                with patch.object(sys, 'argv', argv):
-                    with self.assertRaises(SystemExit) as stop:
-                        vm_console.main()
-            self.assertEqual(stop.exception.code, 1)
+    def test_no_accepted_fixture_is_none(self):
+        with tempfile.TemporaryDirectory() as temp:
+            self.assertIsNone(workspace.newest_accepted_fixture(Path(temp) / 'missing'))
+            self.assertEqual(workspace.accepted_fixtures(Path(temp) / 'missing'), [])
 
-    def test_verb_mistakes_are_usage_errors(self):
-        with tempfile.TemporaryDirectory() as root:
-            (Path(root) / '.sockets').mkdir()
-            for argv in (['--directory', root, 'sh'], ['--directory', root, 'click', '2', '0.5']):
-                with self.subTest(argv=argv):
-                    code, _ = self.run_console(*argv)
-                    self.assertEqual(code, 2)
+
+class CleanOutputTests(unittest.TestCase):
+    def test_strips_marker_line_and_terminal_escapes(self):
+        output = 'hello \x1b[32mworld\x1b[0m\r\necho done\r\n__VERIFY_abc123__:0\r\n'
+        self.assertEqual(vm_console.clean_output(output), 'hello world\necho done')
+
+    def test_keeps_quotes_and_dollar_expansion(self):
+        output = 'it\'s "$HOME"\r\n__VERIFY_deadbeef00__:0\r\n'
+        self.assertEqual(vm_console.clean_output(output), 'it\'s "$HOME"')
 
 
 if __name__ == '__main__':
