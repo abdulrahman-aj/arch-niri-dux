@@ -132,10 +132,8 @@ the button opens Dux's updater; its Update All runs the same `pacman -Syu`
 that installs our packages and triggers migrations. A bar layout saved before
 the seed ran (`barConfigs` in a user file) is kept and gets no button. The
 seeder also enables the plugin in `~/.config/dms/plugin_settings.json` unless
-a choice is already recorded there. A user migration moves the interval and the
-bar entry to the button only where they still hold our previous seed. Move,
-remove or add the button in Dux Settings, Bar; Software Updates shows the
-6-hour interval as a custom interval.
+a choice is already recorded there. Move, remove or add the button in Dux
+Settings, Bar; Software Updates shows the 6-hour interval as a custom interval.
 
 Seeds never change a value that already exists. To change a shipped default for
 existing accounts, add a user migration that rewrites the key only where it

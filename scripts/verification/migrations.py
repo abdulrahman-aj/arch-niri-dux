@@ -13,10 +13,6 @@ STATE = Path('/var/lib/arch-niri-dux/migrations')
 HOME = Path('/home/tester')
 USER_STATE = HOME / '.local/state/arch-niri-dux/migrations'
 COMMAND = 'arch-niri-dux-migrate'
-# Production migrations shipped in the package. Fixture numbers (99999999_*)
-# sort after any realistic date, so shipped scripts run first.
-SHIPPED_USER = ('20261110_01_release_button.sh',)
-RELEASE_HELPER = Path('/usr/lib/arch-niri-dux/migrate-dux-release-button.py')
 
 
 def fixture(root, scope, number, body):
@@ -36,63 +32,9 @@ def check():
     run('systemd-detect-virt', '--vm')
     assert Path('/run/verify/install.json').is_file()
     assert not any((CODE / 'system').iterdir())
-    assert sorted(path.name for path in (CODE / 'user').iterdir()) == sorted(SHIPPED_USER)
+    assert not any((CODE / 'user').iterdir())
     assert (STATE / 'generation').is_file()
     assert (USER_STATE / 'lock').is_file()
-    # A fresh install records the shipped migration without executing it.
-    record = json.loads((USER_STATE / (SHIPPED_USER[0] + '.json')).read_text())
-    assert record['outcome'] == 'baseline', record
-    # The packaged helper rewrites only untouched old seed values, checked
-    # against a scratch config so the live account is undisturbed.
-    scratch = Path('/var/tmp/migration-scratch')
-    run('rm', '-rf', str(scratch))
-    seed = scratch / 'dms/config.d/00-arch-niri-dux-updates.json'
-    seed.parent.mkdir(parents=True)
-    # The complete bar our previous seed installed; the helper only replaces
-    # an exact match, so a partial bar would (correctly) be left alone.
-    seed.write_text(
-        json.dumps(
-            {
-                'updaterIntervalSeconds': 7 * 24 * 60 * 60,
-                'barConfigs': [
-                    {
-                        'id': 'default',
-                        'name': 'Main Bar',
-                        'enabled': True,
-                        'position': 0,
-                        'screenPreferences': ['all'],
-                        'showOnLastDisplay': True,
-                        'leftWidgets': ['launcherButton', 'workspaceSwitcher', 'focusedWindow'],
-                        'centerWidgets': [
-                            'music',
-                            'clock',
-                            {'id': 'systemUpdate', 'enabled': True, 'hideWhenIdle': True},
-                            'weather',
-                        ],
-                        'rightWidgets': [
-                            'systemTray',
-                            'clipboard',
-                            'cpuUsage',
-                            'memUsage',
-                            'notificationButton',
-                            'battery',
-                            'controlCenterButton',
-                        ],
-                    }
-                ],
-            }
-        )
-    )
-    run('chown', '-R', 'tester:tester', str(scratch))
-    # Later assignments win in env, so this overrides user_command's own
-    # XDG_CONFIG_HOME. check=True raises with the helper's output on failure.
-    user_command('env', f'XDG_CONFIG_HOME={scratch}', 'python3', str(RELEASE_HELPER), capture=True)
-    migrated = json.loads(seed.read_text())
-    assert migrated['updaterIntervalSeconds'] == 6 * 60 * 60, migrated
-    center = next(bar for bar in migrated['barConfigs'] if bar['id'] == 'default')['centerWidgets']
-    assert {'id': 'archNiriDuxRelease', 'enabled': True} in center, migrated
-    assert not any((entry.get('id') if isinstance(entry, dict) else entry) == 'systemUpdate' for entry in center)
-    run('rm', '-rf', str(scratch))
     # Avoid logind retaining a just-deleted policy probe's UID during shutdown.
     run('useradd', '-m', '-u', '42420', 'migration-later')
     run('runuser', '-u', 'migration-later', '--', 'bash', '/usr/lib/arch-niri-dux/initialize-user')
@@ -193,8 +135,7 @@ def check():
         run('runuser', '-u', 'migration-new', '--', 'bash', '/usr/lib/arch-niri-dux/initialize-user')
         new = Path('/home/migration-new/.local/state')
         assert not (new / 'verification-effects').exists()
-        # Four user fixtures plus the shipped migration, all baselined.
-        assert len(list((new / 'arch-niri-dux/migrations').glob('*.json'))) == len(SHIPPED_USER) + 4
+        assert len(list((new / 'arch-niri-dux/migrations').glob('*.json'))) == 4
     finally:
         run('userdel', '-r', 'migration-new')
     # A logged-out existing account catches up when its graphical target starts.
