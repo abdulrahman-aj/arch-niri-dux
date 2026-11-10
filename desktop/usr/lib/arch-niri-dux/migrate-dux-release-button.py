@@ -73,7 +73,7 @@ def migrate(target):
     changes = []
     if value.get('updaterIntervalSeconds') == OLD_INTERVAL_SECONDS:
         value['updaterIntervalSeconds'] = NEW_INTERVAL_SECONDS
-        changes.append('updaterIntervalSeconds 604800 -> 21600')
+        changes.append(f'updaterIntervalSeconds {OLD_INTERVAL_SECONDS} -> {NEW_INTERVAL_SECONDS}')
     bars = value.get('barConfigs')
     if isinstance(bars, list):
         for index, bar in enumerate(bars):

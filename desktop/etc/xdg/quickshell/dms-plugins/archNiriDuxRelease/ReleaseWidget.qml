@@ -47,10 +47,6 @@ PluginComponent {
         }
     }
 
-    Component.onDestruction: {
-        _pendingSystemUpdateAnchor = null;
-    }
-
     pillClickAction: (x, y, width, section, screen) => {
         if (!root.popoutService) {
             return;
@@ -65,6 +61,8 @@ PluginComponent {
             return;
         }
         loader.active = true;
+        // If the loader finished synchronously the popout is already set;
+        // otherwise the change handler above finishes the open when it lands.
         if (root.popoutService.systemUpdatePopout) {
             root.popoutService.toggleSystemUpdate(x, y, width, section, screen);
             return;
