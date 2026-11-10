@@ -1,10 +1,11 @@
 # Product rules
 
 - The ISO must install the full desktop offline.
-- Change defaults for new installs and accounts only. Add compatibility code or a
-  migration for existing installs only when the task asks for it.
-- Before designing a desktop feature, read the pinned Dux source and check how
-  Omarchy solves the same problem.
+- New defaults apply to new installs and accounts. Don't rewrite an existing
+  install's settings or state (compatibility code, migrations) unless the task
+  asks for it; package updates still reach existing installs.
+- Before designing a desktop feature, read the Dux source matching
+  `packages/closure.lock.json` and check how Omarchy solves the same problem.
 - Prefer files owned by packages over files written by the installer.
 
 # Development
