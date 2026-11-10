@@ -68,8 +68,7 @@ final qualification. Iterate on a kept VM, then qualify once.
 writes `FAST-PASSED` as usual, then keeps the VM running with its serial/QMP
 sockets under `out/debug/.sockets` and prints paste-ready attach commands
 (the same block prints if the run fails, when the live guest is most useful).
-Without `--keep`, behavior is unchanged. No new make target: `--keep` passes
-through the existing `verify-fast` `ARGS=` convention.
+Without `--keep`, behavior is unchanged.
 
 Drive the kept VM with `scripts/vm_console.py` (one driver at a time):
 
