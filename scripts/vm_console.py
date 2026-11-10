@@ -15,20 +15,21 @@ from verification.vm import VM
 
 ANSI_RE = re.compile(r'\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)|\x1b\[[0-?]*[ -/]*[@-~]|\x1b[@-Z\\-_]')
 MARKER_RE = re.compile(r'__VERIFY_[0-9A-Fa-f]+__:[0-9]+')
+ECHO_RE = re.compile(r'__VERIFY_[0-9A-Fa-f]+__:%s')
 
 
 def clean_output(output):
     """Drop the serial command's completion marker line and terminal escapes."""
-    lines = output.split('\n')
-    if lines and lines[-1] == '':
-        lines.pop()
     kept = []
-    for line in lines:
+    for line in output.split('\n'):
         text = ANSI_RE.sub('', line).replace('\r', '')
-        if MARKER_RE.fullmatch(text.strip()):
+        stripped = text.strip()
+        # The guest echoes the sent payload, including its printf with a
+        # literal %s where the exit status will go; drop that echo too.
+        if MARKER_RE.fullmatch(stripped) or ECHO_RE.search(stripped):
             continue
         kept.append(text)
-    return '\n'.join(kept)
+    return '\n'.join(kept).rstrip('\n')
 
 
 def main():
@@ -88,6 +89,7 @@ def main():
             vm.poweroff()
     finally:
         vm.stop()
+        vm.log.close()
 
 
 if __name__ == '__main__':

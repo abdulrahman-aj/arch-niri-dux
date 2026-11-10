@@ -1,10 +1,15 @@
 """Kept-VM debugging loop: attach failures, socket dirs, fixture choice, console output."""
 
 from pathlib import Path
+import contextlib
+import io
 import os
+import pty
+import re
 import socket
 import sys
 import tempfile
+import threading
 import unittest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'scripts'))
@@ -145,9 +150,130 @@ class CleanOutputTests(unittest.TestCase):
         output = 'hello \x1b[32mworld\x1b[0m\r\necho done\r\n__VERIFY_abc123__:0\r\n'
         self.assertEqual(vm_console.clean_output(output), 'hello world\necho done')
 
+    def test_strips_echoed_payload_marker(self):
+        output = (
+            "bash -c '(\r\n> echo hi\r\n> verify_status=$?; printf '\"'\"'\\n__VERIFY_abc123__:%s\\n'\"'\"' \"$verify_status\"'\r\n"
+            'hi\r\n__VERIFY_abc123__:0\r\n'
+        )
+        self.assertEqual(vm_console.clean_output(output), "bash -c '(\n> echo hi\nhi")
+
     def test_keeps_quotes_and_dollar_expansion(self):
         output = 'it\'s "$HOME"\r\n__VERIFY_deadbeef00__:0\r\n'
         self.assertEqual(vm_console.clean_output(output), 'it\'s "$HOME"')
+
+
+def serve_kept_vm(sockets, open_connections):
+    """Minimal fake kept VM: answer the QMP handshake and one serial command."""
+    serial_listener = socket.socket(socket.AF_UNIX)
+    serial_listener.bind(str(sockets / 'serial.sock'))
+    serial_listener.listen(1)
+    qmp_listener = socket.socket(socket.AF_UNIX)
+    qmp_listener.bind(str(sockets / 'qmp.sock'))
+    qmp_listener.listen(1)
+    threading.Thread(target=_answer_qmp, args=(qmp_listener, open_connections), daemon=True).start()
+    threading.Thread(target=_answer_serial, args=(serial_listener, open_connections), daemon=True).start()
+
+
+def _track(open_connections, connection):
+    open_connections.append(connection)
+    return connection
+
+
+def _answer_qmp(listener, open_connections):
+    try:
+        listener.settimeout(10)
+        connection, _ = listener.accept()
+    finally:
+        listener.close()
+    with _track(open_connections, connection):
+        connection.settimeout(10)
+        connection.sendall(b'{"QMP": {"version": {}, "capabilities": []}}\n')
+        while True:
+            try:
+                data = connection.recv(4096)
+            except OSError:
+                return
+            if not data:
+                return
+            if data.strip():
+                connection.sendall(b'{"return": {}}\n')
+
+
+def _answer_serial(listener, open_connections):
+    try:
+        listener.settimeout(10)
+        connection, _ = listener.accept()
+    finally:
+        listener.close()
+    with _track(open_connections, connection):
+        connection.settimeout(10)
+        received = b''
+        marker = None
+        while marker is None:
+            try:
+                chunk = connection.recv(65536)
+            except OSError:
+                return
+            if not chunk:
+                return
+            received += chunk
+            match = re.search(rb'__VERIFY_[0-9a-f]+__', received)
+            if match and received.endswith(b'\n'):
+                marker = match.group(0)
+        try:
+            connection.sendall(b"it's $HOME\r\n\n" + marker + b':0\r\n')
+        except OSError:
+            pass
+
+
+class StdinScriptTests(unittest.TestCase):
+    def run_main(self, argv, stdin):
+        showed = io.StringIO()
+        old_argv, old_stdin = sys.argv, sys.stdin
+        sys.argv, sys.stdin = argv, stdin
+        try:
+            with contextlib.redirect_stdout(showed):
+                vm_console.main()
+        finally:
+            sys.argv, sys.stdin = old_argv, old_stdin
+            for connection in self.connections:
+                connection.close()
+            self.connections.clear()
+        return showed.getvalue()
+
+    def kept_argv(self, temp):
+        (Path(temp) / '.sockets').mkdir()
+        serve_kept_vm(Path(temp) / '.sockets', self.connections)
+        return ['vm_console', '--directory', temp, 'sh']
+
+    def setUp(self):
+        self.connections = []
+
+    def test_sh_reads_script_from_stdin(self):
+        with tempfile.TemporaryDirectory() as temp:
+            argv = self.kept_argv(temp)
+            output = self.run_main(argv, io.StringIO('echo "it\'s $HOME"\n'))
+            self.assertIn("it's $HOME", output)
+            self.assertNotIn('__VERIFY_', output)
+
+    def test_empty_stdin_is_a_usage_error(self):
+        with tempfile.TemporaryDirectory() as temp:
+            argv = self.kept_argv(temp)
+            with self.assertRaises(SystemExit) as stop:
+                self.run_main(argv, io.StringIO('  \n'))
+            self.assertEqual(stop.exception.code, 2)
+
+    def test_tty_stdin_is_a_usage_error(self):
+        with tempfile.TemporaryDirectory() as temp:
+            argv = self.kept_argv(temp)
+            primary, replica = pty.openpty()
+            try:
+                with os.fdopen(replica, 'w') as stdin:
+                    with self.assertRaises(SystemExit) as stop:
+                        self.run_main(argv, stdin)
+                self.assertEqual(stop.exception.code, 2)
+            finally:
+                os.close(primary)
 
 
 if __name__ == '__main__':

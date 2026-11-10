@@ -65,8 +65,8 @@ hooks.
 Rule: QML/probe-only changes never rerun full `make verify`; full verify is
 final qualification. Iterate on a kept VM, then qualify once.
 
-`make verify-fast ARGS="--fixture out/accepted/disk.qcow2 --directory out/debug --keep"`
-writes `FAST-PASSED` as usual, then keeps the VM running with its serial/QMP
+`make verify-fast ARGS="--directory out/debug --keep"` (the fixture is
+auto-found; pass `--fixture` to override) writes `FAST-PASSED` as usual, then keeps the VM running with its serial/QMP
 sockets under `out/debug/.sockets` and prints paste-ready attach commands
 (the same block prints if the run fails, when the live guest is most useful).
 Without `--keep`, behavior is unchanged.

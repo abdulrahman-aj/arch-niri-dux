@@ -53,20 +53,29 @@ def own(directory, checkout=ROOT):
     (registry / key).write_text(str(directory) + '\n')
 
 
-def accepted_fixtures(registry=None):
-    """Accepted full-verify workspaces, newest first: ACCEPTANCE-PASSED plus a disk."""
-    registry = Path(registry) if registry is not None else cache_root() / 'arch-niri-dux-states'
-    found = []
+def registered_paths(registry):
+    """Absolute directories recorded in a states registry."""
+    paths = []
     if registry.is_dir():
         for record in registry.iterdir():
             if record.is_file() and not record.is_symlink():
                 value = record.read_text().strip()
-                if not Path(value).is_absolute():
-                    continue
-                directory = Path(value)
-                if (directory / 'ACCEPTANCE-PASSED').is_file() and (directory / 'disk.qcow2').is_file():
-                    found.append(directory)
-    return sorted(found, key=lambda path: path.stat().st_mtime, reverse=True)
+                if Path(value).is_absolute():
+                    paths.append(Path(value))
+    return paths
+
+
+def accepted_fixtures(registry=None):
+    """Accepted full-verify workspaces, newest first: ACCEPTANCE-PASSED plus a disk."""
+    registry = Path(registry) if registry is not None else cache_root() / 'arch-niri-dux-states'
+    entries = []
+    for directory in registered_paths(registry):
+        try:
+            if (directory / 'ACCEPTANCE-PASSED').is_file() and (directory / 'disk.qcow2').is_file():
+                entries.append((directory.stat().st_mtime, directory))
+        except OSError:
+            continue
+    return [directory for _, directory in sorted(entries, reverse=True)]
 
 
 def newest_accepted_fixture(registry=None):
@@ -84,12 +93,7 @@ def candidates(cache, checkout):
     if evidence.is_dir():
         paths.update(evidence.iterdir())
     registry = cache / 'arch-niri-dux-states'
-    if registry.is_dir():
-        for record in registry.iterdir():
-            if record.is_file() and not record.is_symlink():
-                value = record.read_text().strip()
-                if Path(value).is_absolute():
-                    paths.add(Path(value))
+    paths.update(registered_paths(registry))
     return sorted(paths)
 
 

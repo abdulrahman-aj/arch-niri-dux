@@ -11,9 +11,8 @@ Enter the Nix dev shell with `nix develop`. Make targets enter it automatically.
 | Installer, archiso, or release | `make iso-development` (4–7 min) + `make verify` (16–21 min) |
 
 `make lint` and `make test` are light: run them before every PR, on any
-machine, including one with `AGENT_HEAVY_JOBS=deny`. The rest are heavy: run
-them on your build machine, where heavy targets refuse when
-`AGENT_HEAVY_JOBS=deny`.
+machine, including one with `AGENT_HEAVY_JOBS=deny` (heavy targets refuse
+there; run them on your build machine).
 
 Pass verification arguments through `ARGS='...'`. Evidence defaults to
 `out/verify/`; see [VERIFICATION.md](VERIFICATION.md) for fixture requirements.
