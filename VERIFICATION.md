@@ -87,9 +87,9 @@ evidence directory is mounted in the guest at `/run/verify`, so deploy a
 changed file by copying it into `out/debug/` on the host, then inside the
 guest, e.g. `sh 'cp /run/verify/ReleaseWidget.qml /usr/share/arch-niri-dux/niri/dms-plugins/archNiriDuxRelease/ReleaseWidget.qml'`,
 restart the shell as the tester user with
-`sh 'runuser -u tester -- systemctl --user restart dms.service'`, then click,
-screenshot, and read the journal with
-`sh "journalctl -q --user -u dms.service --since '-5 min'"`.
+`sh 'runuser -u tester -- env XDG_RUNTIME_DIR=/run/user/1000 DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/1000/bus systemctl --user restart dms.service'`,
+then click, screenshot, and read the shell journal with
+`sh 'runuser -u tester -- env XDG_RUNTIME_DIR=/run/user/1000 journalctl --user -u dms.service --since "-5 min" --no-pager'`.
 
 A kept VM holds 8 GiB guest RAM; power it off before builds or other VMs and
 remove the directory when finished.
