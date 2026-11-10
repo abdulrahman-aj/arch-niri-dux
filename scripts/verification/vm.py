@@ -58,9 +58,31 @@ class VM:
 
     def control_path(self, name):
         # Linux limits Unix socket paths to 107 bytes, including deep worktrees.
+        # A caller-chosen plain directory (e.g. under the evidence dir) keeps
+        # the sockets reachable after this process exits; otherwise use a
+        # private tempdir that stop() removes.
         if self.socket_directory is None:
             self.socket_directory = tempfile.TemporaryDirectory(prefix='dux-vm-')
-        return Path(self.socket_directory.name) / name
+        base = self.socket_directory if isinstance(self.socket_directory, Path) else Path(self.socket_directory.name)
+        return base / name
+
+    def attach(self):
+        """Reconnect to a kept VM's sockets and confirm the guest answers."""
+        missing = [name for name in ('serial.sock', 'qmp.sock') if not self.control_path(name).exists()]
+        if missing:
+            raise RuntimeError(
+                f'No kept VM sockets in {self.control_path(missing[0]).parent}; '
+                'start one with verify-fast --keep first.'
+            )
+        self.serial = self.connect('serial.sock')
+        qmp_socket = self.connect('qmp.sock')
+        qmp_socket.settimeout(30)
+        self.qmp = qmp_socket.makefile('rwb', buffering=0)
+        self.qmp.readline()
+        self.qmp_command('qmp_capabilities')
+        self.qmp_command('query-status')
+        self.transcript = ''
+        self.read_cursor = 0
 
     def connect(self, name):
         path = self.control_path(name)
@@ -73,7 +95,7 @@ class VM:
                 return connection
             except (FileNotFoundError, ConnectionRefusedError):
                 connection.close()
-                if self.process.poll() is not None:
+                if self.process is not None and self.process.poll() is not None:
                     raise RuntimeError('QEMU exited; inspect qemu.log.')
                 time.sleep(0.1)
         raise TimeoutError(f'QEMU socket did not appear: {path}')
@@ -265,7 +287,9 @@ class VM:
         deadline = time.monotonic() + timeout
         # Drain the console while waiting: shutdown can otherwise block when
         # the Unix socket's receive buffer fills with service/terminal output.
-        while self.process.poll() is None:
+        # An attached console owns no QEMU process, so EOF on the serial
+        # socket is its shutdown signal.
+        while self.process is None or self.process.poll() is None:
             if time.monotonic() >= deadline:
                 raise TimeoutError('VM did not exit; inspect serial.log.')
             try:
@@ -273,11 +297,13 @@ class VM:
                 if data:
                     self.log.write(data.decode(errors='replace'))
                     self.log.flush()
+                elif self.process is None:
+                    break
                 else:
                     self.process.wait(timeout=15)
             except TimeoutError:
                 pass
-        if self.process.returncode != 0:
+        if self.process is not None and self.process.returncode not in (None, 0):
             raise RuntimeError(f'QEMU exited abnormally during shutdown: {self.process.returncode}')
 
     def stop(self):
@@ -293,10 +319,14 @@ class VM:
         if self.qmp:
             self.qmp.close()
         if self.socket_directory is not None:
-            self.socket_directory.cleanup()
-            self.socket_directory = None
+            cleanup = getattr(self.socket_directory, 'cleanup', None)
+            if callable(cleanup):
+                cleanup()
+                self.socket_directory = None
         if self.process is not None and self.process.returncode not in (None, 0):
             raise RuntimeError(f'QEMU exited abnormally: {self.process.returncode}')
+        # Only private tempdirs are removed; a caller-chosen directory (kept
+        # VM sockets under the evidence dir) survives so attach() still works.
 
 
 def wait_for_password_screen(vm, name):

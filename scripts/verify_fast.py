@@ -24,6 +24,11 @@ def main():
     parser.add_argument(
         '--kernel-package', type=Path, help='Also reinstall this kernel archive in the same package transaction'
     )
+    parser.add_argument(
+        '--keep',
+        action='store_true',
+        help='Keep the VM running after the run (pass or fail) for interactive debugging',
+    )
     args = parser.parse_args()
     fixture = args.fixture.resolve()
     accepted = fixture.parent
@@ -56,8 +61,13 @@ def main():
     disk = directory / 'disk.qcow2'
     subprocess.run(['qemu-img', 'create', '-f', 'qcow2', '-F', 'qcow2', '-b', str(fixture), str(disk)], check=True)
     vm = VM(directory, None, disk)
+    if args.keep:
+        vm.socket_directory = directory / '.sockets'
+        vm.socket_directory.mkdir(exist_ok=True)
+    started = False
     try:
         vm.start(cdrom=False)
+        started = True
         installed_login(vm)
         vm.mount_probes()
         # Pre-0.3 installer-owned files need manual repair. This tier deliberately
@@ -94,7 +104,8 @@ def main():
         vm.probe('policy', 'check', timeout=180)
         vm.probe('desktop', 'niri-overrides', timeout=180)
         vm.probe('migrations', 'check', timeout=180)
-        vm.poweroff()
+        if not args.keep:
+            vm.poweroff()
         (directory / 'FAST-PASSED').write_text(
             json.dumps(
                 {
@@ -115,7 +126,20 @@ def main():
             + '\n'
         )
     finally:
-        vm.stop()
+        if args.keep and started:
+            # The VM outlives this process: sockets stay under the evidence
+            # directory, so vm_console.py can attach. Wanted especially on
+            # failure, which is when the live guest is most useful.
+            console = f'./scripts/build-in-dev python3 scripts/vm_console.py --directory {directory}'
+            print(f'VM kept running in {directory} (holds 8 GiB guest RAM until stopped).')
+            print(f"  Shell:      {console} sh '<command>'")
+            print(f'  Screenshot: {console} shot <name>')
+            print(f'  Click/key:  {console} click <x_frac> <y_frac> | key <qcode>')
+            print(f'  Probe:      {console} probe <module> <function>')
+            print(f"  Files:      cp <src> {directory}/, then sh 'cp /run/verify/<name> <dest>'")
+            print(f'  Stop:       {console} poweroff')
+        else:
+            vm.stop()
 
 
 if __name__ == '__main__':

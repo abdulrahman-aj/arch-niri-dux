@@ -57,7 +57,42 @@ presets, greetd login, unlocked GNOME Keyring, loaded vendor systemd drop-ins
 and migration behavior. It does not replace fresh installation or snapshot
 and alongside qualification. Pass `--kernel-package PATH` to reinstall a
 local kernel archive in the same transaction and exercise both boot rebuild
-hooks.
+ hooks.
+
+## Debugging loop (kept verify-fast VM)
+
+Rule: QML/probe-only changes never rerun full `make verify`; full verify is
+final qualification. Iterate on a kept VM, then qualify once.
+
+`make verify-fast ARGS="--fixture out/accepted/disk.qcow2 --directory out/debug --keep"`
+writes `FAST-PASSED` as usual, then keeps the VM running with its serial/QMP
+sockets under `out/debug/.sockets` and prints paste-ready attach commands
+(the same block prints if the run fails, when the live guest is most useful).
+Without `--keep`, behavior is unchanged. No new make target: `--keep` passes
+through the existing `verify-fast` `ARGS=` convention.
+
+Drive the kept VM with `scripts/vm_console.py` (one driver at a time):
+
+```
+./scripts/build-in-dev python3 scripts/vm_console.py --directory out/debug sh '<command>'
+./scripts/build-in-dev python3 scripts/vm_console.py --directory out/debug shot <name>
+./scripts/build-in-dev python3 scripts/vm_console.py --directory out/debug click <x_frac> <y_frac>
+./scripts/build-in-dev python3 scripts/vm_console.py --directory out/debug key <qcode>
+./scripts/build-in-dev python3 scripts/vm_console.py --directory out/debug probe <module> <function>
+./scripts/build-in-dev python3 scripts/vm_console.py --directory out/debug poweroff
+```
+
+Per iteration there is no ISO rebuild, reinstall or scheduler wait. The
+evidence directory is mounted in the guest at `/run/verify`, so deploy a
+changed file by copying it into `out/debug/` on the host, then inside the
+guest, e.g. `sh 'cp /run/verify/ReleaseWidget.qml /usr/share/arch-niri-dux/niri/dms-plugins/archNiriDuxRelease/ReleaseWidget.qml'`,
+restart the shell as the tester user with
+`sh 'runuser -u tester -- systemctl --user restart dms.service'`, then click,
+screenshot, and read the journal with
+`sh "journalctl -q --user -u dms.service --since '-5 min'"`.
+
+A kept VM holds 8 GiB guest RAM; power it off before builds or other VMs and
+remove the directory when finished.
 
 ## `make verify-hibernate`
 

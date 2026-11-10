@@ -17,6 +17,8 @@ machine, including one with `AGENT_HEAVY_JOBS=deny`.
 
 Pass verification arguments through `ARGS='...'`. Evidence defaults to
 `out/verify/`; see [VERIFICATION.md](VERIFICATION.md) for fixture requirements.
+For QML/probe-only iteration, keep the fast VM instead of rerunning full
+acceptance: [VERIFICATION.md](VERIFICATION.md#debugging-loop-kept-verify-fast-vm).
 
 [scripts/workspace.py](scripts/workspace.py) gives each checkout its own
 `BUILD_STATE` by default; an explicit `BUILD_STATE` wins and is yours to manage.
