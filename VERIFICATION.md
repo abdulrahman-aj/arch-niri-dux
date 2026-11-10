@@ -57,7 +57,7 @@ presets, greetd login, unlocked GNOME Keyring, loaded vendor systemd drop-ins
 and migration behavior. It does not replace fresh installation or snapshot
 and alongside qualification. Pass `--kernel-package PATH` to reinstall a
 local kernel archive in the same transaction and exercise both boot rebuild
- hooks.
+hooks.
 
 ## Debugging loop (kept verify-fast VM)
 
@@ -75,7 +75,7 @@ Drive the kept VM with `scripts/vm_console.py` (one driver at a time):
 
 ```
 ./scripts/build-in-dev python3 scripts/vm_console.py --directory out/debug sh '<command>'
-./scripts/build-in-dev python3 scripts/vm_console.py --directory out/debug shot <name>
+./scripts/build-in-dev python3 scripts/vm_console.py --directory out/debug shot <name.png>
 ./scripts/build-in-dev python3 scripts/vm_console.py --directory out/debug click <x_frac> <y_frac>
 ./scripts/build-in-dev python3 scripts/vm_console.py --directory out/debug key <qcode>
 ./scripts/build-in-dev python3 scripts/vm_console.py --directory out/debug probe <module> <function>
@@ -83,13 +83,14 @@ Drive the kept VM with `scripts/vm_console.py` (one driver at a time):
 ```
 
 Per iteration there is no ISO rebuild, reinstall or scheduler wait. The
-evidence directory is mounted in the guest at `/run/verify`, so deploy a
-changed file by copying it into `out/debug/` on the host, then inside the
-guest, e.g. `sh 'cp /run/verify/ReleaseWidget.qml /usr/share/arch-niri-dux/niri/dms-plugins/archNiriDuxRelease/ReleaseWidget.qml'`,
-restart the shell as the tester user with
-`sh 'runuser -u tester -- env XDG_RUNTIME_DIR=/run/user/1000 DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/1000/bus systemctl --user restart dms.service'`,
-then click, screenshot, and read the shell journal with
-`sh 'runuser -u tester -- env XDG_RUNTIME_DIR=/run/user/1000 journalctl --user -u dms.service --since "-5 min" --no-pager'`.
+evidence directory is mounted in the guest at `/run/verify`, so copy a changed
+file into `out/debug/` on the host, then e.g.
+`sh 'cp /run/verify/ReleaseWidget.qml /etc/xdg/quickshell/dms-plugins/archNiriDuxRelease/ReleaseWidget.qml'`.
+For multi-line guest work, write a small script into `out/debug/` on the host
+and run `sh 'sh /run/verify/x.sh'` to avoid nested quoting. Commands needing
+the tester user's environment are best run as probes (`probe <module>
+<function>`), which get the full environment from `guest.user_command`.
+`shot <name.png>` takes a real desktop screenshot via the guest.
 
 A kept VM holds 8 GiB guest RAM; power it off before builds or other VMs and
 remove the directory when finished.

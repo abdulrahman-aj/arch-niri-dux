@@ -9,9 +9,12 @@ import selectors
 import signal
 import stat
 import subprocess
+import sys
 import time
 import urllib.error
 import zlib
+
+from . import dispatch
 
 
 def wait_until(description, check, timeout=60):
@@ -180,3 +183,7 @@ def png_top_rows(path, count):
         rows.append([tuple(line[x : x + 3]) for x in range(0, stride, channels)])
         previous = line
     return rows
+
+
+if __name__ == '__main__':
+    dispatch('guest', {'screenshot': lambda: screenshot(sys.argv[2])})

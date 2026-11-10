@@ -39,8 +39,9 @@ def main():
         elif args.verb == 'shot':
             if len(args.args) != 1:
                 parser.error('shot needs a screenshot name.')
-            path = vm.screenshot(args.args[0])
-            print(path if path is not None else directory / (args.args[0] + '.unavailable.txt'))
+            name = args.args[0]
+            vm.probe('guest', 'screenshot', name)
+            print(directory / name)
         elif args.verb == 'click':
             if len(args.args) != 2:
                 parser.error('click needs fractional x y coordinates.')

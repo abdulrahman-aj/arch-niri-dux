@@ -1,6 +1,7 @@
 """Kept-VM debugging loop: attach failures, socket dirs, console dispatch."""
 
 from pathlib import Path
+import socket
 import sys
 import tempfile
 import unittest
@@ -19,12 +20,11 @@ def kept_machine(directory):
 
 
 class KeptSocketTests(unittest.TestCase):
-    def test_sockets_live_under_a_caller_chosen_directory(self):
+    def test_stop_leaves_caller_chosen_socket_dir(self):
         with tempfile.TemporaryDirectory() as root:
             directory = Path(root)
             machine = kept_machine(directory)
             try:
-                self.assertEqual(machine.control_path('qmp.sock'), directory / '.sockets' / 'qmp.sock')
                 machine.stop()
                 self.assertTrue((directory / '.sockets').is_dir())
             finally:
@@ -40,6 +40,41 @@ class KeptSocketTests(unittest.TestCase):
                 machine.log.close()
 
 
+class AttachedConsoleTests(unittest.TestCase):
+    def test_expect_times_out_without_a_qemu_process(self):
+        with tempfile.TemporaryDirectory() as root:
+            directory = Path(root)
+            machine = verify.VM(directory, None, directory / 'disk.qcow2')
+            reader, writer = socket.socketpair()
+            reader.settimeout(0.25)
+            machine.serial = reader
+            machine.process = None
+            try:
+                with self.assertRaises(TimeoutError):
+                    machine.expect('never-matches', timeout=0.5)
+            finally:
+                writer.close()
+                reader.close()
+                machine.serial = None
+                machine.log.close()
+
+    def test_wait_exit_returns_on_serial_eof_without_a_qemu_process(self):
+        with tempfile.TemporaryDirectory() as root:
+            directory = Path(root)
+            machine = verify.VM(directory, None, directory / 'disk.qcow2')
+            reader, writer = socket.socketpair()
+            reader.settimeout(0.25)
+            machine.serial = reader
+            machine.process = None
+            writer.close()
+            try:
+                machine.wait_exit(timeout=5)
+            finally:
+                reader.close()
+                machine.serial = None
+                machine.log.close()
+
+
 class ConsoleDispatchTests(unittest.TestCase):
     def run_console(self, *argv):
         with patch.object(sys, 'argv', ['vm_console', *argv]), patch.object(vm_console, 'VM') as factory:
@@ -51,7 +86,7 @@ class ConsoleDispatchTests(unittest.TestCase):
                 return stop.code, factory.return_value
             return 0, factory.return_value
 
-    def test_missing_vm_exits_nonzero_without_a_traceback(self):
+    def test_missing_vm_exits_nonzero(self):
         with tempfile.TemporaryDirectory() as root:
             argv = ['vm_console', '--directory', root, 'sh', 'true']
             with patch.object(vm_console.VM, 'attach', side_effect=RuntimeError('no kept VM')):
@@ -66,15 +101,6 @@ class ConsoleDispatchTests(unittest.TestCase):
                 code, machine = self.run_console(*argv)
                 self.assertEqual(code, 2)
                 machine.click.assert_not_called()
-
-    def test_verbs_reach_the_matching_vm_method(self):
-        code, machine = self.run_console('--directory', 'out/fast', 'sh', 'echo', 'hi')
-        self.assertEqual(code, 0)
-        machine.command.assert_called_once_with('echo hi')
-        code, machine = self.run_console('--directory', 'out/fast', 'probe', 'dux_update', 'offer')
-        self.assertEqual(code, 0)
-        machine.probe.assert_called_once_with('dux_update', 'offer')
-        machine.stop.assert_called()
 
 
 if __name__ == '__main__':

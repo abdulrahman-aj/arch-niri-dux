@@ -66,7 +66,7 @@ class VM:
         base = self.socket_directory if isinstance(self.socket_directory, Path) else Path(self.socket_directory.name)
         return base / name
 
-    def attach(self):
+    def attach(self, timeout=5):
         """Reconnect to a kept VM's sockets and confirm the guest answers."""
         missing = [name for name in ('serial.sock', 'qmp.sock') if not self.control_path(name).exists()]
         if missing:
@@ -74,8 +74,14 @@ class VM:
                 f'No kept VM sockets in {self.control_path(missing[0]).parent}; '
                 'start one with verify-fast --keep first.'
             )
-        self.serial = self.connect('serial.sock')
-        qmp_socket = self.connect('qmp.sock')
+        try:
+            self.serial = self.connect('serial.sock', timeout=timeout)
+            qmp_socket = self.connect('qmp.sock', timeout=timeout)
+        except TimeoutError as error:
+            raise RuntimeError(
+                f'No kept VM running in {self.control_path("qmp.sock").parent}; '
+                'start one with verify-fast --keep first.'
+            ) from error
         qmp_socket.settimeout(30)
         self.qmp = qmp_socket.makefile('rwb', buffering=0)
         self.qmp.readline()
@@ -84,9 +90,9 @@ class VM:
         self.transcript = ''
         self.read_cursor = 0
 
-    def connect(self, name):
+    def connect(self, name, timeout=60):
         path = self.control_path(name)
-        deadline = time.monotonic() + 60
+        deadline = time.monotonic() + timeout
         while time.monotonic() < deadline:
             try:
                 connection = socket.socket(socket.AF_UNIX)
@@ -318,6 +324,8 @@ class VM:
             self.serial.close()
         if self.qmp:
             self.qmp.close()
+        # Only private tempdirs are removed; a caller-chosen directory (kept
+        # VM sockets under the evidence dir) survives so attach() still works.
         if self.socket_directory is not None:
             cleanup = getattr(self.socket_directory, 'cleanup', None)
             if callable(cleanup):
@@ -325,8 +333,6 @@ class VM:
                 self.socket_directory = None
         if self.process is not None and self.process.returncode not in (None, 0):
             raise RuntimeError(f'QEMU exited abnormally: {self.process.returncode}')
-        # Only private tempdirs are removed; a caller-chosen directory (kept
-        # VM sockets under the evidence dir) survives so attach() still works.
 
 
 def wait_for_password_screen(vm, name):

@@ -5,6 +5,7 @@ import argparse
 import json
 from pathlib import Path
 import shutil
+import socket
 import subprocess
 
 from workspace import disk_guard, own
@@ -15,6 +16,21 @@ from verification.evidence import Evidence
 from verification.vm import VM, graphical_login, installed_login, stage_probes
 
 ROOT = Path(__file__).resolve().parents[1]
+
+
+def kept_running(directory):
+    sock = directory / '.sockets' / 'qmp.sock'
+    if not sock.exists():
+        return False
+    probe = socket.socket(socket.AF_UNIX)
+    try:
+        probe.settimeout(2)
+        probe.connect(str(sock))
+        return True
+    except OSError:
+        return False
+    finally:
+        probe.close()
 
 
 def main():
@@ -35,6 +51,8 @@ def main():
     if not fixture.is_file() or not (accepted / 'ACCEPTANCE-PASSED').is_file():
         parser.error('Fixture must be a disk from a completed full acceptance run.')
     directory = args.directory.resolve()
+    if kept_running(directory):
+        parser.error(f'Kept VM still running in {directory}; power it off first.')
     disk_guard(args.directory)
     evidence = Evidence(directory, parents=True)
     own(args.directory)
@@ -133,7 +151,7 @@ def main():
             console = f'./scripts/build-in-dev python3 scripts/vm_console.py --directory {directory}'
             print(f'VM kept running in {directory} (holds 8 GiB guest RAM until stopped).')
             print(f"  Shell:      {console} sh '<command>'")
-            print(f'  Screenshot: {console} shot <name>')
+            print(f'  Screenshot: {console} shot <name.png>')
             print(f'  Click/key:  {console} click <x_frac> <y_frac> | key <qcode>')
             print(f'  Probe:      {console} probe <module> <function>')
             print(f"  Files:      cp <src> {directory}/, then sh 'cp /run/verify/<name> <dest>'")
