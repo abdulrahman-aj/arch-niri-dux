@@ -12,7 +12,6 @@ import unittest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'scripts'))
 from verification import vm as verify
-import verify_fast
 import vm_console
 import workspace
 
@@ -89,7 +88,7 @@ class KeptRunningGuardTests(unittest.TestCase):
             try:
                 listener.bind(str(sockets / 'qmp.sock'))
                 listener.listen(1)
-                self.assertTrue(verify_fast.kept_running(Path(root)))
+                self.assertTrue(workspace.kept_running(Path(root)))
             finally:
                 listener.close()
 
@@ -101,13 +100,13 @@ class KeptRunningGuardTests(unittest.TestCase):
             stale.bind(str(sockets / 'qmp.sock'))
             stale.close()
             try:
-                self.assertFalse(verify_fast.kept_running(Path(root)))
+                self.assertFalse(workspace.kept_running(Path(root)))
             finally:
                 (sockets / 'qmp.sock').unlink(missing_ok=True)
 
     def test_missing_sockets_counts_as_not_running(self):
         with tempfile.TemporaryDirectory() as root:
-            self.assertFalse(verify_fast.kept_running(Path(root)))
+            self.assertFalse(workspace.kept_running(Path(root)))
 
 
 class FixtureSelectionTests(unittest.TestCase):

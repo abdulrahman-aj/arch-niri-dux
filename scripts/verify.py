@@ -58,8 +58,10 @@ def main():
         directory = Path(tempfile.mkdtemp(prefix='dux-verify-', dir=ROOT / 'out/verify'))
     evidence = Evidence(directory, parents=True, exist_ok=True)
     own(directory)
-    if args.keep and len(str(directory / '.sockets' / 'serial.sock')) > 107:
-        parser.error('Kept-VM socket path exceeds the 107-byte Unix socket limit; use a shorter --directory.')
+    if args.keep:
+        socket_guard(directory)
+    if kept_running(directory):
+        parser.error(f'Kept VM still running in {directory}; power it off first.')
     disk = args.disk or directory / 'disk.qcow2'
     if disk.exists():
         parser.error('Use a fresh verification directory; refusing to overwrite an existing VM disk.')
