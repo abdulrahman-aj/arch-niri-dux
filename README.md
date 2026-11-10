@@ -58,10 +58,10 @@ the external display.
 
 ### Verify a prebuilt ISO
 
-If someone gave you `arch-niri-dux-0.3.1-x86_64.iso`, verify it before flashing. Get `SHA256SUMS` and
+If someone gave you `arch-niri-dux-0.3.2-x86_64.iso`, verify it before flashing. Get `SHA256SUMS` and
 `SHA256SUMS.sig` from the same person, all three files together. Download the public key separately from
 this repository,
-[`keys/integration-signing.gpg`](https://raw.githubusercontent.com/abdulrahman-aj/arch-niri-dux/v0.3.1-1/keys/integration-signing.gpg),
+[`keys/integration-signing.gpg`](https://raw.githubusercontent.com/abdulrahman-aj/arch-niri-dux/v0.3.2-1/keys/integration-signing.gpg),
 and save it as `integration-signing.gpg` next to those files. Take these instructions from this repository,
 not from whoever sent the ISO. A public key that arrives with the ISO proves nothing on its own.
 
@@ -75,7 +75,7 @@ sha256sum --check --strict SHA256SUMS
 ```
 
 Flash the ISO only if every command succeeds, including a good signature and
-`arch-niri-dux-0.3.1-x86_64.iso: OK`. The first command checks the whole public key against these
+`arch-niri-dux-0.3.2-x86_64.iso: OK`. The first command checks the whole public key against these
 instructions. The signature shows the project released these exact ISO bytes. It does not show that CI
 built or reproduced them.
 
