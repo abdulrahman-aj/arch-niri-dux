@@ -1,3 +1,12 @@
+# Product rules
+
+- The ISO must install the full desktop offline.
+- Change defaults for new installs and accounts only. Add compatibility code or a
+  migration for existing installs only when the task asks for it.
+- Before designing a desktop feature, read the pinned Dux source and check how
+  Omarchy solves the same problem.
+- Prefer files owned by packages over files written by the installer.
+
 # Development
 
 Enter the Nix dev shell with `nix develop`. Make targets enter it automatically.
