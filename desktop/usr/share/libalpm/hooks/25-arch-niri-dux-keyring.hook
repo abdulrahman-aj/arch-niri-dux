@@ -2,9 +2,10 @@
 Operation = Upgrade
 Type = Path
 Target = usr/share/pacman/keyrings/arch-niri-dux.gpg
+Target = usr/share/pacman/keyrings/omarchy.gpg
 
 [Action]
-Description = Refreshing Arch Niri Dux release signing keys...
+Description = Refreshing release signing keys...
 When = PostTransaction
 Depends = pacman
-Exec = /usr/bin/pacman-key --populate arch-niri-dux
+Exec = /usr/bin/pacman-key --populate arch-niri-dux omarchy

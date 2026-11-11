@@ -88,6 +88,9 @@ advisory](keys/RECOVERY.md#iso-verification-and-recovery) before installing.
 Click the update button next to the clock when it appears, or run `sudo pacman -Syu`. Migrations that an update
 brings run right after it finishes, or at the next boot.
 
+If the first update on an older install fails on a new packager key, refresh the keyring first with
+`sudo pacman -Sy archlinux-keyring && sudo pacman -Su`.
+
 ## Recover
 
 Boot a working snapshot from the Limine menu, log in, and run:
@@ -96,10 +99,40 @@ Boot a working snapshot from the Limine menu, log in, and run:
 sudo limine-snapper-restore
 ```
 
-Restore it and reboot into the normal entry. The restore leaves `/home`, including your personal config,
-as it was. After restoring an older snapshot, run a full system update before installing anything else,
+Restore it and reboot into the normal entry. A restore rolls back everything outside the separate
+subvolumes: the root system plus `/var/lib` (databases, Docker/Podman, libvirt images, system Flatpaks),
+`/root`, `/srv`, `/opt` and `/usr/local`. It keeps `/home`, `/var/log` and the package cache
+(`/var/cache/pacman/pkg`), which live on their own subvolumes.
+
+Upstream restore keeps the replaced root as a "backup" boot entry (see
+`/usr/share/doc/limine-snapper-sync/README.md`), so you can boot back if the restore was wrong.
+The backup is a snapper snapshot with no cleanup algorithm, so snapper's number cleanup leaves it
+alone; delete it manually with `sudo snapper -c root delete <id>` once you no longer need it.
+
+After restoring an older snapshot, run a full system update before installing anything else,
 because the restored system may trust signing keys that were revoked after the snapshot. The [snapshot
 policy](desktop/README.md#system-policy) covers transaction snapshots and other safeguards.
+
+### If the boot menu doesn't appear
+
+Boot the ISO, unlock the disk, mount the system and reinstall the bootloader from the ISO terminal.
+Replace `/dev/<encrypted-part>` with the LUKS partition and `/dev/<esp-part>` with the EFI partition
+(use `lsblk` to find them):
+
+```sh
+cryptsetup open /dev/<encrypted-part> dux-root
+mount -o subvol=@,compress=zstd:1,noatime /dev/mapper/dux-root /mnt
+mount /dev/<esp-part> /mnt/boot
+arch-chroot /mnt
+pacman -S limine limine-mkinitcpio-hook limine-snapper-sync linux
+limine-install
+limine-mkinitcpio
+limine-snapper-sync
+exit
+reboot
+```
+
+`pacman -S` needs network; the reinstall triggers the initramfs and boot-menu rebuild.
 
 ## Build and contribute
 
