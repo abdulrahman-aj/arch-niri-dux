@@ -160,8 +160,6 @@ class StubVM:
     def __init__(self):
         self.scripts = []
         self.attach_error = None
-        self.socket_directory = None
-        self.log = io.StringIO()
 
     def attach(self):
         if self.attach_error is not None:

@@ -12,7 +12,7 @@ Enter the Nix dev shell with `nix develop`. Make targets enter it automatically.
 
 `make lint` and `make test` are light: run them before every PR, on any
 machine, including one with `AGENT_HEAVY_JOBS=deny` (heavy targets refuse
-there; run them on your build machine).
+there).
 
 Pass verification arguments through `ARGS='...'`. Evidence defaults to
 `out/verify/`; see [VERIFICATION.md](VERIFICATION.md) for fixture requirements.

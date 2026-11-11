@@ -88,7 +88,6 @@ def main():
             vm.poweroff()
     finally:
         vm.stop()
-        vm.log.close()
 
 
 if __name__ == '__main__':

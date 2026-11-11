@@ -48,9 +48,9 @@ Suspend qualification requires logind `LockedHint=yes`, Niri's lock event, an un
 
 `make verify-fast` builds current integration packages inside a disposable
 overlay of the newest accepted `make verify` image. `--fixture` defaults to
-the newest registered workspace holding `ACCEPTANCE-PASSED` and `disk.qcow2`,
+the newest registered 0.3+ workspace holding `ACCEPTANCE-PASSED` and `disk.qcow2`,
 and `--directory` defaults to a fresh `out/fast-<timestamp>`; pass explicit
-paths to override either default. Use an accepted 0.3+ fixture. Keep `ACCEPTANCE-PASSED`,
+paths to override either default. Keep `ACCEPTANCE-PASSED`,
 `install.json`, `inputs.json` and `OVMF_VARS.fd` next to the fixture disk. It checks ALPM
 regeneration of the active Limine initramfs and boot menu without a manual
 rebuild, Niri validation, Dux shortcut editing/cheatsheet, enabled units and

@@ -11,7 +11,7 @@ import subprocess
 import sys
 import tempfile
 
-from workspace import disk_guard, own
+from workspace import disk_guard, newest_accepted_fixture, own
 
 from verification.digest import digest
 from verification.evidence import Evidence
@@ -171,7 +171,8 @@ def main():
             pass
         (directory / 'FAILURE.txt').write_text(str(error) + '\n')
         print(f'Verification failed: {error}\nEvidence: {directory}', file=sys.stderr)
-        print("Next: make verify-fast ARGS='--keep' (auto-finds the newest accepted fixture)", file=sys.stderr)
+        if newest_accepted_fixture() is not None:
+            print("Next: make verify-fast ARGS='--keep' (auto-finds the newest accepted fixture)", file=sys.stderr)
         return 1
     finally:
         vm.stop()
