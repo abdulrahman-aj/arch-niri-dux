@@ -329,6 +329,54 @@ def recovery_fstab(text):
     return '\n'.join(lines) + '\n'
 
 
+def check_installation_clock():
+    """Refuse when the system clock predates the ISO build; stale clocks mimic expired keys."""
+    try:
+        build_date = int((SHARE / 'iso-build-date').read_text().strip())
+    except (OSError, ValueError):
+        raise ValueError('The ISO build date is missing or invalid; refusing to install from this medium.')
+    now = time.time()
+    if now < build_date:
+        iso = time.strftime('%Y-%m-%d %H:%M:%S UTC', time.gmtime(build_date))
+        clock = time.strftime('%Y-%m-%d %H:%M:%S UTC', time.gmtime(now))
+        raise ValueError(
+            f'System clock ({clock}) is earlier than the ISO build date ({iso}). Fix the system clock and retry.'
+        )
+
+
+def verify_payload_signatures(config, database, cache, names):
+    """Verify every payload package against the install keyring before the disk is touched.
+
+    pacman --print resolves names only, so without this the first pacstrap is
+    the first real signature check, after partitioning. --downloadonly
+    exercises the same SigLevel and keyring the pacstrap will use, including
+    key expiry, which plain gpg verification would still accept. The cache is
+    disposable: corrupt entries are deleted from it, never from the medium.
+    """
+    cache.mkdir(parents=True, exist_ok=True)
+    try:
+        run(
+            'pacman',
+            '--config',
+            str(config),
+            '--dbpath',
+            str(database),
+            '--cachedir',
+            str(cache),
+            '--sync',
+            '--downloadonly',
+            '--noconfirm',
+            *names,
+        )
+    except subprocess.CalledProcessError as error:
+        raise ValueError(
+            'Package signature preflight failed; the install keyring cannot verify the offline payload. '
+            'A signing key may have expired or is missing; check the system clock and use a newer ISO.'
+        ) from error
+    finally:
+        shutil.rmtree(cache, ignore_errors=True)
+
+
 def verify_repository(repository):
     manifest = repository / 'SHA256SUMS'
     if not manifest.is_file():
@@ -383,6 +431,7 @@ def install(settings, state=None):
     if not packages or any(not re.fullmatch(r'[a-zA-Z0-9@+_.-]+', package) for package in packages):
         raise ValueError('Invalid or missing target package list.')
     print('\n[1/6] Checking the offline package payload…', flush=True)
+    check_installation_clock()
     verify_repository(REPO)
     for name in (('sfdisk', 'efibootmgr') if settings.mode == 'alongside' else ()) + (
         'sgdisk',
@@ -445,6 +494,9 @@ def install(settings, state=None):
         for filename in resolved.splitlines():
             if '.pkg.tar.' in filename and not (REPO / filename).is_file():
                 raise ValueError(f'Offline dependency is missing: {filename}')
+        verify_payload_signatures(
+            offline_conf, package_db, stage / 'payload-cache', [*packages, 'arch-niri-dux', 'arch-niri-dux-baseline']
+        )
         if storage.require_disk(settings.disk) != original_device:
             raise ValueError('Disk identity changed during package preflight; refusing to erase it.')
         try:

@@ -150,11 +150,115 @@ class InstallerSafetyTests(unittest.TestCase):
         self.assertIn('subvol=/@home', result)
         self.assertTrue(result.startswith('# root\n'))
 
+    def test_clock_before_iso_build_date_prevents_disk_mutation(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / 'packages.target').write_text('base\n')
+            (root / 'iso-build-date').write_text('9999999999\n')
+            with (
+                patch.object(installer, 'SHARE', root),
+                patch.object(installer, 'REPO', root),
+                patch.object(installer, 'TARGET', root / 'target'),
+                patch.object(storage, 'require_disk', return_value=1),
+                patch.object(installer, 'run') as run,
+            ):
+                with self.assertRaisesRegex(ValueError, 'System clock'):
+                    installer.install(settings())
+                run.assert_not_called()
+
+    def test_missing_iso_build_date_prevents_disk_mutation(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / 'packages.target').write_text('base\n')
+            with (
+                patch.object(installer, 'SHARE', root),
+                patch.object(installer, 'REPO', root),
+                patch.object(installer, 'TARGET', root / 'target'),
+                patch.object(storage, 'require_disk', return_value=1),
+                patch.object(installer, 'run') as run,
+            ):
+                with self.assertRaisesRegex(ValueError, 'build date'):
+                    installer.install(settings())
+                run.assert_not_called()
+
+    def test_signature_preflight_failure_prevents_partitioning(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / 'packages.target').write_text('base\n')
+            (root / 'offline.db').touch()
+            (root / 'base-1.pkg.tar.zst').touch()
+            (root / 'iso-build-date').write_text('1\n')
+            calls = []
+
+            def fake_run(*args, **_kwargs):
+                calls.append(args)
+                if '--downloadonly' in args:
+                    raise installer.subprocess.CalledProcessError(1, args)
+                if '--print' in args:
+                    return 'base-1.pkg.tar.zst\n'
+                raise AssertionError(f'preflight must stop before partitioning: {args}')
+
+            state = installer.InstallationState()
+            real_staging = tempfile.TemporaryDirectory
+            with (
+                patch.object(installer, 'SHARE', root),
+                patch.object(installer, 'REPO', root),
+                patch.object(installer, 'TARGET', root / 'target'),
+                patch.object(storage, 'require_disk', return_value=(1, 2, 64 * 1024**3, None, None, 'vda')),
+                patch.object(installer, 'verify_repository'),
+                patch.object(installer.shutil, 'which', return_value='/usr/bin/tool'),
+                patch.object(installer, 'run', side_effect=fake_run),
+                patch.object(installer.tempfile, 'TemporaryDirectory', lambda *a, **k: real_staging(dir=root)),
+                patch.object(storage, 'create_partitions') as partitions,
+            ):
+                with self.assertRaisesRegex(ValueError, 'signature preflight'):
+                    installer.install(settings(), state)
+                partitions.assert_not_called()
+                self.assertFalse(state.installation_started)
+                self.assertTrue(any('--downloadonly' in args for args in calls))
+
+    def test_signature_preflight_success_reaches_partitioning(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / 'packages.target').write_text('base\n')
+            (root / 'offline.db').touch()
+            (root / 'base-1.pkg.tar.zst').touch()
+            (root / 'iso-build-date').write_text('1\n')
+            calls = []
+
+            def fake_run(*args, **_kwargs):
+                calls.append(args)
+                if '--print' in args:
+                    return 'base-1.pkg.tar.zst\n'
+                return None
+
+            state = installer.InstallationState()
+            real_staging = tempfile.TemporaryDirectory
+            with (
+                patch.object(installer, 'SHARE', root),
+                patch.object(installer, 'REPO', root),
+                patch.object(installer, 'TARGET', root / 'target'),
+                patch.object(storage, 'require_disk', return_value=(1, 2, 64 * 1024**3, None, None, 'vda')),
+                patch.object(installer, 'verify_repository'),
+                patch.object(installer.shutil, 'which', return_value='/usr/bin/tool'),
+                patch.object(installer, 'run', side_effect=fake_run),
+                patch.object(installer.tempfile, 'TemporaryDirectory', lambda *a, **k: real_staging(dir=root)),
+                patch.object(storage, 'create_partitions', side_effect=ValueError('sentinel partitioning reached')),
+            ):
+                with self.assertRaisesRegex(ValueError, 'sentinel partitioning'):
+                    installer.install(settings(), state)
+                self.assertFalse(state.installation_started)
+            preflight = [args for args in calls if '--downloadonly' in args]
+            self.assertEqual(len(preflight), 1)
+            for name in ('base', 'arch-niri-dux', 'arch-niri-dux-baseline'):
+                self.assertIn(name, preflight[0])
+
     def test_disk_swap_between_confirmation_and_install_prevents_all_commands(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             (root / 'packages.target').write_text('base\nlinux\n')
             (root / 'offline.db').touch()
+            (root / 'iso-build-date').write_text('1\n')
             with (
                 patch.object(installer, 'SHARE', root),
                 patch.object(installer, 'REPO', root),
@@ -189,6 +293,7 @@ class InstallerSafetyTests(unittest.TestCase):
             package.write_bytes(b'package')
             checksum = hashlib.sha256(package.read_bytes()).hexdigest()
             (root / 'SHA256SUMS').write_text(f'{checksum}  {package.name}\n')
+            (root / 'iso-build-date').write_text('1\n')
             with (
                 patch.object(installer, 'SHARE', root),
                 patch.object(installer, 'REPO', root),

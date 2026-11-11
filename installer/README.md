@@ -8,6 +8,7 @@ The live ISO must provide `fzf` for selection menus, plus:
 
 - `/run/archiso/bootmnt/repo`: a local pacman repository with the complete target closure;
 - `/usr/local/share/arch-niri-dux/packages.target`: one package name per line;
+- `/usr/local/share/arch-niri-dux/iso-build-date`: the ISO build time as UTC epoch seconds;
 - `arch-niri-dux` and `arch-niri-dux-baseline` in the offline repository.
   The baseline installs after initial boot setup so `snap-pac` starts with a
   bootable system. See [desktop initialization](../desktop/README.md) for package
