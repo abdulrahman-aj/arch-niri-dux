@@ -185,9 +185,8 @@ def main():
         print(f'Verification failed: {error}\nEvidence: {directory}', file=sys.stderr)
         return 1
     finally:
-        # A failed or interrupted run's disk can never become an accepted
-        # fixture; drop it and keep the logs and screenshots. QEMU keeps the
-        # unlinked file open, so the space frees at poweroff, not here.
+        # A failed or interrupted run's disk can never become a fixture:
+        # unlink it (QEMU holds it open; the space frees at poweroff).
         kept = args.keep and not succeeded and vm.process is not None and vm.process.poll() is None
         if not succeeded:
             disk.unlink(missing_ok=True)

@@ -17,10 +17,8 @@ from verification.vm import VM
 ANSI_RE = re.compile(r'\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)|\x1b\[[0-?]*[ -/]*[@-~]|\x1b[@-Z\\-_]')
 MARKER_RE = re.compile(r'__VERIFY_[0-9A-Fa-f]+__:[0-9]+')
 ECHO_RE = re.compile(r'__VERIFY_[0-9A-Fa-f]+__:%s')
-# Stages whose verify(vm, passed) never restarts QEMU. Suspend and recovery
-# power the guest off and start a new QEMU on the evidence disk, which a kept
-# failed-verify run has already unlinked; running them would destroy the
-# debug session instead of qualifying anything.
+# Suspend and recovery reboot onto the evidence disk, which a kept
+# failed-verify run unlinked; running them would destroy the debug session.
 STAGES = ('apps', 'browser', 'camera', 'desktop', 'dux_update', 'pdf')
 
 
