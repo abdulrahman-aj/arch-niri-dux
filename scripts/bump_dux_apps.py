@@ -146,6 +146,13 @@ def bump(root, recipe):
         (work / '.SRCINFO').write_text(text)
         for name in recipe['files']:
             shutil.copyfile(work / name, source / name)
+        if recipe['name'] == 'dux-files-bin':
+            # The skel seed is a copy because the integration source archive
+            # rejects symlinks; keep it identical to the packaged service.
+            shutil.copyfile(
+                source / 'dev.duxlabs.files.FileManager1.service',
+                root / 'desktop/etc/skel/.local/share/dbus-1/services/dev.duxlabs.files.FileManager1.service',
+            )
     recipe['files'] = {name: digest(source / name) for name in recipe['files']}
     published = datetime.fromisoformat(release['published_at'].replace('Z', '+00:00'))
     recipe['source_date_epoch'] = int(published.timestamp())

@@ -22,7 +22,7 @@ shopt -s nullglob
 scripts=("$scripts_dir"/*.sh)
 shopt -u nullglob
 
-for script in ${scripts[@]+${scripts[@]}}; do
+for script in "${scripts[@]}"; do
     name=${script##*/}
     if [[ ! $name =~ ^[0-9]{8}_[0-9]{2}_[a-z0-9][a-z0-9_-]*\.sh$ ]]; then
         echo "Invalid migration: $script (expected YYYYMMDD_NN_slug.sh)" >&2

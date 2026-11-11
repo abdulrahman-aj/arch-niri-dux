@@ -48,15 +48,21 @@ class UserMigrationsTest(unittest.TestCase):
         self.assertEqual(run(self.scripts, self.home).returncode, 0)
         self.assertEqual(log.read_text().splitlines(), ['first', 'second', 'second', 'third'])
 
-    def test_pkgbuild_seeds_one_skel_marker_per_script(self):
+    def test_skel_markers_suppress_execution(self):
+        # The PKGBUILD writes one marker per script into
+        # /etc/skel/.local/state/arch-niri-dux/migrations/, so useradd -m
+        # copies a complete set. The runner must honor those markers by
+        # script basename, the same name the PKGBUILD loop writes.
         recipe = (ROOT / 'packages/integration/PKGBUILD').read_text()
         self.assertIn('etc/skel/.local/state/arch-niri-dux/migrations', recipe)
-        self.script('20261106_01_example.sh', 'true')
-        markers = self.root / 'markers'
-        markers.mkdir()
-        for script in sorted(self.scripts.glob('*.sh')):
-            (markers / script.name).touch()
-        self.assertEqual([path.name for path in sorted(markers.iterdir())], ['20261106_01_example.sh'])
+        self.assertIn('${script##*/}', recipe)
+        log = self.root / 'log'
+        self.script('20261106_01_example.sh', f'echo ran >>{log}')
+        state = self.home / 'state/arch-niri-dux/migrations'
+        state.mkdir(parents=True)
+        (state / '20261106_01_example.sh').touch()
+        self.assertEqual(run(self.scripts, self.home).returncode, 0)
+        self.assertFalse(log.exists())
 
 
 if __name__ == '__main__':
