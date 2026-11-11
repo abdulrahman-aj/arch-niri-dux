@@ -10,8 +10,8 @@ before the interval to show no extra check runs, then offers our packages one
 pkgrel newer and lets the next scheduled check find them. The pill appears when
 Dux's own check finds the newer arch-niri-dux, with no rescan or visibility
 workaround. The host clicks the button, sends Update All's request, types the
-password into Dux's real authentication dialog, and checks the migration
-contract end to end. Dux runs `pkexec pacman -Syu --needed --noconfirm`
+password into Dux's real authentication dialog, and checks the installed
+release end to end. Dux runs `pkexec pacman -Syu --needed --noconfirm`
 through its pacman backend because no AUR helper is installed.
 """
 
@@ -23,7 +23,7 @@ import shutil
 import subprocess
 import time
 
-from . import dispatch, migrations
+from . import dispatch
 from .apps import daemon_request
 from .guest import png_dimensions, png_top_rows, run, screenshot, user_command, wait_until
 from .vm import PASSWORD
@@ -34,9 +34,6 @@ WORK = Path('/var/tmp/dux-update-fixture')
 PACMAN_CONF = Path('/etc/pacman.conf')
 SAVED_CONF = WORK / 'pacman.conf.original'
 REPOSITORY = 'dux-update-fixture'
-SYSTEM_EFFECT = Path('/var/lib/arch-niri-dux/dux-update-effects')
-USER_EFFECT = Path('/home/tester/.local/state/dux-update-effects')
-FIXTURE_NUMBER = 30
 PACKAGES = ('arch-niri-dux', 'arch-niri-dux-baseline')
 PROMPT = 'dux-update-prompt.png'
 NONE = 'dux-update-none.png'
@@ -58,7 +55,7 @@ def installed():
 
 
 def build_candidate():
-    """Build our packages one pkgrel step newer, carrying fixture migrations."""
+    """Build our packages one pkgrel step newer for Dux's updater to find."""
     user = pwd.getpwnam('tester')
     source = WORK / 'source'
     source.mkdir()
@@ -71,11 +68,6 @@ def build_candidate():
     recipe_path = source / 'packages/integration/PKGBUILD'
     recipe_path.parent.mkdir(parents=True)
     recipe_path.write_text(recipe)
-    fixtures = source / 'desktop/usr/lib/arch-niri-dux/migrations'
-    migrations.fixture(fixtures, 'system', FIXTURE_NUMBER, migrations.effect(SYSTEM_EFFECT, 'dux-updater'))
-    migrations.fixture(
-        fixtures, 'user', FIXTURE_NUMBER, migrations.effect('"$HOME/.local/state/dux-update-effects"', 'dux-updater')
-    )
     run('chown', '-R', f'{user.pw_uid}:{user.pw_gid}', str(WORK))
     packages = WORK / 'packages'
     run(
@@ -220,7 +212,6 @@ def prepare():
             {
                 'packages': installed().splitlines(),
                 'candidate': candidate_version,
-                'generation': (migrations.STATE / 'generation').read_text().strip(),
                 'checkupdates': shutil.which('checkupdates'),
                 'fakeroot': shutil.which('fakeroot'),
                 'first_check': {key: initial[key] for key in ('lastCheckUnix', 'intervalSeconds')},
@@ -300,16 +291,6 @@ def check():
             raise
         after = installed().splitlines()
         assert f'arch-niri-dux {before["candidate"]}' in after, after
-        name = f'99999999_{FIXTURE_NUMBER:02}_verification.sh'
-        wait_until('System migration from the ALPM hook', lambda: (migrations.STATE / (name + '.json')).is_file())
-        assert SYSTEM_EFFECT.read_text().splitlines() == ['dux-updater']
-        generation = (migrations.STATE / 'generation').read_text().strip()
-        assert generation != before['generation']
-        wait_until(
-            'User migration from the session .path unit',
-            lambda: (migrations.USER_STATE / (name + '.json')).is_file(),
-        )
-        assert USER_EFFECT.read_text().splitlines() == ['dux-updater']
         # pkexec logs COMMAND= just before exec'ing pacman, so journald may
         # attribute that line to _COMM=pacman; pkexec's syslog ident is stable.
         journal = subprocess.check_output(
@@ -335,9 +316,6 @@ def check():
                     'upgrade_log': state.get('recentLog', []),
                     'pkexec_journal': journal.splitlines(),
                     'authentication_dialog_answered': True,
-                    'system_migration_recorded': True,
-                    'generation': {'before': before['generation'], 'after': generation},
-                    'user_migration_via_path_unit': True,
                 },
                 indent=2,
             )
@@ -347,8 +325,6 @@ def check():
         restore_pacman_conf()
     # Back to the shipped 6-hour interval for later stages.
     set_interval(SIX_HOURS)
-    SYSTEM_EFFECT.unlink()
-    USER_EFFECT.unlink()
     shutil.rmtree(WORK)
 
 
@@ -433,7 +409,7 @@ def verify(vm, passed):
     vm.type_graphical(PASSWORD)
     vm.key('ret')
     vm.probe('dux_update', 'check', timeout=420)
-    passed("The bar button opened Dux's updater, which installed a release whose system and user migrations ran")
+    passed("The bar button opened Dux's updater, which installed the offered release")
 
 
 if __name__ == '__main__':

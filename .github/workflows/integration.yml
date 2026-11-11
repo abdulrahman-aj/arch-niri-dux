@@ -30,6 +30,24 @@ jobs:
         with:
           install_url: file://${{ runner.temp }}/nix-install
       - run: make test
+      - name: Require Existing installs note for existing-install changes
+        if: github.event_name == 'pull_request'
+        shell: bash
+        env:
+          PR_BODY: ${{ github.event.pull_request.body }}
+        run: |
+          git fetch --no-tags --depth=1 origin "refs/heads/${{ github.base_ref }}"
+          changed=$(git diff --name-only FETCH_HEAD HEAD)
+          backup=$(sed -n '/^ *backup=(/,/)/p' packages/integration/PKGBUILD | grep -o 'etc/[^ )]*')
+          needs_note=false
+          while IFS= read -r file; do
+            case "$file" in installer/*|desktop/etc/skel/*|*preset*) needs_note=true;; esac
+            while IFS= read -r owned; do [ "$file" = "desktop/$owned" ] && needs_note=true; done <<<"$backup"
+          done <<<"$changed"
+          if [ "$needs_note" = true ] && ! grep -q '^Existing installs:' <<<"$PR_BODY"; then
+            echo 'This PR touches existing installs; add a line starting "Existing installs:" to its description.' >&2
+            exit 1
+          fi
 
   packages:
     runs-on: ubuntu-24.04

@@ -122,7 +122,7 @@ def desktop():
     versions = run('pacman', '-Q', 'arch-niri-dux', 'arch-niri-dux-baseline', stdout=subprocess.PIPE).stdout
     owned = [
         '/usr/share/arch-niri-dux/niri/defaults.kdl',
-        '/usr/lib/arch-niri-dux/initialize-user',
+        '/etc/skel/.config/niri/config.kdl',
         '/usr/lib/environment.d/90-dux.conf',
         '/usr/lib/systemd/user/dux-application-themes.service',
         '/etc/xdg/mimeapps.list',
@@ -411,48 +411,41 @@ def wallpaper():
 
 
 def wallpaper_preserved():
-    # Invoke the real script for a disposable existing-state user and verify
-    # the wallpaper choice is unchanged. No source-string checks.
-    user = 'dux-preserve-check'
-    run('sh', '-c', f'userdel -r {user} 2>/dev/null || true')
-    run('useradd', '-m', '-s', '/bin/bash', user)
+    # useradd -m seeds homes from /etc/skel; package upgrades never touch
+    # home. A second account proves the seeded desktop stands alone.
+    users = ('dux-preserve-check', 'dux-second-check')
+    for user in users:
+        run('sh', '-c', f'userdel -r {user} 2>/dev/null || true')
+    for user in users:
+        run('useradd', '-m', '-s', '/bin/bash', user)
     try:
-        run(
-            'runuser',
-            '-u',
-            user,
-            '--',
-            'env',
-            '-u',
-            'XDG_CONFIG_HOME',
-            '-u',
-            'XDG_STATE_HOME',
-            '-u',
-            'XDG_DATA_HOME',
-            f'HOME=/home/{user}',
-            'bash',
-            '/usr/lib/arch-niri-dux/initialize-user',
-        )
-        session = Path(f'/home/{user}/.local/state/dms/session.json')
-        assert json.loads(session.read_text())['materialWallpapers']['']['shared']['preset'] == 'bloom'
-        run('runuser', '-u', user, '--', 'niri', 'validate', '--config', f'/home/{user}/.config/niri/config.kdl')
-        session.parent.mkdir(parents=True, exist_ok=True)
+        for user in users:
+            home = Path(f'/home/{user}')
+            session = home / '.local/state/dms/session.json'
+            assert json.loads(session.read_text())['materialWallpapers']['']['shared']['preset'] == 'bloom', user
+            run('runuser', '-u', user, '--', 'niri', 'validate', '--config', str(home / '.config/niri/config.kdl'))
+            for name in ('00-arch-niri-dux-lock.json', '00-arch-niri-dux-updates.json'):
+                assert (home / '.config/dms/config.d' / name).is_file(), (user, name)
+            plugin = json.loads((home / '.config/dms/plugin_settings.json').read_text())
+            assert plugin.get('archNiriDuxRelease', {}).get('enabled') is True, (user, plugin)
+        user = users[0]
+        home = Path(f'/home/{user}')
+        session = home / '.local/state/dms/session.json'
         custom = {'configVersion': 7, 'materialWallpapers': {'': {'shared': {'preset': 'orbit', 'seed': '#ff0000'}}}}
         session.write_text(json.dumps(custom))
         before = session.read_text()
-        terminal = Path(f'/home/{user}/.config/xdg-terminals.list')
-        terminal.parent.mkdir(parents=True, exist_ok=True)
+        terminal = home / '.config/xdg-terminals.list'
         terminal_before = '# Personal terminal preference\nOther.desktop\nAlacritty.desktop\n'
         terminal.write_text(terminal_before)
-        mime = Path(f'/home/{user}/.config/mimeapps.list')
+        mime = home / '.config/mimeapps.list'
         mime_before = '[Default Applications]\ntext/plain=org.example.Editor.desktop\n'
         mime.write_text(mime_before)
-        applications = Path(f'/home/{user}/.local/share/applications')
+        applications = home / '.local/share/applications'
         applications.mkdir(parents=True)
         (applications / 'org.example.Editor.desktop').write_text(
             '[Desktop Entry]\nType=Application\nName=Personal editor\nExec=/usr/bin/true\nMimeType=text/plain;\n'
         )
-        niri = Path(f'/home/{user}/.config/niri')
+        niri = home / '.config/niri'
         (niri / 'dms').mkdir(parents=True, exist_ok=True)
         niri_files = {
             niri / 'config.kdl': 'include "/usr/share/arch-niri-dux/niri/defaults.kdl"\n'
@@ -465,25 +458,11 @@ def wallpaper_preserved():
         for path, content in niri_files.items():
             path.write_text(content)
         # The fixture represents an existing user's own files, not root-owned data.
-        run('chown', '-R', f'{user}:{user}', f'/home/{user}')
-        run(
-            'runuser',
-            '-u',
-            user,
-            '--',
-            'env',
-            '-u',
-            'XDG_CONFIG_HOME',
-            '-u',
-            'XDG_STATE_HOME',
-            '-u',
-            'XDG_DATA_HOME',
-            'bash',
-            '/usr/lib/arch-niri-dux/initialize-user',
-        )
-        assert session.read_text() == before, 'User initialization overwrote the existing wallpaper choice.'
-        assert terminal.read_text() == terminal_before, 'User initialization overwrote the existing terminal choice.'
-        assert mime.read_text() == mime_before, 'User initialization overwrote existing MIME choices.'
+        run('chown', '-R', f'{user}:{user}', str(home))
+        # Nothing re-seeds an existing home: skel copies once at useradd -m.
+        assert session.read_text() == before, 'Existing wallpaper choice was overwritten.'
+        assert terminal.read_text() == terminal_before, 'Existing terminal choice was overwritten.'
+        assert mime.read_text() == mime_before, 'Existing MIME choices were overwritten.'
         selected = run(
             'runuser',
             '-u',
@@ -499,7 +478,7 @@ def wallpaper_preserved():
         ).stdout.strip()
         assert selected == 'org.example.Editor.desktop', selected
         for path, content in niri_files.items():
-            assert path.read_text() == content, f'User initialization overwrote {path}.'
+            assert path.read_text() == content, f'Existing Niri file overwritten: {path}.'
         run('runuser', '-u', user, '--', 'niri', 'validate', '--config', str(niri / 'config.kdl'))
         Path('/run/verify/wallpaper-preserved.json').write_text(
             json.dumps(
@@ -511,13 +490,15 @@ def wallpaper_preserved():
                     'niri_preserved': True,
                     'mime_preserved': True,
                     'fresh_account_initialized': True,
+                    'second_account_seeded': True,
                 },
                 indent=2,
             )
             + '\n'
         )
     finally:
-        run('sh', '-c', f'userdel -r {user} 2>/dev/null || true')
+        for user in users:
+            run('sh', '-c', f'userdel -r {user} 2>/dev/null || true')
 
 
 def session_path():
@@ -576,7 +557,7 @@ def verify(vm, passed):
     vm.probe('desktop', 'wallpaper', timeout=90)
     passed('Bloom material wallpaper is the fresh-user default and rendered')
     vm.probe('desktop', 'wallpaper-preserved', timeout=180)
-    passed('User initialization preserved existing desktop choices')
+    passed('Skel-seeded homes preserve existing desktop choices; second account seeded')
 
 
 def verify_lock(vm, passed):

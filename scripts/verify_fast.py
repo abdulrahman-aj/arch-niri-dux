@@ -118,7 +118,7 @@ def main():
         vm.probe('boot', 'plymouth-config')
         vm.probe('policy', 'check', timeout=180)
         vm.probe('desktop', 'niri-overrides', timeout=180)
-        vm.probe('migrations', 'check', timeout=180)
+        vm.probe('desktop', 'wallpaper-preserved', timeout=180)
         if not args.keep:
             vm.poweroff()
         (directory / 'FAST-PASSED').write_text(

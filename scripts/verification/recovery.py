@@ -41,8 +41,6 @@ def select_boot_entry(path):
 
 
 def snapshots():
-    from . import migrations
-
     run('systemctl', 'stop', 'snapper-cleanup.timer')
     home = Path('/home/tester/keep-this-file')
     home.write_text('home-must-survive-rollback\n')
@@ -59,7 +57,6 @@ def snapshots():
     after = run('snapper', '-c', 'root', '--csvout', 'list', stdout=subprocess.PIPE).stdout
     if len(after.splitlines()) <= len(before.splitlines()):
         raise RuntimeError('The package transaction did not create automatic snapshots.')
-    migrations.prepare_snapshot()
     number = run(
         'snapper',
         '-c',
@@ -73,7 +70,6 @@ def snapshots():
         stdout=subprocess.PIPE,
     ).stdout.strip()
     Path('/run/verify/recovery-snapshot').write_text(number + '\n')
-    migrations.after_snapshot()
     from . import key_lifecycle
 
     key_lifecycle.verify_installed()
@@ -122,9 +118,6 @@ def recovery():
 
 
 def restored():
-    from . import migrations
-
-    migrations.restored()
     assert '/@snapshots/' not in Path('/proc/cmdline').read_text()
     assert Path('/etc/dux-verification-version').read_text().strip() == 'known-good'
     assert Path('/home/tester/keep-this-file').read_text().strip() == 'home-created-after-snapshot'

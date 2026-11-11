@@ -1,0 +1,5 @@
+{
+  "lockBeforeSuspend": true,
+  "acLockTimeout": 600,
+  "batteryLockTimeout": 600
+}
