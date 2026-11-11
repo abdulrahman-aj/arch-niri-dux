@@ -42,6 +42,15 @@ delivery against offline trust and exact release hashes. `--install-only` is
 a debug run and does not produce acceptance success. Full acceptance is
 required for installer changes and releases.
 
+`make verify ARGS='--keep'`: on failure the guest stays running with its
+serial/QMP sockets under `<evidence>/.sockets` and prints attach commands;
+the failed disk is still unlinked, so it can never become a fixture (QEMU
+holds the open file; the space frees at poweroff). Attach with
+`scripts/vm_console.py --directory <evidence> sh '<command>'`, rerun one
+reboot-free stage (`... stage <apps|browser|camera|desktop|dux_update|pdf>`),
+then `... poweroff`. Suspend and recovery reboot the guest, so they are
+rejected. On success `--keep` changes nothing.
+
 Suspend qualification requires logind `LockedHint=yes`, Niri's lock event, an unchanged boot ID and kernel S3 entry/exit. Post-resume QEMU GL/input and shutdown can stall, so screenshots stay best-effort and this stage does not qualify password unlock. The probe syncs the guest before the host restarts it.
 
 ## `make verify-fast`

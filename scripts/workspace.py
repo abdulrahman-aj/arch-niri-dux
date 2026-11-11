@@ -5,6 +5,7 @@ import hashlib
 import os
 from pathlib import Path
 import shutil
+import socket
 
 ROOT = Path(__file__).resolve().parents[1]
 MARKER = '.arch-niri-dux-owner'
@@ -36,6 +37,28 @@ def disk_guard(path, minimum=MIN_FREE):
     free = shutil.disk_usage(path).free
     if free < minimum:
         raise SystemExit(f'Need {minimum / 1024**3:g} GiB free at {path}; have {free / 1024**3:.1f} GiB. Run make gc.')
+
+
+def socket_guard(directory):
+    """Refuse kept-VM layouts past the 107-byte Unix socket path limit."""
+    if len(str(Path(directory) / '.sockets' / 'serial.sock')) > 107:
+        raise SystemExit('Kept-VM socket path exceeds the 107-byte Unix socket limit; use a shorter --directory.')
+
+
+def kept_running(directory):
+    """True when a kept VM's QMP socket answers in the evidence directory."""
+    sock = Path(directory) / '.sockets' / 'qmp.sock'
+    if not sock.exists():
+        return False
+    probe = socket.socket(socket.AF_UNIX)
+    try:
+        probe.settimeout(2)
+        probe.connect(str(sock))
+        return True
+    except OSError:
+        return False
+    finally:
+        probe.close()
 
 
 def own(directory, checkout=ROOT):

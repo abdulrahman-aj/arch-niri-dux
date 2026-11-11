@@ -5,11 +5,10 @@ import argparse
 import json
 from pathlib import Path
 import shutil
-import socket
 import subprocess
 import time
 
-from workspace import disk_guard, newest_accepted_fixture, own
+from workspace import disk_guard, kept_running, newest_accepted_fixture, own, socket_guard
 
 from verification.digest import digest
 from verification.evidence import Evidence
@@ -17,21 +16,6 @@ from verification.evidence import Evidence
 from verification.vm import VM, graphical_login, installed_login, stage_probes
 
 ROOT = Path(__file__).resolve().parents[1]
-
-
-def kept_running(directory):
-    sock = directory / '.sockets' / 'qmp.sock'
-    if not sock.exists():
-        return False
-    probe = socket.socket(socket.AF_UNIX)
-    try:
-        probe.settimeout(2)
-        probe.connect(str(sock))
-        return True
-    except OSError:
-        return False
-    finally:
-        probe.close()
 
 
 def main():
@@ -62,8 +46,8 @@ def main():
             directory = ROOT / 'out' / f'fast-{stamp}-{suffix}'
     else:
         directory = args.directory.resolve()
-    if args.keep and len(str(directory / '.sockets' / 'serial.sock')) > 107:
-        parser.error('Kept-VM socket path exceeds the 107-byte Unix socket limit; use a shorter --directory.')
+    if args.keep:
+        socket_guard(directory)
     if kept_running(directory):
         parser.error(f'Kept VM still running in {directory}; power it off first.')
     disk_guard(directory)

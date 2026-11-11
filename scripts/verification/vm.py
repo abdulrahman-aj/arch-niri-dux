@@ -73,7 +73,7 @@ class VM:
         if missing:
             raise RuntimeError(
                 f'No kept VM sockets in {self.control_path(missing[0]).parent}; '
-                'start one with verify-fast --keep first.'
+                'start one with verify --keep or verify-fast --keep first.'
             )
         serial = None
         try:
@@ -84,7 +84,7 @@ class VM:
                 serial.close()
             raise RuntimeError(
                 f'No kept VM running in {self.control_path("qmp.sock").parent}; '
-                'start one with verify-fast --keep first.'
+                'start one with verify --keep or verify-fast --keep first.'
             ) from error
         self.serial = serial
         qmp_socket.settimeout(30)

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Drive a kept verify-fast VM: attach to its sockets and run one verb.
+"""Drive a kept VM (verify --keep or verify-fast --keep): attach to its sockets and run one verb.
 
 The guest mounts this evidence directory at /run/verify, so files reach it
 without a push verb: copy on the host, then sh 'cp /run/verify/<name> <dest>'.
@@ -7,6 +7,7 @@ One driver at a time; the serial marker protocol does not multiplex.
 """
 
 import argparse
+import importlib
 from pathlib import Path
 import re
 import sys
@@ -16,6 +17,9 @@ from verification.vm import VM
 ANSI_RE = re.compile(r'\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)|\x1b\[[0-?]*[ -/]*[@-~]|\x1b[@-Z\\-_]')
 MARKER_RE = re.compile(r'__VERIFY_[0-9A-Fa-f]+__:[0-9]+')
 ECHO_RE = re.compile(r'__VERIFY_[0-9A-Fa-f]+__:%s')
+# Suspend and recovery reboot onto the evidence disk, which a kept
+# failed-verify run unlinked; running them would destroy the debug session.
+STAGES = ('apps', 'browser', 'camera', 'desktop', 'dux_update', 'pdf')
 
 
 def clean_output(output):
@@ -34,12 +38,14 @@ def clean_output(output):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--directory', required=True, type=Path, help='Evidence directory of a kept (--keep) VM')
-    parser.add_argument('verb', choices=('sh', 'probe', 'shot', 'click', 'key', 'poweroff'))
+    parser.add_argument('verb', choices=('sh', 'probe', 'shot', 'click', 'key', 'poweroff', 'stage'))
     parser.add_argument('args', nargs='*', help='Verb arguments')
     args = parser.parse_args()
     directory = args.directory.resolve()
     if not (directory / '.sockets').is_dir():
-        parser.error(f'No kept VM sockets in {directory / ".sockets"}; start one with verify-fast --keep first.')
+        parser.error(
+            f'No kept VM sockets in {directory / ".sockets"}; start one with verify --keep or verify-fast --keep first.'
+        )
     vm = VM(directory, None, directory / 'disk.qcow2')
     vm.socket_directory = directory / '.sockets'
     try:
@@ -86,6 +92,18 @@ def main():
             if args.args:
                 parser.error('poweroff takes no arguments.')
             vm.poweroff()
+        elif args.verb == 'stage':
+            if len(args.args) != 1:
+                parser.error('stage needs a verification module name.')
+            name = args.args[0]
+            if name not in STAGES:
+                parser.error(f'unknown stage: {name!r} (choose from {", ".join(STAGES)}).')
+            module = importlib.import_module('verification.' + name)
+
+            def passed(message):
+                print('PASS: ' + message, flush=True)
+
+            module.verify(vm, passed)
     finally:
         vm.stop()
 
