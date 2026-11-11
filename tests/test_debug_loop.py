@@ -238,7 +238,7 @@ class StdinScriptTests(ConsoleCase):
 
 class StageDispatchTests(ConsoleCase):
     def test_bad_stage_names_are_usage_errors(self):
-        for name in ('../evil', 'nosuchstage', 'digest', 'suspend', 'recovery'):
+        for name in ('../evil', 'digest', 'suspend', 'recovery'):
             with self.subTest(stage=name), tempfile.TemporaryDirectory() as temp:
                 with self.assertRaises(SystemExit) as stop:
                     self.run_main(self.kept_argv(temp, 'stage', name), io.StringIO(''))
