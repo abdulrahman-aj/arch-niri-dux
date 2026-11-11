@@ -48,16 +48,6 @@ Generated `dms/alttab.kdl` controls appearance.
 Rerunning user initialization preserves existing user Niri files. Generated
 layout/input files remain local, so Dux settings continue to control them.
 
-## Dux shell source
-
-The vendored files above track the `dux-shell` pin in
-[`packages/closure.lock.json`](../packages/closure.lock.json). Fetch the
-matching upstream source into `out/` with:
-
-```sh
-v=$(python3 -c "import json;print(next(p['version'] for p in json.load(open('packages/closure.lock.json'))['packages'] if p['name']=='dux-shell').split('-')[0])") && mkdir -p out && curl -L -o "out/dux-shell-$v.tar.gz" "https://github.com/duxlabs-dev/dux-shell/archive/refs/tags/v$v.tar.gz"
-```
-
 ## Applications and session defaults
 
 New users start on Dux's upstream "bloom" material preset. The seed lives in
