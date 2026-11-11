@@ -7,8 +7,9 @@ from pathlib import Path
 import shutil
 import socket
 import subprocess
+import time
 
-from workspace import disk_guard, own
+from workspace import disk_guard, newest_accepted_fixture, own
 
 from verification.digest import digest
 from verification.evidence import Evidence
@@ -35,8 +36,8 @@ def kept_running(directory):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('--fixture', required=True, type=Path, help='disk.qcow2 from a full accepted make verify run')
-    parser.add_argument('--directory', required=True, type=Path, help='New evidence directory')
+    parser.add_argument('--fixture', type=Path, help='disk.qcow2 from a full accepted run (default: newest accepted)')
+    parser.add_argument('--directory', type=Path, help='New evidence directory (default: fresh out/fast-<timestamp>)')
     parser.add_argument(
         '--kernel-package', type=Path, help='Also reinstall this kernel archive in the same package transaction'
     )
@@ -46,18 +47,28 @@ def main():
         help='Keep the VM running after the run (pass or fail) for interactive debugging',
     )
     args = parser.parse_args()
-    fixture = args.fixture.resolve()
+    fixture = args.fixture.resolve() if args.fixture else newest_accepted_fixture()
+    if fixture is None:
+        parser.error('No accepted fixture found; run make verify first or pass --fixture PATH.')
     accepted = fixture.parent
     if not fixture.is_file() or not (accepted / 'ACCEPTANCE-PASSED').is_file():
         parser.error('Fixture must be a disk from a completed full acceptance run.')
-    directory = args.directory.resolve()
+    if args.directory is None:
+        stamp = time.strftime('%Y%m%d-%H%M%S')
+        directory = ROOT / 'out' / f'fast-{stamp}'
+        suffix = 1
+        while directory.exists():
+            suffix += 1
+            directory = ROOT / 'out' / f'fast-{stamp}-{suffix}'
+    else:
+        directory = args.directory.resolve()
     if args.keep and len(str(directory / '.sockets' / 'serial.sock')) > 107:
         parser.error('Kept-VM socket path exceeds the 107-byte Unix socket limit; use a shorter --directory.')
     if kept_running(directory):
         parser.error(f'Kept VM still running in {directory}; power it off first.')
-    disk_guard(args.directory)
+    disk_guard(directory)
     evidence = Evidence(directory, parents=True)
-    own(args.directory)
+    own(directory)
     for name in ('OVMF_VARS.fd', 'install.json'):
         shutil.copyfile(accepted / name, directory / name)
     if args.kernel_package:

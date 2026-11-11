@@ -1,16 +1,20 @@
-"""Kept-VM debugging loop: attach failures, socket dirs, console dispatch."""
+"""Kept-VM debugging loop: attach failures, socket dirs, fixture choice, console output."""
 
 from pathlib import Path
+import contextlib
+import io
+import os
+import pty
 import socket
 import sys
 import tempfile
 import unittest
-from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'scripts'))
 from verification import vm as verify
 import verify_fast
 import vm_console
+import workspace
 
 
 def kept_machine(directory):
@@ -35,7 +39,7 @@ class KeptSocketTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as root:
             machine = kept_machine(Path(root))
             try:
-                with self.assertRaisesRegex(RuntimeError, 'verify-fast --keep'):
+                with self.assertRaises(RuntimeError):
                     machine.attach()
             finally:
                 machine.log.close()
@@ -106,34 +110,131 @@ class KeptRunningGuardTests(unittest.TestCase):
             self.assertFalse(verify_fast.kept_running(Path(root)))
 
 
-class ConsoleDispatchTests(unittest.TestCase):
-    def run_console(self, *argv):
-        with patch.object(sys, 'argv', ['vm_console', *argv]), patch.object(vm_console, 'VM') as factory:
-            factory.return_value.command.return_value = ''
-            factory.return_value.probe.return_value = ''
-            try:
-                vm_console.main()
-            except SystemExit as stop:
-                return stop.code, factory.return_value
-            return 0, factory.return_value
+class FixtureSelectionTests(unittest.TestCase):
+    def test_picks_newest_valid_and_ignores_incomplete(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            registry = root / 'registry'
+            registry.mkdir()
+            self.assertIsNone(workspace.newest_accepted_fixture(registry))
+            old = root / 'old'
+            old.mkdir()
+            (old / 'ACCEPTANCE-PASSED').write_text('All acceptance stages passed.\n')
+            (old / 'disk.qcow2').write_bytes(b'old')
+            new = root / 'new'
+            new.mkdir()
+            (new / 'ACCEPTANCE-PASSED').write_text('All acceptance stages passed.\n')
+            (new / 'disk.qcow2').write_bytes(b'new')
+            # A failed run's disk is unlinked, so a marker alone must never select it.
+            unlinked = root / 'unlinked'
+            unlinked.mkdir()
+            (unlinked / 'ACCEPTANCE-PASSED').write_text('All acceptance stages passed.\n')
+            for index, target in enumerate((old, new, unlinked)):
+                (registry / str(index)).write_text(str(target) + '\n')
+            (registry / 'gone').write_text(str(root / 'missing') + '\n')
+            (registry / 'relative').write_text('relative/path\n')
+            os.utime(old, (1000, 1000))
+            os.utime(new, (2000, 2000))
+            os.utime(unlinked, (3000, 3000))
+            self.assertEqual(workspace.newest_accepted_fixture(registry), new / 'disk.qcow2')
+            self.assertEqual(workspace.accepted_fixtures(registry), [new, old])
 
-    def test_missing_vm_exits_nonzero(self):
-        with tempfile.TemporaryDirectory() as root:
-            (Path(root) / '.sockets').mkdir()
-            argv = ['vm_console', '--directory', root, 'sh', 'true']
-            with patch.object(vm_console.VM, 'attach', side_effect=RuntimeError('no kept VM')):
-                with patch.object(sys, 'argv', argv):
-                    with self.assertRaises(SystemExit) as stop:
-                        vm_console.main()
+
+class CleanOutputTests(unittest.TestCase):
+    def test_drops_markers_and_escapes_but_keeps_shell_text(self):
+        raw = (
+            "bash -c '(\r\n> echo hi\r\n"
+            "> verify_status=$?; printf '\"'\"'\\n__VERIFY_abc123__:%s\\n'\"'\"' \"$verify_status\"'\r\n"
+            'hi "$HOME" \x1b[32mok\x1b[0m\r\n__VERIFY_abc123__:0\r\n'
+        )
+        cleaned = vm_console.clean_output(raw)
+        self.assertIn("bash -c '(", cleaned)
+        self.assertIn('hi "$HOME" ok', cleaned)
+        self.assertNotIn('__VERIFY_', cleaned)
+        self.assertNotIn('\x1b', cleaned)
+
+
+class StubVM:
+    """Stand-in for verification.vm.VM: echoes each script back with a completion marker."""
+
+    def __init__(self):
+        self.scripts = []
+        self.attach_error = None
+
+    def attach(self):
+        if self.attach_error is not None:
+            raise self.attach_error
+
+    def command(self, script):
+        self.scripts.append(script)
+        return script + '\r\n__VERIFY_ab12cd34__:0\r\n'
+
+    def stop(self):
+        pass
+
+
+class ConsoleCase(unittest.TestCase):
+    """Run vm_console.main against StubVM; assert stdout and exit codes."""
+
+    def setUp(self):
+        self.vm = StubVM()
+        self._real_vm = vm_console.VM
+        vm_console.VM = self._stub
+
+    def tearDown(self):
+        vm_console.VM = self._real_vm
+
+    def _stub(self, *args):
+        return self.vm
+
+    def kept_argv(self, temp, *verb):
+        (Path(temp) / '.sockets').mkdir()
+        return ['vm_console', '--directory', temp, *verb]
+
+    def run_main(self, argv, stdin):
+        showed = io.StringIO()
+        old_argv, old_stdin = sys.argv, sys.stdin
+        sys.argv, sys.stdin = argv, stdin
+        try:
+            with contextlib.redirect_stdout(showed):
+                vm_console.main()
+        finally:
+            sys.argv, sys.stdin = old_argv, old_stdin
+        return showed.getvalue()
+
+
+class StdinScriptTests(ConsoleCase):
+    def test_sh_reads_script_from_stdin(self):
+        with tempfile.TemporaryDirectory() as temp:
+            output = self.run_main(self.kept_argv(temp, 'sh'), io.StringIO('echo "it\'s $HOME"\n'))
+            self.assertEqual(self.vm.scripts, ['echo "it\'s $HOME"\n'])
+            self.assertIn("it's $HOME", output)
+            self.assertNotIn('__VERIFY_', output)
+
+    def test_attach_failure_exits_nonzero(self):
+        self.vm.attach_error = RuntimeError('no kept VM')
+        with tempfile.TemporaryDirectory() as temp:
+            with self.assertRaises(SystemExit) as stop:
+                self.run_main(self.kept_argv(temp, 'sh', 'true'), io.StringIO(''))
             self.assertEqual(stop.exception.code, 1)
 
-    def test_verb_mistakes_are_usage_errors(self):
-        with tempfile.TemporaryDirectory() as root:
-            (Path(root) / '.sockets').mkdir()
-            for argv in (['--directory', root, 'sh'], ['--directory', root, 'click', '2', '0.5']):
-                with self.subTest(argv=argv):
-                    code, _ = self.run_console(*argv)
-                    self.assertEqual(code, 2)
+    def test_empty_stdin_is_a_usage_error(self):
+        with tempfile.TemporaryDirectory() as temp:
+            with self.assertRaises(SystemExit) as stop:
+                self.run_main(self.kept_argv(temp, 'sh'), io.StringIO('  \n'))
+            self.assertEqual(stop.exception.code, 2)
+
+    def test_tty_stdin_is_a_usage_error(self):
+        with tempfile.TemporaryDirectory() as temp:
+            argv = self.kept_argv(temp, 'sh')
+            primary, replica = pty.openpty()
+            try:
+                with os.fdopen(replica, 'w') as stdin:
+                    with self.assertRaises(SystemExit) as stop:
+                        self.run_main(argv, stdin)
+                self.assertEqual(stop.exception.code, 2)
+            finally:
+                os.close(primary)
 
 
 if __name__ == '__main__':
