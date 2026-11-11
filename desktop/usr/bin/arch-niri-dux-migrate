@@ -21,6 +21,12 @@ mkdir -p "$state_dir"
 shopt -s nullglob
 scripts=("$scripts_dir"/*.sh)
 shopt -u nullglob
+# Names sort chronologically by construction (fixed-width YYYYMMDD_NN_ slugs);
+# pin the collation so an account locale can never reorder slug punctuation.
+if ((${#scripts[@]} > 0)); then
+    sorted=$(printf '%s\n' "${scripts[@]}" | LC_ALL=C sort)
+    mapfile -t scripts <<<"$sorted"
+fi
 
 for script in "${scripts[@]}"; do
     name=${script##*/}

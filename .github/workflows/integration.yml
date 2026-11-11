@@ -31,6 +31,7 @@ jobs:
           changed=$(git diff --name-only "origin/${{ github.base_ref }}...HEAD")
           # backup= holds install paths under etc/ only; a non-etc entry would escape the check below.
           backup=$(sed -n '/^ *backup=(/,/)/p' packages/integration/PKGBUILD | grep -o 'etc/[^ )]*')
+          [ -n "$backup" ] || { echo 'Could not parse the backup= array; refusing to gate silently.' >&2; exit 1; }
           needs_note=false
           while IFS= read -r file; do
             case "$file" in installer/*|desktop/etc/skel/*|*preset*) needs_note=true;; esac

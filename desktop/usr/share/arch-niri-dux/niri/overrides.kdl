@@ -1,2 +1,0 @@
-// Personal Niri settings go here; this file loads last, after Dux settings.
-// Package updates preserve this file. Later bindings replace earlier bindings.
