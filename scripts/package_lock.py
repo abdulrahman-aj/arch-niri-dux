@@ -145,9 +145,10 @@ def resolve_date(argument):
             with urllib.request.urlopen(f'{ARCHIVE}/{date}/core/os/x86_64/core.db', timeout=DOWNLOAD_TIMEOUT):
                 return date
         except urllib.error.HTTPError as exc:
-            if exc.code != 404 or argument is not None:
+            # Only a missing snapshot advances to the previous day. Any other
+            # failure aborts instead of silently pinning an older date.
+            if exc.code != 404:
                 raise
-        except Exception:
             if argument is not None:
                 raise
     raise ValueError('No Arch archive snapshot is available for the last 8 days')
@@ -165,8 +166,13 @@ def dux_shell_version(extra_db):
     raise ValueError('Pinned archive date has no dux-shell')
 
 
-def closure_filenames(date, arch_requested):
-    """Resolve the Arch closure to filename entries using the pinned date."""
+def closure_filenames(date, arch_requested, required=None):
+    """Resolve the Arch closure to filename entries using the pinned date.
+
+    `required` names must appear verbatim in the resolution. It defaults to
+    every requested target; provisions and soname deps from third-party pins
+    resolve to real package names, so callers check only their direct list.
+    """
     with tempfile.TemporaryDirectory(prefix='archive-resolve-') as directory:
         dbpath = pathlib.Path(directory)
         (dbpath / 'local').mkdir()
@@ -199,7 +205,7 @@ def closure_filenames(date, arch_requested):
             continue
         name, version, filename, repo = line.split('|')
         entries.append(dict(name=name, version=version, filename=filename, repository=repo))
-    if not set(arch_requested).issubset({e['name'] for e in entries}):
+    if not set(required if required is not None else arch_requested).issubset({e['name'] for e in entries}):
         raise ValueError('Incomplete resolution from the pinned archive date')
     return entries
 
@@ -223,19 +229,24 @@ def vendor_desktop(root, tag, contents):
     pkgbuild.write_text(new)
 
 
-def omarchy_arch_deps(pin):
+def download_omarchy_db():
+    """Return the current Omarchy repository database."""
+    return fetch_url(f'{OMARCHY_FILES_URL}omarchy.db')
+
+
+def omarchy_arch_deps(pin, database=None):
     """Return the pinned Omarchy packages' Arch dependencies.
 
     The two hooks install from the offline repository, so their Arch
     dependencies must be part of the downloaded closure. Matching the exact
     pinned versions fails closed when the pin goes stale.
     """
-    database = pathlib.Path(tempfile.mkdtemp(prefix='omarchy-deps-')) / 'omarchy.db'
-    try:
-        database.write_bytes(fetch_url(f'{OMARCHY_FILES_URL}omarchy.db'))
-        fields = database_entries(database)
-    finally:
-        shutil.rmtree(database.parent, ignore_errors=True)
+    if database is None:
+        database = download_omarchy_db()
+    with tempfile.TemporaryDirectory(prefix='omarchy-deps-') as directory:
+        path = pathlib.Path(directory) / 'omarchy.db'
+        path.write_bytes(database)
+        fields = database_entries(path)
     deps = set()
     for entry in pin:
         matches = [info for info in fields.values() if info.get('NAME') == [entry['name']]]
@@ -245,11 +256,13 @@ def omarchy_arch_deps(pin):
     return deps - {entry['name'] for entry in pin}
 
 
-def refresh_omarchy_pin():
+def refresh_omarchy_pin(database=None):
+    if database is None:
+        database = download_omarchy_db()
     with tempfile.TemporaryDirectory(prefix='omarchy-pin-') as directory:
-        database = pathlib.Path(directory) / 'omarchy.db'
-        database.write_bytes(fetch_url(f'{OMARCHY_FILES_URL}omarchy.db'))
-        fields = database_entries(database)
+        path = pathlib.Path(directory) / 'omarchy.db'
+        path.write_bytes(database)
+        fields = database_entries(path)
         entries = []
         for name in OMARCHY_NAMES:
             matches = [info for info in fields.values() if info.get('NAME') == [name]]
@@ -280,11 +293,13 @@ def resolve(root, date=None):
         pkgver = dux_shell_version(extra_db)
     requested = requested_packages(root)
     omarchy_requested = sorted(set(requested) & set(OMARCHY_NAMES))
-    pin = refresh_omarchy_pin()
-    pin = [entry for entry in pin if entry['name'] in omarchy_requested]
-    arch_requested = sorted(set(requested) - set(omarchy_requested) | omarchy_arch_deps(pin))
-    closure_filenames(pinned, arch_requested)
-    tag = 'v' + pkgver.split('-')[0]
+    omarchy_db = download_omarchy_db()
+    pin = [entry for entry in refresh_omarchy_pin(omarchy_db) if entry['name'] in omarchy_requested]
+    direct_arch = set(requested) - set(omarchy_requested)
+    arch_requested = sorted(direct_arch | omarchy_arch_deps(pin, omarchy_db))
+    # Fail fast on the host; fetch re-resolves authoritatively in the guest.
+    closure_filenames(pinned, arch_requested, required=sorted(direct_arch))
+    tag = 'v' + pkgver.split('-')[0].split(':')[-1]
     base = f'https://raw.githubusercontent.com/duxlabs-dev/dux-shell/{tag}/core/internal/config/embedded/'
     suffixes = ('niri.kdl', 'niri-binds.kdl', 'niri-colors.kdl', 'niri-layout.kdl', 'niri-alttab.kdl', 'niri-input.kdl')
     contents = [fetch_url(base + suffix) for suffix in suffixes]
@@ -395,9 +410,10 @@ def refresh_keyring(date, keyring):
 def fetch(root, dest, keyring, downloads, host_cache, cache_dir):
     root = pathlib.Path(root)
     date = archive_date(root)
-    pin = [entry for entry in omarchy_pin(root) if entry['name'] in requested_packages(root)]
     requested = requested_packages(root)
-    arch_requested = sorted(set(requested) - {entry['name'] for entry in pin} | omarchy_arch_deps(pin))
+    pin = [entry for entry in omarchy_pin(root) if entry['name'] in requested]
+    direct_arch = set(requested) - {entry['name'] for entry in pin}
+    arch_requested = sorted(direct_arch | omarchy_arch_deps(pin))
     dest.mkdir(parents=True, exist_ok=True)
     downloads.mkdir(parents=True, exist_ok=True)
     cache_dir.mkdir(parents=True, exist_ok=True)
@@ -446,7 +462,7 @@ def fetch(root, dest, keyring, downloads, host_cache, cache_dir):
             continue
         name, version, filename, repo = line.split('|')
         closure.append(dict(name=name, version=version, filename=filename, repository=repo))
-    if not set(arch_requested).issubset({e['name'] for e in closure}):
+    if not direct_arch.issubset({e['name'] for e in closure}):
         raise ValueError('Incomplete download from the pinned archive date')
     entries = []
     for item in closure:

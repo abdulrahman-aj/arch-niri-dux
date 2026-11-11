@@ -9,25 +9,20 @@ import re
 import subprocess
 import tempfile
 
-from package_lock import DATE_PATTERN, OMARCHY_NAMES, read_database, requested_packages, validate_entry
+from package_lock import archive_date, omarchy_pin, read_database, requested_packages
 from verification.digest import digest
 
 
 def _manifest(root, repository):
-    date = (root / 'packages/archive-date').read_text()
-    if not DATE_PATTERN.fullmatch(date):
-        raise ValueError('Pinned archive date must look like YYYY/MM/DD')
+    date = archive_date(root)
     downloaded = repository / 'arch-downloaded.json'
     try:
         arch = json.loads(downloaded.read_text())
     finally:
         # The payload directory ships on the ISO; provenance lives in the manifest.
         downloaded.unlink(missing_ok=True)
-    pin = json.loads((root / 'packages/omarchy-pin.json').read_text())
-    if {entry['name'] for entry in pin} - set(OMARCHY_NAMES) or len(pin) != len({e['name'] for e in pin}):
-        raise ValueError('Omarchy pin holds only the two reviewed packages.')
-    for entry in pin:
-        validate_entry(entry)
+    requested = requested_packages(root)
+    pin = [entry for entry in omarchy_pin(root) if entry['name'] in requested]
     integration = json.loads((repository / 'integration.manifest.json').read_text())
     recipes = json.loads((root / 'packages/aur-recipes.json').read_text())
     apps = integration.get('apps', [])
@@ -43,7 +38,7 @@ def _manifest(root, repository):
     return dict(
         schema=1,
         archive_date=date.strip(),
-        requested=requested_packages(root),
+        requested=requested,
         packages=sorted(arch + pin, key=lambda e: e['name']),
         integration=integration,
     )

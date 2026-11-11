@@ -37,7 +37,7 @@ class PayloadFinalizationTests(unittest.TestCase):
             }
         ]
         self.pin = [
-            self.package(name, repository='omarchy', producer_verified=True)
+            self.package(name, repository='omarchy')
             | {'version': '1-1', 'url': 'https://example.invalid/' + name, 'signature': 'producer-verified'}
             for name in ('limine-mkinitcpio-hook', 'limine-snapper-sync')
         ]
@@ -58,7 +58,7 @@ class PayloadFinalizationTests(unittest.TestCase):
         )
         self.save()
 
-    def package(self, name, directory=None, repository=None, producer_verified=False):
+    def package(self, name, directory=None, repository=None):
         directory = directory or self.repository
         directory.mkdir(parents=True, exist_ok=True)
         with tempfile.TemporaryDirectory(dir=self.root) as temporary:
@@ -122,6 +122,15 @@ class PayloadFinalizationTests(unittest.TestCase):
         self.assertFalse((self.repository / 'offline.db.tar.gz.old').exists())
         listed = {line.split()[1] for line in (self.repository / 'SHA256SUMS').read_text().splitlines()}
         self.assertEqual(listed, {p.name for p in self.repository.glob('*.pkg.tar.zst')} | {'offline.db'})
+
+    def test_bad_archive_date_is_rejected(self):
+        (self.root / 'packages/archive-date').write_text('last-week\n')
+        self.rejected('archive date')
+
+    def test_unknown_pin_name_is_rejected(self):
+        self.pin[0]['name'] = 'unreviewed-hook'
+        self.save()
+        self.rejected('two reviewed')
 
     def test_missing_package_stops_without_replacing_manifest(self):
         (self.repository / self.arch[0]['filename']).unlink()

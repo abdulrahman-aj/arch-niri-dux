@@ -13,16 +13,18 @@ packages, and pacman tracks their files.
 
 ## Repositories
 
-`packages/archive-date` pins every Arch binary package to one Arch Linux
-Archive snapshot (`https://archive.archlinux.org/repos/YYYY/MM/DD`), and
+`packages/archive-date` pins every Arch binary package in the offline ISO
+payload to one Arch Linux Archive snapshot
+(`https://archive.archlinux.org/repos/YYYY/MM/DD`), and
 `packages/omarchy-pin.json` pins the two Omarchy packages
 (`limine-mkinitcpio-hook`, `limine-snapper-sync`) by hash and signature. The
 installed repository order is arch-niri-dux at
-`https://abdulrahman-aj.github.io/arch-niri-dux/x86_64`, then core and extra
-from the pinned archive date, then omarchy.
+`https://abdulrahman-aj.github.io/arch-niri-dux/x86_64`, then core and extra,
+then omarchy.
 Our repository comes first so another repository cannot shadow our packages.
-Omarchy uses `https://pkgs.omarchy.org/stable/$arch`. The package ships this
-configuration in `/etc/pacman.d/arch-niri-dux.conf`. The integration repository
+The date freezes the build payload only: installed systems track the rolling
+mirrors in `/etc/pacman.d/arch-niri-dux.conf`, so `pacman -Syu` keeps updating
+Arch packages after installation. The integration repository
 retains `Required TrustedOnly`; other repositories inherit `Required
 DatabaseOptional`.
 
@@ -32,7 +34,7 @@ configuration from the dux-shell release matching that snapshot's dux-shell,
 and rewrites the pins. The build guest refreshes `archlinux-keyring` from the
 pinned date first, then downloads the requested package lists with `pacman
 -Syw`; the manifest records what was downloaded. Builds reuse the shared
-verified download cache and refuse a stale date.
+verified download cache, and a stale Omarchy pin fails the build closed.
 
 ## Dux app builds
 

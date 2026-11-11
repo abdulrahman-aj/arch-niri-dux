@@ -4,8 +4,9 @@
 - New defaults apply to new installs and accounts. Don't rewrite an existing
   install's settings or state (compatibility code, migrations) unless the task
   asks for it; package updates still reach existing installs.
-- Before designing a desktop feature, read the Dux source matching
-  `packages/closure.lock.json` and check how Omarchy solves the same problem.
+- Before designing a desktop feature, read the Dux source matching the vendored
+  Niri integration (`desktop/README.md` names the version) and check how
+  Omarchy solves the same problem.
 - Prefer files owned by packages over files written by the installer.
 
 # Development

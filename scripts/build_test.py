@@ -270,3 +270,108 @@ class LiveKeyringTests(unittest.TestCase):
                     self.assertEqual(operations.read_text().splitlines(), ['--init', '--populate archlinux'])
                 else:
                     self.assertFalse(operations.exists())
+
+
+class ResolveDateTests(unittest.TestCase):
+    def test_missing_snapshot_falls_back_to_previous_day(self):
+        import datetime
+        import urllib.error
+        from unittest.mock import MagicMock
+
+        available = MagicMock()
+        available.__enter__.return_value = available
+        missing = urllib.error.HTTPError('https://example.invalid/core.db', 404, 'Not Found', None, None)
+        with patch('urllib.request.urlopen', side_effect=[missing, available]) as opened:
+            self.assertEqual(
+                module.resolve_date(None), (datetime.date.today() - datetime.timedelta(days=1)).strftime('%Y/%m/%d')
+            )
+        self.assertEqual(opened.call_count, 2)
+
+    def test_server_error_aborts_instead_of_drifting_to_an_older_date(self):
+        import urllib.error
+
+        failing = urllib.error.HTTPError('https://example.invalid/core.db', 500, 'Server Error', None, None)
+        with patch('urllib.request.urlopen', side_effect=failing):
+            with self.assertRaises(urllib.error.HTTPError):
+                module.resolve_date(None)
+
+    def test_explicit_date_is_used_verbatim(self):
+        from unittest.mock import MagicMock
+
+        available = MagicMock()
+        available.__enter__.return_value = available
+        with patch('urllib.request.urlopen', return_value=available) as opened:
+            self.assertEqual(module.resolve_date('2026/11/10'), '2026/11/10')
+        self.assertEqual(opened.call_count, 1)
+
+
+class OmarchyDepsTests(unittest.TestCase):
+    @staticmethod
+    def database(entries):
+        import io
+        import tarfile
+
+        buffer = io.BytesIO()
+        with tarfile.open(fileobj=buffer, mode='w:gz') as archive:
+            for name, fields in entries.items():
+                body = ''.join(f'%{key}%\n{value}\n\n' for key, value in fields.items())
+                member = tarfile.TarInfo(f'{name}/desc')
+                member.size = len(body.encode())
+                archive.addfile(member, io.BytesIO(body.encode()))
+        buffer.seek(0)
+        return buffer.read()
+
+    def test_matching_pin_returns_arch_dependencies(self):
+        database = self.database(
+            {
+                'hook-1': {
+                    'NAME': 'limine-mkinitcpio-hook',
+                    'VERSION': '1.40.0-2',
+                    'FILENAME': 'limine-mkinitcpio-hook-1.40.0-2-x86_64.pkg.tar.zst',
+                    'DEPENDS': 'libnotify',
+                }
+            }
+        )
+        pin = [dict(name='limine-mkinitcpio-hook', version='1.40.0-2')]
+        with patch.object(module, 'fetch_url', return_value=database):
+            self.assertEqual(module.omarchy_arch_deps(pin), {'libnotify'})
+
+    def test_moved_pin_version_fails_closed(self):
+        database = self.database(
+            {
+                'hook-1': {
+                    'NAME': 'limine-mkinitcpio-hook',
+                    'VERSION': '9.9.9-9',
+                    'FILENAME': 'limine-mkinitcpio-hook-9.9.9-9-x86_64.pkg.tar.zst',
+                }
+            }
+        )
+        pin = [dict(name='limine-mkinitcpio-hook', version='1.40.0-2')]
+        with patch.object(module, 'fetch_url', return_value=database):
+            with self.assertRaisesRegex(ValueError, 'stale'):
+                module.omarchy_arch_deps(pin)
+
+
+class VendorDesktopTests(unittest.TestCase):
+    def test_refresh_rewrites_files_and_version_references(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / 'desktop/usr/share/arch-niri-dux/niri/dms').mkdir(parents=True)
+            (root / 'packages/integration').mkdir(parents=True)
+            (root / 'desktop/README.md').write_text('upstream Dux v2.1.0 Niri integration,\n')
+            (root / 'packages/integration/PKGBUILD').write_text("depends=('dux-shell>=2.1.0')\n")
+            module.vendor_desktop(root, 'v2.1.2', [f'body-{i}\n'.encode() for i in range(6)])
+            for _, path in module.VENDORED:
+                self.assertTrue((root / path).is_file())
+            self.assertIn('v2.1.2', (root / 'desktop/README.md').read_text())
+            self.assertIn("'dux-shell>=2.1.2'", (root / 'packages/integration/PKGBUILD').read_text())
+
+    def test_missing_version_reference_fails_closed(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / 'desktop/usr/share/arch-niri-dux/niri/dms').mkdir(parents=True)
+            (root / 'packages/integration').mkdir(parents=True)
+            (root / 'desktop/README.md').write_text('no version here\n')
+            (root / 'packages/integration/PKGBUILD').write_text("depends=('dux-shell>=2.1.0')\n")
+            with self.assertRaisesRegex(ValueError, 'no Dux version'):
+                module.vendor_desktop(root, 'v2.1.2', [b'body\n'] * 6)
