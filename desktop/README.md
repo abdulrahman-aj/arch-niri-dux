@@ -1,6 +1,6 @@
 # Packaged desktop integration
 
-`usr/share/arch-niri-dux/niri` contains the upstream Dux v2.1.2 Niri integration,
+`usr/share/arch-niri-dux/niri` contains the upstream Dux Niri integration,
 vendored verbatim from the dux-shell release matching the pinned dux-shell.
 `make lock` refreshes these files with the archive date. The upstream license
 is included. No personal dotfiles are used.

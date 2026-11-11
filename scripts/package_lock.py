@@ -3,8 +3,8 @@
 
 `resolve` runs on the host (`make lock`) and refreshes packages/archive-date,
 the two-entry Omarchy pin, and the vendored Dux Niri files. `fetch` runs in
-the builder VM and never changes the pins: it refreshes archlinux-keyring from
-the pinned date, then downloads the requested package lists with pacman.
+the builder VM and never changes the pins: it downloads the requested package
+lists with pacman and checks each signature against keys/trusted-packagers.gpg.
 """
 
 import argparse
@@ -166,99 +166,87 @@ def dux_shell_version(extra_db):
     raise ValueError('Pinned archive date has no dux-shell')
 
 
-def closure_filenames(date, arch_requested, required=None):
-    """Resolve the Arch closure to filename entries using the pinned date.
+def pinned_closure(date, requested, required, workdir, cache_dir=None):
+    """Resolve requested names against the pinned date with pacman.
 
-    `required` names must appear verbatim in the resolution. It defaults to
-    every requested target; provisions and soname deps from third-party pins
-    resolve to real package names, so callers check only their direct list.
+    Returns the pacman command prefix, for downloading into cache_dir, and the
+    closure entries with each database's SHA256 and detached signature.
+    `required` names must appear verbatim; provisions and soname deps from the
+    Omarchy pin resolve to real package names, so callers check only their
+    direct list.
     """
-    with tempfile.TemporaryDirectory(prefix='archive-resolve-') as directory:
-        dbpath = pathlib.Path(directory)
-        (dbpath / 'local').mkdir()
-        (dbpath / 'sync').mkdir()
-        config = dbpath / 'pacman.conf'
-        sections = ''.join(f'[{repo}]\nServer = {ARCHIVE}/{date}/{repo}/os/x86_64\n' for repo in ARCH_REPOS)
-        # Lock-time databases are fetched over HTTPS and only used for resolution.
-        config.write_text(f'[options]\nArchitecture = x86_64\nSigLevel = Never\n{sections}')
-        for repo in ARCH_REPOS:
-            database = dbpath / 'sync' / f'{repo}.db'
-            database.write_bytes(fetch_url(f'{ARCHIVE}/{date}/{repo}/os/x86_64/{repo}.db'))
-        result = subprocess.check_output(
-            [
-                'pacman',
-                '-Sp',
-                '--noconfirm',
-                '--config',
-                str(config),
-                '--dbpath',
-                str(dbpath),
-                '--print-format',
-                '%n|%v|%f|%r',
-                *arch_requested,
-            ],
-            text=True,
-        )
+    config = workdir / 'pacman.conf'
+    sections = ''.join(f'[{repo}]\nServer = {ARCHIVE}/{date}/{repo}/os/x86_64\n' for repo in ARCH_REPOS)
+    cache = f'CacheDir = {cache_dir}\n' if cache_dir else ''
+    # fetch checks every package with gpgv against the repository keyring,
+    # which is also the install keyring, so pacman's own check would only add
+    # a dependency on the bootstrap ISO's keyring.
+    config.write_text(f'[options]\nArchitecture = x86_64\nSigLevel = Never\n{cache}{sections}')
+    # An empty local database makes pacman print and download the whole
+    # closure instead of skipping what the live builder already installed.
+    dbpath = workdir / 'db'
+    (dbpath / 'local').mkdir(parents=True)
+    (dbpath / 'sync').mkdir()
+    # Writing the databases directly, like `pacman -Sy`, works without root.
+    for repo in ARCH_REPOS:
+        (dbpath / 'sync' / f'{repo}.db').write_bytes(fetch_url(f'{ARCHIVE}/{date}/{repo}/os/x86_64/{repo}.db'))
+    pacman = ['pacman', '--noconfirm', '--config', str(config), '--dbpath', str(dbpath)]
+    result = subprocess.check_output([*pacman, '-Sp', '--print-format', '%n|%v|%f|%r', *requested], text=True)
+    metadata = {}
+    for repo in ARCH_REPOS:
+        for fields in read_database(dbpath / 'sync' / f'{repo}.db'):
+            metadata[fields['FILENAME'][0]] = fields
     entries = []
     for line in result.splitlines():
         if line.count('|') != 3:
             continue
         name, version, filename, repo = line.split('|')
-        entries.append(dict(name=name, version=version, filename=filename, repository=repo))
-    if not set(required if required is not None else arch_requested).issubset({e['name'] for e in entries}):
+        fields = metadata[filename]
+        entries.append(
+            dict(
+                name=name,
+                version=version,
+                filename=filename,
+                sha256=fields['SHA256SUM'][0],
+                url=f'{ARCHIVE}/{date}/{repo}/os/x86_64/{filename}',
+                repository=repo,
+                signature=fields['PGPSIG'][0],
+            )
+        )
+    if not set(required).issubset({e['name'] for e in entries}):
         raise ValueError('Incomplete resolution from the pinned archive date')
-    return entries
+    return pacman, entries
 
 
 def vendor_desktop(root, tag, contents):
-    """Write the vendored files and the version references for one Dux tag."""
+    """Write the vendored files and the version reference for one Dux tag."""
     for (_, path), body in zip(VENDORED, contents, strict=True):
         (root / path).write_bytes(body)
     version = tag.lstrip('v')
-    readme = root / 'desktop/README.md'
-    old = readme.read_text()
-    new = re.sub(r'upstream Dux v[\d.]+ Niri integration', f'upstream Dux v{version} Niri integration', old)
-    if new == old:
-        raise ValueError('Desktop README has no Dux version to refresh')
-    readme.write_text(new)
     pkgbuild = root / 'packages/integration/PKGBUILD'
     old = pkgbuild.read_text()
-    new = re.sub(r"'dux-shell>=[\d.]+'", f"'dux-shell>={version}'", old)
-    if new == old:
+    new, count = re.subn(r"'dux-shell>=[\d.]+'", f"'dux-shell>={version}'", old)
+    if count == 0:
         raise ValueError('Integration recipe has no dux-shell floor to refresh')
     pkgbuild.write_text(new)
 
 
-def download_omarchy_db():
-    """Return the current Omarchy repository database."""
-    return fetch_url(f'{OMARCHY_FILES_URL}omarchy.db')
-
-
-def omarchy_arch_deps(pin, database=None):
-    """Return the pinned Omarchy packages' Arch dependencies.
+def omarchy_arch_deps(pin):
+    """Return the pinned Omarchy packages' Arch dependencies from the pin.
 
     The two hooks install from the offline repository, so their Arch
-    dependencies must be part of the downloaded closure. Matching the exact
-    pinned versions fails closed when the pin goes stale.
+    dependencies must be part of the downloaded closure. The pin records the
+    dependencies at lock time, so fetch needs no Omarchy database.
     """
-    if database is None:
-        database = download_omarchy_db()
-    with tempfile.TemporaryDirectory(prefix='omarchy-deps-') as directory:
-        path = pathlib.Path(directory) / 'omarchy.db'
-        path.write_bytes(database)
-        fields = database_entries(path)
+    names = {entry['name'] for entry in pin}
     deps = set()
     for entry in pin:
-        matches = [info for info in fields.values() if info.get('NAME') == [entry['name']]]
-        if len(matches) != 1 or matches[0].get('VERSION') != [entry['version']]:
-            raise ValueError(f'Omarchy pin is stale for {entry["name"]}; refresh it with `make lock`')
-        deps.update(matches[0].get('DEPENDS', []))
-    return deps - {entry['name'] for entry in pin}
+        deps.update(entry['depends'])
+    return deps - names
 
 
-def refresh_omarchy_pin(database=None):
-    if database is None:
-        database = download_omarchy_db()
+def refresh_omarchy_pin():
+    database = fetch_url(f'{OMARCHY_FILES_URL}omarchy.db')
     with tempfile.TemporaryDirectory(prefix='omarchy-pin-') as directory:
         path = pathlib.Path(directory) / 'omarchy.db'
         path.write_bytes(database)
@@ -279,6 +267,7 @@ def refresh_omarchy_pin(database=None):
                     url=OMARCHY_FILES_URL + info['FILENAME'][0],
                     repository='omarchy',
                     signature=signature,
+                    depends=info.get('DEPENDS', []),
                 )
             )
     return sorted(entries, key=lambda e: e['name'])
@@ -293,12 +282,12 @@ def resolve(root, date=None):
         pkgver = dux_shell_version(extra_db)
     requested = requested_packages(root)
     omarchy_requested = sorted(set(requested) & set(OMARCHY_NAMES))
-    omarchy_db = download_omarchy_db()
-    pin = [entry for entry in refresh_omarchy_pin(omarchy_db) if entry['name'] in omarchy_requested]
+    pin = [entry for entry in refresh_omarchy_pin() if entry['name'] in omarchy_requested]
     direct_arch = set(requested) - set(omarchy_requested)
-    arch_requested = sorted(direct_arch | omarchy_arch_deps(pin, omarchy_db))
+    arch_requested = sorted(direct_arch | omarchy_arch_deps(pin))
     # Fail fast on the host; fetch re-resolves authoritatively in the guest.
-    closure_filenames(pinned, arch_requested, required=sorted(direct_arch))
+    with tempfile.TemporaryDirectory(prefix='archive-resolve-') as directory:
+        pinned_closure(pinned, arch_requested, direct_arch, pathlib.Path(directory))
     tag = 'v' + pkgver.split('-')[0].split(':')[-1]
     base = f'https://raw.githubusercontent.com/duxlabs-dev/dux-shell/{tag}/core/internal/config/embedded/'
     suffixes = ('niri.kdl', 'niri-binds.kdl', 'niri-colors.kdl', 'niri-layout.kdl', 'niri-alttab.kdl', 'niri-input.kdl')
@@ -367,44 +356,22 @@ def fetch_package(entry, dest, downloads, host_cache):
     shutil.copyfile(source, package)
 
 
-def seed_cache(cache_dir, *sources):
-    """Offer already-verified packages to pacman; unknown names are ignored."""
-    for source in sources:
-        if source is None:
-            continue
-        for path in pathlib.Path(source).glob('*.pkg.tar.zst'):
-            target = cache_dir / path.name
-            if not target.exists():
-                try:
-                    shutil.copyfile(path, target)
-                except OSError:
-                    continue
+def verify_signature(keyring, signature, package):
+    """Check a detached signature against the repository keyring.
 
-
-def refresh_keyring(date, keyring):
-    """Install the pinned date's keyring so pacman verifies that date's packages.
-
-    The package hash comes from the archive database over HTTPS, and its
-    detached signature is checked against the repository keyring before pacman
-    trusts it. Pacman then enforces signatures for everything it downloads.
+    The installer trusts only this keyring, so a signer missing here would
+    fail the install; fail the build instead and name the key to review.
     """
-    with tempfile.TemporaryDirectory(prefix='archive-keyring-') as directory:
-        database = pathlib.Path(directory) / 'core.db'
-        database.write_bytes(fetch_url(f'{ARCHIVE}/{date}/core/os/x86_64/core.db'))
-        fields = database_entries(database)
-        matches = [info for info in fields.values() if info.get('NAME') == ['archlinux-keyring']]
-        if len(matches) != 1:
-            raise ValueError('Pinned archive date has no archlinux-keyring')
-        info = matches[0]
-        package = pathlib.Path(directory) / info['FILENAME'][0]
-        download(f'{ARCHIVE}/{date}/core/os/x86_64/{info["FILENAME"][0]}', package, info['SHA256SUM'][0])
-        signature = package.with_name(package.name + '.sig')
-        signature.write_bytes(fetch_url(f'{ARCHIVE}/{date}/core/os/x86_64/{info["FILENAME"][0]}.sig'))
-        subprocess.run(['gpgv', '--keyring', str(keyring), str(signature), str(package)], check=True)
-        config = pathlib.Path(directory) / 'pacman.conf'
-        config.write_text('[options]\nArchitecture = auto\nSigLevel = Never\n')
-        subprocess.run(['pacman', '-U', '--noconfirm', '--config', str(config), str(package)], check=True)
-    subprocess.run(['pacman-key', '--populate', 'archlinux'], check=True)
+    result = subprocess.run(
+        ['gpgv', '--keyring', str(keyring), str(signature), str(package)], capture_output=True, text=True, check=False
+    )
+    if result.returncode != 0:
+        key = re.search(r'key ([0-9A-F]{16,40})', result.stderr)
+        signer = key.group(1) if key else 'unknown'
+        raise ValueError(
+            f'Signature check failed for {package.name} (signer {signer}): {result.stderr.strip()}\n'
+            f'Review the signer and add it to keys/trusted-packagers.gpg'
+        )
 
 
 def fetch(root, dest, keyring, downloads, host_cache, cache_dir):
@@ -418,86 +385,37 @@ def fetch(root, dest, keyring, downloads, host_cache, cache_dir):
     downloads.mkdir(parents=True, exist_ok=True)
     cache_dir.mkdir(parents=True, exist_ok=True)
     (dest / 'arch-downloaded.json').unlink(missing_ok=True)
-    refresh_keyring(date, keyring)
-    config = pathlib.Path(tempfile.mkdtemp(prefix='archive-fetch-')) / 'pacman.conf'
-    sections = ''.join(f'[{repo}]\nServer = {ARCHIVE}/{date}/{repo}/os/x86_64\n' for repo in ARCH_REPOS)
-    config.write_text(
-        f'[options]\nArchitecture = auto\nSigLevel = Required DatabaseOptional\nCacheDir = {cache_dir}\n{sections}'
-    )
-    # An empty local database makes pacman download the whole closure instead
-    # of skipping what the live builder already installed.
-    dbpath = pathlib.Path(tempfile.mkdtemp(prefix='archive-local-'))
-    (dbpath / 'local').mkdir()
-    (dbpath / 'sync').mkdir()
+    workdir = pathlib.Path(tempfile.mkdtemp(prefix='archive-fetch-'))
     try:
-        seed_cache(cache_dir, downloads, host_cache)
-        subprocess.run(
-            ['pacman', '-Syw', '--noconfirm', '--config', str(config), '--dbpath', str(dbpath), *arch_requested],
-            check=True,
-        )
-        result = subprocess.check_output(
-            [
-                'pacman',
-                '-Sp',
-                '--config',
-                str(config),
-                '--dbpath',
-                str(dbpath),
-                '--print-format',
-                '%n|%v|%f|%r',
-                *arch_requested,
-            ],
-            text=True,
-        )
-        expected = {}
-        for repo in ARCH_REPOS:
-            for fields in read_database(dbpath / 'sync' / f'{repo}.db'):
-                expected[fields['FILENAME'][0]] = (fields['SHA256SUM'][0], fields['PGPSIG'][0])
+        pacman, entries = pinned_closure(date, arch_requested, direct_arch, workdir, cache_dir)
+        # Offer pacman only this closure's verified files from earlier builds.
+        for entry in entries:
+            target = cache_dir / entry['filename']
+            if cache_matches(target, entry['sha256']):
+                continue
+            for source in (downloads, host_cache):
+                if source is not None and cache_matches(source / entry['filename'], entry['sha256']):
+                    place_verified(source / entry['filename'], target)
+                    break
+        subprocess.run([*pacman, '-Sw', *arch_requested], check=True)
     finally:
-        shutil.rmtree(dbpath, ignore_errors=True)
-        shutil.rmtree(config.parent, ignore_errors=True)
-    closure = []
-    for line in result.splitlines():
-        if line.count('|') != 3:
-            continue
-        name, version, filename, repo = line.split('|')
-        closure.append(dict(name=name, version=version, filename=filename, repository=repo))
-    if not direct_arch.issubset({e['name'] for e in closure}):
-        raise ValueError('Incomplete download from the pinned archive date')
-    entries = []
-    for item in closure:
-        package = cache_dir / item['filename']
-        if item['filename'] not in expected:
-            raise ValueError(f'Downloaded package is not in the pinned databases: {item["filename"]}')
-        sha256, signature = expected[item['filename']]
-        checksum = digest(package)
-        if checksum != sha256:
-            raise ValueError(f'Package checksum mismatch: {item["filename"]}')
-        place_verified(package, downloads / item['filename'])
-        place_verified(package, dest / item['filename'])
-        # The installer checks every package signature against the install
-        # keyring. These bytes equal the archive's detached signatures.
-        (dest / (item['filename'] + '.sig')).write_bytes(base64.b64decode(signature))
-        entries.append(
-            dict(
-                name=item['name'],
-                version=item['version'],
-                filename=item['filename'],
-                sha256=checksum,
-                url=f'{ARCHIVE}/{date}/{item["repository"]}/os/x86_64/{item["filename"]}',
-                repository=item['repository'],
-                signature=signature,
-            )
-        )
+        shutil.rmtree(workdir, ignore_errors=True)
+    for entry in entries:
+        package = cache_dir / entry['filename']
+        if digest(package) != entry['sha256']:
+            raise ValueError(f'Package checksum mismatch: {entry["filename"]}')
+        for target in (downloads / entry['filename'], dest / entry['filename']):
+            if not cache_matches(target, entry['sha256']):
+                place_verified(package, target)
     with concurrent.futures.ThreadPoolExecutor(max_workers=6) as pool:
         list(pool.map(lambda entry: fetch_package(entry, dest, downloads, host_cache), pin))
-    for entry in pin:
+    for entry in entries + pin:
         package = dest / entry['filename']
         if digest(package) != entry['sha256']:
             raise ValueError(f'Package checksum mismatch: {package}')
         signature = package.with_name(package.name + '.sig')
         signature.write_bytes(base64.b64decode(entry['signature'], validate=True))
-        subprocess.run(['gpgv', '--keyring', str(keyring), str(signature), str(package)], check=True)
+        verify_signature(keyring, signature, package)
     prune_payload(dest, entries + pin)
     (dest / 'arch-downloaded.json').write_text(json.dumps(sorted(entries, key=lambda e: e['name']), indent=2) + '\n')
     # A changed refresh also needs a fresh database, not repo-add's merged history.

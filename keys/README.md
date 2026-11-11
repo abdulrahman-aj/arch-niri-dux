@@ -1,20 +1,19 @@
 # Public build signing keys
 
 `trusted-packagers.gpg` contains only the public signing keys needed by the
-pinned bootstrap ISO and the two pinned Omarchy packages. `fingerprints.txt` records the issuer
+pinned bootstrap ISO and package closure. `fingerprints.txt` records the issuer
 fingerprints extracted from their signatures. These were exported from the
 Arch/Omarchy package keyring after the initial signature-verified build.
 
-The build uses this repository keyring to bootstrap trust, so it does not require Omarchy or a
-previously initialized host pacman keyring. Arch packages are verified by pacman against the
-`archlinux-keyring` refreshed from the pinned archive date inside the build guest; the two
-Omarchy packages are verified against this keyring. No private key material is included.
+The build verifies every fetched package against this repository keyring, so it does not
+require Omarchy or a previously initialized host pacman keyring. No private key material is
+included.
 See [package inputs](../packages/README.md) for binary-package and Dux recipe
 verification.
 
-When intentionally updating the Omarchy pin, check new signing fingerprints
-against the source distribution's public keyring before adding their public keys. Arch keys need
-no manual check: they arrive through the pinned date's own keyring package.
+When a new archive date or Omarchy pin brings a new signer, the build fails and names
+its key. Check new signing fingerprints against the source distribution's public keyring
+before adding their public keys.
 
 `integration-signing.gpg` is our public release key, and
 `integration-signing.fingerprint` pins its primary identity. CI receives only

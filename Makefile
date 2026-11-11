@@ -1,6 +1,6 @@
 .PHONY: lock iso iso-development iso-checksums verify verify-fast verify-release verify-hibernate lint lint-in-dev fmt test build-test verify-alongside provision-alongside fetch-alongside
 lock:
-	./scripts/build-in-dev python3 scripts/package_lock.py resolve .
+	./scripts/build-in-dev python3 scripts/package_lock.py resolve . $(ARGS)
 iso:
 	./scripts/build-in-dev ./scripts/build-iso
 iso-development:

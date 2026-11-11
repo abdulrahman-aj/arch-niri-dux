@@ -306,72 +306,39 @@ class ResolveDateTests(unittest.TestCase):
 
 
 class OmarchyDepsTests(unittest.TestCase):
-    @staticmethod
-    def database(entries):
-        import io
-        import tarfile
-
-        buffer = io.BytesIO()
-        with tarfile.open(fileobj=buffer, mode='w:gz') as archive:
-            for name, fields in entries.items():
-                body = ''.join(f'%{key}%\n{value}\n\n' for key, value in fields.items())
-                member = tarfile.TarInfo(f'{name}/desc')
-                member.size = len(body.encode())
-                archive.addfile(member, io.BytesIO(body.encode()))
-        buffer.seek(0)
-        return buffer.read()
-
-    def test_matching_pin_returns_arch_dependencies(self):
-        database = self.database(
-            {
-                'hook-1': {
-                    'NAME': 'limine-mkinitcpio-hook',
-                    'VERSION': '1.40.0-2',
-                    'FILENAME': 'limine-mkinitcpio-hook-1.40.0-2-x86_64.pkg.tar.zst',
-                    'DEPENDS': 'libnotify',
-                }
-            }
-        )
-        pin = [dict(name='limine-mkinitcpio-hook', version='1.40.0-2')]
-        with patch.object(module, 'fetch_url', return_value=database):
-            self.assertEqual(module.omarchy_arch_deps(pin), {'libnotify'})
-
-    def test_moved_pin_version_fails_closed(self):
-        database = self.database(
-            {
-                'hook-1': {
-                    'NAME': 'limine-mkinitcpio-hook',
-                    'VERSION': '9.9.9-9',
-                    'FILENAME': 'limine-mkinitcpio-hook-9.9.9-9-x86_64.pkg.tar.zst',
-                }
-            }
-        )
-        pin = [dict(name='limine-mkinitcpio-hook', version='1.40.0-2')]
-        with patch.object(module, 'fetch_url', return_value=database):
-            with self.assertRaisesRegex(ValueError, 'stale'):
-                module.omarchy_arch_deps(pin)
+    def test_pin_dependencies_exclude_the_pinned_packages(self):
+        pin = [
+            dict(name='limine-mkinitcpio-hook', depends=['bash', 'limine']),
+            dict(name='limine-snapper-sync', depends=['limine-mkinitcpio-hook', 'libnotify']),
+        ]
+        self.assertEqual(module.omarchy_arch_deps(pin), {'bash', 'limine', 'libnotify'})
 
 
 class VendorDesktopTests(unittest.TestCase):
-    def test_refresh_rewrites_files_and_version_references(self):
+    def tree(self, directory, pkgbuild):
+        root = Path(directory)
+        (root / 'desktop/usr/share/arch-niri-dux/niri/dms').mkdir(parents=True)
+        (root / 'packages/integration').mkdir(parents=True)
+        (root / 'packages/integration/PKGBUILD').write_text(pkgbuild)
+        return root
+
+    def test_refresh_rewrites_files_and_dux_shell_floor(self):
         with tempfile.TemporaryDirectory() as directory:
-            root = Path(directory)
-            (root / 'desktop/usr/share/arch-niri-dux/niri/dms').mkdir(parents=True)
-            (root / 'packages/integration').mkdir(parents=True)
-            (root / 'desktop/README.md').write_text('upstream Dux v2.1.0 Niri integration,\n')
-            (root / 'packages/integration/PKGBUILD').write_text("depends=('dux-shell>=2.1.0')\n")
+            root = self.tree(directory, "depends=('dux-shell>=2.1.0')\n")
             module.vendor_desktop(root, 'v2.1.2', [f'body-{i}\n'.encode() for i in range(6)])
             for _, path in module.VENDORED:
                 self.assertTrue((root / path).is_file())
-            self.assertIn('v2.1.2', (root / 'desktop/README.md').read_text())
             self.assertIn("'dux-shell>=2.1.2'", (root / 'packages/integration/PKGBUILD').read_text())
 
-    def test_missing_version_reference_fails_closed(self):
+    def test_rerun_with_the_same_tag_succeeds(self):
         with tempfile.TemporaryDirectory() as directory:
-            root = Path(directory)
-            (root / 'desktop/usr/share/arch-niri-dux/niri/dms').mkdir(parents=True)
-            (root / 'packages/integration').mkdir(parents=True)
-            (root / 'desktop/README.md').write_text('no version here\n')
-            (root / 'packages/integration/PKGBUILD').write_text("depends=('dux-shell>=2.1.0')\n")
-            with self.assertRaisesRegex(ValueError, 'no Dux version'):
+            root = self.tree(directory, "depends=('dux-shell>=2.1.0')\n")
+            module.vendor_desktop(root, 'v2.1.2', [b'body\n'] * 6)
+            module.vendor_desktop(root, 'v2.1.2', [b'body\n'] * 6)
+            self.assertIn("'dux-shell>=2.1.2'", (root / 'packages/integration/PKGBUILD').read_text())
+
+    def test_missing_dux_shell_floor_fails_closed(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = self.tree(directory, "depends=('niri')\n")
+            with self.assertRaisesRegex(ValueError, 'no dux-shell floor'):
                 module.vendor_desktop(root, 'v2.1.2', [b'body\n'] * 6)

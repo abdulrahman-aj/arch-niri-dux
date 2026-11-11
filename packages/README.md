@@ -31,10 +31,11 @@ DatabaseOptional`.
 Run `make lock` to refresh the archive date, the Omarchy pin, and the vendored
 Dux files. It picks the latest available archive snapshot, vendors the Niri
 configuration from the dux-shell release matching that snapshot's dux-shell,
-and rewrites the pins. The build guest refreshes `archlinux-keyring` from the
-pinned date first, then downloads the requested package lists with `pacman
--Syw`; the manifest records what was downloaded. Builds reuse the shared
-verified download cache, and a stale Omarchy pin fails the build closed.
+and rewrites the pins; the Omarchy pin records each package's dependencies, so
+builds never read Omarchy's database. The build guest resolves the requested
+package lists against the pinned date, downloads them with pacman, and checks
+every signature against `keys/trusted-packagers.gpg`; the manifest records what
+was downloaded. Builds reuse the shared verified download cache.
 
 ## Dux app builds
 
