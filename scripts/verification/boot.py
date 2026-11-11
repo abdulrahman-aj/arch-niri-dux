@@ -53,6 +53,29 @@ def luks_pbkdf():
     )
 
 
+def x11_keyboard(keymap, map_path=Path('/usr/share/systemd/kbd-model-map')):
+    """Expected (layout, model, variant, options) for a console keymap.
+
+    Mirrors the installer's conversion through systemd's kbd-model-map; the
+    probe keeps its own copy because it also runs on the installed system,
+    where the installer package is not staged.
+    """
+    for line in map_path.read_text().splitlines():
+        stripped = line.strip()
+        if not stripped or stripped.startswith('#'):
+            continue
+        fields = stripped.split()
+        if len(fields) < 5 or fields[0] != keymap:
+            continue
+        layout, model, variant, options = fields[1], fields[2], fields[3], fields[4]
+        return (layout, model, None if variant == '-' else variant, None if options == '-' else options)
+    raise AssertionError(f'No X11 layout mapping for console keymap {keymap!r}.')
+
+
+def keyboard_conf_text(root):
+    return (root / 'etc/X11/xorg.conf.d/00-keyboard.conf').read_text()
+
+
 def prepare(root):
     # Enable post-unlock test control without changing the production boot UI.
     plymouth_config(root)
@@ -71,6 +94,13 @@ def prepare(root):
     Path('/run/verify/limine-cmdlines.json').write_text(json.dumps(entries, indent=2) + '\n')
     run('arch-chroot', str(root), 'systemctl', 'enable', 'serial-getty@ttyS0.service')
     configuration = json.loads(Path('/run/verify/install.json').read_text())
+    keymap = configuration.get('keymap', 'us')
+    layout, _model, variant, _options = x11_keyboard(keymap)
+    assert (root / 'etc/vconsole.conf').read_text() == f'KEYMAP={keymap}\n'
+    text = keyboard_conf_text(root)
+    assert f'Option "XkbLayout" "{layout}"' in text, text
+    if variant:
+        assert f'Option "XkbVariant" "{variant}"' in text, text
     if configuration.get('swap_gib') == 0:
         assert not (root / 'swap/swapfile').exists()
         assert not any(token.startswith(('resume=', 'resume_offset=')) for token in configured_cmdline(root))
@@ -221,6 +251,21 @@ def prepare_hibernate():
     run('sync')
 
 
+def keyboard():
+    # Niri leaves its xkb section empty so it inherits systemd's X11 keyboard
+    # setting, which is also what the greetd login screen uses. localectl
+    # reads that setting from the file the installer wrote.
+    configuration = json.loads(Path('/run/verify/install.json').read_text())
+    keymap = configuration.get('keymap', 'us')
+    layout, _model, variant, _options = x11_keyboard(keymap)
+    status = run('localectl', 'status', stdout=subprocess.PIPE).stdout
+    match = re.search(r'X11 Layout:\s*(\S+)', status)
+    assert match and match.group(1) == layout, status
+    if variant:
+        found = re.search(r'X11 Variant:\s*(\S+)', status)
+        assert found and found.group(1) == variant, status
+
+
 def splash_fallback(disable, root='/'):
     # Real text-fallback path: Plymouth stays installed, but the kernel
     # disables its splash so the plain console passphrase prompt is used.
@@ -266,6 +311,8 @@ def verify_boot(vm, passed, swap_gib):
     vm.probe('boot', 'plymouth-config')
     vm.probe('boot', 'plymouth-status')
     passed('Plymouth configuration and boot services are active')
+    vm.probe('boot', 'keyboard')
+    passed('Console keymap carries over to the X11/login layout')
     graphical_login(vm)
     vm.probe('boot', 'luks-pbkdf')
     passed('LUKS2 argon2id uses cryptsetup defaults, not the old 256 MiB pin')
@@ -313,6 +360,7 @@ if __name__ == '__main__':
         {
             'prepare': lambda: prepare(Path(sys.argv[2])),
             'storage': storage,
+            'keyboard': keyboard,
             'luks-pbkdf': luks_pbkdf,
             'plymouth-config': lambda: plymouth_config(sys.argv[2] if len(sys.argv) > 2 else '/'),
             'plymouth-status': plymouth_status,

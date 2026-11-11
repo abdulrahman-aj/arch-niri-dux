@@ -183,9 +183,7 @@ def secret(label):
 
 
 def disk_label(disk):
-    identity = (disk.get('serial') or disk.get('wwn') or '').strip()
-    label = f'{disk["name"]}  {int(disk["size"]) / GIB:.1f} GiB  {(disk.get("model") or "").strip()}'.rstrip()
-    return f'{label}  ID: {identity}' if identity else label
+    return storage.disk_identity(disk)
 
 
 def wizard(state):
@@ -197,7 +195,9 @@ def wizard(state):
     if not shutil.which('fzf'):
         raise ValueError('The live installer is missing fzf, required for its selection menus.')
     labels = {disk_label(disk): disk for disk in disks}
-    disk = labels[choose('Installation disk', list(labels))]
+    boot_map = storage.boot_entry_nodes(disks)
+    contents = '\n\n'.join(storage.describe_disk(disk, boot_map) for disk in disks)
+    disk = labels[choose('Installation disk', list(labels), header=contents)]
     mode = choose('Storage mode', ['Erase disk', 'Alongside in existing free space'])
     snapshot = None
     region = None
@@ -266,7 +266,8 @@ def wizard(state):
         f'User: {settings.username}    Host: {settings.hostname}\n'
         f'Timezone: {settings.timezone}    Keyboard: {settings.keymap}\n'
         'Storage: 4 GiB EFI + encrypted Btrfs, with separate /home\n'
-        f'Swap: {str(size) + " GiB encrypted; hibernation enabled" if size else "disabled; hibernation disabled"}'
+        f'Swap: {str(size) + " GiB encrypted; hibernation enabled" if size else "disabled; hibernation disabled"}\n'
+        f'Current contents of this disk — everything below is destroyed:\n{storage.describe_contents(disk, boot_map)}'
     )
     if snapshot:
         plan = storage.alongside_plan(settings, snapshot)
@@ -295,6 +296,29 @@ def write(relative, contents, mode=0o644):
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(contents)
     path.chmod(mode)
+
+
+def write_keyboard_layout(keymap):
+    """Write the console keymap and its matching X11 layout for the login stack.
+
+    Niri leaves its xkb section empty so it inherits systemd's X11 keyboard
+    setting. The console KEYMAP alone leaves that setting at US, so a non-US
+    password typed at the login screen would use the wrong layout.
+    """
+    mapping = storage.x11_keyboard_layout(keymap)
+    if mapping is None:
+        print(f"Warning: no X11 layout mapping for console keymap '{keymap}'; the login screen will use US.")
+        layout, model, variant, options = 'us', 'pc105', None, None
+    else:
+        layout, model, variant, options = mapping
+    write('/etc/X11/xorg.conf.d/00-keyboard.conf', storage.xorg_keyboard_conf(keymap, layout, model, variant, options))
+
+
+def register_alongside_boot(settings, snapshot, plan):
+    try:
+        storage.finish_alongside_boot(settings, snapshot, plan[0][0], TARGET)
+    except ValueError as error:
+        raise ValueError(f'{error}\n\n{storage.alongside_recovery_text(settings, snapshot, plan)}') from error
 
 
 def write_boot_config(luks_uuid, filesystem_uuid, resume_offset, *, defer_efi=False):
@@ -562,6 +586,7 @@ def install(settings, state=None):
             write('/etc/locale.gen', 'en_US.UTF-8 UTF-8\n')
             write('/etc/locale.conf', 'LANG=en_US.UTF-8\n')
             write('/etc/vconsole.conf', 'KEYMAP=' + settings.keymap + '\n')
+            write_keyboard_layout(settings.keymap)
             # arch-chroot mounts a fresh /run, so stage outside that mountpoint.
             target_script = TARGET / 'root/configure-target.sh'
             shutil.copy2(Path(__file__).with_name('configure-target.sh'), target_script)
@@ -586,7 +611,7 @@ def install(settings, state=None):
             run('arch-chroot', str(TARGET), 'limine-snapper-sync')
             print('\n[6/6] Saving changes and unmounting the installation…', flush=True)
             if snapshot:
-                storage.finish_alongside_boot(settings, snapshot, plan[0][0], TARGET)
+                register_alongside_boot(settings, snapshot, plan)
                 write_boot_config(luks_uuid, filesystem_uuid, resume_offset)
             run('sync')
         finally:
@@ -630,7 +655,14 @@ def main():
         return 130
     except (ValueError, TypeError, OSError, subprocess.CalledProcessError, KeyboardInterrupt) as error:
         consequence = 'The selected disk may be incomplete.' if state.installation_started else 'No disk was changed.'
-        print(f'\nInstallation stopped: {error}\n{consequence}', file=sys.stderr)
+        detail = ''
+        if state.installation_started:
+            detail = (
+                "\nBefore retrying, release this attempt's mounts and mappings:\n"
+                f'  umount -R {TARGET}\n'
+                f'  cryptsetup close {MAPPER}'
+            )
+        print(f'\nInstallation stopped: {error}\n{consequence}{detail}', file=sys.stderr)
         return 1
     return 0
 
