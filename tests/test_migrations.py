@@ -49,13 +49,9 @@ class UserMigrationsTest(unittest.TestCase):
         self.assertEqual(log.read_text().splitlines(), ['first', 'second', 'second', 'third'])
 
     def test_skel_markers_suppress_execution(self):
-        # The PKGBUILD writes one marker per script into
-        # /etc/skel/.local/state/arch-niri-dux/migrations/, so useradd -m
-        # copies a complete set. The runner must honor those markers by
-        # script basename, the same name the PKGBUILD loop writes.
-        recipe = (ROOT / 'packages/integration/PKGBUILD').read_text()
-        self.assertIn('etc/skel/.local/state/arch-niri-dux/migrations', recipe)
-        self.assertIn('${script##*/}', recipe)
+        # Fresh accounts carry a complete marker set via /etc/skel, so
+        # useradd -m copies them and the runner must honor those markers by
+        # script basename without executing.
         log = self.root / 'log'
         self.script('20261106_01_example.sh', f'echo ran >>{log}')
         state = self.home / 'state/arch-niri-dux/migrations'

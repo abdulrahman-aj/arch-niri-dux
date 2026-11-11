@@ -1,6 +1,6 @@
 [Unit]
 Description=Apply Arch Niri Dux user migrations
-After=graphical-session.target
+After=graphical-session.target dms.service
 PartOf=graphical-session.target
 
 [Service]
