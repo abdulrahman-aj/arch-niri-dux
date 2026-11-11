@@ -9,12 +9,20 @@ import re
 import subprocess
 import tempfile
 
-from package_lock import read_database
+from package_lock import archive_date, omarchy_pin, read_database, requested_packages
 from verification.digest import digest
 
 
 def _manifest(root, repository):
-    lock = json.loads((root / 'packages/closure.lock.json').read_text())
+    date = archive_date(root)
+    downloaded = repository / 'arch-downloaded.json'
+    try:
+        arch = json.loads(downloaded.read_text())
+    finally:
+        # The payload directory ships on the ISO; provenance lives in the manifest.
+        downloaded.unlink(missing_ok=True)
+    requested = requested_packages(root)
+    pin = [entry for entry in omarchy_pin(root) if entry['name'] in requested]
     integration = json.loads((repository / 'integration.manifest.json').read_text())
     recipes = json.loads((root / 'packages/aur-recipes.json').read_text())
     apps = integration.get('apps', [])
@@ -27,9 +35,13 @@ def _manifest(root, repository):
         raise ValueError('Dux app inventory does not match the declared recipes.')
     if any(entry['recipe'] != expected[entry['name']] for entry in apps):
         raise ValueError('Dux app provenance does not match the declared recipes.')
-    if lock['schema'] != 1:
-        raise ValueError('Unsupported package lock schema.')
-    return dict(schema=1, requested=lock['requested'], packages=lock['packages'], integration=integration)
+    return dict(
+        schema=1,
+        archive_date=date.strip(),
+        requested=requested,
+        packages=sorted(arch + pin, key=lambda e: e['name']),
+        integration=integration,
+    )
 
 
 def _inventory(manifest, repository):

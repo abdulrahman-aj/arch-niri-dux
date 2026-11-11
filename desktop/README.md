@@ -1,8 +1,9 @@
 # Packaged desktop integration
 
-`usr/share/arch-niri-dux/niri` contains the upstream Dux v2.1.0 Niri integration,
-vendored verbatim. `packages/desktop-sources.json` records source URLs and hashes.
-The upstream license is included. No personal dotfiles are used.
+`usr/share/arch-niri-dux/niri` contains the upstream Dux Niri integration,
+vendored verbatim from the dux-shell release matching the pinned dux-shell.
+`make lock` refreshes these files with the archive date. The upstream license
+is included. No personal dotfiles are used.
 
 The `arch-niri-dux` package owns shared system configuration. The installer
 applies vendor presets for Dux services and runs
@@ -40,9 +41,7 @@ Dux 2.1 ignores `~` includes. Relative home includes allow shortcut editing.
 Put personal Niri settings in `~/.config/niri/overrides.kdl`; initialization
 seeds comments only and preserves existing files and symlinks. Package updates
 can change defaults and session policy without editing home. `dms/binds.kdl` starts empty and holds
-only overrides. Dux generates `dms/binds-next.kdl` for the installed Niri. The
-entrypoint includes it before personal bindings. Keep that generated file local.
-Later bindings replace earlier ones, so a disabled shortcut
+only overrides; later bindings replace earlier ones, so a disabled shortcut
 can override its stock action with `spawn "true"`. This still consumes the key.
 Generated `dms/alttab.kdl` controls appearance.
 Rerunning user initialization preserves existing user Niri files. Generated

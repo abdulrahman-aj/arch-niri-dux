@@ -13,20 +13,29 @@ packages, and pacman tracks their files.
 
 ## Repositories
 
-`closure.lock.json` pins the signed Arch/Omarchy binary packages. The installed
-repository order is arch-niri-dux at
-`https://abdulrahman-aj.github.io/arch-niri-dux/x86_64`, then core and extra
-through `https://geo.mirror.pkgbuild.com/$repo/os/$arch`, then omarchy.
+`packages/archive-date` pins every Arch binary package in the offline ISO
+payload to one Arch Linux Archive snapshot
+(`https://archive.archlinux.org/repos/YYYY/MM/DD`), and
+`packages/omarchy-pin.json` pins the two Omarchy packages
+(`limine-mkinitcpio-hook`, `limine-snapper-sync`) by hash and signature. The
+installed repository order is arch-niri-dux at
+`https://abdulrahman-aj.github.io/arch-niri-dux/x86_64`, then core and extra,
+then omarchy.
 Our repository comes first so another repository cannot shadow our packages.
-Omarchy uses `https://pkgs.omarchy.org/stable/$arch`. The package ships this
-configuration in `/etc/pacman.d/arch-niri-dux.conf`. The integration repository
+The date freezes the build payload only: installed systems track the rolling
+mirrors in `/etc/pacman.d/arch-niri-dux.conf`, so `pacman -Syu` keeps updating
+Arch packages after installation. The integration repository
 retains `Required TrustedOnly`; other repositories inherit `Required
-DatabaseOptional`. New entries extend the closure. A lock refresh can change
-existing pins.
+DatabaseOptional`.
 
-Run `make lock` after changing `packages/packages.target` or `archiso/packages.live`.
-It resolves the closure on the host from the current mirror databases and
-rewrites the lock. Builds only fetch locked packages and refuse a stale lock.
+Run `make lock` to refresh the archive date, the Omarchy pin, and the vendored
+Dux files. It picks the latest available archive snapshot, vendors the Niri
+configuration from the dux-shell release matching that snapshot's dux-shell,
+and rewrites the pins; the Omarchy pin records each package's dependencies, so
+builds never read Omarchy's database. The build guest resolves the requested
+package lists against the pinned date, downloads them with pacman, and checks
+every signature against `keys/trusted-packagers.gpg`; the manifest records what
+was downloaded. Builds reuse the shared verified download cache.
 
 ## Dux app builds
 
@@ -53,9 +62,9 @@ published digest. The workflow opens a PR and never merges or publishes.
 missing, unexpected or mismatched packages and checks the generated database
 against their declared inventory.
 
-The manifest records the signed closure and our packages with their hashes and
-recipe provenance. Dux's system updater or `pacman -Syu` updates everything from
-signed repositories. `base-devel` provides `sudo`, which the installer
+The manifest records the pinned archive date, the downloaded Arch packages, and
+our packages with their hashes and recipe provenance. Dux's system updater or
+`pacman -Syu` updates everything from signed repositories. `base-devel` provides `sudo`, which the installer
 configures for `wheel`, and `fakeroot`, which Dux's updater uses to check for
 updates without root.
 

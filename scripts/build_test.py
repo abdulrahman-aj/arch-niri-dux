@@ -270,3 +270,75 @@ class LiveKeyringTests(unittest.TestCase):
                     self.assertEqual(operations.read_text().splitlines(), ['--init', '--populate archlinux'])
                 else:
                     self.assertFalse(operations.exists())
+
+
+class ResolveDateTests(unittest.TestCase):
+    def test_missing_snapshot_falls_back_to_previous_day(self):
+        import datetime
+        import urllib.error
+        from unittest.mock import MagicMock
+
+        available = MagicMock()
+        available.__enter__.return_value = available
+        missing = urllib.error.HTTPError('https://example.invalid/core.db', 404, 'Not Found', None, None)
+        with patch('urllib.request.urlopen', side_effect=[missing, available]) as opened:
+            self.assertEqual(
+                module.resolve_date(None), (datetime.date.today() - datetime.timedelta(days=1)).strftime('%Y/%m/%d')
+            )
+        self.assertEqual(opened.call_count, 2)
+
+    def test_server_error_aborts_instead_of_drifting_to_an_older_date(self):
+        import urllib.error
+
+        failing = urllib.error.HTTPError('https://example.invalid/core.db', 500, 'Server Error', None, None)
+        with patch('urllib.request.urlopen', side_effect=failing):
+            with self.assertRaises(urllib.error.HTTPError):
+                module.resolve_date(None)
+
+    def test_explicit_date_is_used_verbatim(self):
+        from unittest.mock import MagicMock
+
+        available = MagicMock()
+        available.__enter__.return_value = available
+        with patch('urllib.request.urlopen', return_value=available) as opened:
+            self.assertEqual(module.resolve_date('2026/11/10'), '2026/11/10')
+        self.assertEqual(opened.call_count, 1)
+
+
+class OmarchyDepsTests(unittest.TestCase):
+    def test_pin_dependencies_exclude_the_pinned_packages(self):
+        pin = [
+            dict(name='limine-mkinitcpio-hook', depends=['bash', 'limine']),
+            dict(name='limine-snapper-sync', depends=['limine-mkinitcpio-hook', 'libnotify']),
+        ]
+        self.assertEqual(module.omarchy_arch_deps(pin), {'bash', 'limine', 'libnotify'})
+
+
+class VendorDesktopTests(unittest.TestCase):
+    def tree(self, directory, pkgbuild):
+        root = Path(directory)
+        (root / 'desktop/usr/share/arch-niri-dux/niri/dms').mkdir(parents=True)
+        (root / 'packages/integration').mkdir(parents=True)
+        (root / 'packages/integration/PKGBUILD').write_text(pkgbuild)
+        return root
+
+    def test_refresh_rewrites_files_and_dux_shell_floor(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = self.tree(directory, "depends=('dux-shell>=2.1.0')\n")
+            module.vendor_desktop(root, 'v2.1.2', [f'body-{i}\n'.encode() for i in range(6)])
+            for _, path in module.VENDORED:
+                self.assertTrue((root / path).is_file())
+            self.assertIn("'dux-shell>=2.1.2'", (root / 'packages/integration/PKGBUILD').read_text())
+
+    def test_rerun_with_the_same_tag_succeeds(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = self.tree(directory, "depends=('dux-shell>=2.1.0')\n")
+            module.vendor_desktop(root, 'v2.1.2', [b'body\n'] * 6)
+            module.vendor_desktop(root, 'v2.1.2', [b'body\n'] * 6)
+            self.assertIn("'dux-shell>=2.1.2'", (root / 'packages/integration/PKGBUILD').read_text())
+
+    def test_missing_dux_shell_floor_fails_closed(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = self.tree(directory, "depends=('niri')\n")
+            with self.assertRaisesRegex(ValueError, 'no dux-shell floor'):
+                module.vendor_desktop(root, 'v2.1.2', [b'body\n'] * 6)

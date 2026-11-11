@@ -5,13 +5,15 @@ pinned bootstrap ISO and package closure. `fingerprints.txt` records the issuer
 fingerprints extracted from their signatures. These were exported from the
 Arch/Omarchy package keyring after the initial signature-verified build.
 
-The build uses this repository keyring, so it does not require Omarchy or a
-previously initialized host pacman keyring. No private key material is included.
+The build verifies every fetched package against this repository keyring, so it does not
+require Omarchy or a previously initialized host pacman keyring. No private key material is
+included.
 See [package inputs](../packages/README.md) for binary-package and Dux recipe
 verification.
 
-When intentionally updating the package lock, check new signing fingerprints
-against the source distribution's public keyring before adding their public keys.
+When a new archive date or Omarchy pin brings a new signer, the build fails and names
+its key. Check new signing fingerprints against the source distribution's public keyring
+before adding their public keys.
 
 `integration-signing.gpg` is our public release key, and
 `integration-signing.fingerprint` pins its primary identity. CI receives only

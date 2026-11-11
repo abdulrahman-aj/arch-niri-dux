@@ -13,7 +13,8 @@ edits to files listed in the integration recipe's `backup` array through its
    not run CI on PRs created by Actions; close and reopen one to run it. That
    workflow needs "Allow GitHub Actions to create and approve pull requests".
    A merged app update ships with the next integration version.
-2. Run `make test`, `make iso-development`, and `make verify` on the candidate.
+2. Run `make lock` when refreshing inputs, then `make test`, `make iso-development`, and `make verify`
+   on the candidate. `make lock` moves the Arch archive date and the vendored Dux files forward together.
    Update recorded evidence for changes affecting installation or the desktop.
 3. Merge, then tag that main commit as `v<version>-<pkgrel>` and push
    the tag. This step publishes. Main merges alone do not

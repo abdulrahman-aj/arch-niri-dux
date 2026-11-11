@@ -1,0 +1,35 @@
+[
+  {
+    "name": "limine-mkinitcpio-hook",
+    "version": "1.40.0-2",
+    "filename": "limine-mkinitcpio-hook-1.40.0-2-x86_64.pkg.tar.zst",
+    "sha256": "725f43ce1a73785d4159b741f5f82a6f08857070ea125cc54cb4f1e73faaf798",
+    "url": "https://pkgs.omarchy.org/stable/x86_64/limine-mkinitcpio-hook-1.40.0-2-x86_64.pkg.tar.zst",
+    "repository": "omarchy",
+    "signature": "iHUEABYKAB0WIQRA37Yw/0K8/7BHBGzwE07mgMrFcQUCatQeXQAKCRDwE07mgMrFcV2pAP4uDoa/yXAJ8QlmgCyMaIOufL8qMywdZX8JpX/gzU15awD/e58mw5YgnGin8KK97QqG5/Q+UMQpyqrAeyqLGYuIrAA=",
+    "depends": [
+      "bash",
+      "grep",
+      "tar",
+      "limine",
+      "mkinitcpio",
+      "efibootmgr"
+    ]
+  },
+  {
+    "name": "limine-snapper-sync",
+    "version": "1.32.1-2",
+    "filename": "limine-snapper-sync-1.32.1-2-x86_64.pkg.tar.zst",
+    "sha256": "95e239bd4c3297cc66c67f64ff66ef5df72ab5105995a2b11caf0f4a896e8465",
+    "url": "https://pkgs.omarchy.org/stable/x86_64/limine-snapper-sync-1.32.1-2-x86_64.pkg.tar.zst",
+    "repository": "omarchy",
+    "signature": "iHUEABYKAB0WIQRA37Yw/0K8/7BHBGzwE07mgMrFcQUCatQeXQAKCRDwE07mgMrFcaU5AQDThP590o65WesHiM5Bjq5fcvrtbTkj+UdTal/LKzhuIgD9HH0p56Ns/Yv5Wq28tFGvATASy0sqqclr2Uh3L7ibgwc=",
+    "depends": [
+      "bash",
+      "limine",
+      "snapper",
+      "btrfs-progs",
+      "libnotify"
+    ]
+  }
+]

@@ -18,7 +18,7 @@ prepare() {
 }
 
 package_arch-niri-dux() {
-    depends=(bash python libnotify systemd pacman niri 'dux-shell>=2.1.0' dux-greeter-bin dux-search-bin dux-calendar-bin
+    depends=(bash python libnotify systemd pacman niri 'dux-shell>=2.1.2' dux-greeter-bin dux-search-bin dux-calendar-bin
              dux-files-bin greetd gnome-keyring matugen adw-gtk-theme gtk3
              xdg-desktop-portal-gnome xdg-desktop-portal-gtk xdg-terminal-exec xdg-utils nftables)
     backup=(etc/snapper/configs/root etc/mkinitcpio.conf.d/arch-niri-dux.conf
