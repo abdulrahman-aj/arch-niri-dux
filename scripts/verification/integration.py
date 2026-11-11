@@ -48,7 +48,7 @@ def verify_upgrade():
         Path(user.pw_dir) / '.config' / name for name in ('niri/config.kdl', 'niri/dms/binds.kdl', 'xdg-terminals.list')
     ]
     before = {str(path): digest(path) for path in personal}
-    old_file = Path('/usr/share/arch-niri-dux/niri/dms/layout.kdl')
+    old_file = Path('/etc/skel/.config/niri/overrides.kdl')
     new_file = Path('/usr/share/arch-niri-dux/upgrade-fixture')
     fake_name = 'dux-verification-app'
     assert old_file.is_file() and not new_file.exists()
@@ -64,6 +64,9 @@ def verify_upgrade():
         assert changes == 1
         # Remove a seed template only in this disposable release. The running
         # session uses its user-owned copy, so deletion cannot break recovery.
+        # This must stay clear of files package() installs by explicit path
+        # (the skel Dux fragments, DUX-LICENSE, trailing rm): removing one of
+        # those breaks the candidate build instead of the installed file.
         entrypoint = 'package_arch-niri-dux() {'
         assert recipe.count(entrypoint) == 1
         recipe = recipe.replace(entrypoint, entrypoint + f'\n    rm "$srcdir/desktop{old_file}"')
