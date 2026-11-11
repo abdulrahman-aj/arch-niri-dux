@@ -4,7 +4,9 @@ description: Author and qualify offline system and per-user migrations.
 ---
 
 Prefer package ownership, dependencies, inherited defaults and missing-file
-seeds. Add a migration only for state changes those cannot express. Ship no
+seeds. Add a migration only for state changes those cannot express, and only
+when the task asks to change existing installs. A changed seed covers new
+accounts. Ship no
 production scripts until needed. Fresh defaults must produce the desired
 baseline. Fresh installs and accounts record completion without executing
 scripts.
