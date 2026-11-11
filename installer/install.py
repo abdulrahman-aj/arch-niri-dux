@@ -344,16 +344,15 @@ def check_installation_clock():
         )
 
 
-def verify_payload_signatures(config, database, cache, names):
-    """Verify every payload package against the install keyring before the disk is touched.
+def verify_payload_signatures(config, database, repository, filenames):
+    """Verify every resolved package file against the install keyring before the disk is touched.
 
     pacman --print resolves names only, so without this the first pacstrap is
-    the first real signature check, after partitioning. --downloadonly
-    exercises the same SigLevel and keyring the pacstrap will use, including
-    key expiry, which plain gpg verification would still accept. The cache is
-    disposable: corrupt entries are deleted from it, never from the medium.
+    the first real signature check, after partitioning. Checking the files in
+    place exercises the same keyring and expiry enforcement the pacstrap will
+    use, which plain gpg verification would still accept. Nothing is copied,
+    and the medium is never written.
     """
-    cache.mkdir(parents=True, exist_ok=True)
     try:
         run(
             'pacman',
@@ -361,20 +360,17 @@ def verify_payload_signatures(config, database, cache, names):
             str(config),
             '--dbpath',
             str(database),
-            '--cachedir',
-            str(cache),
-            '--sync',
-            '--downloadonly',
-            '--noconfirm',
-            *names,
+            '--upgrade',
+            '--print',
+            '--print-format',
+            '%f',
+            *(str(repository / name) for name in filenames),
         )
     except subprocess.CalledProcessError as error:
         raise ValueError(
             'Package signature preflight failed; the install keyring cannot verify the offline payload. '
             'A signing key may have expired or is missing; check the system clock and use a newer ISO.'
         ) from error
-    finally:
-        shutil.rmtree(cache, ignore_errors=True)
 
 
 def verify_repository(repository):
@@ -495,7 +491,7 @@ def install(settings, state=None):
             if '.pkg.tar.' in filename and not (REPO / filename).is_file():
                 raise ValueError(f'Offline dependency is missing: {filename}')
         verify_payload_signatures(
-            offline_conf, package_db, stage / 'payload-cache', [*packages, 'arch-niri-dux', 'arch-niri-dux-baseline']
+            offline_conf, package_db, REPO, [line for line in resolved.splitlines() if '.pkg.tar.' in line]
         )
         if storage.require_disk(settings.disk) != original_device:
             raise ValueError('Disk identity changed during package preflight; refusing to erase it.')

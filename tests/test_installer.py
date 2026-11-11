@@ -192,7 +192,7 @@ class InstallerSafetyTests(unittest.TestCase):
 
             def fake_run(*args, **_kwargs):
                 calls.append(args)
-                if '--downloadonly' in args:
+                if '--upgrade' in args:
                     raise installer.subprocess.CalledProcessError(1, args)
                 if '--print' in args:
                     return 'base-1.pkg.tar.zst\n'
@@ -215,7 +215,9 @@ class InstallerSafetyTests(unittest.TestCase):
                     installer.install(settings(), state)
                 partitions.assert_not_called()
                 self.assertFalse(state.installation_started)
-                self.assertTrue(any('--downloadonly' in args for args in calls))
+                preflight = [args for args in calls if '--upgrade' in args]
+                self.assertEqual(len(preflight), 1)
+                self.assertIn(str(root / 'base-1.pkg.tar.zst'), preflight[0])
 
     def test_signature_preflight_success_reaches_partitioning(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -248,10 +250,10 @@ class InstallerSafetyTests(unittest.TestCase):
                 with self.assertRaisesRegex(ValueError, 'sentinel partitioning'):
                     installer.install(settings(), state)
                 self.assertFalse(state.installation_started)
-            preflight = [args for args in calls if '--downloadonly' in args]
+            preflight = [args for args in calls if '--upgrade' in args]
             self.assertEqual(len(preflight), 1)
-            for name in ('base', 'arch-niri-dux', 'arch-niri-dux-baseline'):
-                self.assertIn(name, preflight[0])
+            self.assertIn(str(root / 'base-1.pkg.tar.zst'), preflight[0])
+            self.assertNotIn('--downloadonly', preflight[0])
 
     def test_disk_swap_between_confirmation_and_install_prevents_all_commands(self):
         with tempfile.TemporaryDirectory() as directory:
