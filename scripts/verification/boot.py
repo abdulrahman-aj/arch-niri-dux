@@ -56,9 +56,11 @@ def luks_pbkdf():
 def x11_keyboard(keymap, map_path=Path('/usr/share/systemd/kbd-model-map')):
     """Expected (layout, model, variant, options) for a console keymap.
 
-    Mirrors the installer's conversion through systemd's kbd-model-map; the
-    probe keeps its own copy because it also runs on the installed system,
-    where the installer package is not staged.
+    Mirrors the installer's conversion through systemd's kbd-model-map —
+    including its US fallback for unmapped keymaps — so the probe asserts
+    the login layout the installer actually designed. The probe keeps its own
+    copy because it also runs on the installed system, where the installer
+    package is not staged.
     """
     for line in map_path.read_text().splitlines():
         stripped = line.strip()
@@ -69,7 +71,7 @@ def x11_keyboard(keymap, map_path=Path('/usr/share/systemd/kbd-model-map')):
             continue
         layout, model, variant, options = fields[1], fields[2], fields[3], fields[4]
         return (layout, model, None if variant == '-' else variant, None if options == '-' else options)
-    raise AssertionError(f'No X11 layout mapping for console keymap {keymap!r}.')
+    return ('us', 'pc105', None, None)
 
 
 def keyboard_conf_text(root):

@@ -167,12 +167,28 @@ class InstallerSafetyTests(unittest.TestCase):
     def test_boot_entry_lookup_never_breaks_the_picker(self):
         with patch.object(storage, 'run', side_effect=OSError('no efibootmgr')):
             self.assertEqual(storage.boot_entry_nodes([RECORDED_DISK]), {})
-        stale = dict(RECORDED_DISK, children=[dict(name='/dev/sda9', type='part', size=1024**3)])
+        stale = dict(
+            RECORDED_DISK,
+            children=[
+                dict(
+                    name='/dev/sda9',
+                    type='part',
+                    size=1024**3,
+                    partuuid='aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee',
+                    mountpoints=[None],
+                )
+            ],
+        )
         with (
-            patch.object(storage, 'run', return_value='Boot0001* Other\tHD(1)/File(x.efi)'),
-            patch.object(storage, 'firmware_boot_path', return_value=(9, 'deadbeef-0000-0000-0000-000000000000', 'x')),
+            patch.object(storage, 'run', return_value='Boot0001* Other\tHD(9)/File(x.efi)') as commands,
+            patch.object(
+                storage, 'firmware_boot_path', return_value=(9, 'deadbeef-0000-0000-0000-000000000000', 'x')
+            ) as paths,
         ):
+            # No PARTUUID on this disk matches the decoded firmware GUID.
             self.assertEqual(storage.boot_entry_nodes([stale]), {})
+        commands.assert_called_once()
+        paths.assert_called_once_with('0001')
 
     def test_alongside_refusal_names_partitions_and_recovery_commands(self):
         text = storage.alongside_recovery_text(settings(), RECOVERY_SNAPSHOT, RECOVERY_PLAN)
@@ -190,14 +206,21 @@ class InstallerSafetyTests(unittest.TestCase):
 
     def test_alongside_registration_failure_keeps_recovery_commands(self):
         value = settings(mode='alongside', free_region=[2048, 2097152], existing_boot='0001')
-        with patch.object(storage, 'finish_alongside_boot', side_effect=ValueError('firmware refused')):
-            with self.assertRaisesRegex(ValueError, 'firmware refused'):
-                try:
-                    installer.register_alongside_boot(value, RECOVERY_SNAPSHOT, RECOVERY_PLAN)
-                except ValueError as error:
-                    self.assertIn('sgdisk --delete=5 /dev/vda', str(error))
-                    self.assertIn('efibootmgr --create-only', str(error))
-                    raise
+        failures = [
+            ValueError('firmware refused'),
+            installer.subprocess.CalledProcessError(1, ['efibootmgr', '--create-only']),
+        ]
+        for failure in failures:
+            with (
+                self.subTest(failure=type(failure).__name__),
+                patch.object(storage, 'finish_alongside_boot', side_effect=failure),
+            ):
+                with self.assertRaisesRegex(ValueError, 'sgdisk --delete=5 /dev/vda'):
+                    try:
+                        installer.register_alongside_boot(value, RECOVERY_SNAPSHOT, RECOVERY_PLAN)
+                    except ValueError as error:
+                        self.assertIn('efibootmgr --create-only', str(error))
+                        raise
 
     def test_post_write_failures_print_retry_cleanup(self):
         for started, present in ((True, True), (False, False)):

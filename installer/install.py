@@ -317,7 +317,9 @@ def write_keyboard_layout(keymap):
 def register_alongside_boot(settings, snapshot, plan):
     try:
         storage.finish_alongside_boot(settings, snapshot, plan[0][0], TARGET)
-    except ValueError as error:
+    except (ValueError, subprocess.CalledProcessError) as error:
+        # Firmware refusals surface as CalledProcessError (efibootmgr exits
+        # nonzero when the variable write is rejected), not ValueError.
         raise ValueError(f'{error}\n\n{storage.alongside_recovery_text(settings, snapshot, plan)}') from error
 
 
