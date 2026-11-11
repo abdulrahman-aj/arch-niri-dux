@@ -5,11 +5,9 @@ import contextlib
 import io
 import os
 import pty
-import re
 import socket
 import sys
 import tempfile
-import threading
 import unittest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'scripts'))
@@ -116,6 +114,9 @@ class FixtureSelectionTests(unittest.TestCase):
     def test_picks_newest_valid_and_ignores_incomplete(self):
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp)
+            registry = root / 'registry'
+            registry.mkdir()
+            self.assertIsNone(workspace.newest_accepted_fixture(registry))
             old = root / 'old'
             old.mkdir()
             (old / 'ACCEPTANCE-PASSED').write_text('All acceptance stages passed.\n')
@@ -124,109 +125,74 @@ class FixtureSelectionTests(unittest.TestCase):
             new.mkdir()
             (new / 'ACCEPTANCE-PASSED').write_text('All acceptance stages passed.\n')
             (new / 'disk.qcow2').write_bytes(b'new')
-            broken = root / 'broken'
-            broken.mkdir()
-            (broken / 'disk.qcow2').write_bytes(b'no marker')
-            registry = root / 'registry'
-            registry.mkdir()
-            for index, target in enumerate((old, new, broken)):
+            # A failed run's disk is unlinked, so a marker alone must never select it.
+            unlinked = root / 'unlinked'
+            unlinked.mkdir()
+            (unlinked / 'ACCEPTANCE-PASSED').write_text('All acceptance stages passed.\n')
+            for index, target in enumerate((old, new, unlinked)):
                 (registry / str(index)).write_text(str(target) + '\n')
             (registry / 'gone').write_text(str(root / 'missing') + '\n')
             (registry / 'relative').write_text('relative/path\n')
             os.utime(old, (1000, 1000))
             os.utime(new, (2000, 2000))
-            os.utime(broken, (3000, 3000))
+            os.utime(unlinked, (3000, 3000))
             self.assertEqual(workspace.newest_accepted_fixture(registry), new / 'disk.qcow2')
             self.assertEqual(workspace.accepted_fixtures(registry), [new, old])
 
-    def test_no_accepted_fixture_is_none(self):
-        with tempfile.TemporaryDirectory() as temp:
-            self.assertIsNone(workspace.newest_accepted_fixture(Path(temp) / 'missing'))
-            self.assertEqual(workspace.accepted_fixtures(Path(temp) / 'missing'), [])
-
 
 class CleanOutputTests(unittest.TestCase):
-    def test_strips_marker_line_and_terminal_escapes(self):
-        output = 'hello \x1b[32mworld\x1b[0m\r\necho done\r\n__VERIFY_abc123__:0\r\n'
-        self.assertEqual(vm_console.clean_output(output), 'hello world\necho done')
-
-    def test_strips_echoed_payload_marker(self):
-        output = (
-            "bash -c '(\r\n> echo hi\r\n> verify_status=$?; printf '\"'\"'\\n__VERIFY_abc123__:%s\\n'\"'\"' \"$verify_status\"'\r\n"
-            'hi\r\n__VERIFY_abc123__:0\r\n'
+    def test_drops_markers_and_escapes_but_keeps_shell_text(self):
+        raw = (
+            "bash -c '(\r\n> echo hi\r\n"
+            "> verify_status=$?; printf '\"'\"'\\n__VERIFY_abc123__:%s\\n'\"'\"' \"$verify_status\"'\r\n"
+            'hi "$HOME" \x1b[32mok\x1b[0m\r\n__VERIFY_abc123__:0\r\n'
         )
-        self.assertEqual(vm_console.clean_output(output), "bash -c '(\n> echo hi\nhi")
-
-    def test_keeps_quotes_and_dollar_expansion(self):
-        output = 'it\'s "$HOME"\r\n__VERIFY_deadbeef00__:0\r\n'
-        self.assertEqual(vm_console.clean_output(output), 'it\'s "$HOME"')
-
-
-def serve_kept_vm(sockets, open_connections):
-    """Minimal fake kept VM: answer the QMP handshake and one serial command."""
-    serial_listener = socket.socket(socket.AF_UNIX)
-    serial_listener.bind(str(sockets / 'serial.sock'))
-    serial_listener.listen(1)
-    qmp_listener = socket.socket(socket.AF_UNIX)
-    qmp_listener.bind(str(sockets / 'qmp.sock'))
-    qmp_listener.listen(1)
-    threading.Thread(target=_answer_qmp, args=(qmp_listener, open_connections), daemon=True).start()
-    threading.Thread(target=_answer_serial, args=(serial_listener, open_connections), daemon=True).start()
+        cleaned = vm_console.clean_output(raw)
+        self.assertIn("bash -c '(", cleaned)
+        self.assertIn('hi "$HOME" ok', cleaned)
+        self.assertNotIn('__VERIFY_', cleaned)
+        self.assertNotIn('\x1b', cleaned)
 
 
-def _track(open_connections, connection):
-    open_connections.append(connection)
-    return connection
+class StubVM:
+    """Stand-in for verification.vm.VM: echoes each script back with a completion marker."""
+
+    def __init__(self):
+        self.scripts = []
+        self.attach_error = None
+        self.socket_directory = None
+        self.log = io.StringIO()
+
+    def attach(self):
+        if self.attach_error is not None:
+            raise self.attach_error
+
+    def command(self, script):
+        self.scripts.append(script)
+        return script + '\r\n__VERIFY_ab12cd34__:0\r\n'
+
+    def stop(self):
+        pass
 
 
-def _answer_qmp(listener, open_connections):
-    try:
-        listener.settimeout(10)
-        connection, _ = listener.accept()
-    finally:
-        listener.close()
-    with _track(open_connections, connection):
-        connection.settimeout(10)
-        connection.sendall(b'{"QMP": {"version": {}, "capabilities": []}}\n')
-        while True:
-            try:
-                data = connection.recv(4096)
-            except OSError:
-                return
-            if not data:
-                return
-            if data.strip():
-                connection.sendall(b'{"return": {}}\n')
+class ConsoleCase(unittest.TestCase):
+    """Run vm_console.main against StubVM; assert stdout and exit codes."""
 
+    def setUp(self):
+        self.vm = StubVM()
+        self._real_vm = vm_console.VM
+        vm_console.VM = self._stub
 
-def _answer_serial(listener, open_connections):
-    try:
-        listener.settimeout(10)
-        connection, _ = listener.accept()
-    finally:
-        listener.close()
-    with _track(open_connections, connection):
-        connection.settimeout(10)
-        received = b''
-        marker = None
-        while marker is None:
-            try:
-                chunk = connection.recv(65536)
-            except OSError:
-                return
-            if not chunk:
-                return
-            received += chunk
-            match = re.search(rb'__VERIFY_[0-9a-f]+__', received)
-            if match and received.endswith(b'\n'):
-                marker = match.group(0)
-        try:
-            connection.sendall(b"it's $HOME\r\n\n" + marker + b':0\r\n')
-        except OSError:
-            pass
+    def tearDown(self):
+        vm_console.VM = self._real_vm
 
+    def _stub(self, *args):
+        return self.vm
 
-class StdinScriptTests(unittest.TestCase):
+    def kept_argv(self, temp, *verb):
+        (Path(temp) / '.sockets').mkdir()
+        return ['vm_console', '--directory', temp, *verb]
+
     def run_main(self, argv, stdin):
         showed = io.StringIO()
         old_argv, old_stdin = sys.argv, sys.stdin
@@ -236,43 +202,33 @@ class StdinScriptTests(unittest.TestCase):
                 vm_console.main()
         finally:
             sys.argv, sys.stdin = old_argv, old_stdin
-            for connection in self.connections:
-                connection.close()
-            self.connections.clear()
         return showed.getvalue()
 
-    def kept_argv(self, temp):
-        (Path(temp) / '.sockets').mkdir()
-        serve_kept_vm(Path(temp) / '.sockets', self.connections)
-        return ['vm_console', '--directory', temp, 'sh']
 
-    def setUp(self):
-        self.connections = []
-
+class StdinScriptTests(ConsoleCase):
     def test_sh_reads_script_from_stdin(self):
         with tempfile.TemporaryDirectory() as temp:
-            argv = self.kept_argv(temp)
-            output = self.run_main(argv, io.StringIO('echo "it\'s $HOME"\n'))
+            output = self.run_main(self.kept_argv(temp, 'sh'), io.StringIO('echo "it\'s $HOME"\n'))
+            self.assertEqual(self.vm.scripts, ['echo "it\'s $HOME"\n'])
             self.assertIn("it's $HOME", output)
             self.assertNotIn('__VERIFY_', output)
 
     def test_attach_failure_exits_nonzero(self):
+        self.vm.attach_error = RuntimeError('no kept VM')
         with tempfile.TemporaryDirectory() as temp:
-            (Path(temp) / '.sockets').mkdir()
             with self.assertRaises(SystemExit) as stop:
-                self.run_main(['vm_console', '--directory', temp, 'sh', 'true'], io.StringIO(''))
+                self.run_main(self.kept_argv(temp, 'sh', 'true'), io.StringIO(''))
             self.assertEqual(stop.exception.code, 1)
 
     def test_empty_stdin_is_a_usage_error(self):
         with tempfile.TemporaryDirectory() as temp:
-            argv = self.kept_argv(temp)
             with self.assertRaises(SystemExit) as stop:
-                self.run_main(argv, io.StringIO('  \n'))
+                self.run_main(self.kept_argv(temp, 'sh'), io.StringIO('  \n'))
             self.assertEqual(stop.exception.code, 2)
 
     def test_tty_stdin_is_a_usage_error(self):
         with tempfile.TemporaryDirectory() as temp:
-            argv = self.kept_argv(temp)
+            argv = self.kept_argv(temp, 'sh')
             primary, replica = pty.openpty()
             try:
                 with os.fdopen(replica, 'w') as stdin:

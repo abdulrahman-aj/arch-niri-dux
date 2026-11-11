@@ -24,8 +24,7 @@ def clean_output(output):
     for line in output.split('\n'):
         text = ANSI_RE.sub('', line).replace('\r', '')
         stripped = text.strip()
-        # The guest echoes the sent payload, including its printf with a
-        # literal %s where the exit status will go; drop that echo too.
+        # The guest echoes the sent payload, whose printf carries a literal %s; drop that line too.
         if MARKER_RE.fullmatch(stripped) or ECHO_RE.search(stripped):
             continue
         kept.append(text)
