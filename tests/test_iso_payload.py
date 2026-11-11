@@ -21,22 +21,26 @@ class PayloadFinalizationTests(unittest.TestCase):
         self.repository = self.root / 'repo'
         self.repository.mkdir()
         (self.root / 'packages').mkdir()
+        (self.root / 'archiso').mkdir()
         (self.root / 'out').mkdir()
         self.output = self.root / 'out/packages.manifest.json'
+        (self.root / 'packages/archive-date').write_text('2026/11/10\n')
+        (self.root / 'packages/packages.target').write_text('base\nlimine-mkinitcpio-hook\nlimine-snapper-sync\n')
+        (self.root / 'archiso/packages.live').write_text('# fixture live list\n')
         base = self.package('base')
-        self.lock = dict(
-            schema=1,
-            requested=['base'],
-            packages=[
-                base
-                | {
-                    'version': '1-1',
-                    'url': 'https://example.invalid/' + base['filename'],
-                    'repository': 'core',
-                    'signature': 'producer-verified',
-                }
-            ],
-        )
+        self.arch = [
+            base
+            | {
+                'version': '1-1',
+                'url': 'https://archive.example.invalid/' + base['filename'],
+                'repository': 'core',
+            }
+        ]
+        self.pin = [
+            self.package(name, repository='omarchy', producer_verified=True)
+            | {'version': '1-1', 'url': 'https://example.invalid/' + name, 'signature': 'producer-verified'}
+            for name in ('limine-mkinitcpio-hook', 'limine-snapper-sync')
+        ]
         own = [self.package(name) for name in ('arch-niri-dux', 'arch-niri-dux-baseline')]
         self.recipe = dict(
             name='example-bin', source_date_epoch=1234, files={'PKGBUILD': 'e' * 64, '.SRCINFO': 'f' * 64}
@@ -54,7 +58,7 @@ class PayloadFinalizationTests(unittest.TestCase):
         )
         self.save()
 
-    def package(self, name, directory=None):
+    def package(self, name, directory=None, repository=None, producer_verified=False):
         directory = directory or self.repository
         directory.mkdir(parents=True, exist_ok=True)
         with tempfile.TemporaryDirectory(dir=self.root) as temporary:
@@ -66,15 +70,28 @@ class PayloadFinalizationTests(unittest.TestCase):
             )
             path = directory / f'{name}-1-1-any.pkg.tar.zst'
             subprocess.run(['bsdtar', '--zstd', '-cf', str(path), '-C', str(source), '.PKGINFO'], check=True)
-        return dict(name=name, filename=path.name, sha256=hashlib.sha256(path.read_bytes()).hexdigest())
+        entry = dict(name=name, filename=path.name, sha256=hashlib.sha256(path.read_bytes()).hexdigest())
+        if repository is not None:
+            entry['repository'] = repository
+        return entry
 
     def save(self):
         for path, value in [
-            (self.root / 'packages/closure.lock.json', self.lock),
             (self.root / 'packages/aur-recipes.json', [self.recipe]),
+            (self.root / 'packages/omarchy-pin.json', self.pin),
+            (self.repository / 'arch-downloaded.json', self.arch),
             (self.repository / 'integration.manifest.json', self.integration),
         ]:
             path.write_text(json.dumps(value))
+
+    def expected_manifest(self):
+        return dict(
+            schema=1,
+            archive_date='2026/11/10',
+            requested=['base', 'limine-mkinitcpio-hook', 'limine-snapper-sync'],
+            packages=sorted(self.arch + self.pin, key=lambda e: e['name']),
+            integration=self.integration,
+        )
 
     def rejected(self, message):
         self.output.write_text('Previous complete manifest\n')
@@ -93,20 +110,21 @@ class PayloadFinalizationTests(unittest.TestCase):
         (self.repository / 'offline.db.tar.gz.old').write_text('Old bootstrap database')
         iso_payload.finalize(self.root, self.repository)
         combined = json.loads(self.output.read_text())
-        self.assertEqual(combined, self.lock | {'integration': self.integration})
+        self.assertEqual(combined, self.expected_manifest())
+        self.assertFalse((self.repository / 'arch-downloaded.json').exists())
         verify_repository(self.repository)
         with tarfile.open(self.repository / 'offline.db') as database:
             descriptions = [
                 database.extractfile(member).read().decode() for member in database if member.name.endswith('/desc')
             ]
-        self.assertEqual(len(descriptions), 4)
+        self.assertEqual(len(descriptions), 6)
         self.assertFalse(any('%NAME%\nobsolete\n' in text for text in descriptions))
         self.assertFalse((self.repository / 'offline.db.tar.gz.old').exists())
         listed = {line.split()[1] for line in (self.repository / 'SHA256SUMS').read_text().splitlines()}
         self.assertEqual(listed, {p.name for p in self.repository.glob('*.pkg.tar.zst')} | {'offline.db'})
 
     def test_missing_package_stops_without_replacing_manifest(self):
-        (self.repository / self.lock['packages'][0]['filename']).unlink()
+        (self.repository / self.arch[0]['filename']).unlink()
         self.rejected('Missing packages')
 
     def test_unexpected_package_is_rejected_and_not_deleted(self):
@@ -115,17 +133,17 @@ class PayloadFinalizationTests(unittest.TestCase):
         self.assertTrue((self.repository / extra['filename']).is_file())
 
     def test_corrupted_package_stops_without_replacing_manifest(self):
-        path = self.repository / self.lock['packages'][0]['filename']
+        path = self.repository / self.arch[0]['filename']
         path.write_bytes(path.read_bytes() + b'corruption')
         self.rejected('checksum mismatch')
 
     def test_metadata_name_must_match_the_actual_package_database(self):
-        self.lock['packages'][0]['name'] = 'pretend'
+        self.arch[0]['name'] = 'pretend'
         self.save()
         self.rejected('database inventory')
 
     def test_metadata_version_must_match_the_actual_package_database(self):
-        self.lock['packages'][0]['version'] = '99-1'
+        self.arch[0]['version'] = '99-1'
         self.save()
         self.rejected('database inventory')
 
@@ -135,7 +153,7 @@ class PayloadFinalizationTests(unittest.TestCase):
         self.rejected('Duplicate package name')
 
     def test_duplicate_package_filenames_are_rejected_across_origins(self):
-        self.integration['packages'][0]['filename'] = self.lock['packages'][0]['filename']
+        self.integration['packages'][0]['filename'] = self.arch[0]['filename']
         self.save()
         self.rejected('Duplicate package filename')
 
@@ -150,12 +168,12 @@ class PayloadFinalizationTests(unittest.TestCase):
         self.rejected('Dux app provenance')
 
     def test_unsafe_package_filename_is_rejected(self):
-        self.lock['packages'][0]['filename'] = '../escape.pkg.tar.zst'
+        self.arch[0]['filename'] = '../escape.pkg.tar.zst'
         self.save()
         self.rejected('Unsafe package filename')
 
     def test_package_symlink_is_rejected(self):
-        path = self.repository / self.lock['packages'][0]['filename']
+        path = self.repository / self.arch[0]['filename']
         moved = self.root / path.name
         path.rename(moved)
         path.symlink_to(moved)

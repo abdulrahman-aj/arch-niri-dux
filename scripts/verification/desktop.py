@@ -52,12 +52,9 @@ def fonts():
 
 def niri_overrides():
     bindings = Path('/home/tester/.config/niri/dms/binds.kdl')
-    generated = bindings.with_name('binds-next.kdl')
-    wait_until('Dux-generated Niri compatibility bindings', generated.is_file)
-    included = json.loads(
-        user_command('dms', 'config', 'resolve-include', 'niri', 'binds-next.kdl', capture=True).stdout
-    )
-    assert included['exists'] and included['included'], included
+    # Dux 2.1.2 retired the generated binds-next.kdl compatibility layer; the
+    # keybinds sheet reads the native bindings directly.
+    assert not bindings.with_name('binds-next.kdl').exists(), 'Retired compatibility bindings reappeared.'
     before = bindings.read_bytes()
     overrides = bindings.parent.parent / 'overrides.kdl'
     before_overrides = overrides.read_bytes() if overrides.exists() else None
@@ -111,7 +108,7 @@ def niri_overrides():
                 'override_effective': True,
                 'reset_restores_stock': True,
                 'overrides_mru_preserved': True,
-                'native_binds_next_included': included,
+                'compat_binds_next_retired': True,
                 'alt_f4_inherited': True,
                 'tracked_override_link_preserved': True,
             },

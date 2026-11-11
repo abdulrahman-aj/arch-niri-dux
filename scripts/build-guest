@@ -19,19 +19,19 @@ mount /dev/vda /build
 rm -rf /build/work /build/output
 fstrim /build || true
 mkdir -p /build/cache
-cat >/etc/pacman.conf <<'CONF'
+# Every guest package comes from the pinned archive date or the reviewed
+# Omarchy pin; rolling mirrors are never consulted.
+archive_date=$(cat /source/packages/archive-date)
+cat >/etc/pacman.conf <<CONF
 [options]
 Architecture = auto
 SigLevel = Required DatabaseOptional
 ParallelDownloads = 5
 CacheDir = /build/cache
 [core]
-Server = https://geo.mirror.pkgbuild.com/core/os/x86_64
+Server = https://archive.archlinux.org/repos/$archive_date/core/os/x86_64
 [extra]
-Server = https://geo.mirror.pkgbuild.com/extra/os/x86_64
-[omarchy]
-Server = https://pkgs.omarchy.org/stable/x86_64
-Usage = Sync Search Install
+Server = https://archive.archlinux.org/repos/$archive_date/extra/os/x86_64
 CONF
 # Serialize keyring preparation with archiso's background initializer.
 # Concurrent trustdb writers can corrupt the live VM keyring.
@@ -41,7 +41,7 @@ pacman-key --populate archlinux
 # Import the existing host trust anchors only in the isolated build VM.
 gpg --homedir /etc/pacman.d/gnupg --import /state/trusted-packagers.gpg
 python /source/scripts/package_lock.py fetch /source /build/payload/repo \
-    --keyring /state/trusted-packagers.gpg --downloads /downloads --host-cache /cache
+    --keyring /state/trusted-packagers.gpg --downloads /downloads --host-cache /cache --cache-dir /build/cache
 cat >/build/pacman-pinned.conf <<'CONF'
 [options]
 Architecture = auto

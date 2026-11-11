@@ -9,7 +9,8 @@ make verify
 ```
 
 `make iso` builds the ISO from the signed packages of the release in the recipe. To build unreleased
-integration changes, run `make iso-development` instead. The build writes the ISO and its checksums to
+integration changes, run `make iso-development` instead. Arch packages come from the date pinned in
+`packages/archive-date`; run `make lock` to move it forward. The build writes the ISO and its checksums to
 `out/`. [Verification](VERIFICATION.md) lists the test targets, VM requirements and current limits, and
 [release maintenance](packages/RELEASING.md) covers publishing.
 

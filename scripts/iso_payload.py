@@ -9,12 +9,25 @@ import re
 import subprocess
 import tempfile
 
-from package_lock import read_database
+from package_lock import DATE_PATTERN, OMARCHY_NAMES, read_database, requested_packages, validate_entry
 from verification.digest import digest
 
 
 def _manifest(root, repository):
-    lock = json.loads((root / 'packages/closure.lock.json').read_text())
+    date = (root / 'packages/archive-date').read_text()
+    if not DATE_PATTERN.fullmatch(date):
+        raise ValueError('Pinned archive date must look like YYYY/MM/DD')
+    downloaded = repository / 'arch-downloaded.json'
+    try:
+        arch = json.loads(downloaded.read_text())
+    finally:
+        # The payload directory ships on the ISO; provenance lives in the manifest.
+        downloaded.unlink(missing_ok=True)
+    pin = json.loads((root / 'packages/omarchy-pin.json').read_text())
+    if {entry['name'] for entry in pin} - set(OMARCHY_NAMES) or len(pin) != len({e['name'] for e in pin}):
+        raise ValueError('Omarchy pin holds only the two reviewed packages.')
+    for entry in pin:
+        validate_entry(entry)
     integration = json.loads((repository / 'integration.manifest.json').read_text())
     recipes = json.loads((root / 'packages/aur-recipes.json').read_text())
     apps = integration.get('apps', [])
@@ -27,9 +40,13 @@ def _manifest(root, repository):
         raise ValueError('Dux app inventory does not match the declared recipes.')
     if any(entry['recipe'] != expected[entry['name']] for entry in apps):
         raise ValueError('Dux app provenance does not match the declared recipes.')
-    if lock['schema'] != 1:
-        raise ValueError('Unsupported package lock schema.')
-    return dict(schema=1, requested=lock['requested'], packages=lock['packages'], integration=integration)
+    return dict(
+        schema=1,
+        archive_date=date.strip(),
+        requested=requested_packages(root),
+        packages=sorted(arch + pin, key=lambda e: e['name']),
+        integration=integration,
+    )
 
 
 def _inventory(manifest, repository):
