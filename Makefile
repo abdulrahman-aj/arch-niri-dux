@@ -6,8 +6,9 @@ iso:
 iso-development:
 	./scripts/build-in-dev ./scripts/build-iso development
 # make try is for humans; agents use make verify-fast ARGS=--keep.
+# try is exempt from heavy-guard so it runs on the laptop too.
 try:
-	./scripts/build-in-dev python3 scripts/try_vm.py $(ARGS)
+	./scripts/build-in-dev python3 scripts/try_vm.py
 verify:
 	./scripts/build-in-dev python3 scripts/verify.py $(ARGS)
 verify-fast:
@@ -41,7 +42,7 @@ fetch-alongside:
 help:
 	@printf '%s\n' 'lock, iso, iso-development, iso-checksums, verify, verify-fast, verify-release,' \
 		'verify-hibernate, verify-alongside, provision-alongside, fetch-alongside, gc' \
-		'try: interactive persistent test-drive VMs (for humans; agents use make verify-fast ARGS=--keep).'
+		'try: guided persistent test-drive VMs (for humans; agents use make verify-fast ARGS=--keep).'
 
 .PHONY: heavy-guard gc
 lock iso iso-development verify verify-fast verify-release verify-hibernate verify-alongside provision-alongside fetch-alongside: | heavy-guard

@@ -9,14 +9,7 @@ make verify
 ```
 
 `make iso` builds the ISO from the signed packages of the release in the recipe. To build unreleased
-integration changes, run `make iso-development` instead. To test-drive the installer by hand in a window,
-run `make try` (for humans; agents use `make verify-fast ARGS=--keep`). The first `open` boots the newest
-`out/*.iso` with the VM disk attached (building a development ISO first only when `out/` holds none, and
-saying so); later opens boot the installed disk directly. Each VM persists under
-`~/.local/share/arch-niri-dux/try/<name>/` (disk, OVMF vars, metadata with the ISO version it was
-installed from, size and last use), outside the checkout. The guest gets 8 GiB by default, or 4 GiB with a
-notice when the host is short on RAM; user-mode networking is on unless `--offline` is passed. The list
-shows the ISO version each VM was installed from; there are no update notifications. Arch packages come from the date pinned in
+integration changes, run `make iso-development` instead. To test-drive the installer by hand in a window, run `make try` (humans only; agents use `make verify-fast ARGS=--keep`). It asks whether to open an existing VM, create a new one, or delete one. Each VM keeps its disk under `~/.local/share/arch-niri-dux/try/<name>/`, boots the newest `out/*.iso` with the disk first in boot order (so an installed system boots when present, otherwise the installer), and gets 8 GiB of RAM. Build an ISO first with `make iso-development` when `out/` holds none. Arch packages come from the date pinned in
 `packages/archive-date`; run `make lock` to move it forward. The build writes the ISO and its checksums to
 `out/`. An ISO stays installable only while its install keyring's earliest signing key is still valid;
 the installer refuses before touching the disk once a key has expired, so replace distributed ISOs before then. [Verification](VERIFICATION.md) lists the test targets, VM requirements and current limits, and
