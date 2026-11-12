@@ -19,6 +19,7 @@ AGENT_VARS = ['CLAUDECODE', 'AI_AGENT', 'AGENT']
 AGENT_PREFIXES = ['CODEX_', 'OPENCODE', 'T3CODE_']
 
 NAME_RE = re.compile(r'[A-Za-z0-9][A-Za-z0-9._-]*')
+RESERVED_NAMES = ('new', 'delete')
 DEFAULT_NAME = 'default'
 DEFAULT_RAM_GIB = 8
 DEFAULT_DISK_GIB = 48
@@ -44,18 +45,33 @@ def try_base():
 
 
 def valid_name(name):
-    return bool(NAME_RE.fullmatch(name or ''))
+    return bool(name and NAME_RE.fullmatch(name) and any(character.isalpha() for character in name))
+
+
+def resolve_base(base):
+    return try_base() if base is None else Path(base)
 
 
 def vm_dir(name, base=None):
-    return (try_base() if base is None else Path(base)) / name
+    return resolve_base(base) / name
 
 
 def list_vms(base=None):
-    root = try_base() if base is None else Path(base)
+    root = resolve_base(base)
     if not root.is_dir():
         return []
-    return sorted([path for path in root.iterdir() if path.is_dir() and valid_name(path.name)])
+    return sorted(
+        path
+        for path in root.iterdir()
+        if path.is_dir() and valid_name(path.name) and ((path / 'disk.qcow2').exists() or (path / 'config').exists())
+    )
+
+
+def require_vm_dir(name, base=None):
+    directory = vm_dir(name, base)
+    if not directory.is_dir():
+        raise SystemExit(f"VM '{name}' does not exist.")
+    return directory
 
 
 def read_choices(directory):
@@ -80,6 +96,16 @@ def read_choices(directory):
 
 def write_choices(directory, ram_gib, disk_gib, source):
     (directory / 'config').write_text(f'ram_gib={ram_gib}\ndisk_gib={disk_gib}\nsource={source}\n')
+
+
+def ask_name():
+    while True:
+        name = input(f'VM name [{DEFAULT_NAME}]: ').strip() or DEFAULT_NAME
+        if valid_name(name) and name.lower() not in RESERVED_NAMES:
+            return name
+        print(
+            f'Use letters, digits, dot, dash or underscore; {", ".join(repr(word) for word in RESERVED_NAMES)} and digits-only names are reserved.'
+        )
 
 
 def ask_positive_int(label, default):
@@ -176,13 +202,15 @@ def firmware():
     raise SystemExit(f'OVMF firmware missing under {base}; install edk2-ovmf.')
 
 
-def build_qemu_command(*, code, variables, disk, iso, ram_gib=DEFAULT_RAM_GIB, gl=True):
+def build_qemu_command(*, code, variables, disk, iso, ram_gib, gl):
     command = ['qemu-system-x86_64', '-machine', 'q35,accel=kvm', '-cpu', 'host', '-m', str(ram_gib * 1024)]
     command += ['-smp', '4']
-    if gl:
-        command += ['-display', 'gtk,gl=on,show-cursor=on', '-device', 'virtio-vga-gl']
-    else:
-        command += ['-display', 'gtk,show-cursor=on', '-device', 'virtio-vga']
+    command += [
+        '-display',
+        f'gtk{",gl=on" if gl else ""},show-cursor=on',
+        '-device',
+        'virtio-vga-gl' if gl else 'virtio-vga',
+    ]
     command += ['-drive', f'if=pflash,format=raw,readonly=on,file={code}']
     command += ['-drive', f'if=pflash,format=raw,file={variables}']
     command += ['-drive', f'if=none,id=target-disk,format=qcow2,file={disk}']
@@ -194,7 +222,7 @@ def build_qemu_command(*, code, variables, disk, iso, ram_gib=DEFAULT_RAM_GIB, g
 
 
 def create_vm(name, base=None, ram_gib=DEFAULT_RAM_GIB, disk_gib=DEFAULT_DISK_GIB, source=DEVELOPMENT):
-    if not valid_name(name):
+    if not valid_name(name) or name.lower() in RESERVED_NAMES:
         raise SystemExit(f'Invalid VM name {name!r}; use letters, digits, dot, dash or underscore.')
     directory = vm_dir(name, base)
     if directory.exists():
@@ -223,9 +251,7 @@ def create_vm(name, base=None, ram_gib=DEFAULT_RAM_GIB, disk_gib=DEFAULT_DISK_GI
 
 
 def open_vm(name, base=None):
-    directory = vm_dir(name, base)
-    if not directory.is_dir():
-        raise SystemExit(f"VM '{name}' does not exist.")
+    directory = require_vm_dir(name, base)
     disk = directory / 'disk.qcow2'
     if not disk.exists():
         raise SystemExit(f"Disk missing for VM '{name}': {disk}")
@@ -249,9 +275,7 @@ def open_vm(name, base=None):
 
 
 def delete_vm(name, base=None):
-    directory = vm_dir(name, base)
-    if not directory.is_dir():
-        raise SystemExit(f"VM '{name}' does not exist.")
+    directory = require_vm_dir(name, base)
     try:
         answer = input(f"Delete VM '{name}' and its disk? [y/N] ").strip()
     except (EOFError, KeyboardInterrupt):
@@ -275,47 +299,29 @@ def interactive(base=None):
         except (EOFError, KeyboardInterrupt):
             print()
             return
-        if not answer or answer.lower() in ('q', 'quit', 'exit'):
+        if not answer:
             return
-        if answer.lower() in ('n', 'new'):
-            try:
-                name = input(f'VM name [{DEFAULT_NAME}]: ').strip() or DEFAULT_NAME
+        try:
+            if answer == 'new':
+                name = ask_name()
                 source = ask_source()
                 ram_gib = ask_positive_int('RAM', DEFAULT_RAM_GIB)
                 disk_gib = ask_positive_int('Disk', DEFAULT_DISK_GIB)
-            except (EOFError, KeyboardInterrupt):
-                print()
-                return
-            try:
                 create_vm(name, base, ram_gib=ram_gib, disk_gib=disk_gib, source=source)
                 open_vm(name, base)
-            except SystemExit as error:
-                print(error)
-            continue
-        if answer.lower().startswith('delete'):
-            target = answer.partition(' ')[2].strip()
-            if not target:
-                try:
-                    target = input('Delete which VM? (Enter cancels): ').strip()
-                except (EOFError, KeyboardInterrupt):
-                    print()
-                    continue
-                if not target:
-                    continue
-            try:
-                delete_vm(target, base)
-            except SystemExit as error:
-                print(error)
-            continue
-        if re.fullmatch(r'[0-9]+', answer) and 1 <= int(answer) <= len(vms):
-            target = vms[int(answer) - 1].name
-        elif valid_name(answer) and vm_dir(answer, base).is_dir():
-            target = answer
-        else:
-            print(f"Unknown VM '{answer}'.")
-            continue
-        try:
-            open_vm(target, base)
+            elif answer == 'delete':
+                target = input('Delete which VM? (Enter cancels): ').strip()
+                if target:
+                    delete_vm(target, base)
+            elif re.fullmatch(r'[0-9]+', answer) and 1 <= int(answer) <= len(vms):
+                open_vm(vms[int(answer) - 1].name, base)
+            elif valid_name(answer) and vm_dir(answer, base).is_dir():
+                open_vm(answer, base)
+            else:
+                print(f"Unknown VM '{answer}'.")
+        except (EOFError, KeyboardInterrupt):
+            print()
+            return
         except SystemExit as error:
             print(error)
 

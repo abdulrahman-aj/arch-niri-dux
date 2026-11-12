@@ -19,10 +19,24 @@ class TryVmTests(unittest.TestCase):
         try_vm.refuse_if_agent({'HOME': '/home/u', 'PATH': '/usr/bin'})
 
     def test_name_validation(self):
-        for good in ('default', 'a', 'my-vm_1.2'):
+        for good in ('default', 'a', 'my-vm_1.2', 'new', '123abc'):
             self.assertTrue(try_vm.valid_name(good))
-        for bad in ('', '../evil', 'a/b', ' name', '-lead'):
+        for bad in ('', '../evil', 'a/b', ' name', '-lead', '123', '1.5'):
             self.assertFalse(try_vm.valid_name(bad))
+
+    def test_ask_name_rejects_reserved_and_bad_names(self):
+        with patch('builtins.input', side_effect=['new', '123', 'my vm', 'ok-name']):
+            self.assertEqual(try_vm.ask_name(), 'ok-name')
+        with patch('builtins.input', side_effect=['']):
+            self.assertEqual(try_vm.ask_name(), try_vm.DEFAULT_NAME)
+
+    def test_list_vms_ignores_junk_directories(self):
+        with tempfile.TemporaryDirectory() as state:
+            (Path(state) / 'out').mkdir()
+            real = Path(state) / 'demo'
+            real.mkdir()
+            (real / 'disk.qcow2').write_bytes(b'disk')
+            self.assertEqual([path.name for path in try_vm.list_vms(state)], ['demo'])
 
     def test_size_and_source_prompts(self):
         with patch('builtins.input', side_effect=['0', '-3', 'abc', '16']):
@@ -42,6 +56,23 @@ class TryVmTests(unittest.TestCase):
                 self.assertTrue(try_vm.iso_for_kind(try_vm.RELEASE).name.endswith('.iso'))
                 self.assertFalse(try_vm.iso_for_kind(try_vm.RELEASE).name.endswith('-development.iso'))
                 self.assertTrue(try_vm.iso_for_kind(try_vm.DEVELOPMENT).name.endswith('-development.iso'))
+
+    def test_ensure_iso_and_staleness(self):
+        commit_time = int(
+            subprocess.check_output(['git', '-C', str(ROOT), 'log', '-1', '--format=%ct'], text=True).strip()
+        )
+        with tempfile.TemporaryDirectory() as temp:
+            with patch.dict(os.environ, {'TRY_OUT_DIR': temp}):
+                with patch('builtins.input', side_effect=['n']):
+                    with self.assertRaises(SystemExit):
+                        try_vm.ensure_iso(try_vm.DEVELOPMENT)
+                iso = Path(temp) / 'x-development.iso'
+                iso.write_bytes(b'data')
+                os.utime(iso, (commit_time - 100, commit_time - 100))
+                self.assertTrue(try_vm.checkout_newer_than(iso))
+                os.utime(iso, (commit_time, commit_time))
+                self.assertFalse(try_vm.checkout_newer_than(iso))
+                self.assertEqual(try_vm.ensure_iso(try_vm.DEVELOPMENT), iso.resolve())
 
     def test_choices_roundtrip_and_defaults(self):
         with tempfile.TemporaryDirectory() as temp:
@@ -84,7 +115,7 @@ class TryVmTests(unittest.TestCase):
                 choices = try_vm.read_choices(Path(state) / 'demo')
                 self.assertEqual(choices, {'ram_gib': 16, 'disk_gib': 60, 'source': try_vm.RELEASE})
                 self.assertTrue((Path(state) / 'demo' / 'disk.qcow2').is_file())
-                with patch('builtins.input', side_effect=['delete demo', 'y', '']):
+                with patch('builtins.input', side_effect=['delete', 'demo', 'y', '']):
                     try_vm.interactive(base=state)
                 self.assertFalse((Path(state) / 'demo').exists())
 
