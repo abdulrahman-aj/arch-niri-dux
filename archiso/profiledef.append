@@ -1,0 +1,11 @@
+iso_name="arch-niri-dux"
+iso_label="ARCH_NIRI_DUX"
+iso_publisher="arch-niri-dux"
+iso_application="Offline Arch Niri Dux Installer"
+bootmodes=('uefi.systemd-boot')
+airootfs_image_type="squashfs"
+airootfs_image_tool_options=('-comp' 'zstd' '-Xcompression-level' '3')
+file_permissions+=(
+ ["/usr/local/bin/arch-niri-install"]="0:0:755"
+ ["/usr/local/share/arch-niri-dux/install-keyring"]="0:0:700"
+)

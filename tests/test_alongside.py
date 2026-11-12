@@ -356,6 +356,48 @@ class AlongsideBootTests(unittest.TestCase):
                 with self.assertRaisesRegex(ValueError, 'Kernel partition geometry'):
                     installer.verify_partition_nodes(settings(), [(2, 513, 1536, 'ef00', 'ESP')], 4096)
 
+    def test_erase_mode_verifies_kernel_geometry_against_created_table(self):
+        table = {
+            'sectorsize': 512,
+            'partitions': [
+                {'node': '/dev/vda1', 'start': 2048, 'size': 8388608},
+                {'node': '/dev/vda2', 'start': 8390656, 'size': 85983232},
+            ],
+        }
+
+        def command(*args, **_kwargs):
+            if args[:2] == ('sfdisk', '--json'):
+                return json.dumps({'partitiontable': table})
+            return None
+
+        with tempfile.TemporaryDirectory() as directory:
+            sysfs = Path(directory)
+            for part in table['partitions']:
+                node = Path(part['node']).name
+                (sysfs / node).mkdir()
+                (sysfs / node / 'start').write_text(str(part['start']))
+                (sysfs / node / 'size').write_text(str(part['size']))
+            real_path = Path
+
+            def path(value, *args):
+                return sysfs if value == '/sys/class/block' else real_path(value, *args)
+
+            with (
+                patch.object(installer, 'run', side_effect=command),
+                patch.object(installer, 'Path', side_effect=path),
+            ):
+                self.assertEqual(
+                    installer.create_partitions(settings(), None, (1, 2, 3), lambda: None),
+                    ('/dev/vda1', '/dev/vda2'),
+                )
+            (sysfs / 'vda2/size').write_text(str(table['partitions'][1]['size'] + 2))
+            with (
+                patch.object(installer, 'run', side_effect=command),
+                patch.object(installer, 'Path', side_effect=path),
+                self.assertRaisesRegex(ValueError, 'Kernel partition geometry'),
+            ):
+                installer.create_partitions(settings(), None, (1, 2, 3), lambda: None)
+
 
 class FirmwareRegistrationTests(unittest.TestCase):
     def setUp(self):

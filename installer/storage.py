@@ -588,4 +588,17 @@ def create_partitions(settings, snapshot, identity, on_start):
     run('udevadm', 'settle')
     if snapshot:
         verify_partition_nodes(settings, alongside_plan(settings, snapshot), snapshot['table']['sectorsize'])
+    else:
+        table = json.loads(run('sfdisk', '--json', settings.disk, capture=True))['partitiontable']
+        plan = [
+            (
+                int(part['node'].removeprefix(settings.disk).removeprefix('p')),
+                part['start'],
+                part['start'] + part['size'] - 1,
+                '',
+                '',
+            )
+            for part in table['partitions']
+        ]
+        verify_partition_nodes(settings, plan, table['sectorsize'])
     return esp, encrypted

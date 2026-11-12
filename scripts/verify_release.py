@@ -53,6 +53,11 @@ def main():
     evidence = Evidence(directory, parents=True, exist_ok=True)
     own(directory)
     iso_digest = digest(iso)
+    canonical = ROOT / 'out' / canonical_name
+    # SHA256SUMS hashes the canonical file while the dispatch command carries
+    # iso_digest; refuse a stale staged ISO before the long VM run.
+    if canonical.exists() and digest(canonical) != iso_digest:
+        parser.error(f'A different ISO is already staged as {canonical}; remove it first.')
     evidence.inputs(
         {
             'tag': args.tag,
@@ -83,7 +88,6 @@ def main():
         run_install(vm, evidence.passed, evidence, directory, package_digest, serial_preboot=True)
         integration.verify_published(vm, evidence.passed)
         (directory / 'RELEASE-CHECK-PASSED').write_text('Release install and online delivery passed.\n')
-        canonical = ROOT / 'out' / canonical_name
         if not canonical.exists():
             shutil.copyfile(iso, canonical)
         iso_checksums.prepare(args.tag, canonical, ROOT / 'out' / 'iso-checksums')
@@ -95,7 +99,7 @@ def main():
         return 1
     finally:
         vm.stop()
-        if (directory / 'RELEASE-CHECK-PASSED').exists() is False:
+        if not (directory / 'RELEASE-CHECK-PASSED').exists():
             disk.unlink(missing_ok=True)
 
 
