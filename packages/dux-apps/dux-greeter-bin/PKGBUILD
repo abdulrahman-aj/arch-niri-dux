@@ -32,6 +32,7 @@ source=(
   "LICENSE-${pkgver}::${_urlraw}/LICENSE"
   "README-${pkgver}.md::${_urlraw}/README.md"
   "tmpfiles-dms-greeter.conf"
+  "sysusers-dms-greeter.conf"
   "dms-niri.kdl"
   "dms-hypr.lua"
   "${_binname}-completions-${pkgver}.tar.gz::${_urlrel}/${_binname}-completions-${pkgver}.tar.gz"
@@ -42,6 +43,7 @@ source_aarch64=("${_binname}-${arch[1]}-${pkgver}.gz::${_urlrel}/${_binname}-lin
 sha256sums=('0c4c01a73eb7d2d1286a7e60e580dd53b605636dc46a57c9c3318e8e23efc676'
             '40331d18c29600ea9858d6e78099a80044b5a1b2dfc5d5201120b48876d1155d'
             '3dc267a18f22d06f595a80fb77275db56fe88c48b838db364ba3a1d307572a50'
+            '6fd5a090e3c34afed64f8497da7a0980f77fa6cb872a7f6f83cf229dcf54da94'
             '0376981f71a7331e3a8e5fdf71628f8c0e3881328969011f31fc1da6d54036c0'
             '1697f1cf527a911d08b7cd4dd935727ecc22cc2707819a5ef6253a2d59faee2b'
             'fac4f302a8551ec39d400f5d92ce596a68cf0112349ba9f51842fbe539f4dec6')
@@ -58,6 +60,10 @@ package() {
   install -Dm644 "${_binname}.fish" "${pkgdir}/usr/share/fish/vendor_completions.d/${_binname}.fish"
 
   install -Dm644 "tmpfiles-dms-greeter.conf" "${pkgdir}/usr/lib/tmpfiles.d/${_binname}.conf"
+  # Upstream's sysusers fragment gives the greeter a home (/var/lib/greeter);
+  # greetd's own fragment leaves it homeless, so user services crash-loop.
+  # dms-greeter.conf sorts before greetd.conf, so ours wins on fresh installs.
+  install -Dm644 "sysusers-dms-greeter.conf" "${pkgdir}/usr/lib/sysusers.d/${_binname}.conf"
 
   install -Dm644 "dms-niri.kdl"  "${pkgdir}/usr/share/doc/${pkgname}/examples/dms-niri.kdl"
   install -Dm644 "dms-hypr.lua"  "${pkgdir}/usr/share/doc/${pkgname}/examples/dms-hypr.lua"
