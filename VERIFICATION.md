@@ -86,6 +86,17 @@ and alongside qualification. Pass `--kernel-package PATH` to reinstall a
 local kernel archive in the same transaction and exercise both boot rebuild
 hooks.
 
+## Error gate
+
+`make verify` and `make verify-fast` end with an error gate: a final clean
+boot collects `journalctl -b -p warning` and `systemctl --failed` (system and
+the tester's user manager) into the evidence dir, and any line without a
+reviewed entry in `scripts/verification/gate-allowlist.txt` fails the run
+before `ACCEPTANCE-PASSED` / `FAST-PASSED` is written. Each allowlist line is
+one regex on the normalized text with a `# <reason>` naming its judgement
+rows. Deliberate-failure probes (firewall containment, signature rejection)
+run in earlier boots only, so the final-boot scan never sees them.
+
 ## Debugging loop (kept verify-fast VM)
 
 Rule: QML/probe-only changes never rerun full `make verify`; full verify is
