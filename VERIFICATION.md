@@ -42,22 +42,19 @@ required for installer changes and releases.
 
 The runner continues past stage failures while the guest still answers:
 apps, PDF, camera and browser depend only on the desktop session, not on each
-other, so one of them failing still runs the rest. A stage whose dependency
-failed is skipped, and the run exits non-zero listing every failure and skip
-in `FAILURE.txt`. `make verify ARGS='--list-stages'` shows the order, tags
-and dependencies; `ARGS='--stages apps,pdf,camera,browser'` reruns a subset,
-automatically pulling in the dependencies it needs (here boot and desktop)
-in canonical order. Only a default run (no `--stages`) writes
-`ACCEPTANCE-PASSED` and can become a fixture; subset runs write
-`STAGES-PASSED` instead, so a partial disk never feeds fixture auto-discovery.
+other, so one of them failing still runs the rest. If boot or desktop fails,
+the run stops there, since later stages cannot mean anything without them. Any
+other failure still runs the rest, and the run exits non-zero listing every
+failure and skip in `FAILURE.txt`. Only a passing full run writes
+`ACCEPTANCE-PASSED` and can become a fixture, so a partial disk never feeds
+fixture auto-discovery.
 
-The Dux updater stage is tagged `slow`: its two scheduled-check waits take
+The Dux updater stage is slow: its two scheduled-check waits take
 about eight minutes, so ordinary runs skip it and finish in about eight and a
 half minutes instead of sixteen and a half. Releases (`--online-repository`)
-include it by default. Request it explicitly with
-`make verify ARGS='--include-tags slow'` or `ARGS='--stages dux_update'`:
-do so for releases and for changes touching the update button, its seeds, or
-Dux itself.
+always include it. Request it explicitly with
+`make verify ARGS='--slow'` for changes touching the update button, its seeds,
+or Dux itself.
 
 `make verify ARGS='--keep'`: on failure the guest stays running with its
 serial/QMP sockets under `<evidence>/.sockets` and prints attach commands;
@@ -73,7 +70,7 @@ Suspend qualification requires logind `LockedHint=yes`, Niri's lock event, an un
 ## `make verify-fast`
 
 `make verify-fast` is a thin alias for fixture mode in `verify.py`
-(`--fixture` plus a stage list), not a second script. It builds current
+(`--fixture`), not a second script. It builds current
 integration packages inside a disposable overlay of the newest accepted
 `make verify` image. `--fixture` defaults to
 the newest registered 0.3+ workspace holding `ACCEPTANCE-PASSED` and `disk.qcow2`,
@@ -86,8 +83,7 @@ presets, greetd login, unlocked GNOME Keyring, loaded vendor systemd drop-ins
 and migration behavior. It does not replace fresh installation or snapshot
 and alongside qualification. Pass `--kernel-package PATH` to reinstall a
 local kernel archive in the same transaction and exercise both boot rebuild
-hooks. `ARGS='--stages policy,overrides'` reruns a subset of the post-upgrade
-checks (`plymouth,policy,overrides,wallpaper`); the upgrade itself always runs.
+hooks.
 
 ## Debugging loop (kept verify-fast VM)
 
