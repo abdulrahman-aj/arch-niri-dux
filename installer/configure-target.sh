@@ -58,10 +58,6 @@ dux_user_preset=$(awk '$1 == "enable" || $1 == "disable" { print $2 }' \
 mapfile -t dux_user_units <<<"$dux_user_preset"
 systemctl --global preset "${dux_user_units[@]}"
 systemd-tmpfiles --create /usr/lib/tmpfiles.d/dms-greeter.conf
-# Dux Files owns org.freedesktop.FileManager1 via the skel-seeded user
-# activator; Nautilus's system file would duplicate the bus name and spam
-# dbus-broker warnings, so remove it (a libalpm hook keeps it away later).
-rm -f /usr/share/dbus-1/services/org.freedesktop.FileManager1.service
 # The installer stays offline; enable online repositories only on the target.
 pacman-key --populate omarchy
 cat >/etc/pacman.conf <<'EOF'

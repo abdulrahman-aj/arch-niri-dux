@@ -36,7 +36,7 @@
     "source_date_epoch": 1794152840,
     "files": {
       ".SRCINFO": "0c0e0baaa2949ff878bb51ad1db868b5ebb99eb8026f5f88ab94239282c06ee7",
-      "PKGBUILD": "796113ba8f646b8be32d6cebdc9628e8482e5d25949574e3000df6852a1ff6fd",
+      "PKGBUILD": "5b17744ca5c929b83305fda3297b80850740542ba5e035a4c0775a7db1b38cc0",
       "dev.duxlabs.files.desktop": "0f230c913a248cbac737341ef5ee0a9e6ccfdda08b459ca14b5af99dd49f773d",
       "dev.duxlabs.files.metainfo.xml": "3fca7d27b64bd0c81e93868f4c3c5ac3ef71790c95b58608890e9c022be62ed0",
       "dev.duxlabs.files.policy": "52fa30b44fefa5a632996075e370923c83b911cd198ffcff959a79789d1e5e17",

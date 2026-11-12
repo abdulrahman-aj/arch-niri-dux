@@ -344,17 +344,16 @@ def dux_components():
 
 def file_manager_activation():
     # Dux Files must answer org.freedesktop.FileManager1 ("Show in folder").
-    # Dux is the only claimant: the per-user activator links to dux-files-bin,
-    # no misnamed file remains, and Nautilus's conflicting system activator is
-    # removed at install time (a hook keeps it away on upgrades). All of that
-    # plus cold activation is observable here, not just in packaging.
+    # The per-user activator links to dux-files-bin and the session bus prefers
+    # it over Nautilus's system file of the same name; dbus-broker logs one
+    # expected duplicate-name line for the shadowed file. No misnamed file may
+    # remain. Cold activation is observable here, not just in packaging.
     home = Path('/home/tester')
     link = home / '.local/share/dbus-1/services/org.freedesktop.FileManager1.service'
     assert link.is_symlink(), f'FileManager1 user activator is not a link: {link}'
     assert os.readlink(link) == '/usr/share/dfiles/org.freedesktop.FileManager1.service', os.readlink(link)
     assert not (home / '.local/share/dbus-1/services/dev.duxlabs.files.FileManager1.service').exists()
     assert not Path('/usr/share/dbus-1/services/dev.duxlabs.files.FileManager1.service').exists()
-    assert not Path('/usr/share/dbus-1/services/org.freedesktop.FileManager1.service').exists()
     # Cold activation: stop the session service and any lingering owners, so a
     # running dfiles cannot mask a broken activator.
     user_command('systemctl', '--user', 'stop', 'dfiles')
@@ -421,14 +420,30 @@ def file_manager_activation():
         'Dux Files owns FileManager1 again', lambda: ipc('dfiles', 'system.fileManager.get')['owned'], timeout=60
     )
     journal = run('journalctl', '-b', '--no-pager', '-o', 'short', stdout=subprocess.PIPE).stdout
+    # Nautilus's system file stays installed but the user directory wins, so
+    # dbus-broker logs its designed precedence: one duplicate-name line per
+    # load naming exactly the shadowed system file. Anything else about
+    # FileManager1 is a bug: the misnamed-file warning or a duplicate naming
+    # any other file.
+    expected = (
+        "Ignoring duplicate name 'org.freedesktop.FileManager1' in service file "
+        "'/usr/share/dbus-1/services/org.freedesktop.FileManager1.service'"
+    )
+    duplicates = [line for line in journal.splitlines() if expected in line]
     bad = [
         line
         for line in journal.splitlines()
-        if 'FileManager1' in line and ('not named after' in line or 'Ignoring duplicate' in line)
+        if 'FileManager1' in line
+        and ('not named after' in line or 'Ignoring duplicate' in line)
+        and expected not in line
     ]
     assert not bad, bad
     Path('/run/verify/file-manager-activation.json').write_text(
-        json.dumps({'activator': os.readlink(link), 'owner': 'dfiles', 'journal_clean': True}, indent=2) + '\n'
+        json.dumps(
+            {'activator': os.readlink(link), 'owner': 'dfiles', 'duplicate_lines': duplicates},
+            indent=2,
+        )
+        + '\n'
     )
 
 

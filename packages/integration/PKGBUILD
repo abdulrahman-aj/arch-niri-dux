@@ -30,8 +30,9 @@ package_arch-niri-dux() {
             etc/xdg/xdg-terminals.list)
     cp -a "$srcdir/desktop/etc" "$srcdir/desktop/usr" "$pkgdir/"
     # Dux Files answers org.freedesktop.FileManager1 ("Show in folder"); a link
-    # tracks dux-files-bin instead of a copy that drifts. Nautilus's
-    # conflicting system file is removed at install time and kept away by a hook.
+    # tracks dux-files-bin instead of a copy that drifts. The user directory
+    # wins over Nautilus's system file of the same name; dbus-broker logs one
+    # expected duplicate-name line for the shadowed file.
     install -d "$pkgdir/etc/skel/.local/share/dbus-1/services"
     ln -s /usr/share/dfiles/org.freedesktop.FileManager1.service \
         "$pkgdir/etc/skel/.local/share/dbus-1/services/org.freedesktop.FileManager1.service"

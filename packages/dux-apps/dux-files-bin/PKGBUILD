@@ -85,9 +85,9 @@ package() {
     "${pkgdir}/usr/share/polkit-1/actions/${_appid}.policy"
 
   # Nautilus ships a conflicting org.freedesktop.FileManager1.service, so this
-  # activator lives outside the service directories (that file is removed at
-  # install time); new homes link to it from ~/.local/share/dbus-1/services,
-  # which the session bus prefers.
+  # activator lives outside the service directories; new homes link to it from
+  # ~/.local/share/dbus-1/services, which the session bus prefers. dbus-broker
+  # logs one expected duplicate-name line for the shadowed system file.
   install -Dm644 "org.freedesktop.FileManager1.service" \
     "${pkgdir}/usr/share/${_binname}/org.freedesktop.FileManager1.service"
   install -Dm644 "org.freedesktop.impl.portal.desktop.dfiles.service" \
