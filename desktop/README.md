@@ -183,9 +183,10 @@ sync is unsupported.
 
 `snap-pac` creates snapshots around package transactions. Recovery entries use
 `noresume` and block hibernation to prevent resuming a normal-root memory image
-over an older snapshot. Timeline snapshots are disabled. Number cleanup keeps 5
-regular and 5 important snapshots, with `snapper-cleanup.timer` enabled. Pre-0.3
-systems need manual repair.
+over an older snapshot. Timeline snapshots are disabled. Number cleanup keeps 10
+regular and 5 important snapshots, with `snapper-cleanup.timer` enabled. Ten keeps
+about five transactions because snap-pac takes a pre and a post snapshot per
+transaction. Pre-0.3 systems need manual repair.
 
 ## Boot-policy upgrades
 

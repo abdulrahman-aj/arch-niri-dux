@@ -174,7 +174,7 @@ def verify_upgrade():
         database.write_bytes(original)
         # Force refresh after the deliberately rejected database download.
         upgrade_output = output('pacman', '--config', str(configuration), '-Syyu', '--noconfirm')
-        assert 'Refreshing Arch Niri Dux release signing keys' in upgrade_output, upgrade_output
+        assert 'Refreshing release signing keys' in upgrade_output, upgrade_output
         updated = output('pacman', '-Q', 'arch-niri-dux', 'arch-niri-dux-baseline')
         assert updated != versions
         assert new_file.read_text() == 'Integration upgrade verified\n' and not old_file.exists()
