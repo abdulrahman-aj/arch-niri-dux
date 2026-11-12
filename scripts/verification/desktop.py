@@ -39,12 +39,19 @@ def greeter():
 
 
 def fonts():
+    # CJK text must not render as tofu, and regional variants must resolve to
+    # their own glyph shapes: Japanese text must not fall back to Chinese
+    # shapes. Assert what fc-match actually selects.
     for pattern, expected in (
         ('sans-serif:lang=ar', 'Noto Naskh Arabic'),
         ('Arial:charset=0627', 'Noto Naskh Arabic'),
         ('sans-serif:lang=ur:charset=0679', 'Noto Nastaliq Urdu'),
         ('Arial:charset=0041', 'Liberation Sans'),
         ('sans-serif:charset=0041', 'Noto Sans'),
+        ('sans-serif:lang=ja', 'Noto Sans CJK JP'),
+        ('sans-serif:lang=zh-cn', 'Noto Sans CJK SC'),
+        ('sans-serif:lang=zh-tw', 'Noto Sans CJK TC'),
+        ('sans-serif:lang=ko', 'Noto Sans CJK KR'),
     ):
         actual = run('fc-match', '-f', '%{family}', pattern, stdout=subprocess.PIPE).stdout
         assert actual == expected, (pattern, actual, expected)
