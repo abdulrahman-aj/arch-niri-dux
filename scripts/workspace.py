@@ -6,10 +6,37 @@ import os
 from pathlib import Path
 import shutil
 import socket
+import sys
 
 ROOT = Path(__file__).resolve().parents[1]
 MARKER = '.arch-niri-dux-owner'
+# Agents' builds and VMs keep this margin because several streams share the
+# build machine; one build alone needs far less (BUILD_SPACE, ISO_SPACE).
 MIN_FREE = 30 * 1024**3
+# Measured on a development build from an empty state (msi-dux, 2026-11-13):
+# the state peaked at 7.3 GiB (the builder disk keeps it for the next build),
+# the shared downloads cache holds 3.3 GiB, and the ISO is 2.7-2.9 GiB.
+BUILD_SPACE = 8 * 1024**3
+DOWNLOADS_SPACE = int(3.5 * 1024**3)
+ISO_SPACE = 3 * 1024**3
+BUILDER_MIB = 8192
+BUILDER_MIN_MIB = 4096
+MEMORY_HEADROOM_MIB = 1024
+
+# Environment variables agent harnesses set in every command they run, and
+# that jobs they start inherit. Match exact names only: T3's integrated
+# terminal (a human) carries T3CODE_PROJECT_ROOT, and only the agents T3
+# launches get T3CODE_THREAD_ID. A human may set CODEX_HOME or OPENCODE_CONFIG.
+AGENT_MARKERS = (
+    'T3CODE_THREAD_ID',  # every agent T3 launches
+    'CLAUDECODE',  # Claude Code tool shells
+    'CODEX_THREAD_ID',  # Codex tool shells
+    'CODEX_CI',
+    'OPENCODE',  # OpenCode tool shells
+    'OPENCODE_SESSION_ID',
+    'AI_AGENT',  # cross-harness convention (Claude Code, OpenCode)
+    'AGENT',
+)
 
 
 def cache_root():
@@ -23,17 +50,100 @@ def build_state(checkout=ROOT):
     return cache_root() / f'arch-niri-dux-build-{identity}'
 
 
-def heavy_guard():
-    if os.environ.get('AGENT_HEAVY_JOBS') == 'deny':
+def agent_markers(env=None):
+    """The agent markers set in env (default: this process); empty for a human."""
+    env = os.environ if env is None else env
+    return [name for name in AGENT_MARKERS if env.get(name)]
+
+
+def heavy_guard(env=None):
+    """AGENT_HEAVY_JOBS=deny keeps agents' builds and VMs off a machine; its human still runs them."""
+    env = os.environ if env is None else env
+    markers = agent_markers(env)
+    if env.get('AGENT_HEAVY_JOBS') == 'deny' and markers:
         raise SystemExit(
-            'Heavy jobs are disabled on this machine (AGENT_HEAVY_JOBS=deny); run this on your build machine.'
+            f'Heavy jobs are disabled for agents on this machine (AGENT_HEAVY_JOBS=deny; agent: {", ".join(markers)}); '
+            'run this on your build machine.'
         )
 
 
-def disk_guard(path, minimum=MIN_FREE):
+def existing(path):
     path = Path(path).resolve()
     while not path.exists():
         path = path.parent
+    return path
+
+
+def tree_size(path):
+    """Allocated bytes under path; sparse disk images count only what they use."""
+    path = Path(path)
+    if not path.exists():
+        return 0
+    return sum(item.lstat().st_blocks * 512 for item in path.rglob('*') if not item.is_symlink())
+
+
+def downloads_root():
+    return cache_root() / 'arch-niri-dux-downloads'
+
+
+def build_space_needed(state):
+    """Free bytes one ISO build still needs beside out/: what earlier builds
+    left in its state and the shared downloads cache counts toward the peak."""
+    return max(0, BUILD_SPACE - tree_size(state)) + max(0, DOWNLOADS_SPACE - tree_size(downloads_root()))
+
+
+def space_shortfalls(needs):
+    """(path, needed, free) for each filesystem without room for the summed needs (path -> bytes)."""
+    totals = {}
+    for path, size in needs.items():
+        path = existing(path)
+        anchor, total = totals.get(path.stat().st_dev, (path, 0))
+        totals[path.stat().st_dev] = (anchor, total + size)
+    return [
+        (anchor, total, shutil.disk_usage(anchor).free)
+        for anchor, total in totals.values()
+        if shutil.disk_usage(anchor).free < total
+    ]
+
+
+def human_build_guard(state):
+    shortfalls = space_shortfalls({state: build_space_needed(state), ROOT / 'out': ISO_SPACE})
+    if shortfalls:
+        path, need, free = shortfalls[0]
+        raise SystemExit(
+            f'An ISO build needs {need / 1024**3:.1f} GiB free at {path}; have {free / 1024**3:.1f} GiB. '
+            'Free some space (make gc removes builds of deleted checkouts).'
+        )
+
+
+def builder_memory(env=None):
+    """(MiB for the builder VM, warning or None). Agents wait for memory other
+    streams on the shared build machine release; humans start at once with a
+    VM that fits what is available."""
+    if agent_markers(env):
+        from verification.vm import wait_for_memory
+
+        wait_for_memory()
+        return BUILDER_MIB, None
+    available = available_memory() // 1024**2
+    mib = max(BUILDER_MIN_MIB, min(BUILDER_MIB, (available - MEMORY_HEADROOM_MIB) // 512 * 512))
+    if available - mib >= MEMORY_HEADROOM_MIB:
+        return mib, None
+    return mib, (
+        f'Memory is tight: {available / 1024:.1f} GiB is available and the builder VM uses up to {mib / 1024:g} GiB.\n'
+        'The build still runs, but the system may swap and slow down. Closing big apps helps.'
+    )
+
+
+def available_memory():
+    for line in Path('/proc/meminfo').read_text().splitlines():
+        if line.startswith('MemAvailable:'):
+            return int(line.split()[1]) * 1024
+    raise SystemExit('MemAvailable missing from /proc/meminfo')
+
+
+def disk_guard(path, minimum=MIN_FREE):
+    path = existing(path)
     free = shutil.disk_usage(path).free
     if free < minimum:
         raise SystemExit(f'Need {minimum / 1024**3:g} GiB free at {path}; have {free / 1024**3:.1f} GiB. Run make gc.')
@@ -163,19 +273,27 @@ def collect(cache, checkout, dry_run=False):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('command', choices=['state', 'prepare-build', 'heavy-guard', 'gc'])
+    parser.add_argument('command', choices=['state', 'prepare-build', 'builder-memory', 'heavy-guard', 'gc'])
     parser.add_argument('--dry-run', action='store_true')
     args = parser.parse_args()
     if args.command == 'heavy-guard':
         heavy_guard()
+    elif args.command == 'builder-memory':
+        mib, warning = builder_memory()
+        if warning:
+            print(warning, file=sys.stderr)
+        print(mib)
     elif args.command == 'gc':
         collect(cache_root(), ROOT, args.dry_run)
     else:
         state = build_state()
         if args.command == 'prepare-build':
             heavy_guard()
-            disk_guard(state)
-            disk_guard(ROOT / 'out')
+            if agent_markers():
+                disk_guard(state)
+                disk_guard(ROOT / 'out')
+            else:
+                human_build_guard(state)
         state.mkdir(parents=True, exist_ok=True)
         if not os.environ.get('BUILD_STATE'):
             own(state)

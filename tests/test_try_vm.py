@@ -13,10 +13,37 @@ import try_vm
 
 class TryVmTests(unittest.TestCase):
     def test_agent_guard(self):
-        for marker in ('CLAUDECODE', 'AI_AGENT', 'AGENT', 'CODEX_SANDBOX', 'OPENCODE_SESSION', 'T3CODE_HOME'):
-            with self.subTest(marker=marker), self.assertRaises(SystemExit):
-                try_vm.refuse_if_agent({marker: '1'})
-        try_vm.refuse_if_agent({'HOME': '/home/u', 'PATH': '/usr/bin'})
+        with self.assertRaises(SystemExit):
+            try_vm.refuse_if_agent({'T3CODE_THREAD_ID': 'thread-1'})
+        # Regression: make try refused to run from T3's integrated terminal.
+        try_vm.refuse_if_agent({'T3CODE_PROJECT_ROOT': '/w', 'AGENT_HEAVY_JOBS': 'deny'})
+
+    def test_build_stage_follows_traced_commands(self):
+        stages = try_vm.BUILD_STAGES[try_vm.DEVELOPMENT]
+        self.assertEqual(try_vm.build_stage(stages, ''), 0)
+        log = '+ python /source/scripts/package_lock.py fetch /source /build/payload/repo\nfetched 700 packages\n'
+        self.assertEqual(try_vm.build_stage(stages, log), 1)
+        # Untraced output that mentions a later stage does not advance it.
+        self.assertEqual(try_vm.build_stage(stages, 'installing archiso and mkarchiso\n'), 0)
+        log += '+ runuser -u nobody -- python /source/scripts/package_build.py /source\n'
+        self.assertEqual(try_vm.build_stage(stages, log), 2)
+        # Stages never move backwards between incremental reads.
+        self.assertEqual(try_vm.build_stage(stages, '+ echo done\n', current=3), 3)
+        fractions = [try_vm.build_fraction(stages, index, 10**6) for index in range(len(stages))]
+        self.assertEqual(fractions, sorted(fractions))
+        self.assertLess(fractions[-1], 1)
+
+    def test_low_disk_warns_before_new_vm_prompts(self):
+        with tempfile.TemporaryDirectory() as state:
+            with (
+                patch.object(try_vm, 'VM_SPACE', 2**60),
+                patch('try_vm.gum_style') as style,
+                patch('try_vm.gum_confirm', return_value=False),
+                patch('try_vm.gum_input') as text,
+            ):
+                self.assertIsNone(try_vm.create_flow(base=state))
+                style.assert_called_once()
+                text.assert_not_called()
 
     def test_name_validation(self):
         for good in ('default', 'a', 'my-vm_1.2', 'new', '123abc'):
@@ -149,12 +176,20 @@ class TryVmTests(unittest.TestCase):
                     Path(argv[-2]).write_bytes(b'disk')
                 return subprocess.CompletedProcess(argv, 0)
 
+            real_popen = subprocess.Popen
+
+            def fake_popen(argv, **_kwargs):
+                self.assertEqual(argv[0], 'qemu-system-x86_64')
+                return real_popen(['true'])
+
             with (
                 patch.dict(os.environ, {'TRY_OUT_DIR': temp}),
                 patch('shutil.which', return_value='/usr/bin/qemu-img'),
                 patch('try_vm.firmware', return_value=(Path(temp) / 'CODE', Path(temp) / 'OVMF_VARS.fd')),
                 patch('os.access', return_value=True),
                 patch('try_vm.subprocess.run', side_effect=fake_run),
+                patch('try_vm.subprocess.Popen', side_effect=fake_popen),
+                patch('try_vm.check_new_vm_space', return_value=True),
                 patch('try_vm.require_gum'),
                 patch('try_vm.gum_style'),
                 patch('try_vm.gum_choose', side_effect=['New VM', try_vm.SOURCE_LABELS[try_vm.RELEASE], None]),

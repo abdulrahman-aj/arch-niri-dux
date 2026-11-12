@@ -11,6 +11,7 @@ import shutil
 import socket
 import subprocess
 import struct
+import sys
 import time
 import tempfile
 
@@ -23,7 +24,8 @@ def wait_for_memory():
     # Build and verification streams share the host, including recovery boots.
     deadline = time.monotonic() + 600
     while time.monotonic() < deadline:
-        subprocess.run(['free', '-g'], check=True)
+        # stderr: build-iso reads the builder's memory size from stdout.
+        subprocess.run(['free', '-g'], check=True, stdout=sys.stderr)
         available = next(
             int(line.split()[1])
             for line in Path('/proc/meminfo').read_text().splitlines()
@@ -31,7 +33,7 @@ def wait_for_memory():
         )
         if available >= 10 * 1024**2:
             return
-        print('Waiting for 10 GiB available before starting a VM.', flush=True)
+        print('Waiting for 10 GiB available before starting a VM.', file=sys.stderr, flush=True)
         time.sleep(30)
     raise TimeoutError('Less than 10 GiB available for ten minutes; VM not started')
 
