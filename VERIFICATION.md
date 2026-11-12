@@ -35,7 +35,7 @@ printing to a loopback printer), PDF rendering, the synthetic camera, screen
 sharing, and screen lock.
 An integration upgrade with Limine snapshot boot and restore preserving home,
 and the `plymouth.enable=0` text fallback with graphical unlock restored
-follow afterward. `make verify-release` is a separate release path (see
+follow afterward. `make verify-release` is the release mode (see
 [release acceptance](packages/RELEASING.md#publish)): it installs the release
 ISO, boots once, and runs only the online delivery check. `--install-only` is
 a debug run and does not produce acceptance success. Full acceptance is

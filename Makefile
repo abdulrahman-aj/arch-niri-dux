@@ -10,7 +10,7 @@ verify:
 verify-fast:
 	./scripts/build-in-dev python3 scripts/verify.py --fixture $(ARGS)
 verify-release:
-	./scripts/build-in-dev python3 scripts/verify_release.py $(ARGS)
+	./scripts/build-in-dev python3 scripts/verify.py --release $(ARGS)
 verify-hibernate:
 	./scripts/build-in-dev python3 scripts/verify_hibernate.py $(ARGS)
 build-test:

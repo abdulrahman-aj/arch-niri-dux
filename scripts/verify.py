@@ -208,6 +208,46 @@ def run_fixture(args, parser):
             vm.stop()
 
 
+def run_install(vm, passed, evidence, directory, package_digest, serial_preboot=False):
+    """Install the ISO offline and prepare the target. Reused by full and release runs."""
+    print(f'VM evidence: {directory}', flush=True)
+    vm.start()
+    vm.expect(r'root@archiso[^\n]*#', timeout=180)
+    # USB boot with enough RAM reproduces archiso's automatic-copy path.
+    # The payload must stay on mounted media instead of disappearing.
+    vm.command(
+        'grep -qw copytoram=n /proc/cmdline; mountpoint -q /run/archiso/bootmnt; test ! -e /run/archiso/copytoram/airootfs.sfs'
+    )
+    vm.mount_probes()
+    vm.command('fastfetch --logo none --structure OS:Kernel')
+    vm.command('test "$(ls /sys/class/net | tr "\\n" " ")" = "lo "')
+    vm.command(f'test "$(sha256sum /run/archiso/bootmnt/packages.manifest.json | cut -d " " -f 1)" = {package_digest}')
+    evidence.verify_installer(vm, ROOT / 'installer')
+    installation_output = vm.command(
+        'arch-niri-install --config /run/verify/install.json --confirm-disk /dev/vda', timeout=2400
+    )
+    elapsed = re.search(r'INSTALLATION COMPLETE[^\n]*took ([0-9]+) seconds', installation_output)
+    if elapsed is None:
+        raise RuntimeError('Installer did not report its elapsed completion time.')
+    (directory / 'install-time-seconds').write_text(elapsed.group(1) + '\n')
+    passed('Offline encrypted installation completed')
+    vm.command(
+        'cryptsetup open --key-file /run/verify/key /dev/vda2 dux-root; mkdir -p /mnt/verify; mount -o subvol=@ /dev/mapper/dux-root /mnt/verify; mount /dev/vda1 /mnt/verify/boot'
+    )
+    vm.probe('boot', 'prepare', '/mnt/verify', timeout=300)
+    if serial_preboot:
+        # The release check boots once, over serial, with no graphical unlock
+        # to qualify. Enable the serial kernel console on the target now;
+        # full acceptance does this after its first graphical boot instead.
+        vm.command(
+            'cd /run/verify && python3 -m verification.boot serial-console-enable /mnt/verify; '
+            'arch-chroot /mnt/verify limine-mkinitcpio',
+            timeout=300,
+        )
+    vm.command('umount -R /mnt/verify; cryptsetup close dux-root; sync')
+    vm.stop()
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--iso', type=Path)
@@ -349,35 +389,7 @@ def main():
     passed = evidence.passed
 
     try:
-        print(f'VM evidence: {directory}', flush=True)
-        vm.start()
-        vm.expect(r'root@archiso[^\n]*#', timeout=180)
-        # USB boot with enough RAM reproduces archiso's automatic-copy path.
-        # The payload must stay on mounted media instead of disappearing.
-        vm.command(
-            'grep -qw copytoram=n /proc/cmdline; mountpoint -q /run/archiso/bootmnt; test ! -e /run/archiso/copytoram/airootfs.sfs'
-        )
-        vm.mount_probes()
-        vm.command('fastfetch --logo none --structure OS:Kernel')
-        vm.command('test "$(ls /sys/class/net | tr "\\n" " ")" = "lo "')
-        vm.command(
-            f'test "$(sha256sum /run/archiso/bootmnt/packages.manifest.json | cut -d " " -f 1)" = {package_digest}'
-        )
-        evidence.verify_installer(vm, ROOT / 'installer')
-        installation_output = vm.command(
-            'arch-niri-install --config /run/verify/install.json --confirm-disk /dev/vda', timeout=2400
-        )
-        elapsed = re.search(r'INSTALLATION COMPLETE[^\n]*took ([0-9]+) seconds', installation_output)
-        if elapsed is None:
-            raise RuntimeError('Installer did not report its elapsed completion time.')
-        (directory / 'install-time-seconds').write_text(elapsed.group(1) + '\n')
-        passed('Offline encrypted installation completed')
-        vm.command(
-            'cryptsetup open --key-file /run/verify/key /dev/vda2 dux-root; mkdir -p /mnt/verify; mount -o subvol=@ /dev/mapper/dux-root /mnt/verify; mount /dev/vda1 /mnt/verify/boot'
-        )
-        vm.probe('boot', 'prepare', '/mnt/verify', timeout=300)
-        vm.command('umount -R /mnt/verify; cryptsetup close dux-root; sync')
-        vm.stop()
+        run_install(vm, passed, evidence, directory, package_digest)
         subprocess.run(['qemu-img', 'snapshot', '-c', 'pristine', str(disk)], check=True)
         if args.install_only:
             print('Install-only debug run complete. Full acceptance has NOT passed.', flush=True)
