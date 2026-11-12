@@ -114,7 +114,7 @@ gpg --homedir "$install_keyring" --batch --check-trustdb
 gpgconf --homedir "$install_keyring" --kill all
 # Installer runtime is deliberately text-only. Standard releng supplies UEFI
 # boot, serial recovery and archiso's tested initramfs setup.
-mkdir -p "$profile/airootfs/usr/local/lib/arch-niri-dux" "$profile/airootfs/usr/local/bin" "$profile/airootfs/usr/local/share/arch-niri-dux"
+mkdir -p "$profile/airootfs/usr/local/lib/arch-niri-dux" "$profile/airootfs/usr/local/share/arch-niri-dux"
 cp -a /source/installer "$profile/airootfs/usr/local/lib/arch-niri-dux/installer"
 find "$profile/airootfs/usr/local/lib/arch-niri-dux/installer" -type d -name __pycache__ -exec rm -rf {} +
 cp /source/packages/packages.target "$profile/airootfs/usr/local/share/arch-niri-dux/packages.target"
@@ -125,7 +125,7 @@ rm -f "$profile/airootfs/root/.zlogin"
 # Keep the USB mounted: archiso's automatic RAM copy contains only airootfs,
 # while our offline repository lives beside it on the installation medium.
 sed -i '/^options /s/$/ copytoram=n console=tty0 console=ttyS0,115200/' "$profile"/efiboot/loader/entries/*.conf
-grep -q 'copytoram=n' "$profile"/efiboot/loader/entries/*.conf
+for entry in "$profile"/efiboot/loader/entries/*.conf; do grep -q 'copytoram=n' "$entry"; done
 # Releng logs root into zsh; use bash so tty1's wizard hook is explicit.
 sed -i 's#root:x:0:0:root:/root:/usr/bin/zsh#root:x:0:0:root:/root:/bin/bash#' "$profile/airootfs/etc/passwd"
 grep -q '^root:x:0:0:root:/root:/bin/bash$' "$profile/airootfs/etc/passwd"
