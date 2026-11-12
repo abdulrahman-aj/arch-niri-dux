@@ -293,6 +293,9 @@ def clock(seconds):
     return f'{seconds // 60}:{seconds % 60:02d}'
 
 
+WORD_RE = re.compile(r'[A-Za-z]{3}')
+
+
 class LogTail:
     """Follows a log file written by another process; truncation (a fresh run) restarts it."""
 
@@ -319,7 +322,10 @@ class LogTail:
         cut = data.rfind(b'\n') + 1
         self.offset += cut
         text = data[:cut].decode(errors='replace')
-        self.lines = (self.lines + [line for line in text.splitlines() if line.strip()])[-200:]
+        # Keep lines with words for the on-screen tail; progress meters (curl's
+        # columns of numbers, \r redraws) would only flicker there.
+        readable = [line.split('\r')[-1] for line in text.split('\n')]
+        self.lines = (self.lines + [line for line in readable if WORD_RE.search(line)])[-200:]
         return text
 
     @property

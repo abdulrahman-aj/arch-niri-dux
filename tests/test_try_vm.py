@@ -33,6 +33,23 @@ class TryVmTests(unittest.TestCase):
         self.assertEqual(fractions, sorted(fractions))
         self.assertLess(fractions[-1], 1)
 
+    def test_log_tail_ignores_previous_build_and_follows_rewrites(self):
+        with tempfile.TemporaryDirectory() as temp:
+            log = Path(temp) / 'guest-build.log'
+            log.write_text('+ mkarchiso -v\n')
+            os.utime(log, (1000, 1000))
+            tail = try_vm.LogTail(log, since=2000)
+            self.assertEqual(tail.read(), '')
+            self.assertFalse(tail.active)
+            log.write_text('+ python /source/scripts/package_lock.py fetch\n  0  0  0  0\npartial')
+            self.assertIn('package_lock.py', tail.read())
+            self.assertEqual(tail.lines, ['+ python /source/scripts/package_lock.py fetch'])
+            with log.open('a') as handle:
+                handle.write(' line done\n')
+            self.assertEqual(tail.read(), 'partial line done\n')
+            log.write_text('+ fresh\n')
+            self.assertEqual(tail.read(), '+ fresh\n')
+
     def test_low_disk_warns_before_new_vm_prompts(self):
         with tempfile.TemporaryDirectory() as state:
             with (
