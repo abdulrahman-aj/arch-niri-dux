@@ -100,12 +100,12 @@ Without `--keep`, behavior is unchanged.
 Drive the kept VM with `scripts/vm_console.py` (one driver at a time):
 
 ```
-./scripts/build-in-dev python3 scripts/vm_console.py --directory out/debug sh '<command>'
-./scripts/build-in-dev python3 scripts/vm_console.py --directory out/debug shot <name.png>
-./scripts/build-in-dev python3 scripts/vm_console.py --directory out/debug click <x_frac> <y_frac>
-./scripts/build-in-dev python3 scripts/vm_console.py --directory out/debug key <qcode>
-./scripts/build-in-dev python3 scripts/vm_console.py --directory out/debug probe <module> <function>
-./scripts/build-in-dev python3 scripts/vm_console.py --directory out/debug poweroff
+./scripts/in-dev-shell python3 scripts/vm_console.py --directory out/debug sh '<command>'
+./scripts/in-dev-shell python3 scripts/vm_console.py --directory out/debug shot <name.png>
+./scripts/in-dev-shell python3 scripts/vm_console.py --directory out/debug click <x_frac> <y_frac>
+./scripts/in-dev-shell python3 scripts/vm_console.py --directory out/debug key <qcode>
+./scripts/in-dev-shell python3 scripts/vm_console.py --directory out/debug probe <module> <function>
+./scripts/in-dev-shell python3 scripts/vm_console.py --directory out/debug poweroff
 ```
 
 Per iteration there is no ISO rebuild, reinstall or scheduler wait. The

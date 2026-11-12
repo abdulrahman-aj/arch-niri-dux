@@ -117,7 +117,7 @@ def unprivileged(work, *arguments):
 
 
 def bump(root, recipe):
-    source = root / 'packages/aur' / recipe['name']
+    source = root / 'packages/dux-apps' / recipe['name']
     fields = srcinfo((source / '.SRCINFO').read_text())
     repository = fields['url'][0]
     if not re.fullmatch(r'https://github\.com/[A-Za-z0-9-]+/[A-Za-z0-9._-]+', repository):
@@ -156,7 +156,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument('root', type=Path)
     root = parser.parse_args().root.resolve()
-    manifest = root / 'packages/aur-recipes.json'
+    manifest = root / 'packages/dux-apps-recipes.json'
     recipes = json.loads(manifest.read_text())
     for recipe in recipes:
         apps.validate_recipe(root, recipe)

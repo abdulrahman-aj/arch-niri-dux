@@ -15,7 +15,7 @@ import urllib.request
 from verification.digest import digest
 
 
-import integration_build as build
+import package_build as build
 import dux_apps as apps
 
 RELEASES = 'https://github.com/abdulrahman-aj/arch-niri-dux/releases/download'

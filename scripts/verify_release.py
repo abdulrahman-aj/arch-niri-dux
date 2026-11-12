@@ -26,7 +26,7 @@ def main():
     parser.add_argument('--directory', type=Path, help='Fresh workspace')
     args = parser.parse_args()
     import iso_checksums
-    from verification import integration
+    from verification import upgrade
 
     canonical_name = iso_checksums.iso_name(args.tag)
     if not os.access('/dev/kvm', os.R_OK | os.W_OK):
@@ -86,7 +86,7 @@ def main():
     vm = VM(directory, iso, disk)
     try:
         run_install(vm, evidence.passed, evidence, directory, package_digest, serial_preboot=True)
-        integration.verify_published(vm, evidence.passed)
+        upgrade.verify_published(vm, evidence.passed)
         (directory / 'RELEASE-CHECK-PASSED').write_text('Release install and online delivery passed.\n')
         if not canonical.exists():
             shutil.copyfile(iso, canonical)

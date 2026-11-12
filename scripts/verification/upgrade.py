@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Guest-only integration upgrade, baseline dependency and config preservation check."""
+"""Guest-only package upgrade, baseline dependency and config preservation check."""
 
 import json
 from pathlib import Path
@@ -91,7 +91,7 @@ def verify_upgrade():
         output(
             *prefix,
             'python',
-            str(evidence / 'integration_build.py'),
+            str(evidence / 'package_build.py'),
             str(source),
             str(work / 'build'),
             str(work / 'skipped-candidate'),
@@ -109,7 +109,7 @@ def verify_upgrade():
         output(
             *prefix,
             'python',
-            str(evidence / 'integration_build.py'),
+            str(evidence / 'package_build.py'),
             str(source),
             str(work / 'build-next'),
             str(packages),
@@ -287,7 +287,7 @@ def verify_published(vm, passed):
     vm.start(cdrom=False, network=True)
     installed_login(vm)
     vm.mount_probes()
-    vm.probe('integration', 'published-repository', timeout=300)
+    vm.probe('upgrade', 'published-repository', timeout=300)
     passed('Published HTTPS repository and packages verify against offline trust and exact release hashes')
     vm.poweroff()
     vm.stop()
@@ -295,7 +295,7 @@ def verify_published(vm, passed):
 
 if __name__ == '__main__':
     dispatch(
-        'integration',
+        'upgrade',
         {
             'published-repository': published_repository,
             'upgrade': verify_upgrade,
