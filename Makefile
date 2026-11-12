@@ -5,8 +5,8 @@ iso:
 	./scripts/in-dev-shell ./scripts/build-iso
 iso-development:
 	./scripts/in-dev-shell ./scripts/build-iso development
-# make try is for humans; agents use make verify-fast ARGS=--keep.
-# try is exempt from heavy-guard so it runs on the laptop too.
+# make try is for humans (it refuses agents itself); agents use make verify-fast ARGS=--keep.
+# heavy-guard stops only agents, so humans build and try VMs on any machine.
 try:
 	./scripts/in-dev-shell python3 scripts/try_vm.py
 verify:

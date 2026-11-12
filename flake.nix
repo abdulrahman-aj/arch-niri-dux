@@ -12,6 +12,19 @@
       GBM_BACKENDS_PATH = "${pkgs.mesa}/lib/gbm";
       LIBGL_DRIVERS_PATH = "${pkgs.mesa}/lib/dri";
       __EGL_VENDOR_LIBRARY_FILENAMES = "${pkgs.mesa}/share/glvnd/egl_vendor.d/50_mesa.json";
+      # QEMU's GTK window links this fontconfig, which warns on a newer host's
+      # /etc/fonts; read the host's fonts with nixpkgs' own rules instead.
+      FONTCONFIG_FILE = pkgs.writeText "fonts.conf" ''
+        <?xml version="1.0"?>
+        <!DOCTYPE fontconfig SYSTEM "urn:fontconfig:fonts.dtd">
+        <fontconfig>
+          <include>${pkgs.fontconfig.out}/etc/fonts/conf.d</include>
+          <dir>/usr/share/fonts</dir>
+          <dir>/usr/local/share/fonts</dir>
+          <dir prefix="xdg">fonts</dir>
+          <cachedir prefix="xdg">fontconfig</cachedir>
+        </fontconfig>
+      '';
     };
   };
 }

@@ -1,6 +1,7 @@
 import contextlib
 import io
 import os
+import subprocess
 from pathlib import Path
 import sys
 import tempfile
@@ -101,12 +102,93 @@ class WorkspaceTests(unittest.TestCase):
             self.assertFalse((directory / workspace.MARKER).exists())
             self.assertEqual(payload.read_bytes(), b'preserve')
 
+    def test_agent_detection(self):
+        harnesses = {
+            'T3 agent': {'T3CODE_THREAD_ID': 'thread-1', 'T3CODE_PROJECT_ROOT': '/w'},
+            'Claude Code': {'CLAUDECODE': '1'},
+            'Codex': {'CODEX_THREAD_ID': 'abc', 'CODEX_CI': '1'},
+            'OpenCode': {'OPENCODE': '1', 'OPENCODE_SESSION_ID': 'ses', 'AGENT': '1', 'AI_AGENT': 'opencode'},
+        }
+        for harness, env in harnesses.items():
+            with self.subTest(harness=harness):
+                self.assertTrue(workspace.agent_markers(env))
+        humans = {
+            'plain shell': {'HOME': '/home/u', 'PATH': '/usr/bin'},
+            # Regression: T3's integrated terminal is a human, not an agent.
+            'T3 integrated terminal': {'T3CODE_PROJECT_ROOT': '/w', 'T3CODE_HOME': '/h', 'AGENT_HEAVY_JOBS': 'deny'},
+            'harness config in a shell profile': {'CODEX_HOME': '/c', 'OPENCODE_CONFIG': '/o'},
+            'empty markers': {'CLAUDECODE': '', 'T3CODE_THREAD_ID': ''},
+        }
+        for who, env in humans.items():
+            with self.subTest(human=who):
+                self.assertEqual(workspace.agent_markers(env), [])
+
+    def test_heavy_guard_denies_only_agents(self):
+        with self.assertRaises(SystemExit):
+            workspace.heavy_guard({'AGENT_HEAVY_JOBS': 'deny', 'T3CODE_THREAD_ID': 'thread-1'})
+        workspace.heavy_guard({'AGENT_HEAVY_JOBS': 'deny', 'T3CODE_PROJECT_ROOT': '/w'})
+        workspace.heavy_guard({'T3CODE_THREAD_ID': 'thread-1'})
+
+    def test_space_needs_add_up_per_filesystem(self):
+        with tempfile.TemporaryDirectory() as temp:
+            free = workspace.shutil.disk_usage(temp).free
+            # Each need fits alone; together on one filesystem they do not.
+            share = int(free * 0.6)
+            self.assertEqual(workspace.space_shortfalls([(Path(temp) / 'a', share, 'a')]), [])
+            shortfalls = workspace.space_shortfalls(
+                [(Path(temp) / 'a', share, 'a'), (Path(temp) / 'b/not-created', share, 'b')]
+            )
+            self.assertEqual(len(shortfalls), 1)
+            _, need, free, purposes = shortfalls[0]
+            self.assertGreater(need, free)
+            self.assertEqual(sorted(purposes), ['a', 'b'])
+
+    def test_earlier_builds_reduce_space_needed(self):
+        with tempfile.TemporaryDirectory() as temp, patch.dict(os.environ, {'XDG_CACHE_HOME': temp}):
+            state = Path(temp) / 'state'
+            fresh = workspace.build_space_needed(state)
+            state.mkdir()
+            (state / 'builder.qcow2').write_bytes(os.urandom(4 * 1024**2))
+            downloads = workspace.downloads_root()
+            downloads.mkdir()
+            (downloads / 'pkg.tar.zst').write_bytes(os.urandom(4 * 1024**2))
+            self.assertLessEqual(workspace.build_space_needed(state), fresh - 8 * 1024**2)
+            with patch.object(workspace, 'BUILD_SPACE', 1024), patch.object(workspace, 'DOWNLOADS_SPACE', 1024):
+                self.assertEqual(workspace.build_space_needed(state), 0)
+
+    def test_builder_memory_fits_humans_and_waits_for_agents(self):
+        gib = 1024**3
+        with patch.object(workspace, 'available_memory', return_value=24 * gib):
+            self.assertEqual(workspace.builder_memory({}), (workspace.BUILDER_MIB, None))
+        with patch.object(workspace, 'available_memory', return_value=6 * gib):
+            mib, warning = workspace.builder_memory({})
+            self.assertLess(mib, workspace.BUILDER_MIB)
+            self.assertLessEqual(mib + workspace.MEMORY_HEADROOM_MIB, 6 * 1024)
+            self.assertTrue(warning)
+        with patch.object(workspace, 'available_memory', return_value=3 * gib):
+            mib, warning = workspace.builder_memory({})
+            self.assertEqual(mib, workspace.BUILDER_MIN_MIB)
+            self.assertTrue(warning)
+        with (
+            patch.object(workspace, 'available_memory', return_value=3 * gib),
+            patch('verification.vm.wait_for_memory') as wait,
+        ):
+            self.assertEqual(workspace.builder_memory({'CLAUDECODE': '1'}), (workspace.BUILDER_MIB, None))
+            wait.assert_called_once()
+
+    def test_builder_memory_command_prints_only_the_size(self):
+        # build-iso captures stdout as QEMU's -m value; warnings must go to stderr.
+        env = {key: value for key, value in os.environ.items() if key not in workspace.AGENT_MARKERS}
+        result = subprocess.run(
+            [sys.executable, str(Path(workspace.__file__)), 'builder-memory'],
+            env=env,
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+        self.assertGreaterEqual(int(result.stdout), workspace.BUILDER_MIN_MIB)
+
     def test_guards(self):
-        with patch.dict(os.environ, {'AGENT_HEAVY_JOBS': 'deny'}):
-            with self.assertRaises(SystemExit):
-                workspace.heavy_guard()
-        with patch.dict(os.environ, {'AGENT_HEAVY_JOBS': ''}):
-            workspace.heavy_guard()
         # Exercise the real filesystem without filling it or mocking commands.
         workspace.disk_guard(Path.cwd(), minimum=0)
         with self.assertRaises(SystemExit):
