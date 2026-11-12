@@ -35,8 +35,9 @@ printing to a loopback printer), PDF rendering, the synthetic camera, screen
 sharing, and screen lock.
 An integration upgrade with Limine snapshot boot and restore preserving home,
 and the `plymouth.enable=0` text fallback with graphical unlock restored
-follow afterward. `make verify-release` additionally checks published HTTPS package
-delivery against offline trust and exact release hashes. `--install-only` is
+follow afterward. `make verify-release` is the release mode (see
+[release acceptance](packages/RELEASING.md#publish)): it installs the release
+ISO, boots once, and runs only the online delivery check. `--install-only` is
 a debug run and does not produce acceptance success. Full acceptance is
 required for installer changes and releases.
 
@@ -51,10 +52,10 @@ fixture auto-discovery.
 
 The Dux updater stage is slow: its two scheduled-check waits take
 about eight minutes, so ordinary runs skip it and finish in about eight and a
-half minutes instead of sixteen and a half. Releases (`--online-repository`)
-always include it. Request it explicitly with
-`make verify ARGS='--slow'` for changes touching the update button, its seeds,
-or Dux itself.
+half minutes instead of sixteen and a half. Request it explicitly with
+`make verify ARGS='--slow'` when qualifying changes touching the update
+button, its seeds, or Dux itself. Releases qualify delivery separately through
+`make verify-release`, which runs only the online check.
 
 `make verify ARGS='--keep'`: on failure the guest stays running with its
 serial/QMP sockets under `<evidence>/.sockets` and prints attach commands;

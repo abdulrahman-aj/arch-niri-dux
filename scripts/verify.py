@@ -17,7 +17,7 @@ from workspace import disk_guard, kept_running, newest_accepted_fixture, own, so
 from verification.digest import digest
 from verification.evidence import Evidence
 
-from verification import apps, boot, browser, camera, desktop, dux_update, integration, pdf, recovery, suspend
+from verification import apps, boot, browser, camera, desktop, dux_update, pdf, recovery, suspend
 from verification.vm import VM, PASSWORD, graphical_login, installed_login, stage_probes
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -31,16 +31,6 @@ def _policy(vm, passed):
 def _network(vm, passed):
     vm.probe('network', 'check', timeout=240)
     passed('Inbound firewall and resolve-only mDNS')
-
-
-def _online(vm, passed):
-    # Fallback leaves the guest stopped; a failed fallback can leave it
-    # running. Start published delivery from a known stopped state.
-    try:
-        vm.stop()
-    except Exception:
-        pass
-    integration.verify_published(vm, passed)
 
 
 def guest_alive(vm, timeout=30):
@@ -79,7 +69,7 @@ def run_stages(vm, passed, stages):
 
 def run_fixture(args, parser):
     """Fixture mode (folded verify_fast.py): qualify new packages on an accepted overlay."""
-    for flag in ('--iso', '--disk', '--install-only', '--online-repository', '--swap-gib', '--slow'):
+    for flag in ('--iso', '--disk', '--install-only', '--swap-gib', '--slow'):
         attr = flag.lstrip('-').replace('-', '_')
         value = args.__dict__.get(attr)
         if value is not None and value is not False:
@@ -208,6 +198,65 @@ def run_fixture(args, parser):
             vm.stop()
 
 
+def run_install(vm, passed, evidence, directory, package_digest, serial_preboot=False):
+    """Install the ISO offline and prepare the target. Reused by full and release runs."""
+    print(f'VM evidence: {directory}', flush=True)
+    vm.start()
+    vm.expect(r'root@archiso[^\n]*#', timeout=180)
+    # USB boot with enough RAM reproduces archiso's automatic-copy path.
+    # The payload must stay on mounted media instead of disappearing.
+    vm.command(
+        'grep -qw copytoram=n /proc/cmdline; mountpoint -q /run/archiso/bootmnt; test ! -e /run/archiso/copytoram/airootfs.sfs'
+    )
+    vm.mount_probes()
+    vm.command('fastfetch --logo none --structure OS:Kernel')
+    vm.command('test "$(ls /sys/class/net | tr "\\n" " ")" = "lo "')
+    vm.command(f'test "$(sha256sum /run/archiso/bootmnt/packages.manifest.json | cut -d " " -f 1)" = {package_digest}')
+    evidence.verify_installer(vm, ROOT / 'installer')
+    installation_output = vm.command(
+        'arch-niri-install --config /run/verify/install.json --confirm-disk /dev/vda', timeout=2400
+    )
+    elapsed = re.search(r'INSTALLATION COMPLETE[^\n]*took ([0-9]+) seconds', installation_output)
+    if elapsed is None:
+        raise RuntimeError('Installer did not report its elapsed completion time.')
+    (directory / 'install-time-seconds').write_text(elapsed.group(1) + '\n')
+    passed('Offline encrypted installation completed')
+    vm.command(
+        'cryptsetup open --key-file /run/verify/key /dev/vda2 dux-root; mkdir -p /mnt/verify; mount -o subvol=@ /dev/mapper/dux-root /mnt/verify; mount /dev/vda1 /mnt/verify/boot'
+    )
+    vm.probe('boot', 'prepare', '/mnt/verify', timeout=300)
+    if serial_preboot:
+        # The release check boots once, over serial, with no graphical unlock
+        # to qualify. Enable the serial kernel console on the target now;
+        # full acceptance does this after its first graphical boot instead.
+        vm.command(
+            'cd /run/verify && python3 -m verification.boot serial-console-enable /mnt/verify; '
+            'arch-chroot /mnt/verify limine-mkinitcpio',
+            timeout=300,
+        )
+    vm.command('umount -R /mnt/verify; cryptsetup close dux-root; sync')
+    vm.stop()
+
+
+def prepare_integration_inputs(directory):
+    """Stage integration build inputs for provenance checks. Shared by full and release runs."""
+    source = directory / 'integration-input'
+    source.mkdir()
+    manifest = json.loads((ROOT / 'out/packages.manifest.json').read_text())['integration']
+    (directory / 'release-manifest.json').write_text(json.dumps(manifest, indent=2) + '\n')
+    import integration_release as release
+
+    release.validate_manifest(ROOT, ROOT / 'out/integration')
+    for filename, target, field in [
+        ('integration.tar', 'integration.tar', 'source_sha256'),
+        ('integration.PKGBUILD', 'PKGBUILD', 'recipe_sha256'),
+    ]:
+        original = ROOT / 'out/integration' / filename
+        if digest(original) != manifest[field]:
+            raise ValueError(f'Integration build input changed: {filename}')
+        shutil.copyfile(original, source / target)
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--iso', type=Path)
@@ -215,14 +264,9 @@ def main():
     parser.add_argument('--disk', type=Path, help='New disposable qcow2 path; default inside the workspace')
     parser.add_argument('--install-only', action='store_true', help='Debug only; does not produce acceptance success')
     parser.add_argument(
-        '--online-repository',
-        action='store_true',
-        help='After offline acceptance, boot with networking and check published package delivery',
-    )
-    parser.add_argument(
         '--slow',
         action='store_true',
-        help='Include the slow Dux updater stage (releases via --online-repository always include it)',
+        help='Include the slow Dux updater stage',
     )
     parser.add_argument('--swap-gib', type=int, help='Override Auto swap sizing; 0 disables swap and hibernation')
     parser.add_argument('--keymap', default='us', help='Console keymap for the installed system (default: us)')
@@ -294,7 +338,7 @@ def main():
     package_digest = digest(ROOT / 'out/packages.manifest.json')
     probe_hashes = stage_probes(directory)
     probe_hashes['verify.py'] = digest(Path(__file__))
-    slow = args.slow or args.online_repository
+    slow = args.slow
     stages = [
         ('boot', lambda vm, passed: boot.verify_boot(vm, passed, args.swap_gib)),
         ('policy', _policy),
@@ -312,8 +356,6 @@ def main():
     ]
     if not slow:
         stages = [(name, func) for name, func in stages if name != 'dux_update']
-    if args.online_repository:
-        stages.append(('online', _online))
     evidence.inputs(
         {
             'iso': str(iso.resolve()),
@@ -325,21 +367,7 @@ def main():
     )
     evidence.key(PASSWORD)
 
-    source = directory / 'integration-input'
-    source.mkdir()
-    manifest = json.loads((ROOT / 'out/packages.manifest.json').read_text())['integration']
-    (directory / 'release-manifest.json').write_text(json.dumps(manifest, indent=2) + '\n')
-    import integration_release as release
-
-    release.validate_manifest(ROOT, ROOT / 'out/integration')
-    for filename, target, field in [
-        ('integration.tar', 'integration.tar', 'source_sha256'),
-        ('integration.PKGBUILD', 'PKGBUILD', 'recipe_sha256'),
-    ]:
-        original = ROOT / 'out/integration' / filename
-        if digest(original) != manifest[field]:
-            raise ValueError(f'Integration build input changed: {filename}')
-        shutil.copyfile(original, source / target)
+    prepare_integration_inputs(directory)
     vm = VM(directory, iso.resolve(), disk)
     succeeded = False
     if args.keep:
@@ -349,35 +377,7 @@ def main():
     passed = evidence.passed
 
     try:
-        print(f'VM evidence: {directory}', flush=True)
-        vm.start()
-        vm.expect(r'root@archiso[^\n]*#', timeout=180)
-        # USB boot with enough RAM reproduces archiso's automatic-copy path.
-        # The payload must stay on mounted media instead of disappearing.
-        vm.command(
-            'grep -qw copytoram=n /proc/cmdline; mountpoint -q /run/archiso/bootmnt; test ! -e /run/archiso/copytoram/airootfs.sfs'
-        )
-        vm.mount_probes()
-        vm.command('fastfetch --logo none --structure OS:Kernel')
-        vm.command('test "$(ls /sys/class/net | tr "\\n" " ")" = "lo "')
-        vm.command(
-            f'test "$(sha256sum /run/archiso/bootmnt/packages.manifest.json | cut -d " " -f 1)" = {package_digest}'
-        )
-        evidence.verify_installer(vm, ROOT / 'installer')
-        installation_output = vm.command(
-            'arch-niri-install --config /run/verify/install.json --confirm-disk /dev/vda', timeout=2400
-        )
-        elapsed = re.search(r'INSTALLATION COMPLETE[^\n]*took ([0-9]+) seconds', installation_output)
-        if elapsed is None:
-            raise RuntimeError('Installer did not report its elapsed completion time.')
-        (directory / 'install-time-seconds').write_text(elapsed.group(1) + '\n')
-        passed('Offline encrypted installation completed')
-        vm.command(
-            'cryptsetup open --key-file /run/verify/key /dev/vda2 dux-root; mkdir -p /mnt/verify; mount -o subvol=@ /dev/mapper/dux-root /mnt/verify; mount /dev/vda1 /mnt/verify/boot'
-        )
-        vm.probe('boot', 'prepare', '/mnt/verify', timeout=300)
-        vm.command('umount -R /mnt/verify; cryptsetup close dux-root; sync')
-        vm.stop()
+        run_install(vm, passed, evidence, directory, package_digest)
         subprocess.run(['qemu-img', 'snapshot', '-c', 'pristine', str(disk)], check=True)
         if args.install_only:
             print('Install-only debug run complete. Full acceptance has NOT passed.', flush=True)
