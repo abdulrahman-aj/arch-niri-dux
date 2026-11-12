@@ -107,6 +107,83 @@ class TryVmTests(unittest.TestCase):
             with self.assertRaises(SystemExit):
                 try_vm.choose_memory(None, str(meminfo), False)
 
+    def test_read_head_reads_constantly_not_whole_file(self):
+        sizes = []
+        real_open = Path.open
+
+        class Spy:
+            def __init__(self, target):
+                self._target = target
+
+            def read(self, size=-1):
+                sizes.append(size)
+                return self._target.read(size)
+
+            def seek(self, *args):
+                return self._target.seek(*args)
+
+            def __enter__(self):
+                self._target.__enter__()
+                return self
+
+            def __exit__(self, *args):
+                return self._target.__exit__(*args)
+
+        def spy_open(self, *args, **kwargs):
+            return Spy(real_open(self, *args, **kwargs))
+
+        with tempfile.TemporaryDirectory() as temp:
+            raw = Path(temp) / 'big.raw'
+            with raw.open('wb') as stream:
+                stream.write(gpt_head(True))
+                stream.truncate(256 * 1024**2)
+            with patch.object(Path, 'open', spy_open):
+                head = try_vm.read_head(raw)
+            self.assertTrue(try_vm.has_esp_gpt(head))
+        self.assertTrue(sizes)
+        self.assertLessEqual(max(size for size in sizes if size != -1), 64 * 1024)
+
+    def test_read_head_qcow_delegates_to_qemu_img(self):
+        with tempfile.TemporaryDirectory() as temp:
+            disk = Path(temp) / 'disk.qcow2'
+            disk.write_bytes(b'QFI\xfb' + b'\0' * 100)
+            head = gpt_head(True)
+
+            def fake_dd(cmd, **_kwargs):
+                target = next(part[3:] for part in cmd if part.startswith('of='))
+                Path(target).write_bytes(head)
+
+            with patch('try_vm.subprocess.run', side_effect=fake_dd):
+                self.assertTrue(try_vm.has_esp_gpt(try_vm.read_head(disk)))
+
+    def test_flags_work_before_or_after_subcommand(self):
+        parser = try_vm.build_parser()
+        before = parser.parse_args(['--iso', 'X.iso', '--offline', '--display', 'none', 'open', 'vm1'])
+        self.assertEqual(before.iso, 'X.iso')
+        self.assertTrue(before.offline)
+        self.assertEqual(before.display, 'none')
+        after = parser.parse_args(['open', 'vm1', '--iso', 'Y.iso', '--offline', '--display', 'none'])
+        self.assertEqual(after.iso, 'Y.iso')
+        self.assertTrue(after.offline)
+        self.assertEqual(after.display, 'none')
+
+    def test_memory_must_be_positive(self):
+        with self.assertRaises(SystemExit):
+            try_vm.choose_memory(-5)
+        with self.assertRaises(SystemExit):
+            try_vm.choose_memory(0)
+        self.assertEqual(try_vm.choose_memory(4), 4)
+
+    def test_interactive_quits_cleanly_on_eof_or_interrupt(self):
+        with tempfile.TemporaryDirectory() as state:
+            directory = Path(state) / 'vm1'
+            directory.mkdir()
+            try_vm.save_meta(directory, {'name': 'vm1'})
+            with patch('builtins.input', side_effect=EOFError):
+                try_vm.interactive(base=state)
+            with patch('builtins.input', side_effect=KeyboardInterrupt):
+                try_vm.interactive(base=state)
+
     def test_create_and_delete_roundtrip(self):
         with tempfile.TemporaryDirectory() as temp, tempfile.TemporaryDirectory() as state:
             with patch.dict(os.environ, {'TRY_OUT_DIR': temp}):

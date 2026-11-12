@@ -156,8 +156,9 @@ def has_esp_gpt(data):
 def read_head(disk, sectors=34):
     """Read the first sectors of a qcow2 (or raw) image without root."""
     disk = Path(disk)
-    if disk.read_bytes()[:4] != b'QFI\xfb':
-        with disk.open('rb') as stream:
+    with disk.open('rb') as stream:
+        if stream.read(4) != b'QFI\xfb':
+            stream.seek(0)
             return stream.read(sectors * 512)
     tmp = disk.parent / f'.gpt-head-{os.getpid()}.bin'
     try:
@@ -205,7 +206,9 @@ def mem_available_gib(path='/proc/meminfo'):
 
 def choose_memory(requested=None, meminfo='/proc/meminfo', interactive=False):
     """Pick the guest size: 8 GiB when the host can spare it, else 4 GiB."""
-    if requested:
+    if requested is not None:
+        if requested <= 0:
+            raise SystemExit('--memory needs a positive number of GiB.')
         return requested
     available = mem_available_gib(meminfo)
     if available >= 10:
@@ -214,7 +217,10 @@ def choose_memory(requested=None, meminfo='/proc/meminfo', interactive=False):
         raise SystemExit(f'Only {available:.1f} GiB available; need at least 6 GiB to start a 4 GiB guest.')
     message = f'Only {available:.1f} GiB available; using a 4 GiB guest instead of 8 GiB.'
     if interactive:
-        answer = input(f'{message} Continue? [Y/n] ').strip()
+        try:
+            answer = input(f'{message} Continue? [Y/n] ').strip()
+        except (EOFError, KeyboardInterrupt):
+            raise SystemExit('Aborted.')
         if answer.lower().startswith('n'):
             raise SystemExit('Aborted.')
         return 4
@@ -405,7 +411,11 @@ def delete_vm(name, *, assume_yes=False, base=None):
     if not assume_yes:
         if not sys.stdin.isatty():
             raise SystemExit(f"Refusing to delete '{name}' without --yes when stdin is not a TTY.")
-        answer = input(f"Delete VM '{name}' and its disk? [y/N] ").strip()
+        try:
+            answer = input(f"Delete VM '{name}' and its disk? [y/N] ").strip()
+        except (EOFError, KeyboardInterrupt):
+            print('\nKept.')
+            return False
         if not answer.lower().startswith('y'):
             print('Kept.')
             return False
@@ -416,7 +426,14 @@ def delete_vm(name, *, assume_yes=False, base=None):
 
 def prompt_text(prompt, default=''):
     marker = f' [{default}]' if default else ''
-    answer = input(f'{prompt}{marker}: ').strip()
+    try:
+        answer = input(f'{prompt}{marker}: ').strip()
+    except EOFError:
+        print()
+        return default
+    except KeyboardInterrupt:
+        print()
+        raise SystemExit('Aborted.')
     return answer or default
 
 
@@ -441,7 +458,11 @@ def interactive(base=None, iso_arg=None, offline=False):
         print()
         print_table(list_vms(base))
         print()
-        answer = input("Open which VM? (number or name, 'new', 'delete NAME', 'quit') ").strip()
+        try:
+            answer = input("Open which VM? (number or name, 'new', 'delete NAME', 'quit') ").strip()
+        except (EOFError, KeyboardInterrupt):
+            print()
+            return
         if not answer or answer.lower() in ('q', 'quit', 'exit'):
             return
         if answer.lower() in ('n', 'new'):
@@ -480,7 +501,7 @@ def interactive(base=None, iso_arg=None, offline=False):
         return
 
 
-def main(argv=None):
+def build_parser():
     parser = argparse.ArgumentParser(description='Persistent interactive test-drive VMs (humans only).')
     parser.add_argument('--iso', default=None, help='installer ISO (default: newest out/*.iso)')
     parser.add_argument('--offline', action='store_true', help='no virtual network (loopback only)')
@@ -497,16 +518,25 @@ def main(argv=None):
     p_open = sub.add_parser('open', help='open a VM (ISO on first boot, disk afterwards)')
     p_open.add_argument('name', nargs='?', default=None)
     p_open.add_argument('--memory', type=int, default=None, help='guest memory in GiB (default: 8, or 4 when low)')
-    p_open.add_argument('--iso', default=None, help='installer ISO (default: newest out/*.iso)')
-    p_open.add_argument('--offline', action='store_true', help='no virtual network (loopback only)')
+    # SUPPRESS keeps flags passed before the subcommand: argparse would
+    # otherwise overwrite them with these same-dest defaults.
+    p_open.add_argument('--iso', default=argparse.SUPPRESS, help='installer ISO (default: newest out/*.iso)')
+    p_open.add_argument('--offline', action='store_true', default=argparse.SUPPRESS, help='no virtual network')
     p_open.add_argument(
-        '--display', default=None, choices=['gtk', 'none'], help='window display (none is for headless checks)'
+        '--display', default=argparse.SUPPRESS, choices=['gtk', 'none'], help='window display (none is headless)'
     )
-    p_open.add_argument('--print-command', action='store_true', help='print the QEMU command and exit')
+    p_open.add_argument(
+        '--print-command', action='store_true', default=argparse.SUPPRESS, help='print the QEMU command and exit'
+    )
     p_delete = sub.add_parser('delete', help='delete a VM')
     p_delete.add_argument('name', nargs='?', default=None)
     p_delete.add_argument('--yes', action='store_true')
     sub.add_parser('list', help='list VMs')
+    return parser
+
+
+def main(argv=None):
+    parser = build_parser()
     args = parser.parse_args(argv)
     refuse_if_agent()
     if args.out_dir:
