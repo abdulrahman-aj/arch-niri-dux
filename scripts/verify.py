@@ -102,7 +102,7 @@ def run_fixture(args, parser):
     if args.kernel_package:
         shutil.copyfile(args.kernel_package, directory / 'kernel.pkg.tar.zst')
     probe_hashes = stage_probes(directory)
-    import integration_build as builder
+    import package_build as builder
 
     source = directory / 'integration-input'
     source.mkdir()
@@ -139,7 +139,7 @@ def run_fixture(args, parser):
             'chown -R tester:tester /tmp/fast'
         )
         vm.command(
-            'runuser -u tester -- python /run/verify/integration_build.py '
+            'runuser -u tester -- python /run/verify/package_build.py '
             f'/tmp/fast/source /tmp/fast/build /tmp/fast/packages --epoch {epoch}',
             timeout=180,
         )
@@ -186,7 +186,7 @@ def run_fixture(args, parser):
         )
     finally:
         if args.keep and started and vm.process is not None and vm.process.poll() is None:
-            console = f'./scripts/build-in-dev python3 scripts/vm_console.py --directory {directory}'
+            console = f'./scripts/in-dev-shell python3 scripts/vm_console.py --directory {directory}'
             print(f'VM kept running in {directory} (holds 8 GiB guest RAM until stopped).')
             print(f"  Shell:      {console} sh '<command>'")
             print(f'  Screenshot: {console} shot <name.png>')
@@ -239,7 +239,7 @@ def run_install(vm, passed, evidence, directory, package_digest, serial_preboot=
 
 
 def prepare_integration_inputs(directory):
-    """Stage integration build inputs for provenance checks. Shared by full and release runs."""
+    """Stage package build inputs for provenance checks. Shared by full and release runs."""
     source = directory / 'integration-input'
     source.mkdir()
     manifest = json.loads((ROOT / 'out/packages.manifest.json').read_text())['integration']
@@ -253,7 +253,7 @@ def prepare_integration_inputs(directory):
     ]:
         original = ROOT / 'out/integration' / filename
         if digest(original) != manifest[field]:
-            raise ValueError(f'Integration build input changed: {filename}')
+            raise ValueError(f'Package build input changed: {filename}')
         shutil.copyfile(original, source / target)
 
 
@@ -416,7 +416,7 @@ def main():
         if not succeeded:
             disk.unlink(missing_ok=True)
         if kept:
-            console = f'./scripts/build-in-dev python3 scripts/vm_console.py --directory {directory}'
+            console = f'./scripts/in-dev-shell python3 scripts/vm_console.py --directory {directory}'
             print(f'VM kept running in {directory} (sockets under {directory}/.sockets).')
             print(f"  Shell:  {console} sh '<command>'")
             print(f'  Stage:  {console} stage <module>')

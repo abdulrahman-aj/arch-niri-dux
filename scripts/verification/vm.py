@@ -440,7 +440,7 @@ def stage_probes(directory):
     shutil.copytree(
         source, directory / 'verification', ignore=shutil.ignore_patterns('__pycache__'), dirs_exist_ok=True
     )
-    builder = source.parent / 'integration_build.py'
+    builder = source.parent / 'package_build.py'
     shutil.copyfile(builder, directory / builder.name)
     paths = sorted(source.glob('*.py')) + [builder]
     return {str(path.relative_to(source.parent)): digest(path) for path in paths}

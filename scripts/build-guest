@@ -63,7 +63,7 @@ if [[ $integration_mode == release ]]; then
     python /source/scripts/integration_release.py fetch /source /build/integration-packages
 else
     integration_epoch=$(cat /state/integration-epoch)
-    runuser -u nobody -- python /source/scripts/integration_build.py /source \
+    runuser -u nobody -- python /source/scripts/package_build.py /source \
         /build/integration-work /build/integration-packages --epoch "$integration_epoch"
     runuser -u nobody -- python /source/scripts/dux_apps.py /source \
         /build/integration-work /build/integration-packages

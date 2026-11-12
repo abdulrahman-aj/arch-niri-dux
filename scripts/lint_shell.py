@@ -25,7 +25,7 @@ def discover():
             '--exclude-standard',
             '--',
             ':(exclude)out/**',
-            ':(exclude)packages/aur/**',
+            ':(exclude)packages/dux-apps/**',
         ]
     )
     scripts, recipes = [], []
