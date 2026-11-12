@@ -20,6 +20,8 @@ BUILD_SPACE = 8 * 1024**3
 DOWNLOADS_SPACE = int(3.5 * 1024**3)
 ISO_SPACE = 3 * 1024**3
 BUILDER_MIB = 8192
+# A development build with a 4 GiB builder succeeded (host RSS peaked at
+# 4.5 GiB instead of 8.6 GiB), so humans with less memory get at least this.
 BUILDER_MIN_MIB = 4096
 MEMORY_HEADROOM_MIB = 1024
 
@@ -106,8 +108,13 @@ def space_shortfalls(needs):
     ]
 
 
+def build_needs(state):
+    """Free bytes one ISO build needs, by path."""
+    return {state: build_space_needed(state), ROOT / 'out': ISO_SPACE}
+
+
 def human_build_guard(state):
-    shortfalls = space_shortfalls({state: build_space_needed(state), ROOT / 'out': ISO_SPACE})
+    shortfalls = space_shortfalls(build_needs(state))
     if shortfalls:
         path, need, free = shortfalls[0]
         raise SystemExit(

@@ -231,13 +231,12 @@ def space_report(needs, reasons):
 
 def build_needs():
     state = workspace.build_state(ROOT)
-    needs = {state: workspace.build_space_needed(state), ROOT / 'out': workspace.ISO_SPACE}
     reasons = [
         f'Building the installer ISO needs up to {gib(workspace.BUILD_SPACE)} for its builder disk (kept in',
         f'{state} for later builds), {gib(workspace.DOWNLOADS_SPACE)} for downloaded packages',
         f'(less when already cached) and {gib(workspace.ISO_SPACE)} for the ISO in out/.',
     ]
-    return needs, reasons
+    return workspace.build_needs(state), reasons
 
 
 def check_new_vm_space(base=None):
