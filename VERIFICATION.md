@@ -9,8 +9,8 @@ recipes are excluded. `make test` adds source and build tests. CI runs these
 checks without graphical VM acceptance.
 
 `make iso-development` builds candidate integration packages and the ISO. Run
-VMs on your build machine. Builds and VM disk creation require 30 GiB
-free. The runner waits for 10 GiB available host RAM before
+VMs on your build machine. Builds and VM disk creation need the free space
+noted in [BUILDING.md](BUILDING.md). The runner waits for 10 GiB available host RAM before
 starting an 8 GiB guest. VM tests require KVM and a GPU render node with
 virtio 3D acceleration; `QEMU_RENDER_NODE` defaults to `/dev/dri/renderD128`.
 
@@ -32,15 +32,30 @@ systemd policy and the PAM-unlocked keyring, the inbound firewall and
 resolve-only mDNS seen from a veth neighbour namespace, and Niri/Dux/terminal/editor/browser
 smoke checks. It checks desktop apps (manuals, archives, media playback, driverless
 printing to a loopback printer), PDF rendering, the synthetic camera, screen
-sharing, and screen lock. It checks
-an update started through Dux's updater (its pacman backend, `pkexec` and
-authentication dialog),
-an integration upgrade with Limine snapshot boot and restore preserving home,
+sharing, and screen lock.
+An integration upgrade with Limine snapshot boot and restore preserving home,
 and the `plymouth.enable=0` text fallback with graphical unlock restored
-afterward. `make verify-release` additionally checks published HTTPS package
-delivery against offline trust and exact release hashes. `--install-only` is
+follow afterward. `make verify-release` is the release mode (see
+[release acceptance](packages/RELEASING.md#publish)): it installs the release
+ISO, boots once, and runs only the online delivery check. `--install-only` is
 a debug run and does not produce acceptance success. Full acceptance is
 required for installer changes and releases.
+
+The runner continues past stage failures while the guest still answers:
+apps, PDF, camera and browser depend only on the desktop session, not on each
+other, so one of them failing still runs the rest. If boot or desktop fails,
+the run stops there, since later stages cannot mean anything without them. Any
+other failure still runs the rest, and the run exits non-zero listing every
+failure and skip in `FAILURE.txt`. Only a passing full run writes
+`ACCEPTANCE-PASSED` and can become a fixture, so a partial disk never feeds
+fixture auto-discovery.
+
+The Dux updater stage is slow: its two scheduled-check waits take
+about eight minutes, so ordinary runs skip it and finish in about eight and a
+half minutes instead of sixteen and a half. Request it explicitly with
+`make verify ARGS='--slow'` when qualifying changes touching the update
+button, its seeds, or Dux itself. Releases qualify delivery separately through
+`make verify-release`, which runs only the online check.
 
 `make verify ARGS='--keep'`: on failure the guest stays running with its
 serial/QMP sockets under `<evidence>/.sockets` and prints attach commands;
@@ -55,8 +70,10 @@ Suspend qualification requires logind `LockedHint=yes`, Niri's lock event, an un
 
 ## `make verify-fast`
 
-`make verify-fast` builds current integration packages inside a disposable
-overlay of the newest accepted `make verify` image. `--fixture` defaults to
+`make verify-fast` is a thin alias for fixture mode in `verify.py`
+(`--fixture`), not a second script. It builds current
+integration packages inside a disposable overlay of the newest accepted
+`make verify` image. `--fixture` defaults to
 the newest registered 0.3+ workspace holding `ACCEPTANCE-PASSED` and `disk.qcow2`,
 and `--directory` defaults to a fresh `out/fast-<timestamp>`; pass explicit
 paths to override either default. Keep `ACCEPTANCE-PASSED`,
@@ -83,12 +100,12 @@ Without `--keep`, behavior is unchanged.
 Drive the kept VM with `scripts/vm_console.py` (one driver at a time):
 
 ```
-./scripts/build-in-dev python3 scripts/vm_console.py --directory out/debug sh '<command>'
-./scripts/build-in-dev python3 scripts/vm_console.py --directory out/debug shot <name.png>
-./scripts/build-in-dev python3 scripts/vm_console.py --directory out/debug click <x_frac> <y_frac>
-./scripts/build-in-dev python3 scripts/vm_console.py --directory out/debug key <qcode>
-./scripts/build-in-dev python3 scripts/vm_console.py --directory out/debug probe <module> <function>
-./scripts/build-in-dev python3 scripts/vm_console.py --directory out/debug poweroff
+./scripts/in-dev-shell python3 scripts/vm_console.py --directory out/debug sh '<command>'
+./scripts/in-dev-shell python3 scripts/vm_console.py --directory out/debug shot <name.png>
+./scripts/in-dev-shell python3 scripts/vm_console.py --directory out/debug click <x_frac> <y_frac>
+./scripts/in-dev-shell python3 scripts/vm_console.py --directory out/debug key <qcode>
+./scripts/in-dev-shell python3 scripts/vm_console.py --directory out/debug probe <module> <function>
+./scripts/in-dev-shell python3 scripts/vm_console.py --directory out/debug poweroff
 ```
 
 Per iteration there is no ISO rebuild, reinstall or scheduler wait. The

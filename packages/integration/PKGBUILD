@@ -1,4 +1,4 @@
-# scripts/integration_build.py supplies the local source archive and its checksum.
+# scripts/package_build.py supplies the local source archive and its checksum.
 pkgbase='arch-niri-dux'
 pkgname=(arch-niri-dux arch-niri-dux-baseline)
 pkgver=0.3.2

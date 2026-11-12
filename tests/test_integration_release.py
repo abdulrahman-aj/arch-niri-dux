@@ -78,7 +78,7 @@ class SignedReleaseTests(unittest.TestCase):
 
     def app_recipe(self, version, description='Fixture app'):
         """Declare a reviewed Dux app recipe for VERSION; DESCRIPTION changes its package contents."""
-        source = self.root / 'packages/aur/dux-example-bin'
+        source = self.root / 'packages/dux-apps/dux-example-bin'
         source.mkdir(parents=True, exist_ok=True)
         pkgver, pkgrel = version.split('-')
         (source / 'PKGBUILD').write_text(description)
@@ -88,7 +88,7 @@ class SignedReleaseTests(unittest.TestCase):
             source_date_epoch=1234,
             files={name: release.build.digest(source / name) for name in ('PKGBUILD', '.SRCINFO')},
         )
-        (self.root / 'packages/aur-recipes.json').write_text(json.dumps([recipe]))
+        (self.root / 'packages/dux-apps-recipes.json').write_text(json.dumps([recipe]))
         return recipe
 
     def fixture_package(self, destination, name, version, arch, description, builder='Test'):

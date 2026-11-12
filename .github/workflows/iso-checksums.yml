@@ -46,7 +46,7 @@ jobs:
       - name: Show exact authorization before environment approval
         id: authorization
         run: |
-          ./scripts/build-in-dev python3 scripts/iso_checksums.py validate \
+          ./scripts/in-dev-shell python3 scripts/iso_checksums.py validate \
             --tag "$RELEASE_TAG" --sha256 "$ISO_SHA256" --commit "$GITHUB_SHA"
 
   sign:
@@ -75,7 +75,7 @@ jobs:
         env:
           PACKAGE_SIGNING_KEY: ${{ secrets.PACKAGE_SIGNING_KEY }}
         run: |
-          ./scripts/build-in-dev python3 scripts/iso_checksums.py sign \
+          ./scripts/in-dev-shell python3 scripts/iso_checksums.py sign \
             --tag "$RELEASE_TAG" --sha256 "$ISO_SHA256" --commit "$GITHUB_SHA" \
             --source-commit "${{ needs.validate.outputs.source_commit }}" --output "$RUNNER_TEMP/iso-checksums"
       - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6

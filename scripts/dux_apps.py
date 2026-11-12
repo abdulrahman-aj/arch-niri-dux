@@ -19,7 +19,7 @@ def validate_recipe(root, recipe):
     name = recipe['name']
     if not re.fullmatch(r'[a-z0-9][a-z0-9+_.-]*', name):
         raise ValueError('Invalid Dux app package name')
-    source = root / 'packages/aur' / name
+    source = root / 'packages/dux-apps' / name
     if not {'PKGBUILD', '.SRCINFO'}.issubset(recipe['files']):
         raise ValueError('Recipe is missing its build or dependency metadata')
     for filename, expected in recipe['files'].items():
@@ -41,7 +41,7 @@ def version(source):
 
 def recipes(root):
     """Return the reviewed recipes with their validated source directory and package filename."""
-    declared = json.loads((root / 'packages/aur-recipes.json').read_text())
+    declared = json.loads((root / 'packages/dux-apps-recipes.json').read_text())
     if len({recipe['name'] for recipe in declared}) != len(declared):
         raise ValueError('Duplicate Dux app recipe.')
     result = []
@@ -87,7 +87,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('root', type=Path)
     parser.add_argument('workspace', type=Path)
-    parser.add_argument('destination', type=Path, help='Output of integration_build.py')
+    parser.add_argument('destination', type=Path, help='Output of package_build.py')
     arguments = parser.parse_args()
     if os.geteuid() == 0:
         parser.error('Run package builds as an unprivileged user.')

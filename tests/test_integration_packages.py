@@ -7,7 +7,7 @@ import unittest
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'scripts'))
-import integration_build as builder
+import package_build as builder
 
 
 class IntegrationSourceTests(unittest.TestCase):

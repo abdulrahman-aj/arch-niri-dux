@@ -1,27 +1,27 @@
 .PHONY: lock iso iso-development iso-checksums try verify verify-fast verify-release verify-hibernate lint lint-in-dev fmt test build-test verify-alongside provision-alongside fetch-alongside help
 lock:
-	./scripts/build-in-dev python3 scripts/package_lock.py resolve . $(ARGS)
+	./scripts/in-dev-shell python3 scripts/package_lock.py resolve . $(ARGS)
 iso:
-	./scripts/build-in-dev ./scripts/build-iso
+	./scripts/in-dev-shell ./scripts/build-iso
 iso-development:
-	./scripts/build-in-dev ./scripts/build-iso development
+	./scripts/in-dev-shell ./scripts/build-iso development
 # make try is for humans; agents use make verify-fast ARGS=--keep.
 # try is exempt from heavy-guard so it runs on the laptop too.
 try:
-	./scripts/build-in-dev python3 scripts/try_vm.py
+	./scripts/in-dev-shell python3 scripts/try_vm.py
 verify:
-	./scripts/build-in-dev python3 scripts/verify.py $(ARGS)
+	./scripts/in-dev-shell python3 scripts/verify.py $(ARGS)
 verify-fast:
-	./scripts/build-in-dev python3 scripts/verify_fast.py $(ARGS)
+	./scripts/in-dev-shell python3 scripts/verify.py --fixture $(ARGS)
 verify-release:
-	./scripts/build-in-dev python3 scripts/verify.py --online-repository $(ARGS)
+	./scripts/in-dev-shell python3 scripts/verify_release.py $(ARGS)
 verify-hibernate:
-	./scripts/build-in-dev python3 scripts/verify_hibernate.py $(ARGS)
+	./scripts/in-dev-shell python3 scripts/verify_hibernate.py $(ARGS)
 build-test:
-	./scripts/build-in-dev python3 -m unittest discover -s scripts -p 'build_test.py'
-# One dev-shell entry per target; build-in-dev passes through inside it.
+	./scripts/in-dev-shell python3 -m unittest discover -s scripts -p 'build_test.py'
+# One dev-shell entry per target; in-dev-shell passes through inside it.
 lint:
-	./scripts/build-in-dev $(MAKE) --no-print-directory lint-in-dev
+	./scripts/in-dev-shell $(MAKE) --no-print-directory lint-in-dev
 lint-in-dev:
 	actionlint
 	ruff check . desktop/usr/bin/arch-niri-dux-keyring-recover
@@ -29,16 +29,16 @@ lint-in-dev:
 	python3 scripts/lint_shell.py
 	python3 scripts/lint_shell.py --check-format
 fmt:
-	./scripts/build-in-dev ruff format . desktop/usr/bin/arch-niri-dux-keyring-recover
-	./scripts/build-in-dev python3 scripts/lint_shell.py --format
+	./scripts/in-dev-shell ruff format . desktop/usr/bin/arch-niri-dux-keyring-recover
+	./scripts/in-dev-shell python3 scripts/lint_shell.py --format
 test: lint
-	./scripts/build-in-dev bash -c 'python3 -m unittest discover -s tests && python3 -m unittest discover -s scripts -p build_test.py'
+	./scripts/in-dev-shell bash -c 'python3 -m unittest discover -s tests && python3 -m unittest discover -s scripts -p build_test.py'
 verify-alongside:
-	./scripts/build-in-dev python3 scripts/verify_alongside.py $(ARGS)
+	./scripts/in-dev-shell python3 scripts/verify_alongside.py $(ARGS)
 provision-alongside:
-	./scripts/build-in-dev python3 scripts/provision_alongside.py $(ARGS)
+	./scripts/in-dev-shell python3 scripts/provision_alongside.py $(ARGS)
 fetch-alongside:
-	./scripts/build-in-dev python3 scripts/fetch_alongside.py $(ARGS)
+	./scripts/in-dev-shell python3 scripts/fetch_alongside.py $(ARGS)
 help:
 	@printf '%s\n' 'lock, iso, iso-development, iso-checksums, verify, verify-fast, verify-release,' \
 		'verify-hibernate, verify-alongside, provision-alongside, fetch-alongside, gc' \
@@ -52,4 +52,4 @@ gc:
 	python3 scripts/workspace.py gc $(ARGS)
 
 iso-checksums:
-	./scripts/build-in-dev python3 scripts/iso_checksums.py prepare $(ARGS)
+	./scripts/in-dev-shell python3 scripts/iso_checksums.py prepare $(ARGS)

@@ -1,5 +1,6 @@
 enable dms.service
 enable dsearch.service
+# dcal loopback HTTP stays enabled for Google/Microsoft OAuth; an env flag would break the data API.
 enable dcal.service
 enable dfiles.service
 enable dux-application-themes.service

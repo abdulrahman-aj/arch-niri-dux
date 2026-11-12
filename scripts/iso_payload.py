@@ -24,7 +24,7 @@ def _manifest(root, repository):
     requested = requested_packages(root)
     pin = [entry for entry in omarchy_pin(root) if entry['name'] in requested]
     integration = json.loads((repository / 'integration.manifest.json').read_text())
-    recipes = json.loads((root / 'packages/aur-recipes.json').read_text())
+    recipes = json.loads((root / 'packages/dux-apps-recipes.json').read_text())
     apps = integration.get('apps', [])
     expected = {recipe['name']: recipe for recipe in recipes}
     if (

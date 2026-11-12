@@ -10,16 +10,251 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import time
 
 from workspace import disk_guard, kept_running, newest_accepted_fixture, own, socket_guard
 
 from verification.digest import digest
 from verification.evidence import Evidence
 
-from verification import apps, boot, browser, camera, desktop, dux_update, integration, pdf, recovery, suspend
-from verification.vm import VM, PASSWORD, stage_probes
+from verification import apps, boot, browser, camera, desktop, dux_update, pdf, recovery, suspend
+from verification.vm import VM, PASSWORD, graphical_login, installed_login, stage_probes
 
 ROOT = Path(__file__).resolve().parents[1]
+
+
+def _policy(vm, passed):
+    vm.probe('policy', 'check', timeout=180)
+    passed('Package presets, systemd policy and PAM-unlocked keyring')
+
+
+def _network(vm, passed):
+    vm.probe('network', 'check', timeout=240)
+    passed('Inbound firewall and resolve-only mDNS')
+
+
+def guest_alive(vm, timeout=30):
+    try:
+        if vm.process is None or vm.process.poll() is not None:
+            return False
+        vm.command('true', timeout=timeout)
+        return True
+    except Exception:
+        return False
+
+
+def run_stages(vm, passed, stages):
+    """Run (name, func) stages in order, continuing past failures.
+
+    Continues while the guest answers. Boot or desktop failing stops the run,
+    since later stages cannot mean anything without them.
+    Returns (failures, skipped).
+    """
+    failures = {}
+    skipped = []
+    for index, (name, func) in enumerate(stages):
+        start = time.monotonic()
+        try:
+            func(vm, passed)
+        except Exception as error:
+            failures[name] = error
+            print(f'FAIL: {name} after {time.monotonic() - start:.0f}s: {error}', flush=True)
+            if name in ('boot', 'desktop') or not guest_alive(vm):
+                skipped.extend(n for n, _ in stages[index + 1 :])
+                break
+            continue
+        print(f'DONE: {name} in {time.monotonic() - start:.0f}s', flush=True)
+    return failures, skipped
+
+
+def run_fixture(args, parser):
+    """Fixture mode (folded verify_fast.py): qualify new packages on an accepted overlay."""
+    for flag in ('--iso', '--disk', '--install-only', '--swap-gib', '--slow'):
+        attr = flag.lstrip('-').replace('-', '_')
+        value = args.__dict__.get(attr)
+        if value is not None and value is not False:
+            parser.error(f'{flag} is for full runs; fixture mode uses --fixture [--kernel-package] [--keep].')
+    raw = args.fixture
+    fixture = newest_accepted_fixture() if raw is None or str(raw) == 'auto' else Path(raw).resolve()
+    if fixture is None:
+        parser.error('No accepted fixture found; run make verify first or pass --fixture PATH.')
+    accepted = fixture.parent
+    if not fixture.is_file() or not (accepted / 'ACCEPTANCE-PASSED').is_file():
+        parser.error('Fixture must be a disk from a completed full acceptance run.')
+    if args.directory is None:
+        stamp = time.strftime('%Y%m%d-%H%M%S')
+        directory = ROOT / 'out' / f'fast-{stamp}'
+        suffix = 1
+        while directory.exists():
+            suffix += 1
+            directory = ROOT / 'out' / f'fast-{stamp}-{suffix}'
+    else:
+        directory = args.directory.resolve()
+    if args.keep:
+        socket_guard(directory)
+    if kept_running(directory):
+        parser.error(f'Kept VM still running in {directory}; power it off first.')
+    disk_guard(directory)
+    evidence = Evidence(directory, parents=True)
+    own(directory)
+    for name in ('OVMF_VARS.fd', 'install.json'):
+        shutil.copyfile(accepted / name, directory / name)
+    if args.kernel_package:
+        shutil.copyfile(args.kernel_package, directory / 'kernel.pkg.tar.zst')
+    probe_hashes = stage_probes(directory)
+    import package_build as builder
+
+    source = directory / 'integration-input'
+    source.mkdir()
+    epoch = int(subprocess.check_output(['git', 'log', '-1', '--format=%ct'], cwd=ROOT, text=True))
+    builder.prepare_source(ROOT, source, epoch)
+    evidence.inputs(
+        {
+            'kernel_sha256': digest(directory / 'kernel.pkg.tar.zst') if args.kernel_package else None,
+            'fixture': str(fixture),
+            'accepted_inputs': json.loads((accepted / 'inputs.json').read_text()),
+            'source_sha256': digest(source / 'integration.tar'),
+            'verification_scripts': probe_hashes | {'verify.py': digest(Path(__file__))},
+        }
+    )
+    disk = directory / 'disk.qcow2'
+    subprocess.run(['qemu-img', 'create', '-f', 'qcow2', '-F', 'qcow2', '-b', str(fixture), str(disk)], check=True)
+    vm = VM(directory, None, disk)
+    if args.keep:
+        vm.socket_directory = directory / '.sockets'
+        vm.socket_directory.mkdir(exist_ok=True)
+    started = False
+    try:
+        vm.start(cdrom=False)
+        started = True
+        installed_login(vm)
+        vm.mount_probes()
+        # Pre-0.3 installer-owned files need manual repair. This tier deliberately
+        # refuses those fixtures instead of introducing a migration path.
+        vm.command('pacman -Qo /etc/snapper/configs/root /usr/share/arch-niri-dux/niri/tail.kdl')
+        vm.command(
+            'mkdir -p /tmp/fast/source/packages/integration /tmp/fast/build /tmp/fast/packages; '
+            'tar -xf /run/verify/integration-input/integration.tar -C /tmp/fast/source; '
+            'cp /run/verify/integration-input/PKGBUILD /tmp/fast/source/packages/integration/; '
+            'chown -R tester:tester /tmp/fast'
+        )
+        vm.command(
+            'runuser -u tester -- python /run/verify/package_build.py '
+            f'/tmp/fast/source /tmp/fast/build /tmp/fast/packages --epoch {epoch}',
+            timeout=180,
+        )
+        vm.probe('policy', 'record-boot')
+        kernel = ' /run/verify/kernel.pkg.tar.zst' if args.kernel_package else ''
+        vm.command(
+            'pacman -U --noconfirm /tmp/fast/packages/*.pkg.tar.zst'
+            + kernel
+            + ' >/run/verify/boot-policy-transaction.log 2>&1; '
+            'cp /tmp/fast/packages/integration.manifest.json /run/verify/fast-packages.json',
+            timeout=300,
+        )
+        vm.probe('policy', 'upgraded-boot')
+        vm.poweroff()
+        vm.stop()
+        vm.start(cdrom=False)
+        installed_login(vm)
+        vm.mount_probes()
+        graphical_login(vm)
+        vm.probe('boot', 'plymouth-config')
+        vm.probe('policy', 'check', timeout=180)
+        vm.probe('desktop', 'niri-overrides', timeout=180)
+        vm.probe('desktop', 'wallpaper-preserved', timeout=180)
+        if not args.keep:
+            vm.poweroff()
+        (directory / 'FAST-PASSED').write_text(
+            json.dumps(
+                {
+                    'fixture': str(fixture),
+                    'source_sha256': digest(source / 'integration.tar'),
+                    'kernel_in_transaction': bool(args.kernel_package),
+                    'checks': [
+                        'ALPM boot policy regeneration',
+                        'package upgrade',
+                        'Niri and Dux bindings',
+                        'presets',
+                        'greetd login and unlocked keyring',
+                        'systemd drop-ins',
+                    ],
+                },
+                indent=2,
+            )
+            + '\n'
+        )
+    finally:
+        if args.keep and started and vm.process is not None and vm.process.poll() is None:
+            console = f'./scripts/in-dev-shell python3 scripts/vm_console.py --directory {directory}'
+            print(f'VM kept running in {directory} (holds 8 GiB guest RAM until stopped).')
+            print(f"  Shell:      {console} sh '<command>'")
+            print(f'  Screenshot: {console} shot <name.png>')
+            print(f'  Click/key:  {console} click <x_frac> <y_frac> | key <qcode>')
+            print(f'  Probe:      {console} probe <module> <function>')
+            print(f"  Files:      cp <src> {directory}/, then sh 'cp /run/verify/<name> <dest>'")
+            print(f'  Stop:       {console} poweroff')
+        else:
+            vm.stop()
+
+
+def run_install(vm, passed, evidence, directory, package_digest, serial_preboot=False):
+    """Install the ISO offline and prepare the target. Reused by full and release runs."""
+    print(f'VM evidence: {directory}', flush=True)
+    vm.start()
+    vm.expect(r'root@archiso[^\n]*#', timeout=180)
+    # USB boot with enough RAM reproduces archiso's automatic-copy path.
+    # The payload must stay on mounted media instead of disappearing.
+    vm.command(
+        'grep -qw copytoram=n /proc/cmdline; mountpoint -q /run/archiso/bootmnt; test ! -e /run/archiso/copytoram/airootfs.sfs'
+    )
+    vm.mount_probes()
+    vm.command('fastfetch --logo none --structure OS:Kernel')
+    vm.command('test "$(ls /sys/class/net | tr "\\n" " ")" = "lo "')
+    vm.command(f'test "$(sha256sum /run/archiso/bootmnt/packages.manifest.json | cut -d " " -f 1)" = {package_digest}')
+    evidence.verify_installer(vm, ROOT / 'installer')
+    installation_output = vm.command(
+        'arch-niri-install --config /run/verify/install.json --confirm-disk /dev/vda', timeout=2400
+    )
+    elapsed = re.search(r'INSTALLATION COMPLETE[^\n]*took ([0-9]+) seconds', installation_output)
+    if elapsed is None:
+        raise RuntimeError('Installer did not report its elapsed completion time.')
+    (directory / 'install-time-seconds').write_text(elapsed.group(1) + '\n')
+    passed('Offline encrypted installation completed')
+    vm.command(
+        'cryptsetup open --key-file /run/verify/key /dev/vda2 dux-root; mkdir -p /mnt/verify; mount -o subvol=@ /dev/mapper/dux-root /mnt/verify; mount /dev/vda1 /mnt/verify/boot'
+    )
+    vm.probe('boot', 'prepare', '/mnt/verify', timeout=300)
+    if serial_preboot:
+        # The release check boots once, over serial, with no graphical unlock
+        # to qualify. Enable the serial kernel console on the target now;
+        # full acceptance does this after its first graphical boot instead.
+        vm.command(
+            'cd /run/verify && python3 -m verification.boot serial-console-enable /mnt/verify; '
+            'arch-chroot /mnt/verify limine-mkinitcpio',
+            timeout=300,
+        )
+    vm.command('umount -R /mnt/verify; cryptsetup close dux-root; sync')
+    vm.stop()
+
+
+def prepare_integration_inputs(directory):
+    """Stage package build inputs for provenance checks. Shared by full and release runs."""
+    source = directory / 'integration-input'
+    source.mkdir()
+    manifest = json.loads((ROOT / 'out/packages.manifest.json').read_text())['integration']
+    (directory / 'release-manifest.json').write_text(json.dumps(manifest, indent=2) + '\n')
+    import integration_release as release
+
+    release.validate_manifest(ROOT, ROOT / 'out/integration')
+    for filename, target, field in [
+        ('integration.tar', 'integration.tar', 'source_sha256'),
+        ('integration.PKGBUILD', 'PKGBUILD', 'recipe_sha256'),
+    ]:
+        original = ROOT / 'out/integration' / filename
+        if digest(original) != manifest[field]:
+            raise ValueError(f'Package build input changed: {filename}')
+        shutil.copyfile(original, source / target)
 
 
 def main():
@@ -29,9 +264,9 @@ def main():
     parser.add_argument('--disk', type=Path, help='New disposable qcow2 path; default inside the workspace')
     parser.add_argument('--install-only', action='store_true', help='Debug only; does not produce acceptance success')
     parser.add_argument(
-        '--online-repository',
+        '--slow',
         action='store_true',
-        help='After offline acceptance, boot with networking and check published package delivery',
+        help='Include the slow Dux updater stage',
     )
     parser.add_argument('--swap-gib', type=int, help='Override Auto swap sizing; 0 disables swap and hibernation')
     parser.add_argument('--keymap', default='us', help='Console keymap for the installed system (default: us)')
@@ -40,7 +275,23 @@ def main():
         action='store_true',
         help='On failure keep the guest running for debugging; the disk is still unlinked',
     )
+    parser.add_argument(
+        '--fixture',
+        nargs='?',
+        const='auto',
+        help='Fixture mode: reuse an accepted disk.qcow2 instead of installing '
+        '(PATH, or auto-discovers the newest accepted fixture)',
+    )
+    parser.add_argument(
+        '--kernel-package',
+        type=Path,
+        help='Fixture mode only: also reinstall this kernel archive in the same transaction',
+    )
     args = parser.parse_args()
+    if args.fixture is not None:
+        return run_fixture(args, parser)
+    if args.kernel_package is not None:
+        parser.error('--kernel-package needs --fixture.')
     if args.swap_gib is not None and args.swap_gib < 0:
         parser.error('--swap-gib must be zero or a positive number of GiB.')
     if not re.fullmatch(r'[A-Za-z0-9_-]{1,64}', args.keymap):
@@ -87,31 +338,36 @@ def main():
     package_digest = digest(ROOT / 'out/packages.manifest.json')
     probe_hashes = stage_probes(directory)
     probe_hashes['verify.py'] = digest(Path(__file__))
+    slow = args.slow
+    stages = [
+        ('boot', lambda vm, passed: boot.verify_boot(vm, passed, args.swap_gib)),
+        ('policy', _policy),
+        ('network', _network),
+        ('desktop', desktop.verify),
+        ('apps', apps.verify),
+        ('pdf', pdf.verify),
+        ('camera', camera.verify),
+        ('browser', browser.verify),
+        ('lock', desktop.verify_lock),
+        ('suspend', suspend.verify),
+        ('dux_update', dux_update.verify),
+        ('recovery', recovery.verify),
+        ('fallback', boot.verify_fallback),
+    ]
+    if not slow:
+        stages = [(name, func) for name, func in stages if name != 'dux_update']
     evidence.inputs(
         {
             'iso': str(iso.resolve()),
             'iso_sha256': iso_digest,
             'package_manifest_sha256': package_digest,
             'verification_scripts': probe_hashes,
+            'stages': [name for name, _ in stages],
         }
     )
     evidence.key(PASSWORD)
 
-    source = directory / 'integration-input'
-    source.mkdir()
-    manifest = json.loads((ROOT / 'out/packages.manifest.json').read_text())['integration']
-    (directory / 'release-manifest.json').write_text(json.dumps(manifest, indent=2) + '\n')
-    import integration_release as release
-
-    release.validate_manifest(ROOT, ROOT / 'out/integration')
-    for filename, target, field in [
-        ('integration.tar', 'integration.tar', 'source_sha256'),
-        ('integration.PKGBUILD', 'PKGBUILD', 'recipe_sha256'),
-    ]:
-        original = ROOT / 'out/integration' / filename
-        if digest(original) != manifest[field]:
-            raise ValueError(f'Integration build input changed: {filename}')
-        shutil.copyfile(original, source / target)
+    prepare_integration_inputs(directory)
     vm = VM(directory, iso.resolve(), disk)
     succeeded = False
     if args.keep:
@@ -121,57 +377,25 @@ def main():
     passed = evidence.passed
 
     try:
-        print(f'VM evidence: {directory}', flush=True)
-        vm.start()
-        vm.expect(r'root@archiso[^\n]*#', timeout=180)
-        # USB boot with enough RAM reproduces archiso's automatic-copy path.
-        # The payload must stay on mounted media instead of disappearing.
-        vm.command(
-            'grep -qw copytoram=n /proc/cmdline; mountpoint -q /run/archiso/bootmnt; test ! -e /run/archiso/copytoram/airootfs.sfs'
-        )
-        vm.mount_probes()
-        vm.command('fastfetch --logo none --structure OS:Kernel')
-        vm.command('test "$(ls /sys/class/net | tr "\\n" " ")" = "lo "')
-        vm.command(
-            f'test "$(sha256sum /run/archiso/bootmnt/packages.manifest.json | cut -d " " -f 1)" = {package_digest}'
-        )
-        evidence.verify_installer(vm, ROOT / 'installer')
-        installation_output = vm.command(
-            'arch-niri-install --config /run/verify/install.json --confirm-disk /dev/vda', timeout=2400
-        )
-        elapsed = re.search(r'INSTALLATION COMPLETE[^\n]*took ([0-9]+) seconds', installation_output)
-        if elapsed is None:
-            raise RuntimeError('Installer did not report its elapsed completion time.')
-        (directory / 'install-time-seconds').write_text(elapsed.group(1) + '\n')
-        passed('Offline encrypted installation completed')
-        vm.command(
-            'cryptsetup open --key-file /run/verify/key /dev/vda2 dux-root; mkdir -p /mnt/verify; mount -o subvol=@ /dev/mapper/dux-root /mnt/verify; mount /dev/vda1 /mnt/verify/boot'
-        )
-        vm.probe('boot', 'prepare', '/mnt/verify', timeout=300)
-        vm.command('umount -R /mnt/verify; cryptsetup close dux-root; sync')
-        vm.stop()
+        run_install(vm, passed, evidence, directory, package_digest)
         subprocess.run(['qemu-img', 'snapshot', '-c', 'pristine', str(disk)], check=True)
         if args.install_only:
             print('Install-only debug run complete. Full acceptance has NOT passed.', flush=True)
             succeeded = True
             return 0
-        boot.verify_boot(vm, passed, args.swap_gib)
-        vm.probe('policy', 'check', timeout=180)
-        passed('Package presets, systemd policy and PAM-unlocked keyring')
-        vm.probe('network', 'check', timeout=240)
-        passed('Inbound firewall and resolve-only mDNS')
-        desktop.verify(vm, passed)
-        apps.verify(vm, passed)
-        pdf.verify(vm, passed)
-        camera.verify(vm, passed)
-        browser.verify(vm, passed)
-        desktop.verify_lock(vm, passed)
-        suspend.verify(vm, passed)
-        dux_update.verify(vm, passed)
-        recovery.verify(vm, passed)
-        boot.verify_fallback(vm, passed)
-        if args.online_repository:
-            integration.verify_published(vm, passed)
+        print(f'Stages: {", ".join(name for name, _ in stages)}', flush=True)
+        failures, skipped = run_stages(vm, passed, stages)
+        if failures or skipped:
+            lines = [f'{name}: {error}' for name, error in failures.items()]
+            lines += [f'{name}: skipped' for name in skipped]
+            (directory / 'FAILURE.txt').write_text('\n'.join(lines) + '\n')
+            for line in lines:
+                print(f'FAILED: {line}', file=sys.stderr)
+            print(
+                f'Verification failed: {len(failures)} stage(s) failed, {len(skipped)} skipped\nEvidence: {directory}',
+                file=sys.stderr,
+            )
+            return 1
         (directory / 'ACCEPTANCE-PASSED').write_text('All acceptance stages passed.\n')
         print(f'Acceptance passed. Evidence: {directory}', flush=True)
         succeeded = True
@@ -192,7 +416,7 @@ def main():
         if not succeeded:
             disk.unlink(missing_ok=True)
         if kept:
-            console = f'./scripts/build-in-dev python3 scripts/vm_console.py --directory {directory}'
+            console = f'./scripts/in-dev-shell python3 scripts/vm_console.py --directory {directory}'
             print(f'VM kept running in {directory} (sockets under {directory}/.sockets).')
             print(f"  Shell:  {console} sh '<command>'")
             print(f'  Stage:  {console} stage <module>')

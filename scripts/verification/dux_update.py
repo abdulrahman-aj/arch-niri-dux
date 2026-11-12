@@ -84,7 +84,7 @@ def build_candidate():
         'XDG_DATA_HOME',
         f'HOME={user.pw_dir}',
         'python',
-        str(EVIDENCE / 'integration_build.py'),
+        str(EVIDENCE / 'package_build.py'),
         str(source),
         str(WORK / 'build'),
         str(packages),
@@ -100,7 +100,7 @@ def use_fixture_repository(packages):
 
     Dux checks and upgrades through /etc/pacman.conf, and the guest is offline,
     so the online repositories it includes are swapped out until cleanup.
-    Signature enforcement is qualified by the integration upgrade stage.
+    Signature enforcement is qualified by the upgrade stage.
     """
     original = PACMAN_CONF.read_text()
     include = 'Include = /etc/pacman.d/arch-niri-dux.conf'
