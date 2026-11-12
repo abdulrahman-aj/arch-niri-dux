@@ -19,8 +19,9 @@ mount /dev/vda /build
 rm -rf /build/work /build/output
 fstrim /build || true
 mkdir -p /build/cache
-# Every guest package comes from the pinned archive date or the reviewed
-# Omarchy pin; rolling mirrors are never consulted.
+# Every guest package is pinned to the archive date or the reviewed Omarchy
+# pin; a rolling mirror only transports bytes the archive-date database and
+# signatures still verify.
 archive_date=$(cat /source/packages/archive-date)
 cat >/etc/pacman.conf <<CONF
 [options]

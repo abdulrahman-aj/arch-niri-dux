@@ -28,6 +28,7 @@ from verification.digest import digest
 DOWNLOAD_TIMEOUT = 60
 DOWNLOAD_ATTEMPTS = 4
 ARCHIVE = 'https://archive.archlinux.org/repos'
+MIRROR = 'https://mirror.omarchy.org'
 ARCH_REPOS = ('core', 'extra')
 OMARCHY_FILES_URL = 'https://pkgs.omarchy.org/stable/x86_64/'
 # Only these two Omarchy packages are reviewed inputs; anything else is refused.
@@ -176,12 +177,22 @@ def pinned_closure(date, requested, required, workdir, cache_dir=None):
     direct list.
     """
     config = workdir / 'pacman.conf'
-    sections = ''.join(f'[{repo}]\nServer = {ARCHIVE}/{date}/{repo}/os/x86_64\n' for repo in ARCH_REPOS)
+    # The mirror is only a faster transport: the sync databases are still
+    # written directly from the archive date (fetch_url below, never through
+    # pacman's Server list), pacman checks each file against the database
+    # SHA256, and fetch() re-checks the digest and the gpgv signature. Pacman
+    # tries servers in order and moves on after a 404, so packages that changed
+    # since the pinned date still fall back to the archive. ParallelDownloads
+    # is explicit because pacman's default (man pacman.conf, v7.1) is serial.
+    sections = ''.join(
+        f'[{repo}]\nServer = {MIRROR}/$repo/os/$arch\nServer = {ARCHIVE}/{date}/{repo}/os/x86_64\n'
+        for repo in ARCH_REPOS
+    )
     cache = f'CacheDir = {cache_dir}\n' if cache_dir else ''
     # fetch checks every package with gpgv against the repository keyring,
     # which is also the install keyring, so pacman's own check would only add
     # a dependency on the bootstrap ISO's keyring.
-    config.write_text(f'[options]\nArchitecture = x86_64\nSigLevel = Never\n{cache}{sections}')
+    config.write_text(f'[options]\nArchitecture = x86_64\nSigLevel = Never\nParallelDownloads = 5\n{cache}{sections}')
     # An empty local database makes pacman print and download the whole
     # closure instead of skipping what the live builder already installed.
     dbpath = workdir / 'db'
