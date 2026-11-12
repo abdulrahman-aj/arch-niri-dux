@@ -1,6 +1,7 @@
 """Desktop acceptance behavior."""
 
 import json
+import os
 from pathlib import Path
 import pwd
 import re
@@ -341,6 +342,96 @@ def dux_components():
     )
 
 
+def file_manager_activation():
+    # Dux Files must answer org.freedesktop.FileManager1 ("Show in folder").
+    # Dux is the only claimant: the per-user activator links to dux-files-bin,
+    # no misnamed file remains, and Nautilus's conflicting system activator is
+    # removed at install time (a hook keeps it away on upgrades). All of that
+    # plus cold activation is observable here, not just in packaging.
+    home = Path('/home/tester')
+    link = home / '.local/share/dbus-1/services/org.freedesktop.FileManager1.service'
+    assert link.is_symlink(), f'FileManager1 user activator is not a link: {link}'
+    assert os.readlink(link) == '/usr/share/dfiles/org.freedesktop.FileManager1.service', os.readlink(link)
+    assert not (home / '.local/share/dbus-1/services/dev.duxlabs.files.FileManager1.service').exists()
+    assert not Path('/usr/share/dbus-1/services/dev.duxlabs.files.FileManager1.service').exists()
+    assert not Path('/usr/share/dbus-1/services/org.freedesktop.FileManager1.service').exists()
+    # Cold activation: stop the session service and any lingering owners, so a
+    # running dfiles cannot mask a broken activator.
+    user_command('systemctl', '--user', 'stop', 'dfiles')
+    user_command('sh', '-c', 'pkill -x dfiles || true; pkill -x nautilus || true')
+
+    def unowned():
+        return (
+            user_command(
+                'busctl',
+                '--user',
+                '--no-pager',
+                'call',
+                'org.freedesktop.DBus',
+                '/org/freedesktop/DBus',
+                'org.freedesktop.DBus',
+                'NameHasOwner',
+                's',
+                'org.freedesktop.FileManager1',
+                capture=True,
+            ).stdout.strip()
+            == 'b false'
+        )
+
+    wait_until('FileManager1 without an owner', unowned, timeout=30)
+    user_command(
+        'busctl',
+        '--user',
+        '--no-pager',
+        'call',
+        'org.freedesktop.FileManager1',
+        '/org/freedesktop/FileManager1',
+        'org.freedesktop.FileManager1',
+        'ShowFolders',
+        'ass',
+        '1',
+        'file:///tmp',
+        '',
+        timeout=60,
+    )
+
+    def answered_by_dfiles():
+        try:
+            status = user_command(
+                'busctl', '--user', '--no-pager', 'status', 'org.freedesktop.FileManager1', capture=True
+            ).stdout
+        except subprocess.CalledProcessError:
+            return False
+        return '/usr/bin/dfiles' in status and 'nautilus' not in status.lower()
+
+    wait_until('FileManager1 activated by Dux Files', answered_by_dfiles, timeout=60)
+    status = user_command(
+        'busctl', '--user', '--no-pager', 'status', 'org.freedesktop.FileManager1', capture=True
+    ).stdout
+    assert '/usr/bin/dfiles' in status and 'nautilus' not in status.lower(), status
+    ipc('dfiles', 'ui.hide')
+    user_command('sh', '-c', 'pkill -x dfiles || true')
+    user_command('systemctl', '--user', 'start', 'dfiles')
+    wait_until(
+        'Dux Files session service restored',
+        lambda: user_command('systemctl', '--user', 'is-active', 'dfiles', capture=True).stdout.strip() == 'active',
+        timeout=60,
+    )
+    wait_until(
+        'Dux Files owns FileManager1 again', lambda: ipc('dfiles', 'system.fileManager.get')['owned'], timeout=60
+    )
+    journal = run('journalctl', '-b', '--no-pager', '-o', 'short', stdout=subprocess.PIPE).stdout
+    bad = [
+        line
+        for line in journal.splitlines()
+        if 'FileManager1' in line and ('not named after' in line or 'Ignoring duplicate' in line)
+    ]
+    assert not bad, bad
+    Path('/run/verify/file-manager-activation.json').write_text(
+        json.dumps({'activator': os.readlink(link), 'owner': 'dfiles', 'journal_clean': True}, indent=2) + '\n'
+    )
+
+
 def themes():
     evidence = []
     for mode in ('light', 'dark', 'light', 'dark'):
@@ -557,6 +648,8 @@ def verify(vm, passed):
     passed('Login shells, user services and Niri spawns resolve local user executables')
     vm.probe('desktop', 'dux-components', timeout=300)
     passed('GOP metrics, live file indexing, Calendar event create/read and Dux Files integration')
+    vm.probe('desktop', 'file-manager-activation', timeout=180)
+    passed('Cold FileManager1 activation reaches Dux Files with a clean journal')
     vm.probe('desktop', 'themes', timeout=300)
     passed('Live Dux light/dark changes reach Chromium, GTK settings, portals and Dux apps')
     # The native first-login welcome must not cover the document/camera UI.
@@ -596,6 +689,7 @@ if __name__ == '__main__':
             'greeter': greeter,
             'fonts': fonts,
             'dux-components': dux_components,
+            'file-manager-activation': file_manager_activation,
             'themes': themes,
             'wallpaper': wallpaper,
             'wallpaper-preserved': wallpaper_preserved,

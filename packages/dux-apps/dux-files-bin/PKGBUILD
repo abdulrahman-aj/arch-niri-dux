@@ -33,7 +33,7 @@ source=(
   "dev.duxlabs.files.desktop"
   "dev.duxlabs.files.metainfo.xml"
   "dev.duxlabs.files.policy"
-  "dev.duxlabs.files.FileManager1.service"
+  "org.freedesktop.FileManager1.service"
   "org.freedesktop.impl.portal.desktop.dfiles.service"
   "dfiles.portal"
   "dfiles.service"
@@ -84,8 +84,12 @@ package() {
   install -Dm644 "dev.duxlabs.files.policy" \
     "${pkgdir}/usr/share/polkit-1/actions/${_appid}.policy"
 
-  install -Dm644 "dev.duxlabs.files.FileManager1.service" \
-    "${pkgdir}/usr/share/dbus-1/services/${_appid}.FileManager1.service"
+  # Nautilus ships a conflicting org.freedesktop.FileManager1.service, so this
+  # activator lives outside the service directories (that file is removed at
+  # install time); new homes link to it from ~/.local/share/dbus-1/services,
+  # which the session bus prefers.
+  install -Dm644 "org.freedesktop.FileManager1.service" \
+    "${pkgdir}/usr/share/${_binname}/org.freedesktop.FileManager1.service"
   install -Dm644 "org.freedesktop.impl.portal.desktop.dfiles.service" \
     "${pkgdir}/usr/share/dbus-1/services/${_portalservice}"
   install -Dm644 "dfiles.portal" \

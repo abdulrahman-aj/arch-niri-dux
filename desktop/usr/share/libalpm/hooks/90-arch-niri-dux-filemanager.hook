@@ -1,0 +1,10 @@
+[Trigger]
+Operation = Install
+Operation = Upgrade
+Type = Path
+Target = usr/share/dbus-1/services/org.freedesktop.FileManager1.service
+
+[Action]
+Description = Removing Nautilus FileManager1 activator (Dux Files provides it)...
+When = PostTransaction
+Exec = /bin/rm -f /usr/share/dbus-1/services/org.freedesktop.FileManager1.service

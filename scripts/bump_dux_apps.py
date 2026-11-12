@@ -32,7 +32,7 @@ VENDORED_SOURCES = {
         'dev.duxlabs.files.desktop': 'assets/dev.duxlabs.files.desktop',
         'dev.duxlabs.files.metainfo.xml': 'assets/dev.duxlabs.files.metainfo.xml',
         'dev.duxlabs.files.policy': 'assets/dev.duxlabs.files.policy',
-        'dev.duxlabs.files.FileManager1.service': 'assets/dbus/dev.duxlabs.files.FileManager1.service',
+        'org.freedesktop.FileManager1.service': 'assets/dbus/dev.duxlabs.files.FileManager1.service',
         'org.freedesktop.impl.portal.desktop.dfiles.service': 'assets/dbus/org.freedesktop.impl.portal.desktop.dfiles.service',
         'dfiles.portal': 'assets/portal/dfiles.portal',
         'dfiles.service': 'assets/systemd/dfiles.service',

@@ -35,12 +35,12 @@
     "name": "dux-files-bin",
     "source_date_epoch": 1794152840,
     "files": {
-      ".SRCINFO": "5ac8560a3295db9035cc0e3dbe425a9a07ff795340d3f674f4cde1cbffef285b",
-      "PKGBUILD": "80b0a09de420f9393173dc6cc00b848f74fb249617194565f7d9623173a55ea6",
+      ".SRCINFO": "0c0e0baaa2949ff878bb51ad1db868b5ebb99eb8026f5f88ab94239282c06ee7",
+      "PKGBUILD": "796113ba8f646b8be32d6cebdc9628e8482e5d25949574e3000df6852a1ff6fd",
       "dev.duxlabs.files.desktop": "0f230c913a248cbac737341ef5ee0a9e6ccfdda08b459ca14b5af99dd49f773d",
       "dev.duxlabs.files.metainfo.xml": "3fca7d27b64bd0c81e93868f4c3c5ac3ef71790c95b58608890e9c022be62ed0",
       "dev.duxlabs.files.policy": "52fa30b44fefa5a632996075e370923c83b911cd198ffcff959a79789d1e5e17",
-      "dev.duxlabs.files.FileManager1.service": "b34bfc6ff30a69ed6bb465afd3acfcdb141c5801d29595b6b24558649d331268",
+      "org.freedesktop.FileManager1.service": "b34bfc6ff30a69ed6bb465afd3acfcdb141c5801d29595b6b24558649d331268",
       "org.freedesktop.impl.portal.desktop.dfiles.service": "edafb25bfd85273bc28e9761dd06b43c61a2d5a6d6dab725766a2b0c6c717bca",
       "dfiles.portal": "1cf796976f0381a7967dd8785ef326414d6b62eb0fde1ff3691e06a744577669",
       "dfiles.service": "705b8b9636c11c3ef62acffea7870000b92481df6dd73d6b1ffa4ae3d54863c6"
