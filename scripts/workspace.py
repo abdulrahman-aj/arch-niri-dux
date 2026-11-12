@@ -95,31 +95,37 @@ def build_space_needed(state):
 
 
 def space_shortfalls(needs):
-    """(path, needed, free) for each filesystem without room for the summed needs (path -> bytes)."""
-    totals = {}
-    for path, size in needs.items():
+    """Filesystems without room for their summed needs, given (path, bytes, purpose) entries.
+    Returns (path, needed, free, purposes) per short filesystem."""
+    groups = {}
+    for path, size, purpose in needs:
         path = existing(path)
-        anchor, total = totals.get(path.stat().st_dev, (path, 0))
-        totals[path.stat().st_dev] = (anchor, total + size)
-    return [
-        (anchor, total, shutil.disk_usage(anchor).free)
-        for anchor, total in totals.values()
-        if shutil.disk_usage(anchor).free < total
-    ]
+        group = groups.setdefault(path.stat().st_dev, [path, 0, []])
+        group[1] += size
+        group[2].append(purpose)
+    shortfalls = []
+    for anchor, total, purposes in groups.values():
+        free = shutil.disk_usage(anchor).free
+        if free < total:
+            shortfalls.append((anchor, total, free, purposes))
+    return shortfalls
 
 
 def build_needs(state):
-    """Free bytes one ISO build needs, by path."""
-    return {state: build_space_needed(state), ROOT / 'out': ISO_SPACE}
+    """(path, bytes, purpose) entries for the free space one ISO build needs."""
+    return [
+        (state, build_space_needed(state), 'the ISO build (builder disk, kept for rebuilds, and package downloads)'),
+        (ROOT / 'out', ISO_SPACE, 'the finished ISO in out/'),
+    ]
 
 
 def human_build_guard(state):
     shortfalls = space_shortfalls(build_needs(state))
     if shortfalls:
-        path, need, free = shortfalls[0]
+        path, need, free, purposes = shortfalls[0]
         raise SystemExit(
-            f'An ISO build needs {need / 1024**3:.1f} GiB free at {path}; have {free / 1024**3:.1f} GiB. '
-            'Free some space (make gc removes builds of deleted checkouts).'
+            f'{path} has {free / 1024**3:.1f} GiB free but needs {need / 1024**3:.1f} GiB for '
+            f'{" and ".join(purposes)}. Free some space (make gc removes builds of deleted checkouts).'
         )
 
 
@@ -134,11 +140,15 @@ def builder_memory(env=None):
         return BUILDER_MIB, None
     available = available_memory() // 1024**2
     mib = max(BUILDER_MIN_MIB, min(BUILDER_MIB, (available - MEMORY_HEADROOM_MIB) // 512 * 512))
-    if available - mib >= MEMORY_HEADROOM_MIB:
+    if available - mib < MEMORY_HEADROOM_MIB:
+        effect = 'The build still runs, but the system may swap and slow down. Closing big apps helps.'
+    elif mib < BUILDER_MIB:
+        effect = 'The build works with less; closing big apps first is optional.'
+    else:
         return mib, None
     return mib, (
-        f'Memory is tight: {available / 1024:.1f} GiB is available and the builder VM uses up to {mib / 1024:g} GiB.\n'
-        'The build still runs, but the system may swap and slow down. Closing big apps helps.'
+        f'Memory is tight: {available / 1024:.1f} GiB is available, so the builder VM gets '
+        f'{mib / 1024:g} GiB instead of {BUILDER_MIB / 1024:g}.\n{effect}'
     )
 
 

@@ -133,10 +133,14 @@ class WorkspaceTests(unittest.TestCase):
             free = workspace.shutil.disk_usage(temp).free
             # Each need fits alone; together on one filesystem they do not.
             share = int(free * 0.6)
-            self.assertEqual(workspace.space_shortfalls({Path(temp) / 'a': share}), [])
-            shortfalls = workspace.space_shortfalls({Path(temp) / 'a': share, Path(temp) / 'b/not-created': share})
+            self.assertEqual(workspace.space_shortfalls([(Path(temp) / 'a', share, 'a')]), [])
+            shortfalls = workspace.space_shortfalls(
+                [(Path(temp) / 'a', share, 'a'), (Path(temp) / 'b/not-created', share, 'b')]
+            )
             self.assertEqual(len(shortfalls), 1)
-            self.assertGreaterEqual(shortfalls[0][1], 2 * share)
+            _, need, free, purposes = shortfalls[0]
+            self.assertGreater(need, free)
+            self.assertEqual(sorted(purposes), ['a', 'b'])
 
     def test_earlier_builds_reduce_space_needed(self):
         with tempfile.TemporaryDirectory() as temp, patch.dict(os.environ, {'XDG_CACHE_HOME': temp}):
@@ -159,7 +163,7 @@ class WorkspaceTests(unittest.TestCase):
             mib, warning = workspace.builder_memory({})
             self.assertLess(mib, workspace.BUILDER_MIB)
             self.assertLessEqual(mib + workspace.MEMORY_HEADROOM_MIB, 6 * 1024)
-            self.assertIsNone(warning)
+            self.assertTrue(warning)
         with patch.object(workspace, 'available_memory', return_value=3 * gib):
             mib, warning = workspace.builder_memory({})
             self.assertEqual(mib, workspace.BUILDER_MIN_MIB)

@@ -218,37 +218,26 @@ def gib(size):
     return f'{size / 1024**3:.1f} GiB'
 
 
-def space_report(needs, reasons):
-    """Plain-words explanation when a filesystem lacks room for needs (path -> bytes), else None."""
+def space_report(needs):
+    """Plain-words explanation when a filesystem lacks room for needs, else None."""
     shortfalls = workspace.space_shortfalls(needs)
     if not shortfalls:
         return None
     lines = ['Not enough free disk space.']
-    lines += [f'{path} has {gib(free)} free; this needs {gib(need)}.' for path, need, free in shortfalls]
-    lines += ['', *reasons, '', 'Free some space and try again (make gc removes builds of deleted checkouts).']
+    for path, need, free, purposes in shortfalls:
+        lines += ['', f'{path} has {gib(free)} free but needs {gib(need)} for:']
+        lines += [f'  • {purpose}' for purpose in purposes]
+    lines += ['', 'Free some space and try again.', 'make gc removes builds left by deleted checkouts.']
     return '\n'.join(lines)
-
-
-def build_needs():
-    state = workspace.build_state(ROOT)
-    reasons = [
-        f'Building the installer ISO needs up to {gib(workspace.BUILD_SPACE)} for its builder disk (kept in',
-        f'{state} for later builds), {gib(workspace.DOWNLOADS_SPACE)} for downloaded packages',
-        f'(less when already cached) and {gib(workspace.ISO_SPACE)} for the ISO in out/.',
-    ]
-    return workspace.build_needs(state), reasons
 
 
 def check_new_vm_space(base=None):
     """Warn before the New VM prompts; return False when the human backs out."""
-    needs = {resolve_base(base): VM_SPACE}
-    reasons = [f'An installed test-drive VM takes about {gib(VM_SPACE)} on its disk.']
+    needs = [(resolve_base(base), VM_SPACE, "the VM's disk once installed")]
     if iso_for_kind(DEVELOPMENT) is None:
-        build, build_reasons = build_needs()
-        for path, size in build.items():
-            needs[path] = needs.get(path, 0) + size
-        reasons += ['There is no checkout ISO yet, so this likely includes a build:', *build_reasons]
-    report = space_report(needs, reasons)
+        # The default source has no ISO yet, so the first boot likely builds one.
+        needs += workspace.build_needs(workspace.build_state(ROOT))
+    report = space_report(needs)
     if report is None:
         return True
     gum_style(report, warning=True)
@@ -393,8 +382,7 @@ def watch(process, frame, interval=0.2):
 def run_build(kind):
     """Run the build's make target with its output in out/try-build.log and live stages on screen.
     The triggered build keeps its heavy-guard; agents never reach it (refuse_if_agent exits first)."""
-    needs, reasons = build_needs()
-    report = space_report(needs, reasons)
+    report = space_report(workspace.build_needs(workspace.build_state(ROOT)))
     if report is not None:
         gum_style(report, warning=True)
         return False
@@ -533,7 +521,7 @@ def create_vm(name, base=None, ram_gib=DEFAULT_RAM_GIB, disk_gib=DEFAULT_DISK_GI
     try:
         write_choices(directory, ram_gib, disk_gib, source)
         subprocess.run(
-            ['qemu-img', 'create', '-f', 'qcow2', str(directory / 'disk.qcow2'), f'{disk_gib}G'],
+            ['qemu-img', 'create', '-q', '-f', 'qcow2', str(directory / 'disk.qcow2'), f'{disk_gib}G'],
             check=True,
         )
         shutil.copyfile(template, directory / 'OVMF_VARS.fd')
@@ -610,7 +598,7 @@ def create_flow(base=None):
     if disk_gib is None:
         return None
     create_vm(name, base, ram_gib=ram_gib, disk_gib=disk_gib, source=source)
-    disk = vm_dir(name, base) / 'disk.qcow2'
+    disk = str(vm_dir(name, base) / 'disk.qcow2').replace(str(Path.home()), '~', 1)
     gum_style(f"VM '{name}' is ready.\nReopen it any time with make try.\nDisk: {disk}")
     open_vm(name, base)
     return name
