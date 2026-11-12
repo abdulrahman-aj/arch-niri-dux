@@ -174,7 +174,16 @@ cp -al /build/payload/repo/. /build/work/iso/repo/
 cp /source/out/packages.manifest.json /build/work/iso/packages.manifest.json
 mkarchiso -v -w /build/work -o /build/output "$profile"
 lsinitcpio /build/work/iso/arch/boot/x86_64/initramfs-linux.img | grep -qx 'hooks/archiso'
-cp /build/output/*.iso /source/out/
+# Development ISOs carry a -development suffix so release (`make iso`) and
+# checkout (`make iso-development`) installers coexist in out/; release ISOs
+# keep mkarchiso's name for the canonical rename in packages/RELEASING.md.
+if [[ $integration_mode == development ]]; then
+    for iso in /build/output/*.iso; do
+        cp "$iso" "/source/out/$(basename "$iso" .iso)-development.iso"
+    done
+else
+    cp /build/output/*.iso /source/out/
+fi
 (cd /source/out && sha256sum ./*.iso >SHA256SUMS)
 rm -rf /build/work /build/output
 fstrim /build || true

@@ -2,7 +2,8 @@
 """Guided persistent test-drive VMs for humans (`make try`).
 
 Disks persist under ~/.local/share/arch-niri-dux/try/<name>/; every open
-attaches the newest installer ISO with the disk first in boot order."""
+attaches the VM's stored install source (release or checkout ISO) with the
+disk first in boot order."""
 
 import os
 import re
@@ -19,8 +20,13 @@ AGENT_PREFIXES = ['CODEX_', 'OPENCODE', 'T3CODE_']
 
 NAME_RE = re.compile(r'[A-Za-z0-9][A-Za-z0-9._-]*')
 DEFAULT_NAME = 'default'
+DEFAULT_RAM_GIB = 8
 DEFAULT_DISK_GIB = 48
-MEMORY_GIB = 8
+RELEASE = 'release'
+DEVELOPMENT = 'development'
+# Release ISOs come from `make iso`; checkout ISOs from `make iso-development`
+# and carry a -development suffix (see scripts/build-guest) so both coexist.
+BUILD_TARGET = {RELEASE: 'iso', DEVELOPMENT: 'iso-development'}
 
 
 def refuse_if_agent(env=None):
@@ -52,9 +58,110 @@ def list_vms(base=None):
     return sorted([path for path in root.iterdir() if path.is_dir() and valid_name(path.name)])
 
 
-def newest_iso():
-    candidates = sorted(Path(os.environ.get('TRY_OUT_DIR', str(ROOT / 'out'))).glob('*.iso'))
+def read_choices(directory):
+    """Per-VM choices stored at creation; a missing file or value means the default."""
+    choices = {'ram_gib': DEFAULT_RAM_GIB, 'disk_gib': DEFAULT_DISK_GIB, 'source': DEVELOPMENT}
+    try:
+        text = (directory / 'config').read_text()
+    except OSError:
+        return choices
+    for line in text.splitlines():
+        key, separator, value = line.partition('=')
+        key, value = key.strip(), value.strip()
+        if not separator or key not in choices:
+            continue
+        if key == 'source':
+            if value in (RELEASE, DEVELOPMENT):
+                choices[key] = value
+        elif value.isdigit() and int(value) > 0:
+            choices[key] = int(value)
+    return choices
+
+
+def write_choices(directory, ram_gib, disk_gib, source):
+    (directory / 'config').write_text(f'ram_gib={ram_gib}\ndisk_gib={disk_gib}\nsource={source}\n')
+
+
+def ask_positive_int(label, default):
+    while True:
+        answer = input(f'{label} in GiB [{default}] ').strip()
+        if not answer:
+            return default
+        if answer.isdigit() and int(answer) > 0:
+            return int(answer)
+        print('Enter a positive whole number.')
+
+
+def ask_source():
+    print('Install from: 1) the latest release (what users get)  2) this checkout (your unreleased changes)')
+    while True:
+        answer = input('Install from [2]: ').strip()
+        if answer in ('', '2'):
+            return DEVELOPMENT
+        if answer == '1':
+            return RELEASE
+        print('Enter 1 or 2.')
+
+
+def ask_yes_no(prompt, default_yes):
+    try:
+        answer = input(f'{prompt} [{"Y/n" if default_yes else "y/N"}] ').strip().lower()
+    except (EOFError, KeyboardInterrupt):
+        print()
+        return False
+    if not answer:
+        return default_yes
+    return answer.startswith('y')
+
+
+def iso_for_kind(kind):
+    out = Path(os.environ.get('TRY_OUT_DIR', str(ROOT / 'out')))
+    if kind == DEVELOPMENT:
+        candidates = sorted(out.glob('*-development.iso'))
+    else:
+        candidates = sorted(path for path in out.glob('*.iso') if not path.name.endswith('-development.iso'))
     return candidates[-1] if candidates else None
+
+
+def checkout_newer_than(iso):
+    try:
+        commit_time = int(
+            subprocess.check_output(['git', '-C', str(ROOT), 'log', '-1', '--format=%ct'], text=True).strip()
+        )
+    except (subprocess.CalledProcessError, ValueError, OSError):
+        return False
+    return iso.stat().st_mtime < commit_time
+
+
+def run_build(kind):
+    """Run the existing make target with streamed output. The triggered build
+    keeps its heavy-guard; agents never reach it (refuse_if_agent exits first)."""
+    target = BUILD_TARGET[kind]
+    print(f'Building the {kind} ISO with make {target}; this takes several minutes.')
+    try:
+        subprocess.run(['make', '-C', str(ROOT), target], check=True)
+    except KeyboardInterrupt:
+        print('\nBuild aborted.')
+        return False
+    except subprocess.CalledProcessError as error:
+        print(f'make {target} failed with status {error.returncode}.')
+        return False
+    return True
+
+
+def ensure_iso(kind):
+    iso = iso_for_kind(kind)
+    if iso is None:
+        reason, default_yes = f'No {kind} installer ISO in out/ yet.', True
+    elif kind == DEVELOPMENT and checkout_newer_than(iso):
+        reason, default_yes = 'This checkout changed since the checkout ISO was built.', False
+    else:
+        return iso.resolve()
+    if ask_yes_no(f'{reason} Build it now with make {BUILD_TARGET[kind]}?', default_yes) and run_build(kind):
+        iso = iso_for_kind(kind) or iso
+    if iso is None:
+        raise SystemExit(f'No {kind} installer ISO in out/; build one with: make {BUILD_TARGET[kind]}')
+    return iso.resolve()
 
 
 def firmware():
@@ -69,8 +176,8 @@ def firmware():
     raise SystemExit(f'OVMF firmware missing under {base}; install edk2-ovmf.')
 
 
-def build_qemu_command(*, code, variables, disk, iso, gl=True):
-    command = ['qemu-system-x86_64', '-machine', 'q35,accel=kvm', '-cpu', 'host', '-m', str(MEMORY_GIB * 1024)]
+def build_qemu_command(*, code, variables, disk, iso, ram_gib=DEFAULT_RAM_GIB, gl=True):
+    command = ['qemu-system-x86_64', '-machine', 'q35,accel=kvm', '-cpu', 'host', '-m', str(ram_gib * 1024)]
     command += ['-smp', '4']
     if gl:
         command += ['-display', 'gtk,gl=on,show-cursor=on', '-device', 'virtio-vga-gl']
@@ -86,7 +193,7 @@ def build_qemu_command(*, code, variables, disk, iso, gl=True):
     return command
 
 
-def create_vm(name, base=None):
+def create_vm(name, base=None, ram_gib=DEFAULT_RAM_GIB, disk_gib=DEFAULT_DISK_GIB, source=DEVELOPMENT):
     if not valid_name(name):
         raise SystemExit(f'Invalid VM name {name!r}; use letters, digits, dot, dash or underscore.')
     directory = vm_dir(name, base)
@@ -100,8 +207,9 @@ def create_vm(name, base=None):
         raise SystemExit('KVM is required')
     directory.mkdir(parents=True)
     try:
+        write_choices(directory, ram_gib, disk_gib, source)
         subprocess.run(
-            ['qemu-img', 'create', '-f', 'qcow2', str(directory / 'disk.qcow2'), f'{DEFAULT_DISK_GIB}G'],
+            ['qemu-img', 'create', '-f', 'qcow2', str(directory / 'disk.qcow2'), f'{disk_gib}G'],
             check=True,
         )
         shutil.copyfile(template, directory / 'OVMF_VARS.fd')
@@ -125,14 +233,12 @@ def open_vm(name, base=None):
     variables = directory / 'OVMF_VARS.fd'
     if not variables.exists():
         shutil.copyfile(template, variables)
-    iso = newest_iso()
-    if iso is None:
-        raise SystemExit('No installer ISO in out/; build one with: make iso-development')
-    iso = iso.resolve()
+    choices = read_choices(directory)
+    iso = ensure_iso(choices['source'])
     render = Path(os.environ.get('QEMU_RENDER_NODE', '/dev/dri/renderD128'))
     gl = os.access(render, os.R_OK | os.W_OK)
-    command = build_qemu_command(code=code, variables=variables, disk=disk, iso=iso, gl=gl)
-    print(f"Booting '{name}' (disk first, installer ISO second).")
+    command = build_qemu_command(code=code, variables=variables, disk=disk, iso=iso, ram_gib=choices['ram_gib'], gl=gl)
+    print(f"Booting '{name}' with {iso.name} (disk first, installer ISO second).")
     print('Install, then quit this window; reopen to boot the installed system.')
     try:
         subprocess.run(command, check=True)
@@ -174,11 +280,14 @@ def interactive(base=None):
         if answer.lower() in ('n', 'new'):
             try:
                 name = input(f'VM name [{DEFAULT_NAME}]: ').strip() or DEFAULT_NAME
+                source = ask_source()
+                ram_gib = ask_positive_int('RAM', DEFAULT_RAM_GIB)
+                disk_gib = ask_positive_int('Disk', DEFAULT_DISK_GIB)
             except (EOFError, KeyboardInterrupt):
                 print()
                 return
             try:
-                create_vm(name, base)
+                create_vm(name, base, ram_gib=ram_gib, disk_gib=disk_gib, source=source)
                 open_vm(name, base)
             except SystemExit as error:
                 print(error)
