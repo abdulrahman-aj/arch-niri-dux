@@ -525,6 +525,8 @@ def install(settings, state=None):
             print('\n[2/6] Partitioning and encrypting the selected disk…', flush=True)
             esp, encrypted = storage.create_partitions(settings, snapshot, original_device, state.begin)
             run('mkfs.fat', '-F', '32', '-n', 'DUX_EFI', esp)
+            # LUKS2 uses cryptsetup's default argon2id (benchmarked memory, ~1 GiB here);
+            # no pinned limit is set.
             run(
                 'cryptsetup',
                 'luksFormat',

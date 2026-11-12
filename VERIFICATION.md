@@ -9,8 +9,8 @@ recipes are excluded. `make test` adds source and build tests. CI runs these
 checks without graphical VM acceptance.
 
 `make iso-development` builds candidate integration packages and the ISO. Run
-VMs on your build machine. Builds and VM disk creation require 30 GiB
-free. The runner waits for 10 GiB available host RAM before
+VMs on your build machine. Builds and VM disk creation need the free space
+noted in [BUILDING.md](BUILDING.md). The runner waits for 10 GiB available host RAM before
 starting an 8 GiB guest. VM tests require KVM and a GPU render node with
 virtio 3D acceleration; `QEMU_RENDER_NODE` defaults to `/dev/dri/renderD128`.
 

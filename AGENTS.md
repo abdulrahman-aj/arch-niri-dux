@@ -19,7 +19,7 @@ Enter the Nix dev shell with `nix develop`. Make targets enter it automatically.
 | Scripts or tests | `make test` (~37 s) |
 | Desktop or package content | `make verify-fast` to a kept VM (~50 s) |
 | A probe or stage | kept VM, then one full `make verify` |
-| Installer, archiso, or release | `make iso-development` (4–7 min) + `make verify` (16–21 min) |
+| Installer, archiso, or release | `make iso-development` (4–7 min) + `make verify` (~8.5 min, ~16.5 with `--slow`) |
 
 `make lint` and `make test` are light: run them before every PR, on any
 machine, including one with `AGENT_HEAVY_JOBS=deny` (heavy targets refuse

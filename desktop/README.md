@@ -6,217 +6,93 @@ vendored verbatim from the dux-shell release matching the pinned dux-shell.
 is included. No personal dotfiles are used.
 
 The `arch-niri-dux` package owns shared system configuration. The installer
-applies vendor presets for Dux services; new accounts seed from `/etc/skel`
-via `useradd -m`. Package upgrades never touch home directories. Changing a
-service preset requires an explicit migration for existing systems
-([#54](https://github.com/abdulrahman-aj/arch-niri-dux/issues/54)); upgrades do
-not reapply presets. Dux Greeter starts Niri. Dux creates its own shell
-settings.
+applies vendor presets; new accounts seed from `/etc/skel` via `useradd -m`.
+Package upgrades never touch home directories. Changing a service preset
+requires an explicit migration for existing systems
+([#54](https://github.com/abdulrahman-aj/arch-niri-dux/issues/54)).
 
 ## Migrations
 
-User migrations run once per account at graphical login, in file order from
-`/usr/lib/arch-niri-dux/migrations/*.sh`. Success markers live in
-`~/.local/state/arch-niri-dux/migrations/`; a failure stops the queue and
-stays pending for the next login. `/etc/skel` carries the same markers, so
-fresh accounts start complete and never execute. No production scripts ship
-today. Authoring and release qualification are covered in [the migrations
+User migrations run once per account at graphical login, in file order.
+Markers in `~/.local/state/arch-niri-dux/migrations/` stop the queue on
+failure; `/etc/skel` carries the same markers so fresh accounts never execute.
+No production scripts ship today. See [the migrations
 skill](../.agents/skills/migrations/SKILL.md).
 
 ## Niri configuration
 
-The Greetd service selects our `/etc/greetd/dux.toml`. Arch retains ownership of
-its separate stock `config.toml`. Pacman preserves local edits to `dux.toml`.
-
-Package construction generates Niri's stock configuration in `/usr/share/arch-niri-dux/niri/defaults.kdl`
-and terminal-resolved bindings in `/usr/share/arch-niri-dux/niri/binds.kdl`. The home entrypoint
-(`~/.config/niri/config.kdl`, seeded from `/etc/skel`) loads package defaults, selected relative
-optional `dms/*.kdl` includes, package-owned `tail.kdl`
-(session environment and file-dialog rules), then optional `overrides.kdl` last.
-Dux 2.1 ignores `~` includes. Relative home includes allow shortcut editing.
-Put personal Niri settings in `~/.config/niri/overrides.kdl`; skel seeds it
-with comments only. Package updates
-can change defaults and session policy without editing home. `dms/binds.kdl` starts empty and holds
-only overrides; later bindings replace earlier ones, so a disabled shortcut
-can override its stock action with `spawn "true"`. This still consumes the key.
-Generated `dms/alttab.kdl` controls appearance.
-Seeded layout/input files remain local, so Dux settings continue to control them.
+Greetd uses our `/etc/greetd/dux.toml`; Arch keeps its stock `config.toml`.
+The home entrypoint (`~/.config/niri/config.kdl`, from `/etc/skel`) loads
+package defaults, optional relative `dms/*.kdl` includes, package-owned
+`tail.kdl`, then `overrides.kdl` last. Put personal settings in
+`~/.config/niri/overrides.kdl`; skel seeds it with comments only.
+`dms/binds.kdl` starts empty; later bindings replace earlier ones, so disable
+a shortcut with `spawn "true"`. Seeded layout and input files stay local, so
+Dux Settings keeps controlling them.
 
 ## Applications and session defaults
 
-New users start on Dux's upstream "bloom" material preset, seeded from
-`/etc/skel` into `~/.local/state/dms/session.json`. Existing
-`session.json` files are never overwritten, so chosen wallpapers are preserved.
-Dux provides the preset assets. The installer does not edit the vendored Niri
-files for this default.
-
-Papers uses `org.gnome.Papers.desktop` and is the default PDF viewer in the
-factory `/etc/xdg/mimeapps.list`. Fresh users also get Loupe for common images,
-GNOME Text Editor for plain text and Markdown, Celluloid for common video,
-Decibels for common audio, Chromium for the browser and Dux Files for folders.
-User initialization leaves `~/.config/mimeapps.list` untouched. GNOME Calculator
-is installed standalone. `EDITOR`/`VISUAL` remain `nvim`. Snapshot is the camera
-app and uses `org.gnome.Snapshot.desktop`. Qt PDF support in `qt6-webengine`
-enables PDF preview inside Dux Files, while Papers remains the default document
-app. The document and media viewers come from signed Arch packages.
-`kimageformats` adds AVIF, HEIF and JPEG XL decoding for Qt apps.
-`qt6-imageformats` supplies WebP, TIFF and other Qt decoders. `smartmontools`
-supports System Monitor's drive-health view. `fprintd` supplies the fingerprint
-backend; enrollment and authentication require supported hardware and user
-setup. The live ISO remains terminal-only.
-
-CUPS and Avahi start for Dux's native driverless printer settings. CUPS keeps
-its stock localhost-only listeners. GVFS supplies Android, Apple-device
-and camera file access. SMB shares remain an optional install. Qt Multimedia
-and cava support Dux's own effects without changing its settings.
-
-Dux controls external-monitor brightness through I2C/DDC. `i2c-tools` loads
-`i2c-dev` at boot. A udev rule grants the active local session access to I2C
-buses under display controllers. Monitor and connection support determine
-whether DDC works. NetworkManager uses `dnsmasq` for hotspot sharing. The
-standalone dnsmasq service is not enabled.
-
-Matugen supplies Dux's colors and system light/dark preference. A first-login
-service applies upstream's GTK integration and selects the matching GTK theme
-and light/dark preference once. Dux keeps subsequent choices. The setup preserves
-a pre-existing custom GTK theme. Qt uses upstream's GTK passthrough.
-Terminal shortcuts, user services and recovery tools use `xdg-terminal-exec`.
-Alacritty is the factory preference in `/etc/xdg/xdg-terminals.list`. Users can
-select another installed terminal through Dux or `~/.config/xdg-terminals.list`.
-Dux Files handles folders and portal file dialogs, with GTK as fallback. The
-GNOME portal handles screen sharing. Nautilus remains its Arch dependency.
-
-Logind suspends on lid-close when undocked and permits docked use. During its
-30-second boot/resume holdoff, a Niri hook locks Dux and powers off the monitors,
-even if Dux is already locked. Opening the lid powers the monitors back on at
-the lock screen. The hook skips docked use and suspend already in progress;
-logind still controls suspend timing.
-
-The session adds `~/.local/bin` to PATH for POSIX login shells, systemd user
-services and Niri spawns. Login shells read `/etc/profile.d/dux-localbin.sh`.
-User services read `/usr/lib/environment.d/90-dux.conf` and per-user overrides.
-Greetd's default profile sourcing passes the login PATH to the user session.
-The greeter still uses its supported `--command niri` compositor selector.
-Each context preserves system and Nix PATH entries. No mise shims are added.
-The `session-path` stage of `make verify` checks the user-service environment,
-login shell and a real Niri-spawned wrapper without personal dotfiles.
+Fresh users get Papers (PDF), Loupe (images), Text Editor, Celluloid (video),
+Decibels (audio), Chromium, Dux Files (folders, portal dialogs), Snapshot
+(camera) and Calculator. Defaults live in `/etc/xdg/mimeapps.list`;
+`~/.config/mimeapps.list` is left alone. `EDITOR`/`VISUAL` stay `nvim`.
+Pick the terminal in Dux Settings or `~/.config/xdg-terminals.list`
+(Alacritty is factory default). `~/.local/bin` is on PATH for login shells,
+user services and Niri spawns. New users start on Dux's upstream bloom preset;
+existing `session.json` files are never overwritten.
 
 ## Dux defaults and updates
 
-`/etc/skel` seeds each feature into its own
-`~/.config/dms/config.d/00-arch-niri-dux-*.json` file. Dux saves
-later changes back to that file, so change these settings in Dux Settings, in
-that file or in a later-sorting `config.d` file; `settings.json` loads first
-and loses to them. An emptied seed file stays in place so restarts don't undo
-an opt-out.
+`/etc/skel` seeds each feature into `~/.config/dms/config.d/00-arch-niri-dux-*.json`.
+Change them in Dux Settings, in that file, or in a later-sorting `config.d`
+file; `settings.json` loads first and loses. An emptied seed stays so restarts
+do not undo an opt-out. Seeds never change an existing value; for existing
+accounts add a user migration and update the skel seed.
 
-The update seed puts our release button on the main bar, right of the clock. It
-appears only when Dux's own updater reports a newer arch-niri-dux release; any
-other pending package alone keeps it hidden. The button is a system plugin that
-holds Dux's updater alive, so its background checks keep running without the
-built-in Software Updates widget, and `dms ipc call systemupdater updatestatus`
-keeps reporting state. Dux's server checks every 6 hours, with no check at
-login. It schedules from its last check, saved in
-`~/.cache/dms/sysupdate.json`, so logins and reboots don't restart the
-interval; a new account checks a few minutes after its first login. Failed
-checks, such as while offline, stay silent and retry every 5 minutes. Clicking
-the button opens Dux's updater; its Update All runs the same `pacman -Syu`
-that installs our packages. A bar layout saved before
-the seed ran (`barConfigs` in a user file) is kept and gets no button. The
-seed also enables the plugin in `~/.config/dms/plugin_settings.json`. Move, remove or add the button in Dux
-Settings, Bar; Software Updates shows the 6-hour interval as a custom interval.
-
-Seeds never change a value that already exists. To change a shipped default for
-existing accounts, add a user migration that rewrites the key only where it
-still holds the old default, and update the skel seed for new accounts. The seeded
-bar copies Dux 2.1's default widget lists; re-sync it when a Dux update
-changes its default bar.
+The update seed puts our release button on the main bar, right of the clock,
+visible only when Dux's updater reports a newer arch-niri-dux release.
+Clicking opens Dux's updater; Update All runs `pacman -Syu`. Move or remove it
+in Dux Settings, Bar. The seeded bar copies Dux 2.1 defaults; re-sync it when
+a Dux update changes its default bar.
 
 ## Firewall and mDNS
 
 `arch-niri-dux-firewall.service` loads `/usr/share/arch-niri-dux/firewall.nft`
-into its own nftables table, leaving Tailscale, Docker and libvirt tables
-alone. It drops unsolicited inbound traffic. It accepts replies to outbound
-connections, loopback, the ICMPv6 and DHCPv6 traffic IPv6 needs, IGMP
-membership queries, mDNS responses, DHCP and DNS requests for NetworkManager hotspots, and everything
-arriving on `tailscale0`. Avahi runs resolve-only from
-`/usr/share/arch-niri-dux/avahi-daemon.conf`: printer discovery and `.local`
-names work, but the host advertises nothing.
-
-The ruleset includes `/etc/arch-niri-dux/firewall.d/*.nft`, which upgrades
-leave alone. To open a port, for example after enabling `sshd`, write
-`add rule inet arch_niri_dux input tcp dport 22 accept` to
-`/etc/arch-niri-dux/firewall.d/sshd.nft` and run `systemctl reload
-arch-niri-dux-firewall`. A broken include fails the reload and keeps the
-running rules. At start or boot it fails the unit and leaves a table that
-drops everything but loopback and replies, so new links get no DHCP until
-the include is fixed. Docker or libvirt guests that must reach host
-services need an `iifname` rule there for their bridge. Stopping the unit
-deletes its table and leaves inbound traffic open. To use another firewall,
-disable the unit; the stock `nftables.service` adds its own table, and a
-packet must pass both. To publish again, add a later-sorting
-`/etc/systemd/system/avahi-daemon.service.d/` drop-in that resets `ExecStart=`
+into its own table and drops unsolicited inbound traffic. Avahi runs
+resolve-only: printer discovery and `.local` names work, nothing is published.
+To open a port (e.g. `sshd`), write to `/etc/arch-niri-dux/firewall.d/sshd.nft`
+and run `systemctl reload arch-niri-dux-firewall`. A broken include fails the
+reload and keeps the running rules; at boot it fails the unit and leaves only
+loopback. Stopping the unit deletes its table and leaves inbound open. Guests
+(Docker/libvirt) need an `iifname` rule for their bridge. To use another
+firewall, disable the unit; with stock `nftables.service` a packet must pass
+both tables.
+To publish again, add a later-sorting
+`/etc/systemd/system/avahi-daemon.service.d/` drop-in resetting `ExecStart=`
 to `/usr/bin/avahi-daemon -s`, then allow inbound UDP 5353.
 
 ## System policy
 
-System policy belongs to the integration package: mkinitcpio's complete MODULES
-and HOOKS arrays, Limine defaults, the root Snapper config, service presets,
-Plymouth/recovery service drop-ins, and the greetd PAM service. To override
-mkinitcpio policy, use a later-sorting `/etc/mkinitcpio.conf.d/*.conf` drop-in
-and rebuild the initramfs. Pacman backs up the shipped mkinitcpio and Snapper
-configs. Systemd overrides belong under `/etc/systemd/`, ahead of vendor files.
-
-Greetd selects `/usr/lib/pam.d/arch-niri-dux` for authentication, including the
-stock local-login stack and GNOME Keyring password/session integration. Its
-greeter session uses the same stack. See [package
-repositories](../packages/README.md#repositories) for online update sources.
-The repository order is arch-niri-dux, core, extra, then omarchy. Keeping our
-repository first prevents other repositories from shadowing our packages.
-
-Do not run `dms-greeter sync` on arch-niri-dux. A full sync recursively grants
-the greeter account read access to parts of the home directory, including files
-unrelated to the login theme, and leaves the greeter cache group-writable. It
-also targets upstream's `/etc/greetd/config.toml` rather than our
-`/etc/greetd/dux.toml`, so greeter setup stays managed by this package and full
-sync is unsupported.
-
-`snap-pac` creates snapshots around package transactions. Recovery entries use
-`noresume` and block hibernation to prevent resuming a normal-root memory image
-over an older snapshot. Timeline snapshots are disabled. Number cleanup keeps 10
-regular and 5 important snapshots, with `snapper-cleanup.timer` enabled. Ten keeps
-about five transactions because snap-pac takes a pre and a post snapshot per
-transaction. Pre-0.3 systems need manual repair.
+System policy belongs to the integration package: mkinitcpio MODULES and HOOKS,
+Limine defaults, the root Snapper config, service presets and recovery
+drop-ins. To override mkinitcpio, use a later-sorting
+`/etc/mkinitcpio.conf.d/*.conf` drop-in and rebuild the initramfs. Systemd
+overrides belong under `/etc/systemd/`. See [package
+repositories](../packages/README.md#repositories) for update sources.
+`snap-pac` snapshots around transactions; recovery entries use `noresume`.
+Timeline snapshots are disabled; number cleanup keeps 10 regular and
+5 important snapshots.
 
 ## Boot-policy upgrades
 
-Every `arch-niri-dux` upgrade triggers
-`95-arch-niri-dux-boot-policy.hook`, which runs `limine-mkinitcpio` to rebuild
-active initramfs images and boot entries. Pacman Path triggers match upgrades of
-the package containing the target files, even when those files are unchanged.
-A transaction that also changes the kernel may run both this hook and the upstream kernel hook; both use the same
-serialized upstream rebuild implementation.
+Every `arch-niri-dux` upgrade triggers `95-arch-niri-dux-boot-policy.hook`,
+which rebuilds initramfs images and boot entries. The hook excludes first
+installation; the installer rebuilds explicitly after machine settings and EFI
+deferral.
 
-The hook excludes first installation. The
-[installer](../installer/README.md#machine-configuration) rebuilds explicitly
-after writing machine settings and EFI deferral.
+## Locking
 
-## Locking and calendar transport
-
-The [Dux defaults](#dux-defaults-and-updates) seeder writes the lock choices
-into `~/.config/dms/config.d/00-arch-niri-dux-lock.json`. The defaults lock
-before suspend, retain the upstream logind lock integration, and lock on idle
-after 600 seconds on AC or battery. No administrator policy locks these
-controls. Existing running sessions acquire the defaults on the next DMS start.
-
-This protects ordinary logind suspend, including normal lid-close suspend.
-Issue [#48](https://github.com/abdulrahman-aj/arch-niri-dux/issues/48) covers
-logind ignoring a lid close during its 30-second post-resume holdoff. Its
-separate Niri hook remains necessary for that window.
-
-dcal's unauthenticated loopback HTTP API remains enabled. Dux's calendar
-backend uses its Unix socket, but Dux Calendar 2.1.0 also uses the HTTP server
-for Google/Microsoft OAuth redirects. Disabling it prevents online account
-setup (`core/internal/ipc/accounts.go`, `redirectURLForHost`). S5-02 needs an
-upstream change to separate OAuth callbacks from the data API or authenticate
-the data API; a service environment flag cannot preserve full functionality.
+The [Dux defaults](#dux-defaults-and-updates) seeder writes lock choices into
+`~/.config/dms/config.d/00-arch-niri-dux-lock.json`: lock before suspend and
+on idle after 600 seconds on AC or battery. Existing sessions pick them up on
+the next DMS start.
