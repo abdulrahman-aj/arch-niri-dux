@@ -94,18 +94,8 @@ rm -rf /build/profile
 mv /build/profile-new /build/profile
 profile=/build/profile
 cp /source/archiso/packages.live "$profile/packages.x86_64"
-cat >"$profile/airootfs/etc/mkinitcpio.conf.d/archiso.conf" <<'INIT'
-HOOKS=(base udev microcode modconf archiso block filesystems keyboard)
-COMPRESSION="zstd"
-COMPRESSION_OPTIONS=(-3)
-INIT
-cat >"$profile/pacman.conf" <<'CONF'
-[options]
-Architecture = auto
-SigLevel = Never
-[offline]
-Server = file:///build/payload/repo
-CONF
+cp /source/archiso/pacman.conf "$profile/pacman.conf"
+cp -a /source/archiso/airootfs/. "$profile/airootfs/"
 # Installation trusts only the pinned package signers, plus our release identity
 # (or this development build's public identity). No signing secrets are shipped.
 install_keyring="$profile/airootfs/usr/local/share/arch-niri-dux/install-keyring"
@@ -130,43 +120,17 @@ find "$profile/airootfs/usr/local/lib/arch-niri-dux/installer" -type d -name __p
 cp /source/packages/packages.target "$profile/airootfs/usr/local/share/arch-niri-dux/packages.target"
 # The installer refuses when the system clock predates the medium (stale clocks mimic expired keys).
 date -u +%s >"$profile/airootfs/usr/local/share/arch-niri-dux/iso-build-date"
-cat >"$profile/airootfs/usr/local/bin/arch-niri-install" <<'WRAPPER'
-#!/bin/sh
-exec python /usr/local/lib/arch-niri-dux/installer/install.py "$@"
-WRAPPER
-chmod +x "$profile/airootfs/usr/local/bin/arch-niri-install"
 # Both interactive gettys remain available after cancellation or errors.
-cat >"$profile/airootfs/root/.bash_profile" <<'PROFILE'
-if [[ $(tty) == /dev/tty1 ]]; then
-    arch-niri-install
-fi
-PROFILE
 rm -f "$profile/airootfs/root/.zlogin"
-mkdir -p "$profile/airootfs/etc/systemd/system/serial-getty@ttyS0.service.d"
-cat >"$profile/airootfs/etc/systemd/system/serial-getty@ttyS0.service.d/autologin.conf" <<'SERIAL'
-[Service]
-ExecStart=
-ExecStart=-/sbin/agetty --autologin root --noclear --keep-baud 115200,38400,9600 - $TERM
-SERIAL
 # Keep the USB mounted: archiso's automatic RAM copy contains only airootfs,
 # while our offline repository lives beside it on the installation medium.
 sed -i '/^options /s/$/ copytoram=n console=tty0 console=ttyS0,115200/' "$profile"/efiboot/loader/entries/*.conf
+grep -q 'copytoram=n' "$profile"/efiboot/loader/entries/*.conf
 # Releng logs root into zsh; use bash so tty1's wizard hook is explicit.
 sed -i 's#root:x:0:0:root:/root:/usr/bin/zsh#root:x:0:0:root:/root:/bin/bash#' "$profile/airootfs/etc/passwd"
+grep -q '^root:x:0:0:root:/root:/bin/bash$' "$profile/airootfs/etc/passwd"
 # The local repository is staged beside arch/ on the boot media.
-cat >>"$profile/profiledef.sh" <<'PROFILE'
-iso_name="arch-niri-dux"
-iso_label="ARCH_NIRI_DUX"
-iso_publisher="arch-niri-dux"
-iso_application="Offline Arch Niri Dux Installer"
-bootmodes=('uefi.systemd-boot')
-airootfs_image_type="squashfs"
-airootfs_image_tool_options=('-comp' 'zstd' '-Xcompression-level' '3')
-file_permissions+=(
- ["/usr/local/bin/arch-niri-install"]="0:0:755"
- ["/usr/local/share/arch-niri-dux/install-keyring"]="0:0:700"
-)
-PROFILE
+cat /source/archiso/profiledef.append >>"$profile/profiledef.sh"
 # A separate bind mount places payload beside arch/ in the staging tree.
 fstrim /build || true
 mkdir -p /build/work/iso/repo
