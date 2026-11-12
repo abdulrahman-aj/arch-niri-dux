@@ -1,8 +1,8 @@
 # Integration releases
 
 [Package inputs](README.md) describes what our signed repository supplies and
-how the baseline metapackage controls app additions. User initialization creates
-missing personal defaults; package upgrades do not replay it. Pacman preserves
+how the baseline metapackage controls app additions. `/etc/skel` seeds
+missing personal defaults for new accounts; package upgrades never touch home. Pacman preserves
 edits to files listed in the integration recipe's `backup` array through its
 `.pacnew` behavior.
 

@@ -27,8 +27,7 @@ machines that are already installed. The live ISO itself is terminal-only.
 - The firewall drops unsolicited inbound traffic and still lets printer discovery, `.local` names, hotspots and Tailscale
   work.
 - Every package change takes a snapshot that you can boot from Limine and restore without touching your home directory.
-- Updates come from signed repositories, ours first. Dux shows an update button only when updates are waiting, and
-  migrations apply one-time fixes during the update.
+- Updates come from signed repositories, ours first. Dux shows an update button only when updates are waiting.
 - Your settings in `~/.config/niri/overrides.kdl` and Dux Settings survive updates, which only change the defaults.
 
 Every release installs in a VM and passes the [acceptance checks](VERIFICATION.md) first, from disk unlock

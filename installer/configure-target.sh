@@ -48,10 +48,8 @@ if ! grep -Eq '^[[:space:]]*hosts:.*mdns' /etc/nsswitch.conf 2>/dev/null; then
     fi
 fi
 
-# Account initialization is separate from package updates and system policy.
-arch-niri-dux-migrate baseline
-runuser -u "$dux_user" -- env -u XDG_CONFIG_HOME -u XDG_STATE_HOME -u XDG_DATA_HOME \
-    bash /usr/lib/arch-niri-dux/initialize-user
+# New accounts seed from /etc/skel via useradd -m (Niri config, Dux
+# defaults, terminal list, session preset); nothing runs per-account here.
 # A separate assignment lets errexit fail on a broken preset instead of
 # silently presetting an empty unit list.
 dux_user_preset=$(awk '$1 == "enable" || $1 == "disable" { print $2 }' \

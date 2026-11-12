@@ -164,8 +164,6 @@ def main():
         browser.verify(vm, passed)
         desktop.verify_lock(vm, passed)
         suspend.verify(vm, passed)
-        vm.probe('migrations', 'check', timeout=180)
-        passed('Migration ordering, retries, session triggers and new-account baseline')
         dux_update.verify(vm, passed)
         recovery.verify(vm, passed)
         boot.verify_fallback(vm, passed)

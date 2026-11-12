@@ -1,7 +1,6 @@
 import sys
 import os
 from pathlib import Path
-import subprocess
 import tarfile
 import tempfile
 import unittest
@@ -44,52 +43,6 @@ class IntegrationSourceTests(unittest.TestCase):
             (root / 'desktop/escape').symlink_to('/etc/passwd')
             with self.assertRaisesRegex(ValueError, 'source symlink'):
                 builder.prepare_source(root, root, 1234)
-
-
-@unittest.skipIf(os.geteuid() == 0, 'User initialization deliberately rejects root')
-class ExistingUserTests(unittest.TestCase):
-    def test_repeated_initialization_preserves_existing_files_and_links(self):
-        with tempfile.TemporaryDirectory() as directory:
-            home = Path(directory)
-            config = home / '.config'
-            state = home / '.local/state'
-            data = home / '.local/share'
-            files = [config / 'niri/dms' / f'{name}.kdl' for name in ('colors', 'layout', 'alttab', 'input', 'binds')]
-            files += [
-                config / 'niri/overrides.kdl',
-                config / 'niri/config.kdl',
-                config / 'xdg-terminals.list',
-                config / 'mimeapps.list',
-                config / 'environment.d/90-dux.conf',
-                state / 'dms/session.json',
-            ]
-            for index, file in enumerate(files):
-                file.parent.mkdir(parents=True, exist_ok=True)
-                file.write_text(f'Personal file {index}\n')
-                file.chmod(0o600)
-            target = home / 'tracked-binds.kdl'
-            target.write_text('Personal tracked shortcut\n')
-            bindings = config / 'niri/dms/binds.kdl'
-            bindings.unlink()
-            bindings.symlink_to(target)
-            manager = data / 'dbus-1/services/dev.duxlabs.files.FileManager1.service'
-            manager.parent.mkdir(parents=True)
-            manager.symlink_to('/missing/personal-manager.service')
-            before = {file: (file.read_bytes(), file.stat().st_mode, file.stat().st_uid) for file in files}
-            environment = os.environ | {
-                'HOME': str(home),
-                'XDG_CONFIG_HOME': str(config),
-                'XDG_STATE_HOME': str(state),
-                'XDG_DATA_HOME': str(data),
-            }
-            for _ in range(2):
-                subprocess.run(
-                    ['bash', str(ROOT / 'desktop/usr/lib/arch-niri-dux/initialize-user')], env=environment, check=True
-                )
-            for file, value in before.items():
-                self.assertEqual((file.read_bytes(), file.stat().st_mode, file.stat().st_uid), value)
-            self.assertTrue(bindings.is_symlink())
-            self.assertEqual(manager.readlink(), Path('/missing/personal-manager.service'))
 
 
 if __name__ == '__main__':

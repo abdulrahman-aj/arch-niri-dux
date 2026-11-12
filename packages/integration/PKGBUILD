@@ -18,7 +18,7 @@ prepare() {
 }
 
 package_arch-niri-dux() {
-    depends=(bash python libnotify systemd pacman niri 'dux-shell>=2.1.2' dux-greeter-bin dux-search-bin dux-calendar-bin
+    depends=(bash python systemd pacman niri 'dux-shell>=2.1.2' dux-greeter-bin dux-search-bin dux-calendar-bin
              dux-files-bin greetd gnome-keyring matugen adw-gtk-theme gtk3
              xdg-desktop-portal-gnome xdg-desktop-portal-gtk xdg-terminal-exec xdg-utils nftables)
     backup=(etc/snapper/configs/root etc/mkinitcpio.conf.d/arch-niri-dux.conf
@@ -29,20 +29,32 @@ package_arch-niri-dux() {
             etc/xdg/mimeapps.list etc/xdg/xdg-desktop-portal/niri-portals.conf
             etc/xdg/xdg-terminals.list)
     cp -a "$srcdir/desktop/etc" "$srcdir/desktop/usr" "$pkgdir/"
-    install -d "$pkgdir/usr/lib/arch-niri-dux/migrations/"{system,user}
+    # New homes need the file-manager activator; a link tracks dux-files-bin
+    # instead of a copy that drifts.
+    install -d "$pkgdir/etc/skel/.local/share/dbus-1/services"
+    ln -s /usr/share/dbus-1/services/dev.duxlabs.files.FileManager1.service \
+        "$pkgdir/etc/skel/.local/share/dbus-1/services/"
+    # The pinned DMS fragments are the source of truth; new homes seed from them.
+    install -Dm644 "$srcdir/desktop/usr/share/arch-niri-dux/niri/dms/"{colors,layout,alttab,input}.kdl \
+        -t "$pkgdir/etc/skel/.config/niri/dms/"
+    install -d "$pkgdir/usr/lib/arch-niri-dux/migrations"
+    # Fresh accounts never execute migrations: useradd -m copies these markers
+    # as a complete set. None ship today; the loop stays for future scripts.
+    install -d "$pkgdir/etc/skel/.local/state/arch-niri-dux/migrations"
+    shopt -s nullglob
+    for script in "$srcdir"/desktop/usr/lib/arch-niri-dux/migrations/*.sh; do
+        : >"$pkgdir/etc/skel/.local/state/arch-niri-dux/migrations/${script##*/}"
+    done
+    shopt -u nullglob
     # Local firewall rules; the package ruleset includes *.nft from here.
     install -d "$pkgdir/etc/arch-niri-dux/firewall.d"
     chmod 0755 "$pkgdir/usr/bin/arch-niri-dux-migrate" \
         "$pkgdir/usr/bin/arch-niri-dux-keyring-recover"
     # Vendor wants apply to already-installed systems too; /etc can override.
-    install -d "$pkgdir/usr/lib/systemd/system/multi-user.target.wants" \
-        "$pkgdir/usr/lib/systemd/user/graphical-session.target.wants"
+    install -d "$pkgdir/usr/lib/systemd/user/graphical-session.target.wants"
     ln -s ../arch-niri-dux-migrate.service \
-        "$pkgdir/usr/lib/systemd/system/multi-user.target.wants/"
-    ln -s ../arch-niri-dux-migrate.service ../arch-niri-dux-migrate.path \
         "$pkgdir/usr/lib/systemd/user/graphical-session.target.wants/"
-    chmod 0755 "$pkgdir/usr/lib/arch-niri-dux/initialize-user" \
-        "$pkgdir/usr/lib/arch-niri-dux/initialize-application-themes" \
+    chmod 0755 "$pkgdir/usr/lib/arch-niri-dux/initialize-application-themes" \
         "$pkgdir/usr/lib/arch-niri-dux/lid-close"
     install -Dm644 "$srcdir/desktop/usr/share/arch-niri-dux/DUX-LICENSE" \
         "$pkgdir/usr/share/licenses/$pkgname/DUX-LICENSE"

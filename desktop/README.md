@@ -6,26 +6,22 @@ vendored verbatim from the dux-shell release matching the pinned dux-shell.
 is included. No personal dotfiles are used.
 
 The `arch-niri-dux` package owns shared system configuration. The installer
-applies vendor presets for Dux services and runs
-`/usr/lib/arch-niri-dux/initialize-user` as the desktop user to seed only
-missing settings. Package upgrades never replay account or user initialization.
-Changing a service preset requires an explicit migration for existing systems
+applies vendor presets for Dux services; new accounts seed from `/etc/skel`
+via `useradd -m`. Package upgrades never touch home directories. Changing a
+service preset requires an explicit migration for existing systems
 ([#54](https://github.com/abdulrahman-aj/arch-niri-dux/issues/54)); upgrades do
 not reapply presets. Dux Greeter starts Niri. Dux creates its own shell
 settings.
 
 ## Migrations
 
-Package migrations run offline after pacman releases its database lock, and at
-boot. System and user queues keep separate completion records. The desktop
-continues starting if a migration fails; inspect `arch-niri-dux-migrate status`
-and retry with `arch-niri-dux-migrate run`. Use sudo for the system queue.
-Logs are in `journalctl -u arch-niri-dux-migrate.service` and
-`journalctl --user -u arch-niri-dux-migrate.service`; user-session failures also
-send a desktop notification. Completion records include intentional skip reasons.
-System records roll back with root snapshots; user records stay with home.
-Downgrades ignore unknown records and never reverse changes. Authoring and
-release qualification are covered in [the migrations skill](../.agents/skills/migrations/SKILL.md).
+User migrations run once per account at graphical login, in file order from
+`/usr/lib/arch-niri-dux/migrations/*.sh`. Success markers live in
+`~/.local/state/arch-niri-dux/migrations/`; a failure stops the queue and
+stays pending for the next login. `/etc/skel` carries the same markers, so
+fresh accounts start complete and never execute. No production scripts ship
+today. Authoring and release qualification are covered in [the migrations
+skill](../.agents/skills/migrations/SKILL.md).
 
 ## Niri configuration
 
@@ -33,24 +29,23 @@ The Greetd service selects our `/etc/greetd/dux.toml`. Arch retains ownership of
 its separate stock `config.toml`. Pacman preserves local edits to `dux.toml`.
 
 Package construction generates Niri's stock configuration in `/usr/share/arch-niri-dux/niri/defaults.kdl`
-and terminal-resolved bindings in `/usr/share/arch-niri-dux/niri/binds.kdl`. The home entrypoint (`niri-user.kdl`
-installed as `~/.config/niri/config.kdl`) loads package defaults, selected relative
+and terminal-resolved bindings in `/usr/share/arch-niri-dux/niri/binds.kdl`. The home entrypoint
+(`~/.config/niri/config.kdl`, seeded from `/etc/skel`) loads package defaults, selected relative
 optional `dms/*.kdl` includes, package-owned `tail.kdl`
 (session environment and file-dialog rules), then optional `overrides.kdl` last.
 Dux 2.1 ignores `~` includes. Relative home includes allow shortcut editing.
-Put personal Niri settings in `~/.config/niri/overrides.kdl`; initialization
-seeds comments only and preserves existing files and symlinks. Package updates
+Put personal Niri settings in `~/.config/niri/overrides.kdl`; skel seeds it
+with comments only. Package updates
 can change defaults and session policy without editing home. `dms/binds.kdl` starts empty and holds
 only overrides; later bindings replace earlier ones, so a disabled shortcut
 can override its stock action with `spawn "true"`. This still consumes the key.
 Generated `dms/alttab.kdl` controls appearance.
-Rerunning user initialization preserves existing user Niri files. Generated
-layout/input files remain local, so Dux settings continue to control them.
+Seeded layout/input files remain local, so Dux settings continue to control them.
 
 ## Applications and session defaults
 
-New users start on Dux's upstream "bloom" material preset. The seed lives in
-`~/.local/state/dms/session.json` and is only created when absent. Existing
+New users start on Dux's upstream "bloom" material preset, seeded from
+`/etc/skel` into `~/.local/state/dms/session.json`. Existing
 `session.json` files are never overwritten, so chosen wallpapers are preserved.
 Dux provides the preset assets. The installer does not edit the vendored Niri
 files for this default.
@@ -108,10 +103,8 @@ login shell and a real Niri-spawned wrapper without personal dotfiles.
 
 ## Dux defaults and updates
 
-Before DMS starts, its packaged service drop-in runs
-`initialize-dux-settings.py` for new and existing accounts. Each feature seeds
-the keys missing from `settings.json` and every `config.d/*.json` file into its
-own `~/.config/dms/config.d/00-arch-niri-dux-*.json` file, once. Dux saves
+`/etc/skel` seeds each feature into its own
+`~/.config/dms/config.d/00-arch-niri-dux-*.json` file. Dux saves
 later changes back to that file, so change these settings in Dux Settings, in
 that file or in a later-sorting `config.d` file; `settings.json` loads first
 and loses to them. An emptied seed file stays in place so restarts don't undo
@@ -128,16 +121,15 @@ login. It schedules from its last check, saved in
 interval; a new account checks a few minutes after its first login. Failed
 checks, such as while offline, stay silent and retry every 5 minutes. Clicking
 the button opens Dux's updater; its Update All runs the same `pacman -Syu`
-that installs our packages and triggers migrations. A bar layout saved before
+that installs our packages. A bar layout saved before
 the seed ran (`barConfigs` in a user file) is kept and gets no button. The
-seeder also enables the plugin in `~/.config/dms/plugin_settings.json` unless
-a choice is already recorded there. Move, remove or add the button in Dux
+seed also enables the plugin in `~/.config/dms/plugin_settings.json`. Move, remove or add the button in Dux
 Settings, Bar; Software Updates shows the 6-hour interval as a custom interval.
 
 Seeds never change a value that already exists. To change a shipped default for
 existing accounts, add a user migration that rewrites the key only where it
-still holds the old default, and update the seed for new accounts. The seeded
-bar copies Dux 2.1's default widget lists; re-sync `MAIN_BAR` when a Dux update
+still holds the old default, and update the skel seed for new accounts. The seeded
+bar copies Dux 2.1's default widget lists; re-sync it when a Dux update
 changes its default bar.
 
 ## Firewall and mDNS

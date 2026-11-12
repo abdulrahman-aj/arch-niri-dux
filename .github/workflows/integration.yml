@@ -17,10 +17,36 @@ concurrency:
 jobs:
   checks:
     runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      pull-requests: read
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
+          fetch-depth: 0
           persist-credentials: false
+      - name: Require Existing installs note for existing-install changes
+        if: github.event_name == 'pull_request'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          BASE_REF: ${{ github.base_ref }}
+        run: |
+          PR_BODY=$(gh pr view "$PR_NUMBER" --json body --jq .body)
+          changed=$(git diff --name-only "origin/$BASE_REF...HEAD")
+          # backup= holds install paths under etc/ only; a non-etc entry would escape the check below.
+          backup=$(sed -n '/^ *backup=(/,/)/p' packages/integration/PKGBUILD | grep -o 'etc/[^ )]*')
+          [ -n "$backup" ] || { echo 'Could not parse the backup= array; refusing to gate silently.' >&2; exit 1; }
+          needs_note=false
+          while IFS= read -r file; do
+            case "$file" in installer/*|desktop/etc/skel/*|*preset*) needs_note=true;; esac
+            while IFS= read -r owned; do [ "$file" = "desktop/$owned" ] && needs_note=true; done <<<"$backup"
+          done <<<"$changed"
+          if [ "$needs_note" = true ] && ! grep -q '^Existing installs:' <<<"$PR_BODY"; then
+            echo 'This PR touches existing installs; add a line starting "Existing installs:" to its description.' >&2
+            exit 1
+          fi
       - name: Verify the pinned Nix installer
         shell: bash
         run: |
