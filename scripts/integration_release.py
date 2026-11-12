@@ -2,6 +2,7 @@
 """Sign the integration repository or fetch an authenticated release for an ISO."""
 
 import argparse
+import base64
 import gzip
 import json
 import os
@@ -17,6 +18,7 @@ from verification.digest import digest
 
 import package_build as build
 import dux_apps as apps
+import package_lock as lock
 
 RELEASES = 'https://github.com/abdulrahman-aj/arch-niri-dux/releases/download'
 
@@ -100,6 +102,9 @@ def validate_manifest(root, directory):
         raise ValueError('Invalid source date epoch.')
     if manifest.get('version') != version:
         raise ValueError('Release version does not match the checkout.')
+    expected = lock.release_omarchy(root)
+    if manifest.get('omarchy') != expected:
+        raise ValueError('Release Omarchy packages differ from the reviewed pin; run make lock for unreleased work.')
     recipes = {recipe['name']: (recipe, filename) for recipe, _, filename in apps.recipes(root)}
     if (
         not isinstance(manifest.get('apps'), list)
@@ -146,6 +151,10 @@ def fetch(root, destination, base_url=RELEASES):
     names = [entry['filename'] for entry in manifest['packages']]
     expected |= {filename for _, _, filename in apps.recipes(root)}
     names += [entry['filename'] for entry in manifest.get('apps', [])]
+    # The pinned boot packages are release assets too, so a publish retry
+    # reuses these exact bytes instead of Omarchy's moving-tip URL.
+    expected |= {entry['filename'] for entry in manifest.get('omarchy', [])}
+    names += [entry['filename'] for entry in manifest.get('omarchy', [])]
     if len(names) != len(expected) or set(names) != expected:
         raise ValueError('Unexpected release asset names.')
     for name in (*names, 'integration.tar', 'integration.PKGBUILD'):
@@ -153,6 +162,9 @@ def fetch(root, destination, base_url=RELEASES):
         if name in expected:
             download(f'{base}/{name}.sig', destination / (name + '.sig'))
             verify(root, destination / name)
+    for entry in manifest.get('omarchy', []):
+        if digest(destination / entry['filename']) != entry['sha256']:
+            raise ValueError('Omarchy package checksum mismatch.')
     validate_manifest(root, destination)
 
 
@@ -202,6 +214,17 @@ def publish(root, packages, history, destination, tag, commit):
     manifest = validate_manifest(root, packages)
     if manifest.get('source_commit', commit) != commit:
         raise ValueError('Published version belongs to a different commit; create a new version.')
+    pin = {entry['name']: entry for entry in lock.omarchy_pin(root)}
+    for entry in manifest.get('omarchy', []):
+        # The exact bytes the pin reviewed, re-signed with our release key so
+        # installed machines take them from our first-listed repository.
+        source = pin[entry['name']]
+        target = packages / entry['filename']
+        if not lock.cache_matches(target, entry['sha256']):
+            lock.download(source['url'], target, entry['sha256'])
+        signature = target.with_name(target.name + '.sig')
+        signature.write_bytes(base64.b64decode(source['signature'], validate=True))
+        lock.verify_signature(root / 'keys/trusted-packagers.gpg', signature, target)
     if destination.exists() and (not destination.is_dir() or any(destination.iterdir())):
         raise ValueError('Repository output must be empty.')
     destination.mkdir(parents=True, exist_ok=True)
@@ -213,9 +236,20 @@ def publish(root, packages, history, destination, tag, commit):
         if int(subprocess.check_output(['vercmp', current_version, boundary['packages'][name]], text=True)) < 0:
             raise ValueError('Current package predates the history boundary.')
     reused = {}
+    omarchy_names = {entry['name'] for entry in manifest.get('omarchy', [])}
+    omarchy_pattern = (
+        '(?:'
+        + '|'.join(re.escape(name) for name in sorted(omarchy_names))
+        + r')-[0-9]+(?:\.[0-9]+)*-[0-9]+(?:\.[0-9]+)*-x86_64\.pkg\.tar\.zst'
+    )
     for old in history.glob('*.pkg.tar.zst'):
         if old.is_symlink() or not old.is_file():
             raise ValueError('Unexpected historical package link.')
+        if omarchy_names and re.fullmatch(omarchy_pattern, old.name):
+            # Only the pinned boot packages are served, like superseded Dux
+            # apps; older files stay on GitHub Releases, if they were kept.
+            verify(root, old, historical=True)
+            continue
         name = next(
             (
                 name
@@ -258,6 +292,12 @@ def publish(root, packages, history, destination, tag, commit):
         target = destination / entry['filename']
         shutil.copyfile(reused.get(entry['filename'], packages / entry['filename']), target)
         # Re-sign reused bytes too: their old signature may be from an expired subkey.
+        sign(root, target)
+        current.append(target)
+    for entry in manifest.get('omarchy', []):
+        # Only the pinned version is served; GitHub Releases keep the history.
+        target = destination / entry['filename']
+        shutil.copyfile(packages / entry['filename'], target)
         sign(root, target)
         current.append(target)
     database = destination / 'arch-niri-dux.db.tar.gz'

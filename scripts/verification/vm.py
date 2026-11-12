@@ -442,5 +442,9 @@ def stage_probes(directory):
     )
     builder = source.parent / 'package_build.py'
     shutil.copyfile(builder, directory / builder.name)
-    paths = sorted(source.glob('*.py')) + [builder]
+    # Fixture rebuilds stamp the Omarchy pin projection, so the pin reader
+    # travels with the builder.
+    locker = source.parent / 'package_lock.py'
+    shutil.copyfile(locker, directory / locker.name)
+    paths = sorted(source.glob('*.py')) + [builder, locker]
     return {str(path.relative_to(source.parent)): digest(path) for path in paths}

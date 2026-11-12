@@ -18,6 +18,10 @@ class IntegrationSourceTests(unittest.TestCase):
             (root / 'desktop/usr/share').mkdir(parents=True)
             (root / 'packages/integration/PKGBUILD').write_text('pkgname=example\n')
             (root / 'packages/packages.target').write_text('base\nniri\n')
+            (root / 'packages/omarchy-pin.json').write_text('[]\n')
+            (root / 'packages/dux-apps-recipes.json').write_text('[]\n')
+            (root / 'archiso').mkdir(parents=True, exist_ok=True)
+            (root / 'archiso/packages.live').write_text('# fixture live list\n')
             asset = root / 'desktop/usr/share/default.kdl'
             asset.write_text('binds { Mod+Return { spawn "xdg-terminal-exec"; } }\n')
             one = root / 'one'
@@ -32,6 +36,9 @@ class IntegrationSourceTests(unittest.TestCase):
             with tarfile.open(first) as archive:
                 self.assertEqual(archive.extractfile('desktop/usr/share/default.kdl').read(), asset.read_bytes())
                 self.assertEqual(archive.extractfile('packages/packages.target').read(), b'base\nniri\n')
+                self.assertEqual(archive.extractfile('packages/omarchy-pin.json').read(), b'[]\n')
+                self.assertEqual(archive.extractfile('packages/dux-apps-recipes.json').read(), b'[]\n')
+                self.assertEqual(archive.extractfile('archiso/packages.live').read(), b'# fixture live list\n')
                 self.assertTrue(all(entry.uid == entry.gid == 0 and entry.mtime == 1234 for entry in archive))
 
     def test_archive_refuses_linked_inputs(self):

@@ -188,6 +188,8 @@ def verify_upgrade():
             assert digest(path) == before[str(path)], path
         output(*prefix, 'niri', 'validate', '--config', str(personal[0]))
         output('pacman', '-Dk')
+        omarchy_section = Path('/etc/pacman.d/arch-niri-dux.conf').read_text().split('[omarchy]')[1]
+        assert 'Usage = Install Sync' in omarchy_section, omarchy_section
         for home in (signing, keyring):
             output('gpgconf', '--homedir', str(home), '--kill', 'all')
         (evidence / 'integration-upgrade.json').write_text(
@@ -202,6 +204,7 @@ def verify_upgrade():
                     'signed_packages_and_database': True,
                     'tampered_database_rejected': True,
                     'installed_keyring_refresh_hook_ran': True,
+                    'omarchy_usage_excludes_upgrade': True,
                     'restoration': {
                         'files_present': [str(old_file)],
                         'files_absent': [str(new_file)],
@@ -258,7 +261,9 @@ def published_repository():
         run('pacman', '--config', str(configuration), '-Syyu', '--noconfirm')
         # Force downloads into an empty cache even when this ISO already has
         # the current version. Package identity must match the signed ISO input.
-        packages = manifest['packages'] + manifest['apps']
+        # The pinned Omarchy boot packages install from our repository too, so
+        # -Syu never follows Omarchy's moving tip for them.
+        packages = manifest['packages'] + manifest['apps'] + manifest.get('omarchy', [])
         run('pacman', '--config', str(configuration), '-S', '--noconfirm', *(package['name'] for package in packages))
         for package in packages:
             payload = cache / package['filename']

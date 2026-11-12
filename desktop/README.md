@@ -79,6 +79,11 @@ drop-ins. To override mkinitcpio, use a later-sorting
 `/etc/mkinitcpio.conf.d/*.conf` drop-in and rebuild the initramfs. Systemd
 overrides belong under `/etc/systemd/`. See [package
 repositories](../packages/README.md#repositories) for update sources.
+The `[omarchy]` section sets `Usage = Install Sync`: `pacman -Syu` upgrades
+the pinned boot packages from our repository only, and our first-listed
+repository wins those names regardless of version, so explicit installs take
+the pinned copies too. Omarchy's repo stays available for explicit installs
+of packages we don't carry.
 `snap-pac` snapshots around transactions; recovery entries use `noresume`.
 Timeline snapshots are disabled; number cleanup keeps 10 regular and
 5 important snapshots.

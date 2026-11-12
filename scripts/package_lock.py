@@ -245,6 +245,25 @@ def omarchy_arch_deps(pin):
     return deps - names
 
 
+def release_omarchy(root):
+    """Return the pinned Omarchy packages our signed repository carries.
+
+    `make lock` is the only thing that moves the pin; this projects that same
+    reviewed source into release metadata instead of a second list. Entries
+    outside the requested package lists are not published, mirroring fetch.
+    """
+    pin = omarchy_pin(root)
+    requested = set(requested_packages(root))
+    return sorted(
+        (
+            dict(name=entry['name'], version=entry['version'], filename=entry['filename'], sha256=entry['sha256'])
+            for entry in pin
+            if entry['name'] in requested
+        ),
+        key=lambda entry: entry['name'],
+    )
+
+
 def refresh_omarchy_pin():
     database = fetch_url(f'{OMARCHY_FILES_URL}omarchy.db')
     with tempfile.TemporaryDirectory(prefix='omarchy-pin-') as directory:

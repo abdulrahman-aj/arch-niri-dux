@@ -158,6 +158,8 @@ def desktop():
     assert next(line.split(':')[1] for line in trusted.splitlines() if line.startswith('pub:')) in ('u', 'f')
     assert 'Include = /etc/pacman.d/arch-niri-dux.conf' in Path('/etc/pacman.conf').read_text()
     assert 'SigLevel = Required TrustedOnly' in Path('/etc/pacman.d/arch-niri-dux.conf').read_text()
+    omarchy_section = Path('/etc/pacman.d/arch-niri-dux.conf').read_text().split('[omarchy]')[1]
+    assert 'Usage = Install Sync' in omarchy_section, omarchy_section
     Path('/run/verify/integration-packages.json').write_text(
         json.dumps(
             {
