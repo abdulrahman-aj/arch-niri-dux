@@ -227,7 +227,7 @@ class SignedReleaseTests(unittest.TestCase):
         self.publish(packages, self.root / 'history', signed)
         release.fetch(self.root, self.root / 'fetched', (self.root / 'releases').as_uri())
         manifest = json.loads((signed / 'integration.manifest.json').read_text())
-        for entry in manifest['packages'] + manifest['apps']:
+        for entry in manifest['packages'] + manifest['apps'] + manifest['omarchy']:
             path = signed / entry['filename']
             self.assertEqual(path.read_bytes(), (self.root / 'fetched' / path.name).read_bytes())
         with self.assertRaisesRegex(ValueError, 'must be empty'):
@@ -235,6 +235,7 @@ class SignedReleaseTests(unittest.TestCase):
         for name in (
             'integration.manifest.json',
             'arch-niri-dux-0.1.0-1-any.pkg.tar.zst',
+            'limine-mkinitcpio-hook-1.40.0-2-x86_64.pkg.tar.zst',
             'integration.tar',
             'integration.PKGBUILD',
         ):

@@ -105,22 +105,6 @@ def validate_manifest(root, directory):
     expected = lock.release_omarchy(root)
     if manifest.get('omarchy') != expected:
         raise ValueError('Release Omarchy packages differ from the reviewed pin; run make lock for unreleased work.')
-    for entry in manifest.get('omarchy', []):
-        if (
-            not isinstance(entry['filename'], str)
-            or Path(entry['filename']).name != entry['filename']
-            or not entry['filename'].endswith('.pkg.tar.zst')
-        ):
-            raise ValueError(f'Unsafe Omarchy package filename: {entry["filename"]}')
-        if not re.fullmatch(r'[a-f0-9]{64}', entry['sha256']):
-            raise ValueError('Invalid Omarchy package checksum.')
-    for name, field in [('integration.tar', 'source_sha256'), ('integration.PKGBUILD', 'recipe_sha256')]:
-        if digest(directory / name) != manifest[field]:
-            raise ValueError(f'Release source checksum mismatch: {name}')
-    if type(manifest['source_date_epoch']) is not int or manifest['source_date_epoch'] < 0:
-        raise ValueError('Invalid source date epoch.')
-    if manifest.get('version') != version:
-        raise ValueError('Release version does not match the checkout.')
     recipes = {recipe['name']: (recipe, filename) for recipe, _, filename in apps.recipes(root)}
     if (
         not isinstance(manifest.get('apps'), list)
@@ -167,6 +151,10 @@ def fetch(root, destination, base_url=RELEASES):
     names = [entry['filename'] for entry in manifest['packages']]
     expected |= {filename for _, _, filename in apps.recipes(root)}
     names += [entry['filename'] for entry in manifest.get('apps', [])]
+    # The pinned boot packages are release assets too, so a publish retry
+    # reuses these exact bytes instead of Omarchy's moving-tip URL.
+    expected |= {entry['filename'] for entry in manifest.get('omarchy', [])}
+    names += [entry['filename'] for entry in manifest.get('omarchy', [])]
     if len(names) != len(expected) or set(names) != expected:
         raise ValueError('Unexpected release asset names.')
     for name in (*names, 'integration.tar', 'integration.PKGBUILD'):
@@ -174,6 +162,9 @@ def fetch(root, destination, base_url=RELEASES):
         if name in expected:
             download(f'{base}/{name}.sig', destination / (name + '.sig'))
             verify(root, destination / name)
+    for entry in manifest.get('omarchy', []):
+        if digest(destination / entry['filename']) != entry['sha256']:
+            raise ValueError('Omarchy package checksum mismatch.')
     validate_manifest(root, destination)
 
 

@@ -25,8 +25,10 @@ Our repository comes first so another repository cannot shadow our packages.
 It also carries the exact pinned Omarchy boot packages, signed with our
 release key, so installed machines take only the versions a release verified.
 The installed `[omarchy]` section sets `Usage = Install Sync`, so `pacman
--Syu` never upgrades from Omarchy; Omarchy's repo stays usable for explicit
-installs.
+-Syu` never upgrades from Omarchy. Our repository is listed first and wins by
+name regardless of version, so explicit installs of the two boot packages
+take our pinned copies too; Omarchy's repo stays usable for explicit installs
+of anything else.
 The date freezes the build payload only: installed systems track the rolling
 mirrors in `/etc/pacman.d/arch-niri-dux.conf`, so `pacman -Syu` keeps updating
 Arch packages after installation. The integration repository

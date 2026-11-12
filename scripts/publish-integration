@@ -46,7 +46,7 @@ python "$root/scripts/integration_release.py" publish "$root" "$packages" "$hist
     --tag "$tag" --commit "$commit"
 if [[ $published == false ]]; then
     assets=()
-    jq -er '.packages[].filename, .apps[].filename' "$output/integration.manifest.json" >"$temporary/assets"
+    jq -er '.packages[].filename, .apps[].filename, .omarchy[].filename' "$output/integration.manifest.json" >"$temporary/assets"
     while IFS= read -r name; do
         assets+=("$output/$name" "$output/$name.sig")
     done <"$temporary/assets"

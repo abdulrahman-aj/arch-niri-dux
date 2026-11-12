@@ -204,7 +204,7 @@ def verify_upgrade():
                     'signed_packages_and_database': True,
                     'tampered_database_rejected': True,
                     'installed_keyring_refresh_hook_ran': True,
-                    'omarchy_sync_without_upgrade': True,
+                    'omarchy_usage_excludes_upgrade': True,
                     'restoration': {
                         'files_present': [str(old_file)],
                         'files_absent': [str(new_file)],

@@ -174,8 +174,10 @@ repositories](../packages/README.md#repositories) for online update sources.
 The repository order is arch-niri-dux, core, extra, then omarchy. Keeping our
 repository first prevents other repositories from shadowing our packages.
 The `[omarchy]` section sets `Usage = Install Sync`: `pacman -Syu` upgrades
-the pinned boot packages from our repository only, while explicit installs
-can still use Omarchy's.
+the pinned boot packages from our repository only, and our first-listed
+repository wins those names regardless of version, so explicit installs take
+the pinned copies too. Omarchy's repo stays available for explicit installs
+of packages we don't carry.
 
 Do not run `dms-greeter sync` on arch-niri-dux. A full sync recursively grants
 the greeter account read access to parts of the home directory, including files
