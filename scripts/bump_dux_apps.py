@@ -39,6 +39,7 @@ VENDORED_SOURCES = {
     },
     'dux-greeter-bin': {
         'tmpfiles-dms-greeter.conf': 'assets/systemd/tmpfiles-dms-greeter.conf',
+        'sysusers-dms-greeter.conf': 'assets/systemd/sysusers-dms-greeter.conf',
         'dms-niri.kdl': 'assets/examples/dms-niri.kdl',
         'dms-hypr.lua': 'assets/examples/dms-hypr.lua',
     },
