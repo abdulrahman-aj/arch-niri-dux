@@ -440,7 +440,7 @@ def stage_probes(directory):
     shutil.copytree(
         source, directory / 'verification', ignore=shutil.ignore_patterns('__pycache__'), dirs_exist_ok=True
     )
-    builder = source.parent / 'integration_build.py'
+    builder = source.parent / 'package_build.py'
     shutil.copyfile(builder, directory / builder.name)
     # Fixture rebuilds stamp the Omarchy pin projection, so the pin reader
     # travels with the builder.

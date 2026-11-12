@@ -16,7 +16,7 @@ import urllib.request
 from verification.digest import digest
 
 
-import integration_build as build
+import package_build as build
 import dux_apps as apps
 import package_lock as lock
 

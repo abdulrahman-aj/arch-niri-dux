@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Build our owning integration and baseline packages with Arch's makepkg."""
+"""Build our owning packages with Arch's makepkg."""
 
 import argparse
 import io
@@ -27,7 +27,7 @@ def version(root):
     for name in ('pkgver', 'pkgrel'):
         match = re.search(rf'^{name}=([0-9]+(?:\.[0-9]+)*)$', recipe, re.MULTILINE)
         if not match:
-            raise ValueError(f'Expected a numeric literal {name} in the integration recipe.')
+            raise ValueError(f'Expected a numeric literal {name} in the package recipe.')
         values.append(match[1])
     return '-'.join(values)
 
@@ -39,7 +39,7 @@ def prepare_source(root, workspace, epoch):
     sources = [
         root / 'packages/packages.target',
         root / 'packages/omarchy-pin.json',
-        root / 'packages/aur-recipes.json',
+        root / 'packages/dux-apps-recipes.json',
         root / 'archiso/packages.live',
     ]
     sources.extend(sorted((root / 'desktop').rglob('*')))
@@ -53,7 +53,7 @@ def prepare_source(root, workspace, epoch):
     with tarfile.open(archive, 'w') as output:
         for path in sources:
             if path.is_symlink():
-                raise ValueError(f'Unexpected integration source symlink: {path}')
+                raise ValueError(f'Unexpected package source symlink: {path}')
             if not path.is_file() or path == root / 'desktop/README.md':
                 continue
             if path == signing_key:
@@ -98,10 +98,10 @@ def build_packages(root, workspace, destination, epoch):
         path = Path(filename)
         name = subprocess.check_output(['pacman', '-Qp', '--quiet', str(path)], text=True).strip()
         if name not in NAMES or path.parent != destination or not path.name.endswith('.pkg.tar.zst'):
-            raise ValueError(f'Unexpected integration package: {path}')
+            raise ValueError(f'Unexpected package: {path}')
         result.append(dict(name=name, filename=path.name, sha256=digest(path)))
     if {entry['name'] for entry in result} != NAMES or len(result) != len(NAMES):
-        raise ValueError('Expected both the integration and baseline packages.')
+        raise ValueError('Expected both of our packages.')
     provenance = dict(
         version=version(root),
         source_sha256=digest(archive),

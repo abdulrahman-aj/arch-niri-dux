@@ -6,7 +6,7 @@ import unittest
 import wave
 
 
-from scripts.verification import apps as baseline
+from scripts.verification import apps
 
 
 class AudioEvidenceTests(unittest.TestCase):
@@ -22,7 +22,7 @@ class AudioEvidenceTests(unittest.TestCase):
                 output.setsampwidth(2)
                 output.setframerate(rate)
                 output.writeframes(struct.pack('<' + 'h' * len(samples), *samples))
-            return baseline.tone_amplitude(path, target)
+            return apps.tone_amplitude(path, target)
 
     def test_silence_or_an_unrelated_tone_cannot_qualify_playback(self):
         self.assertEqual(self.amplitude(0), 0)

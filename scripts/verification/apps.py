@@ -18,7 +18,7 @@ import zlib
 from . import guest
 from .pdf import sample_pdf_bytes
 
-FILES = Path('/tmp/dux-baseline-files')
+FILES = Path('/tmp/dux-apps-files')
 EVIDENCE = Path('/run/verify')
 
 
@@ -50,8 +50,8 @@ def focus_app(name):
     try:
         window = guest.wait_until(name + ' window', lambda: app_window(name))
     except TimeoutError:
-        record('baseline-missing-' + name.lower(), {'windows': guest.windows()})
-        guest.screenshot('baseline-missing-' + name.lower() + '.png')
+        record('apps-missing-' + name.lower(), {'windows': guest.windows()})
+        guest.screenshot('apps-missing-' + name.lower() + '.png')
         raise
     guest.focus_window(window['id'])
     guest.wait_until(name + ' focused', lambda: (app_window(name) or {}).get('is_focused'))
@@ -99,7 +99,7 @@ test -s open-files.txt
         capture=True,
         timeout=90,
     )
-    record('baseline-cli', {'passed': True, 'output': result.stdout})
+    record('apps-cli', {'passed': True, 'output': result.stdout})
 
 
 def png_sample():
@@ -123,8 +123,8 @@ def png_sample():
 def prepare():
     FILES.mkdir(exist_ok=True)
     shutil.chown(FILES, user='tester')
-    (FILES / 'baseline-image.png').write_bytes(png_sample())
-    (FILES / 'baseline-notes.txt').write_text('Dux baseline text editing verification.\n')
+    (FILES / 'apps-image.png').write_bytes(png_sample())
+    (FILES / 'apps-notes.txt').write_text('Dux apps text editing verification.\n')
     for path in FILES.iterdir():
         shutil.chown(path, user='tester')
     guest.user_command(
@@ -151,7 +151,7 @@ def prepare():
         'yuv420p',
         '-c:a',
         'aac',
-        str(FILES / 'baseline-video.mp4'),
+        str(FILES / 'apps-video.mp4'),
         timeout=90,
     )
     for extension, codec in [('flac', 'flac'), ('mp3', 'libmp3lame')]:
@@ -169,7 +169,7 @@ def prepare():
             '30',
             '-c:a',
             codec,
-            str(FILES / ('baseline-audio.' + extension)),
+            str(FILES / ('apps-audio.' + extension)),
             timeout=60,
         )
     guest.user_command(
@@ -179,12 +179,12 @@ def prepare():
         'error',
         '-y',
         '-i',
-        str(FILES / 'baseline-video.mp4'),
+        str(FILES / 'apps-video.mp4'),
         '-t',
         '3',
         '-c',
         'copy',
-        str(FILES / 'baseline-video.mkv'),
+        str(FILES / 'apps-video.mkv'),
         timeout=30,
     )
     guest.user_command(
@@ -194,7 +194,7 @@ def prepare():
         'error',
         '-y',
         '-i',
-        str(FILES / 'baseline-video.mp4'),
+        str(FILES / 'apps-video.mp4'),
         '-t',
         '3',
         '-c:v',
@@ -205,15 +205,15 @@ def prepare():
         '8',
         '-c:a',
         'libvorbis',
-        str(FILES / 'baseline-video.webm'),
+        str(FILES / 'apps-video.webm'),
         timeout=60,
     )
     for filename in (
-        'baseline-video.mp4',
-        'baseline-video.mkv',
-        'baseline-video.webm',
-        'baseline-audio.flac',
-        'baseline-audio.mp3',
+        'apps-video.mp4',
+        'apps-video.mkv',
+        'apps-video.webm',
+        'apps-audio.flac',
+        'apps-audio.mp3',
     ):
         guest.user_command(
             'gst-launch-1.0',
@@ -237,7 +237,7 @@ def prepare():
     guest.user_command(
         'ffmpegthumbnailer',
         '-i',
-        str(FILES / 'baseline-video.mp4'),
+        str(FILES / 'apps-video.mp4'),
         '-o',
         str(FILES / 'thumbnail.png'),
         '-s',
@@ -249,7 +249,7 @@ def prepare():
     guest.user_command('pactl', 'set-default-sink', 'dux_verify_audio')
     guest.user_command('pactl', 'set-sink-volume', 'dux_verify_audio', '100%')
     record(
-        'baseline-codecs',
+        'apps-codecs',
         {
             'decoded': ['MP4/H.264/AAC', 'Matroska/H.264/AAC', 'WebM/VP8/Vorbis', 'FLAC', 'MP3'],
             'gstreamer_and_mpv': True,
@@ -263,18 +263,18 @@ def open_file(filename, name):
     guest.user_command(
         'sh',
         '-c',
-        'xdg-open ' + shlex.quote(str(path)) + ' >' + str(EVIDENCE / ('baseline-' + name.lower() + '.log')) + ' 2>&1 &',
+        'xdg-open ' + shlex.quote(str(path)) + ' >' + str(EVIDENCE / ('apps-' + name.lower() + '.log')) + ' 2>&1 &',
     )
     focus_app(name)
-    guest.screenshot('baseline-' + name.lower() + '.png')
+    guest.screenshot('apps-' + name.lower() + '.png')
 
 
 def image():
     expected = 'org.gnome.Loupe.desktop'
     actual = guest.user_command('xdg-mime', 'query', 'default', 'image/png', capture=True).stdout.strip()
     assert actual == expected, actual
-    open_file('baseline-image.png', 'Loupe')
-    record('baseline-image', {'default': actual, 'opened': True})
+    open_file('apps-image.png', 'Loupe')
+    record('apps-image', {'default': actual, 'opened': True})
     close_app('Loupe')
 
 
@@ -282,7 +282,7 @@ def text():
     for mime in ('text/plain', 'text/markdown'):
         actual = guest.user_command('xdg-mime', 'query', 'default', mime, capture=True).stdout.strip()
         assert actual == 'org.gnome.TextEditor.desktop', (mime, actual)
-    open_file('baseline-notes.txt', 'TextEditor')
+    open_file('apps-notes.txt', 'TextEditor')
     # Earlier probes leave Chromium open beside the editor. Use a known input
     # surface rather than assuming the editor occupies the left half.
     guest.user_command('niri', 'msg', 'action', 'fullscreen-window')
@@ -302,26 +302,26 @@ def text_focused():
 def text_saved():
     guest.wait_until(
         'Graphical editor saved the edited document',
-        lambda: (FILES / 'baseline-notes.txt').read_text().strip() == 'editedbyduxverification',
+        lambda: (FILES / 'apps-notes.txt').read_text().strip() == 'editedbyduxverification',
         timeout=10,
     )
-    guest.screenshot('baseline-text-saved.png')
-    record('baseline-text', {'opened_with': 'org.gnome.TextEditor.desktop', 'edited_and_saved': True})
+    guest.screenshot('apps-text-saved.png')
+    record('apps-text', {'opened_with': 'org.gnome.TextEditor.desktop', 'edited_and_saved': True})
     close_app('TextEditor')
 
 
 def calculator():
-    guest.user_command('sh', '-c', 'gtk-launch org.gnome.Calculator >/run/verify/baseline-calculator.log 2>&1 &')
+    guest.user_command('sh', '-c', 'gtk-launch org.gnome.Calculator >/run/verify/apps-calculator.log 2>&1 &')
     focus_app('Calculator')
-    guest.screenshot('baseline-calculator.png')
-    record('baseline-calculator', {'launched': True})
+    guest.screenshot('apps-calculator.png')
+    record('apps-calculator', {'launched': True})
     close_app('Calculator')
 
 
 def media(kind):
     filename, application, mime, expected = {
-        'audio': ('baseline-audio.flac', 'Decibels', 'audio/flac', 'org.gnome.Decibels.desktop'),
-        'video': ('baseline-video.mp4', 'Celluloid', 'video/mp4', 'io.github.celluloid_player.Celluloid.desktop'),
+        'audio': ('apps-audio.flac', 'Decibels', 'audio/flac', 'org.gnome.Decibels.desktop'),
+        'video': ('apps-video.mp4', 'Celluloid', 'video/mp4', 'io.github.celluloid_player.Celluloid.desktop'),
     }[kind]
     actual = guest.user_command('xdg-mime', 'query', 'default', mime, capture=True).stdout.strip()
     assert actual == expected, (mime, actual)
@@ -369,7 +369,7 @@ def capture_audio(kind):
     frequency = 440 if kind == 'audio' else 660
     amplitude = tone_amplitude(path, frequency)
     record(
-        'baseline-' + kind,
+        'apps-' + kind,
         {
             'frequency_hz': frequency,
             'tone_amplitude': amplitude,
@@ -380,10 +380,10 @@ def capture_audio(kind):
 
 
 def media_played(kind):
-    data = json.loads((EVIDENCE / ('baseline-' + kind + '.json')).read_text())
+    data = json.loads((EVIDENCE / ('apps-' + kind + '.json')).read_text())
     assert data['tone_detected'], data
     application = 'Decibels' if kind == 'audio' else 'Celluloid'
-    guest.screenshot('baseline-' + application.lower() + '-playing.png')
+    guest.screenshot('apps-' + application.lower() + '-playing.png')
     close_app(application)
 
 
@@ -456,7 +456,7 @@ def backends():
         ('avif', ['-c:v', 'libaom-av1', '-still-picture', '1']),
         ('webp', ['-c:v', 'libwebp']),
     ]:
-        image = FILES / ('baseline-image.' + extension)
+        image = FILES / ('apps-image.' + extension)
         guest.user_command(
             'ffmpeg',
             '-nostdin',
@@ -464,7 +464,7 @@ def backends():
             'error',
             '-y',
             '-i',
-            str(FILES / 'baseline-image.png'),
+            str(FILES / 'apps-image.png'),
             '-frames:v',
             '1',
             *codec_options,
@@ -504,7 +504,7 @@ def backends():
     guest.run('udevadm', 'verify', '/usr/lib/udev/rules.d/60-arch-niri-dux-ddc.rules')
     assert Path('/sys/module/i2c_dev').is_dir(), 'i2c-tools did not load i2c-dev at boot'
     record(
-        'baseline-backends',
+        'apps-backends',
         {
             'phone_camera_binaries_load': True,
             'qt_multimedia_import': True,
@@ -536,7 +536,7 @@ def printing():
     assert Path('/usr/share/dbus-1/system-services/org.opensuse.CupsPkHelper.Mechanism.service').is_file()
     spool = FILES / 'print-spool'
     spool.mkdir(exist_ok=True)
-    with (EVIDENCE / 'baseline-printer.log').open('w') as log:
+    with (EVIDENCE / 'apps-printer.log').open('w') as log:
         printer = subprocess.Popen(
             [
                 'ippeveprinter',
@@ -560,7 +560,7 @@ def printing():
             uri = 'ipp://localhost:8631/ipp/print'
 
             def ready():
-                assert printer.poll() is None, 'Virtual printer exited; inspect baseline-printer.log'
+                assert printer.poll() is None, 'Virtual printer exited; inspect apps-printer.log'
                 return (
                     subprocess.run(
                         ['ipptool', uri, '/usr/share/cups/ipptool/get-printer-attributes.test'],
@@ -588,7 +588,7 @@ def printing():
 
             documents = guest.wait_until('PDF delivered through driverless CUPS queue', completed, timeout=60)
             record(
-                'baseline-printing',
+                'apps-printing',
                 {
                     'driverless_queue': True,
                     'dux_printers': printers,
@@ -623,7 +623,7 @@ def verify(vm, passed):
     for kind in ('audio', 'video', 'video', 'video', 'video'):
         vm.probe('apps', 'open-' + kind, timeout=120)
         vm.probe('apps', 'capture-' + kind, timeout=30)
-        capture_file = vm.directory / ('baseline-' + kind + '.json')
+        capture_file = vm.directory / ('apps-' + kind + '.json')
         if not json.loads(capture_file.read_text())['tone_detected']:
             # Some players open paused; exercise their normal play shortcut.
             vm.key('spc')
@@ -672,4 +672,4 @@ if __name__ == '__main__':
     elif action.startswith('played-'):
         media_played(action.removeprefix('played-'))
     else:
-        raise SystemExit('Unknown baseline probe')
+        raise SystemExit('Unknown apps probe')

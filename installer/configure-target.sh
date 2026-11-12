@@ -18,6 +18,7 @@ chmod 0440 /etc/sudoers.d/wheel
 visudo -cf /etc/sudoers.d/wheel
 
 printf 'SNAPPER_CONFIGS="root"\n' >/etc/conf.d/snapper
+# No drop-in exists for SNAPPER_CONFIGS or the NSS hosts line; write both directly.
 
 # Graphical LUKS prompt with a working text fallback. Arch's stock bgrt theme
 # keeps any firmware logo and falls back to spinner, then to text/details when

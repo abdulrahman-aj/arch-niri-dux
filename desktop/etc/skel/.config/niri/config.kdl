@@ -1,3 +1,4 @@
+// Relative home includes: Dux 2.1 ignores `~`. Overrides load last.
 include "/usr/share/arch-niri-dux/niri/defaults.kdl"
 
 include optional=true "dms/colors.kdl"

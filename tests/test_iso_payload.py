@@ -77,7 +77,7 @@ class PayloadFinalizationTests(unittest.TestCase):
 
     def save(self):
         for path, value in [
-            (self.root / 'packages/aur-recipes.json', [self.recipe]),
+            (self.root / 'packages/dux-apps-recipes.json', [self.recipe]),
             (self.root / 'packages/omarchy-pin.json', self.pin),
             (self.repository / 'arch-downloaded.json', self.arch),
             (self.repository / 'integration.manifest.json', self.integration),

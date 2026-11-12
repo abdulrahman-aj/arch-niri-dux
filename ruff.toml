@@ -2,7 +2,7 @@ target-version = "py313"
 # Width for the formatter only; E501 stays off so lint never flags long lines.
 # p99 Python line length is 119, so 120 keeps the one-time reformat small.
 line-length = 120
-extend-exclude = ["out/**", "packages/aur"]
+extend-exclude = ["out/**", "packages/dux-apps"]
 
 [lint]
 # F/ARG: catch undefined names and unused code.

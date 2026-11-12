@@ -6,7 +6,7 @@ import subprocess
 from . import dispatch
 from .guest import run, run_interactive
 from .boot import storage
-from . import integration
+from . import upgrade
 from .vm import installed_login
 
 
@@ -73,7 +73,7 @@ def snapshots():
     from . import key_lifecycle
 
     key_lifecycle.verify_installed()
-    integration.verify_upgrade()
+    upgrade.verify_upgrade()
     home.write_text('home-created-after-snapshot\n')
     Path('/etc/dux-verification-version').write_text('changed-after-snapshot\n')
     run('limine-snapper-sync')
@@ -121,14 +121,14 @@ def restored():
     assert '/@snapshots/' not in Path('/proc/cmdline').read_text()
     assert Path('/etc/dux-verification-version').read_text().strip() == 'known-good'
     assert Path('/home/tester/keep-this-file').read_text().strip() == 'home-created-after-snapshot'
-    integration.assert_restored()
+    upgrade.assert_restored()
     run('systemctl', 'is-active', 'greetd')
     storage()
 
 
 def verify(vm, passed):
     vm.probe('recovery', 'snapshots', timeout=600)
-    passed('Integration upgrade, baseline changes and personal preservation passed; recovery fixture prepared')
+    passed('Package upgrade, baseline changes and personal preservation passed; recovery fixture prepared')
     vm.command('sync')
     vm.poweroff()
     vm.stop()

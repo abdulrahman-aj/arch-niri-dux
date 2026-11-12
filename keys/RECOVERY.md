@@ -6,6 +6,20 @@ pins that primary; `integration-signing.subkey` selects one release signer.
 `integration-signing.gpg` retains all public bindings and revocations. CI receives
 only the selected subkey secret and a primary stub.
 
+## Public keys
+
+`trusted-packagers.gpg` holds only the public signers for the pinned bootstrap
+ISO and package closure; `fingerprints.txt` records their issuer fingerprints.
+The build checks every fetched package against this keyring and names any new
+signer; check a new fingerprint against the source distribution's public
+keyring before adding it. See [package inputs](../packages/README.md). No
+private material is included. Trust assumes the installer and its embedded keys
+are intact; a whole-medium rewrite can replace both. The offline database is
+unsigned: checksums detect corruption, not authentication. `integration-signing.gpg`
+is our public release key; see [release maintenance](../packages/RELEASING.md)
+for publication. Development ISOs use a fresh disposable build key whose private
+half the builder deletes; dev keys never authorize updates on installed systems.
+
 ## Prepare and restore
 
 Use a trusted offline machine and a disposable GnuPG home. Never import backups
@@ -143,6 +157,6 @@ to use an ISO identified as affected by an advisory.
 
 `make test` uses disposable GnuPG homes and real pacman roots. `make verify`
 runs the shared lifecycle probe using the installed helper in a disposable VM.
-VM work runs only on msi-dux. Production keys and the real GitHub secret are never
+VM work runs only on the build machine. Production keys and the real GitHub secret are never
 used in qualification. Tag-time release upload, approval, artifact transfer and
-Pages deployment still require the first deliberate real release.
+Pages deployment still require a real release.

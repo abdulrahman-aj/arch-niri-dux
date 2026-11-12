@@ -6,7 +6,7 @@
 `packages.target`. Removing it lets you remove optional apps while keeping
 integration updates.
 
-`scripts/integration_build.py` prepares a deterministic local source archive and
+`scripts/package_build.py` prepares a deterministic local source archive and
 records its checksum for makepkg. Release ISOs fetch the exact signed release
 artifacts. Development ISOs build the local recipe. The installer installs the
 packages, and pacman tracks their files.
@@ -46,8 +46,8 @@ was downloaded. Builds reuse the shared verified download cache.
 
 ## Dux app builds
 
-`aur/` contains reviewed recipes for Dux Greeter, Search, Calendar and Files.
-`aur-recipes.json` pins every recipe file's hash, and builds refuse changed
+`dux-apps/` contains reviewed recipes for Dux Greeter, Search, Calendar and Files.
+`dux-apps-recipes.json` pins every recipe file's hash, and builds refuse changed
 files. `scripts/dux_apps.py` builds them as an unprivileged user, and
 `makepkg` verifies every upstream source checksum. Integration releases sign and
 publish them in our repository, like our own packages. Installed systems never

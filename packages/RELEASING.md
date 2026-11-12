@@ -13,8 +13,8 @@ edits to files listed in the integration recipe's `backup` array through its
    not run CI on PRs created by Actions; close and reopen one to run it. That
    workflow needs "Allow GitHub Actions to create and approve pull requests".
    A merged app update ships with the next integration version.
-2. Run `make lock` when refreshing inputs, then `make test`, `make iso-development`, and `make verify`
-   on the candidate. `make lock` moves the Arch archive date and the vendored Dux files forward together.
+2. Run `make lock` when refreshing inputs, then `make test`, `make iso-development`, and `make verify ARGS='--slow'`
+   on the candidate (`--slow` includes the Dux updater stage, which releases must qualify). `make lock` moves the Arch archive date and the vendored Dux files forward together.
    Update recorded evidence for changes affecting installation or the desktop.
 3. Merge, then tag that main commit as `v<version>-<pkgrel>` and push
    the tag. This step publishes. Main merges alone do not
@@ -24,13 +24,12 @@ edits to files listed in the integration recipe's `backup` array through its
    the signed repository to GitHub Pages. The build job has no signing secret. The separate signing job uses the pinned
    Nix toolchain and performs no live `pacman -Syu`. It checks manifest hashes
    and source inputs before signing with the pinned subkey.
-5. Run `make iso` to build with those exact authenticated packages, rather than
-   independently rebuilding packages under the same version.
-   Then `make verify-release` runs offline acceptance followed by a networked VM
-   boot. Real HTTPS repository/package verification uses the installed offline
-   trust, checks exact release hashes, and preserves personal config.
-   Select the artifact when retaining several ISOs:
-   `make verify-release ARGS='--iso out/NAME.iso --directory out/verify-release-VERSION'`.
+5. Run `make verify-release ARGS='--tag v<version>-<pkgrel>'` (pass `--iso
+   out/NAME.iso` to check a specific artifact instead of building). It builds
+   the release ISO from those exact authenticated packages, installs it, boots
+   once, and runs only the online delivery check against offline trust and
+   exact release hashes. It stages the canonical ISO and its SHA256SUMS, then
+   prints the ISO-checksum dispatch command; run that command next.
 
 Package publication and Pages deployment use `v*` tags. ISO authorization also
 requires the `main` branch in the protected release environment, as described below.
@@ -71,27 +70,15 @@ authorize an existing release such as `v0.3.0-2`; the tag alone no longer select
 signing code. The workflow rejects dispatch from any other ref.
 
 Build from a clean trusted checkout of the package tag and retain the local
-acceptance evidence from the publish steps above. Choose exactly one release ISO.
-Copy it to the canonical filename derived from the tag's version, then prepare
-its checksum:
+acceptance evidence from the publish steps above. `make verify-release`
+chooses exactly one release ISO, copies it to the canonical filename derived
+from the tag's version, and prepares its checksum in `out/iso-checksums/`.
+It refuses a noncanonical filename, an existing checksum file (retain or
+explicitly remove an earlier candidate's file before preparing another), or a
+different ISO already staged under the canonical name. Do not sign the build's
+`out/SHA256SUMS`, which may include other ISOs retained in `out/`.
 
-```sh
-cp out/CHOSEN.iso out/arch-niri-dux-0.3.0-x86_64.iso
-make iso-checksums ARGS='--tag v0.3.0-2 --iso out/arch-niri-dux-0.3.0-x86_64.iso'
-```
-
-This light target hashes only the explicit file and writes
-`out/iso-checksums/SHA256SUMS`. It refuses a noncanonical filename or an existing
-checksum file. Retain or explicitly remove an earlier candidate's checksum file
-before preparing another. Do not sign the build's `out/SHA256SUMS`, which may
-include other ISOs retained in `out/`.
-
-Dispatch **ISO checksum authorization**, replacing `DIGEST` with the printed
-64-character digest:
-
-```sh
-gh workflow run iso-checksums.yml --ref main -f tag=v0.3.0-2 -f sha256=DIGEST
-```
+Run the ISO-checksum dispatch command the script prints.
 
 The secret-free validation job checks the selected tag is a published package
 release and its commit belongs to the dispatched main history. Its summary shows

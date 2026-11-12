@@ -106,12 +106,12 @@ def read_database(path):
 def requested_packages(root):
     # Reviewed local builds have recipe/source hashes, not distribution signatures.
     # Keep them outside the signed binary closure and add them after verification.
-    aur_names = {entry['name'] for entry in json.loads((root / 'packages/aur-recipes.json').read_text())}
+    dux_apps_names = {entry['name'] for entry in json.loads((root / 'packages/dux-apps-recipes.json').read_text())}
     requested = set()
     for file in ('packages/packages.target', 'archiso/packages.live'):
         requested.update(line.split('#')[0].strip() for line in (root / file).read_text().splitlines())
     requested.discard('')
-    return sorted(requested - aur_names)
+    return sorted(requested - dux_apps_names)
 
 
 def archive_date(root):

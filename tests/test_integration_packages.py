@@ -7,7 +7,7 @@ import unittest
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'scripts'))
-import integration_build as builder
+import package_build as builder
 
 
 class IntegrationSourceTests(unittest.TestCase):
@@ -19,7 +19,7 @@ class IntegrationSourceTests(unittest.TestCase):
             (root / 'packages/integration/PKGBUILD').write_text('pkgname=example\n')
             (root / 'packages/packages.target').write_text('base\nniri\n')
             (root / 'packages/omarchy-pin.json').write_text('[]\n')
-            (root / 'packages/aur-recipes.json').write_text('[]\n')
+            (root / 'packages/dux-apps-recipes.json').write_text('[]\n')
             (root / 'archiso').mkdir(parents=True, exist_ok=True)
             (root / 'archiso/packages.live').write_text('# fixture live list\n')
             asset = root / 'desktop/usr/share/default.kdl'
@@ -37,7 +37,7 @@ class IntegrationSourceTests(unittest.TestCase):
                 self.assertEqual(archive.extractfile('desktop/usr/share/default.kdl').read(), asset.read_bytes())
                 self.assertEqual(archive.extractfile('packages/packages.target').read(), b'base\nniri\n')
                 self.assertEqual(archive.extractfile('packages/omarchy-pin.json').read(), b'[]\n')
-                self.assertEqual(archive.extractfile('packages/aur-recipes.json').read(), b'[]\n')
+                self.assertEqual(archive.extractfile('packages/dux-apps-recipes.json').read(), b'[]\n')
                 self.assertEqual(archive.extractfile('archiso/packages.live').read(), b'# fixture live list\n')
                 self.assertTrue(all(entry.uid == entry.gid == 0 and entry.mtime == 1234 for entry in archive))
 
