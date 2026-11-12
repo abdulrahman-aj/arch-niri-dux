@@ -3,12 +3,13 @@
     "name": "dux-greeter-bin",
     "source_date_epoch": 1794152821,
     "files": {
-      ".SRCINFO": "1fa0e0cf57e28010840fdcf34eaa1199256a1a2b58930b75d0f6ef753bfb08f2",
-      "PKGBUILD": "c42cb490fad33ddd4272aaa046f1af90aa7be4330cf18d322f758c77b62a0078",
+      ".SRCINFO": "b0c053c895b0a04f70d312e7e6a111337c1da416e4596ce6313621ddfc26cb1d",
+      "PKGBUILD": "0d1ccbf4b7024500bb9f84fca0a32117abd58ca99c595a9ec74a335014b61927",
       "dux-greeter.install": "115f1e98517114e83b12a8e985f53779932f63b24ff6d3d2436a91fea7716505",
       "tmpfiles-dms-greeter.conf": "3dc267a18f22d06f595a80fb77275db56fe88c48b838db364ba3a1d307572a50",
       "dms-niri.kdl": "0376981f71a7331e3a8e5fdf71628f8c0e3881328969011f31fc1da6d54036c0",
-      "dms-hypr.lua": "1697f1cf527a911d08b7cd4dd935727ecc22cc2707819a5ef6253a2d59faee2b"
+      "dms-hypr.lua": "1697f1cf527a911d08b7cd4dd935727ecc22cc2707819a5ef6253a2d59faee2b",
+      "sysusers-dms-greeter.conf": "6fd5a090e3c34afed64f8497da7a0980f77fa6cb872a7f6f83cf229dcf54da94"
     }
   },
   {
