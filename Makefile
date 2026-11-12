@@ -8,7 +8,7 @@ iso-development:
 verify:
 	./scripts/build-in-dev python3 scripts/verify.py $(ARGS)
 verify-fast:
-	./scripts/build-in-dev python3 scripts/verify_fast.py $(ARGS)
+	./scripts/build-in-dev python3 scripts/verify.py --fixture $(ARGS)
 verify-release:
 	./scripts/build-in-dev python3 scripts/verify.py --online-repository $(ARGS)
 verify-hibernate:

@@ -195,7 +195,7 @@ def run_fixture(args, parser):
             + '\n'
         )
     finally:
-        if args.keep and started and vm.process is not None and vm.process.poll() is not None:
+        if args.keep and started and vm.process is not None and vm.process.poll() is None:
             console = f'./scripts/build-in-dev python3 scripts/vm_console.py --directory {directory}'
             print(f'VM kept running in {directory} (holds 8 GiB guest RAM until stopped).')
             print(f"  Shell:      {console} sh '<command>'")
@@ -306,11 +306,12 @@ def main():
         ('browser', browser.verify),
         ('lock', desktop.verify_lock),
         ('suspend', suspend.verify),
+        ('dux_update', dux_update.verify),
         ('recovery', recovery.verify),
         ('fallback', boot.verify_fallback),
     ]
-    if slow:
-        stages.insert(10, ('dux_update', dux_update.verify))
+    if not slow:
+        stages = [(name, func) for name, func in stages if name != 'dux_update']
     if args.online_repository:
         stages.append(('online', _online))
     evidence.inputs(
@@ -411,7 +412,7 @@ def main():
     finally:
         # A failed or interrupted run's disk can never become a fixture:
         # unlink it (QEMU holds it open; the space frees at poweroff).
-        kept = args.keep and not succeeded and vm.process is not None and vm.process.poll() is not None
+        kept = args.keep and not succeeded and vm.process is not None and vm.process.poll() is None
         if not succeeded:
             disk.unlink(missing_ok=True)
         if kept:
