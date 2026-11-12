@@ -125,7 +125,11 @@ rm -f "$profile/airootfs/root/.zlogin"
 # Keep the USB mounted: archiso's automatic RAM copy contains only airootfs,
 # while our offline repository lives beside it on the installation medium.
 sed -i '/^options /s/$/ copytoram=n console=tty0 console=ttyS0,115200/' "$profile"/efiboot/loader/entries/*.conf
-for entry in "$profile"/efiboot/loader/entries/*.conf; do grep -q 'copytoram=n' "$entry"; done
+for entry in "$profile"/efiboot/loader/entries/*.conf; do
+    if grep -q '^options ' "$entry"; then
+        grep -q 'copytoram=n' "$entry"
+    fi
+done
 # Releng logs root into zsh; use bash so tty1's wizard hook is explicit.
 sed -i 's#root:x:0:0:root:/root:/usr/bin/zsh#root:x:0:0:root:/root:/bin/bash#' "$profile/airootfs/etc/passwd"
 grep -q '^root:x:0:0:root:/root:/bin/bash$' "$profile/airootfs/etc/passwd"
