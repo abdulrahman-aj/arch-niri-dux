@@ -31,6 +31,41 @@ def disk(**changes):
     return values
 
 
+RECORDED_DISK = {
+    'name': '/dev/sda',
+    'type': 'disk',
+    'size': 256 * 1024**3,
+    'model': 'Samsung SSD 860',
+    'serial': 'S1234',
+    'tran': 'usb',
+    'ro': False,
+    'mountpoints': [None],
+    'children': [
+        {
+            'name': '/dev/sda1',
+            'type': 'part',
+            'size': 100 * 1024**3,
+            'fstype': 'vfat',
+            'label': 'SYSTEM',
+            'partuuid': '11111111-2222-3333-4444-555555555555',
+            'mountpoints': [None],
+        },
+        {
+            'name': '/dev/sda2',
+            'type': 'part',
+            'size': 150 * 1024**3,
+            'fstype': 'ext4',
+            'label': 'Data',
+            'partuuid': 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee',
+            'mountpoints': [None],
+        },
+    ],
+}
+
+RECOVERY_PLAN = [(5, 100, 200, 'ef00', 'DUX EFI'), (6, 201, 300, '8309', 'DUX encrypted')]
+RECOVERY_SNAPSHOT = {'order': '0001,0000'}
+
+
 class InstallerSafetyTests(unittest.TestCase):
     def setUp(self):
         # The host may itself use Dux's mapper name. These disposable installer
@@ -95,6 +130,168 @@ class InstallerSafetyTests(unittest.TestCase):
         self.assertNotEqual(installer.disk_label(first), installer.disk_label(second))
         self.assertIn('SERIAL-A', installer.disk_label(first))
         self.assertIn('WWN-A', installer.disk_label(disk(wwn='WWN-A')))
+        self.assertIn('usb', installer.disk_label(disk(tran='usb')))
+
+    def test_erase_description_lists_transport_partitions_and_boot_entries(self):
+        boots = {'/dev/sda1': [('0001', 'Windows Boot Manager')]}
+        text = storage.describe_disk(RECORDED_DISK, boots)
+        for fact in ('usb', '100.0 GiB', 'vfat', 'SYSTEM', 'ext4', 'Data', 'Windows Boot Manager', 'Boot0001'):
+            self.assertIn(fact, text)
+        self.assertIn('boots from this disk', text)
+
+    def test_erase_description_names_empty_disks(self):
+        empty = dict(RECORDED_DISK, children=[])
+        self.assertIn('no partitions', storage.describe_disk(empty, {}))
+
+    def test_erase_description_handles_missing_filesystem_facts(self):
+        raw = dict(RECORDED_DISK, children=[dict(name='/dev/sda9', type='part', size=1024**3)])
+        text = storage.describe_disk(raw, {})
+        self.assertIn('no filesystem detected', text)
+        self.assertNotIn('"', text)
+
+    def test_boot_entries_map_partitions_by_firmware_guid(self):
+        firmware = (
+            'BootCurrent: 0000\nBootOrder: 0001,0000\n'
+            'Boot0000* USB\tPciRoot(0x0)\n'
+            'Boot0001* Windows Boot Manager\tHD(1,GPT,11111111-2222-3333-4444-555555555555,0x800,0x100000)/File(\\EFI\\x.efi)'
+        )
+        guids = {'0001': (1, '11111111-2222-3333-4444-555555555555', r'\EFI\BOOT\BOOTX64.EFI')}
+        with (
+            patch.object(storage, 'run', return_value=firmware),
+            patch.object(storage, 'firmware_boot_path', side_effect=lambda number: guids.get(number)),
+        ):
+            self.assertEqual(
+                storage.boot_entry_nodes([RECORDED_DISK]), {'/dev/sda1': [('0001', 'Windows Boot Manager')]}
+            )
+
+    def test_boot_entry_lookup_never_breaks_the_picker(self):
+        with patch.object(storage, 'run', side_effect=OSError('no efibootmgr')):
+            self.assertEqual(storage.boot_entry_nodes([RECORDED_DISK]), {})
+        stale = dict(
+            RECORDED_DISK,
+            children=[
+                dict(
+                    name='/dev/sda9',
+                    type='part',
+                    size=1024**3,
+                    partuuid='aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee',
+                    mountpoints=[None],
+                )
+            ],
+        )
+        with (
+            patch.object(storage, 'run', return_value='Boot0001* Other\tHD(9)/File(x.efi)') as commands,
+            patch.object(
+                storage, 'firmware_boot_path', return_value=(9, 'deadbeef-0000-0000-0000-000000000000', 'x')
+            ) as paths,
+        ):
+            # No PARTUUID on this disk matches the decoded firmware GUID.
+            self.assertEqual(storage.boot_entry_nodes([stale]), {})
+        commands.assert_called_once()
+        paths.assert_called_once_with('0001')
+
+    def test_alongside_refusal_names_partitions_and_recovery_commands(self):
+        text = storage.alongside_recovery_text(settings(), RECOVERY_SNAPSHOT, RECOVERY_PLAN)
+        for fact in (
+            '/dev/vda5',
+            '/dev/vda6',
+            'efibootmgr --create-only --disk /dev/vda --part 5',
+            "--label 'Arch Niri Dux'",
+            '\\EFI\\limine\\limine_x64.efi',
+            'efibootmgr --bootorder <new-entry-number>,0001,0000',
+            'sgdisk --delete=5 /dev/vda',
+            'sgdisk --delete=6 /dev/vda',
+        ):
+            self.assertIn(fact, text)
+
+    def test_alongside_registration_failure_keeps_recovery_commands(self):
+        value = settings(mode='alongside', free_region=[2048, 2097152], existing_boot='0001')
+        failures = [
+            ValueError('firmware refused'),
+            installer.subprocess.CalledProcessError(1, ['efibootmgr', '--create-only']),
+        ]
+        for failure in failures:
+            with (
+                self.subTest(failure=type(failure).__name__),
+                patch.object(storage, 'finish_alongside_boot', side_effect=failure),
+            ):
+                with self.assertRaisesRegex(ValueError, 'sgdisk --delete=5 /dev/vda'):
+                    try:
+                        installer.register_alongside_boot(value, RECOVERY_SNAPSHOT, RECOVERY_PLAN)
+                    except ValueError as error:
+                        self.assertIn('efibootmgr --create-only', str(error))
+                        raise
+
+    def test_post_write_failures_print_retry_cleanup(self):
+        for started, present in ((True, True), (False, False)):
+            value = settings(swap_gib=0)
+
+            def fail_install(_settings, state):
+                state.installation_started = started
+                raise ValueError('fixture failure')
+
+            output = io.StringIO()
+            with (
+                self.subTest(started=started),
+                patch.object(sys, 'argv', ['install']),
+                patch.object(installer.os, 'geteuid', return_value=0),
+                patch.object(installer.Path, 'exists', return_value=True),
+                patch.object(installer.Path, 'glob', return_value=[]),
+                patch.object(installer, 'wizard', return_value=value),
+                patch.object(installer, 'install', side_effect=fail_install),
+                patch('sys.stderr', output),
+            ):
+                self.assertEqual(installer.main(), 1)
+            self.assertEqual('umount -R' in output.getvalue(), present)
+            self.assertEqual('cryptsetup close' in output.getvalue(), present)
+
+    def test_console_keymap_maps_to_x11_through_systemd_table(self):
+        with tempfile.TemporaryDirectory() as directory:
+            mapping = Path(directory) / 'kbd-model-map'
+            mapping.write_text(
+                '# consolelayout xlayout xmodel xvariant xoptions\n'
+                'us\tus\tpc105+inet\t-\tterminate:ctrl_alt_bksp\n'
+                'de\tde\tpc105\t-\tterminate:ctrl_alt_bksp\n'
+                'ru\tru,us\tpc105\t-\tgrp:shifts_toggle,grp_led:scroll\n'
+            )
+            self.assertEqual(
+                storage.x11_keyboard_layout('de', mapping), ('de', 'pc105', None, 'terminate:ctrl_alt_bksp')
+            )
+            self.assertEqual(
+                storage.x11_keyboard_layout('ru', mapping), ('ru,us', 'pc105', None, 'grp:shifts_toggle,grp_led:scroll')
+            )
+            self.assertIsNone(storage.x11_keyboard_layout('xx', mapping))
+            self.assertIsNone(storage.x11_keyboard_layout('de', Path(directory) / 'missing'))
+        self.assertEqual(storage.x11_keyboard_layout('de')[0], 'de')
+        self.assertEqual(storage.x11_keyboard_layout('us')[0], 'us')
+
+    def test_x11_keyboard_file_matches_localectl_format(self):
+        text = storage.xorg_keyboard_conf('de', 'de', 'pc105', None, 'terminate:ctrl_alt_bksp')
+        for fact in ('Section "InputClass"', 'Identifier "system-keyboard"', 'MatchIsKeyboard "on"'):
+            self.assertIn(fact, text)
+        self.assertIn('Option "XkbLayout" "de"', text)
+        self.assertIn('Option "XkbOptions" "terminate:ctrl_alt_bksp"', text)
+        self.assertNotIn('XkbVariant', text)
+        variant = storage.xorg_keyboard_conf('us-acentos', 'us', 'pc105', 'intl', 'terminate:ctrl_alt_bksp')
+        self.assertIn('Option "XkbVariant" "intl"', variant)
+
+    def test_install_writes_matching_x11_layout_for_non_us_keymap(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            with patch.object(installer, 'TARGET', root):
+                installer.write_keyboard_layout('de')
+            conf = (root / 'etc/X11/xorg.conf.d/00-keyboard.conf').read_text()
+            self.assertIn('Option "XkbLayout" "de"', conf)
+
+    def test_unknown_keymap_falls_back_to_us_login_layout_with_warning(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            output = io.StringIO()
+            with patch.object(installer, 'TARGET', root), patch('sys.stdout', output):
+                installer.write_keyboard_layout('zz-unknown')
+            self.assertIn('Warning', output.getvalue())
+            conf = (root / 'etc/X11/xorg.conf.d/00-keyboard.conf').read_text()
+            self.assertIn('Option "XkbLayout" "us"', conf)
 
     def test_accepts_unused_disk(self):
         self.assertIsNone(storage.disk_rejection(disk(), set()))

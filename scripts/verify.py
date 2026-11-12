@@ -34,6 +34,7 @@ def main():
         help='After offline acceptance, boot with networking and check published package delivery',
     )
     parser.add_argument('--swap-gib', type=int, help='Override Auto swap sizing; 0 disables swap and hibernation')
+    parser.add_argument('--keymap', default='us', help='Console keymap for the installed system (default: us)')
     parser.add_argument(
         '--keep',
         action='store_true',
@@ -42,6 +43,8 @@ def main():
     args = parser.parse_args()
     if args.swap_gib is not None and args.swap_gib < 0:
         parser.error('--swap-gib must be zero or a positive number of GiB.')
+    if not re.fullmatch(r'[A-Za-z0-9_-]{1,64}', args.keymap):
+        parser.error('--keymap must be a plain console keymap name.')
     images = sorted((ROOT / 'out').glob('*.iso'))
     iso = args.iso or (images[-1] if images else None)
     if iso is None or not iso.is_file():
@@ -71,7 +74,7 @@ def main():
         username='tester',
         hostname='dux-verify',
         timezone='UTC',
-        keymap='us',
+        keymap=args.keymap,
         passphrase=PASSWORD,
         password=PASSWORD,
     )
