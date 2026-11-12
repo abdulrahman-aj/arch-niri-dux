@@ -32,15 +32,29 @@ systemd policy and the PAM-unlocked keyring, the inbound firewall and
 resolve-only mDNS seen from a veth neighbour namespace, and Niri/Dux/terminal/editor/browser
 smoke checks. It checks desktop apps (manuals, archives, media playback, driverless
 printing to a loopback printer), PDF rendering, the synthetic camera, screen
-sharing, and screen lock. It checks
-an update started through Dux's updater (its pacman backend, `pkexec` and
-authentication dialog),
-an integration upgrade with Limine snapshot boot and restore preserving home,
+sharing, and screen lock.
+An integration upgrade with Limine snapshot boot and restore preserving home,
 and the `plymouth.enable=0` text fallback with graphical unlock restored
-afterward. `make verify-release` additionally checks published HTTPS package
+follow afterward. `make verify-release` additionally checks published HTTPS package
 delivery against offline trust and exact release hashes. `--install-only` is
 a debug run and does not produce acceptance success. Full acceptance is
 required for installer changes and releases.
+
+The runner continues past stage failures while the guest still answers:
+apps, PDF, camera and browser depend only on the desktop session, not on each
+other, so one of them failing still runs the rest. A stage whose dependency
+failed is skipped, and the run exits non-zero listing every failure and skip
+in `FAILURE.txt`. `make verify ARGS='--list-stages'` shows the order, tags
+and dependencies; `ARGS='--stages apps,pdf,camera,browser'` reruns a subset
+in canonical order.
+
+The Dux updater stage is tagged `slow`: its two scheduled-check waits take
+about eight minutes, so ordinary runs skip it and finish in about eight and a
+half minutes instead of sixteen and a half. Releases (`--online-repository`)
+include it by default. Request it explicitly with
+`make verify ARGS='--include-tags slow'` or `ARGS='--stages dux_update'`:
+do so for releases and for changes touching the update button, its seeds, or
+Dux itself.
 
 `make verify ARGS='--keep'`: on failure the guest stays running with its
 serial/QMP sockets under `<evidence>/.sockets` and prints attach commands;
@@ -55,8 +69,10 @@ Suspend qualification requires logind `LockedHint=yes`, Niri's lock event, an un
 
 ## `make verify-fast`
 
-`make verify-fast` builds current integration packages inside a disposable
-overlay of the newest accepted `make verify` image. `--fixture` defaults to
+`make verify-fast` is a thin alias for fixture mode in `verify.py`
+(`--fixture` plus a stage list), not a second script. It builds current
+integration packages inside a disposable overlay of the newest accepted
+`make verify` image. `--fixture` defaults to
 the newest registered 0.3+ workspace holding `ACCEPTANCE-PASSED` and `disk.qcow2`,
 and `--directory` defaults to a fresh `out/fast-<timestamp>`; pass explicit
 paths to override either default. Keep `ACCEPTANCE-PASSED`,
@@ -67,7 +83,8 @@ presets, greetd login, unlocked GNOME Keyring, loaded vendor systemd drop-ins
 and migration behavior. It does not replace fresh installation or snapshot
 and alongside qualification. Pass `--kernel-package PATH` to reinstall a
 local kernel archive in the same transaction and exercise both boot rebuild
-hooks.
+hooks. `ARGS='--stages policy,overrides'` reruns a subset of the post-upgrade
+checks (`plymouth,policy,overrides,wallpaper`); the upgrade itself always runs.
 
 ## Debugging loop (kept verify-fast VM)
 
