@@ -1,0 +1,2 @@
+#!/bin/sh
+exec python /usr/local/lib/arch-niri-dux/installer/install.py "$@"
