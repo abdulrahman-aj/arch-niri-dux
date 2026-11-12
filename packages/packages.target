@@ -60,6 +60,7 @@ xwayland-satellite
 wl-clipboard
 polkit
 noto-fonts
+noto-fonts-cjk
 noto-fonts-emoji
 loupe
 gnome-text-editor
