@@ -15,6 +15,9 @@ import tempfile
 from verification.digest import digest
 
 
+import package_lock
+
+
 NAMES = {'arch-niri-dux', 'arch-niri-dux-baseline'}
 
 
@@ -31,7 +34,14 @@ def version(root):
 
 def prepare_source(root, workspace, epoch):
     """Make a bounded, deterministic input archive, independent of Git metadata."""
-    sources = [root / 'packages/packages.target']
+    # The release manifest records the Omarchy pin projection too, so the pin
+    # and the package lists it is filtered by are hashed build inputs.
+    sources = [
+        root / 'packages/packages.target',
+        root / 'packages/omarchy-pin.json',
+        root / 'packages/aur-recipes.json',
+        root / 'archiso/packages.live',
+    ]
     sources.extend(sorted((root / 'desktop').rglob('*')))
     signing_key = root / 'keys/integration-signing.gpg'
     if signing_key.is_file():
@@ -98,6 +108,7 @@ def build_packages(root, workspace, destination, epoch):
         recipe_sha256=digest(root / 'packages/integration/PKGBUILD'),
         source_date_epoch=epoch,
         packages=sorted(result, key=lambda entry: entry['name']),
+        omarchy=package_lock.release_omarchy(root),
     )
     shutil.copyfile(archive, destination / 'integration.tar')
     shutil.copyfile(root / 'packages/integration/PKGBUILD', destination / 'integration.PKGBUILD')

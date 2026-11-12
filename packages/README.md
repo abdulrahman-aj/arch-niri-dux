@@ -22,6 +22,11 @@ installed repository order is arch-niri-dux at
 `https://abdulrahman-aj.github.io/arch-niri-dux/x86_64`, then core and extra,
 then omarchy.
 Our repository comes first so another repository cannot shadow our packages.
+It also carries the exact pinned Omarchy boot packages, signed with our
+release key, so installed machines take only the versions a release verified.
+The installed `[omarchy]` section sets `Usage = Install Sync`, so `pacman
+-Syu` never upgrades from Omarchy; Omarchy's repo stays usable for explicit
+installs.
 The date freezes the build payload only: installed systems track the rolling
 mirrors in `/etc/pacman.d/arch-niri-dux.conf`, so `pacman -Syu` keeps updating
 Arch packages after installation. The integration repository

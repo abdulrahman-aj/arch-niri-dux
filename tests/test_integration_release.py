@@ -1,4 +1,5 @@
 import sys
+import base64
 import gzip
 import json
 import os
@@ -71,10 +72,14 @@ class SignedReleaseTests(unittest.TestCase):
                 )
             )
         )
-        (self.root / 'packages/packages.target').write_text('base\n')
+        (self.root / 'packages/packages.target').write_text('base\nlimine-mkinitcpio-hook\nlimine-snapper-sync\n')
+        (self.root / 'archiso').mkdir(parents=True, exist_ok=True)
+        (self.root / 'archiso/packages.live').write_text('# fixture live list\n')
+        (self.root / 'keys/trusted-packagers.gpg').write_bytes(self.public)
         (self.root / 'desktop/usr/share/example').write_text('Packaged defaults\n')
         (self.root / 'packages/integration/PKGBUILD').write_text('pkgver=0.1.0\npkgrel=1\n')
         self.app_recipe('2.1.0-1')
+        self.omarchy_pin()
 
     def app_recipe(self, version, description='Fixture app'):
         """Declare a reviewed Dux app recipe for VERSION; DESCRIPTION changes its package contents."""
@@ -90,6 +95,29 @@ class SignedReleaseTests(unittest.TestCase):
         )
         (self.root / 'packages/aur-recipes.json').write_text(json.dumps([recipe]))
         return recipe
+
+    def omarchy_pin(self, hook_version='1.40.0-2', sync_version='1.32.1-2'):
+        """Pin the two Omarchy boot packages with test-signed bytes served over file://."""
+        source = self.root / 'omarchy-source'
+        source.mkdir(parents=True, exist_ok=True)
+        pin = []
+        for name, version in (('limine-mkinitcpio-hook', hook_version), ('limine-snapper-sync', sync_version)):
+            entry = self.fixture_package(source, name, version, 'x86_64', f'Omarchy fixture {version}')
+            path = source / entry['filename']
+            self.gpg('--detach-sign', str(path))
+            signature = Path(str(path) + '.sig').read_bytes()
+            pin.append(
+                dict(
+                    entry,
+                    version=version,
+                    url=f'https://example.invalid/{entry["filename"]}',
+                    repository='omarchy',
+                    signature=base64.b64encode(signature).decode(),
+                    depends=[],
+                )
+            )
+        (self.root / 'packages/omarchy-pin.json').write_text(json.dumps(sorted(pin, key=lambda e: e['name'])))
+        return pin
 
     def fixture_package(self, destination, name, version, arch, description, builder='Test'):
         # Real makepkg output also names its tools in comments and records the build
@@ -134,8 +162,13 @@ class SignedReleaseTests(unittest.TestCase):
             recipe_sha256=release.build.digest(destination / 'integration.PKGBUILD'),
             packages=entries,
             apps=apps,
+            omarchy=release.lock.release_omarchy(self.root),
         )
         (destination / 'integration.manifest.json').write_text(json.dumps(manifest))
+        # Stage the pinned bytes alongside the build so publish verifies and
+        # re-signs them without network access; production pins use real URLs.
+        for entry in json.loads((self.root / 'packages/omarchy-pin.json').read_text()):
+            shutil.copyfile(self.root / 'omarchy-source' / entry['filename'], destination / entry['filename'])
         return destination
 
     def publish(self, packages, history, output, commit='a' * 40):
@@ -193,7 +226,9 @@ class SignedReleaseTests(unittest.TestCase):
         signed = self.root / 'releases/v0.1.0-1'
         self.publish(packages, self.root / 'history', signed)
         release.fetch(self.root, self.root / 'fetched', (self.root / 'releases').as_uri())
-        for path in signed.glob('*.pkg.tar.zst'):
+        manifest = json.loads((signed / 'integration.manifest.json').read_text())
+        for entry in manifest['packages'] + manifest['apps']:
+            path = signed / entry['filename']
             self.assertEqual(path.read_bytes(), (self.root / 'fetched' / path.name).read_bytes())
         with self.assertRaisesRegex(ValueError, 'must be empty'):
             release.fetch(self.root, self.root / 'fetched', (self.root / 'releases').as_uri())
@@ -225,7 +260,13 @@ class SignedReleaseTests(unittest.TestCase):
         with tarfile.open(current / 'arch-niri-dux.db') as database:
             self.assertEqual(
                 {name.split('/')[0] for name in database.getnames()},
-                {'arch-niri-dux-0.1.0-2', 'arch-niri-dux-baseline-0.1.0-2', 'dux-example-bin-2.1.0-1'},
+                {
+                    'arch-niri-dux-0.1.0-2',
+                    'arch-niri-dux-baseline-0.1.0-2',
+                    'dux-example-bin-2.1.0-1',
+                    'limine-mkinitcpio-hook-1.40.0-2',
+                    'limine-snapper-sync-1.32.1-2',
+                },
             )
         for suffix in ('db', 'files'):
             alias = current / f'arch-niri-dux.{suffix}'
@@ -327,13 +368,25 @@ class SignedReleaseTests(unittest.TestCase):
             ]
             select(first)
             subprocess.run(
-                pacman + ['-Syu', '--noconfirm', *sorted(release.build.NAMES), 'dux-example-bin'],
+                pacman
+                + [
+                    '-Syu',
+                    '--noconfirm',
+                    *sorted(release.build.NAMES),
+                    'dux-example-bin',
+                    'limine-mkinitcpio-hook',
+                    'limine-snapper-sync',
+                ],
                 check=True,
                 stdout=subprocess.DEVNULL,
                 stderr=subprocess.DEVNULL,
             )
+            installed = subprocess.check_output(pacman + ['-Q'], text=True)
+            self.assertIn('limine-mkinitcpio-hook 1.40.0-2', installed)
+            self.assertIn('limine-snapper-sync 1.32.1-2', installed)
             (self.root / 'packages/integration/PKGBUILD').write_text('pkgver=0.1.0\npkgrel=2\n')
             self.app_recipe('2.1.1-1')
+            self.omarchy_pin(hook_version='1.40.0-3')
             second = self.root / 'second'
             self.publish(self.packages(self.root / 'v2'), first, second)
             select(second)
@@ -353,6 +406,8 @@ class SignedReleaseTests(unittest.TestCase):
             self.assertIn('arch-niri-dux 0.1.0-2', installed)
             self.assertIn('arch-niri-dux-baseline 0.1.0-2', installed)
             self.assertIn('dux-example-bin 2.1.1-1', installed)
+            self.assertIn('limine-mkinitcpio-hook 1.40.0-3', installed)
+            self.assertIn('limine-snapper-sync 1.32.1-2', installed)
         finally:
             subprocess.run(['gpgconf', '--homedir', str(target / 'gnupg'), '--kill', 'all'], check=True)
 

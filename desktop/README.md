@@ -173,6 +173,9 @@ greeter session uses the same stack. See [package
 repositories](../packages/README.md#repositories) for online update sources.
 The repository order is arch-niri-dux, core, extra, then omarchy. Keeping our
 repository first prevents other repositories from shadowing our packages.
+The `[omarchy]` section sets `Usage = Install Sync`: `pacman -Syu` upgrades
+the pinned boot packages from our repository only, while explicit installs
+can still use Omarchy's.
 
 Do not run `dms-greeter sync` on arch-niri-dux. A full sync recursively grants
 the greeter account read access to parts of the home directory, including files
