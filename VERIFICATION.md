@@ -52,10 +52,11 @@ fixture auto-discovery.
 
 The Dux updater stage is slow: its two scheduled-check waits take
 about eight minutes, so ordinary runs skip it and finish in about eight and a
-half minutes instead of sixteen and a half. Releases (`--online-repository`)
-always include it. Request it explicitly with
-`make verify ARGS='--slow'` for changes touching the update button, its seeds,
-or Dux itself.
+half minutes instead of sixteen and a half. Request it explicitly with
+`make verify ARGS='--slow'` when qualifying changes touching the update
+button, its seeds, or Dux itself. Full runs with `--online-repository` also
+include it; releases qualify delivery separately through `make verify-release`,
+which runs only the online check.
 
 `make verify ARGS='--keep'`: on failure the guest stays running with its
 serial/QMP sockets under `<evidence>/.sockets` and prints attach commands;

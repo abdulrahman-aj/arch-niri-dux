@@ -46,12 +46,14 @@ def main():
     iso = args.iso.resolve() if args.iso else None
     if iso is None:
         # A release ISO embeds the exact authenticated packages, rather than
-        # independently rebuilding packages under the same version.
+        # independently rebuilding packages under the same version. Verify the
+        # artifact the build just produced, not a retained older one.
+        before = set((ROOT / 'out').glob('*.iso'))
         subprocess.run(['make', 'iso'], cwd=ROOT, check=True)
-        images = sorted((ROOT / 'out').glob('*.iso'))
-        if not images:
-            parser.error('make iso produced no ISO.')
-        iso = images[-1]
+        new = sorted(set((ROOT / 'out').glob('*.iso')) - before)
+        if len(new) != 1:
+            parser.error('The build did not produce exactly one new ISO; pass --iso to select one.')
+        iso = new[0]
     if not iso.is_file():
         parser.error(f'ISO not found: {iso}')
     if not os.access('/dev/kvm', os.R_OK | os.W_OK):
@@ -60,6 +62,9 @@ def main():
     if not manifest_path.is_file():
         parser.error('No out/packages.manifest.json; build the release ISO first.')
     package_digest = digest(manifest_path)
+    manifest = json.loads(manifest_path.read_text())['integration']
+    if manifest.get('version') != args.tag[1:]:
+        parser.error(f'Release manifest version {manifest.get("version")} does not match --tag {args.tag}.')
     embedded = subprocess.run(['bsdtar', '-xOf', str(iso), 'packages.manifest.json'], capture_output=True, check=False)
     if embedded.returncode != 0 or hashlib.sha256(embedded.stdout).hexdigest() != package_digest:
         parser.error("The ISO does not embed this checkout's package manifest; check --tag, --iso, and the build.")
@@ -71,6 +76,13 @@ def main():
     evidence = Evidence(directory, parents=True, exist_ok=True)
     own(directory)
     iso_digest = digest(iso)
+    canonical = ROOT / 'out' / canonical_name
+    if canonical.exists() and digest(canonical) != iso_digest:
+        parser.error(f'{canonical} already exists with different bytes; choose exactly one release ISO.')
+    if (ROOT / 'out' / 'iso-checksums' / 'SHA256SUMS').exists():
+        parser.error(
+            'out/iso-checksums/SHA256SUMS already exists; retain or explicitly remove it before preparing another.'
+        )
     probe_hashes = stage_probes(directory)
     probe_hashes['verify_release.py'] = digest(Path(__file__))
     evidence.inputs(
@@ -86,7 +98,6 @@ def main():
 
     source = directory / 'integration-input'
     source.mkdir()
-    manifest = json.loads((ROOT / 'out/packages.manifest.json').read_text())['integration']
     (directory / 'release-manifest.json').write_text(json.dumps(manifest, indent=2) + '\n')
     import integration_release as release
 
