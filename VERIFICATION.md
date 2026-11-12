@@ -45,8 +45,11 @@ apps, PDF, camera and browser depend only on the desktop session, not on each
 other, so one of them failing still runs the rest. A stage whose dependency
 failed is skipped, and the run exits non-zero listing every failure and skip
 in `FAILURE.txt`. `make verify ARGS='--list-stages'` shows the order, tags
-and dependencies; `ARGS='--stages apps,pdf,camera,browser'` reruns a subset
-in canonical order.
+and dependencies; `ARGS='--stages apps,pdf,camera,browser'` reruns a subset,
+automatically pulling in the dependencies it needs (here boot and desktop)
+in canonical order. Only a default run (no `--stages`) writes
+`ACCEPTANCE-PASSED` and can become a fixture; subset runs write
+`STAGES-PASSED` instead, so a partial disk never feeds fixture auto-discovery.
 
 The Dux updater stage is tagged `slow`: its two scheduled-check waits take
 about eight minutes, so ordinary runs skip it and finish in about eight and a

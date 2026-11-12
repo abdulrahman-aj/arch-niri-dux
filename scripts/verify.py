@@ -62,7 +62,7 @@ STAGES = [
     {'name': 'boot', 'func': _boot, 'tags': frozenset(), 'requires': []},
     {'name': 'policy', 'func': _policy, 'tags': frozenset(), 'requires': ['boot']},
     {'name': 'network', 'func': _network, 'tags': frozenset(), 'requires': ['boot']},
-    {'name': 'desktop', 'func': _wrap(desktop.verify), 'tags': frozenset(), 'requires': ['boot', 'policy']},
+    {'name': 'desktop', 'func': _wrap(desktop.verify), 'tags': frozenset(), 'requires': ['boot']},
     # Apps, PDF, camera and browser share only the desktop session. They must
     # not require each other, so one failure still leaves the rest to run.
     {'name': 'apps', 'func': _wrap(apps.verify), 'tags': frozenset(), 'requires': ['desktop']},
@@ -79,6 +79,8 @@ STAGES = [
 
 STAGE_MAP = {stage['name']: stage for stage in STAGES}
 
+KNOWN_TAGS = {tag for stage in STAGES for tag in stage['tags']}
+
 
 def list_stages():
     for stage in STAGES:
@@ -88,9 +90,16 @@ def list_stages():
 
 
 def select_stages(args):
-    """Canonical-order stage names for a full run, honouring tags and --stages."""
+    """Canonical-order stage names for a full run, honouring tags and --stages.
+
+    Explicit selections close over dependencies, so --stages dux_update also
+    runs the desktop session it needs. Only a default run (no --stages) can
+    mint ACCEPTANCE-PASSED; subset runs never become fixtures.
+    """
     if args.stages is not None:
         names = [name.strip() for name in args.stages.split(',') if name.strip()]
+        if not names:
+            raise ValueError('Empty --stages selection.')
         if names == ['all']:
             names = [stage['name'] for stage in STAGES if stage['name'] != 'online']
         unknown = [name for name in names if name not in STAGE_MAP]
@@ -98,11 +107,22 @@ def select_stages(args):
             raise ValueError(f'Unknown stage(s): {", ".join(unknown)} (see --list-stages)')
         if 'online' in names and not args.online_repository:
             raise ValueError("'online' needs --online-repository")
-        selected = [name for name in STAGE_MAP if name in names]
-        if args.online_repository and 'online' not in selected:
-            selected.append('online')
-        return selected
+        if args.online_repository and 'online' not in names:
+            names.append('online')
+        needed = set(names)
+        changed = True
+        while changed:
+            changed = False
+            for name in list(needed):
+                for dep in STAGE_MAP[name]['requires']:
+                    if dep not in needed:
+                        needed.add(dep)
+                        changed = True
+        return [stage['name'] for stage in STAGES if stage['name'] in needed]
     include = {tag.strip() for tag in (args.include_tags or '').split(',') if tag.strip()}
+    unknown_tags = include - KNOWN_TAGS
+    if unknown_tags:
+        raise ValueError(f'Unknown tag(s): {", ".join(sorted(unknown_tags))} (known: {", ".join(sorted(KNOWN_TAGS))})')
     if args.online_repository and args.include_tags is None:
         # Releases qualify everything, including the slow updater waits.
         include.add('slow')
@@ -128,7 +148,8 @@ def run_fixture(args, parser):
     """Fixture mode (folded verify_fast.py): qualify new packages on an accepted overlay."""
     for flag in ('--iso', '--disk', '--install-only', '--online-repository', '--swap-gib', '--include-tags'):
         attr = flag.lstrip('-').replace('-', '_')
-        if args.__dict__.get(attr) not in (None, False):
+        value = args.__dict__.get(attr)
+        if value is not None and value is not False:
             parser.error(
                 f'{flag} is for full runs; fixture mode uses --fixture [--stages] [--kernel-package] [--keep].'
             )
@@ -235,6 +256,18 @@ def run_fixture(args, parser):
             vm.probe('desktop', 'wallpaper-preserved', timeout=180)
         if not args.keep:
             vm.poweroff()
+        checks = (
+            [
+                'ALPM boot policy regeneration',
+                'package upgrade',
+                'Niri and Dux bindings',
+                'presets',
+                'greetd login and unlocked keyring',
+                'systemd drop-ins',
+            ]
+            if selected == list(FAST_STAGES)
+            else [f'fast stage: {name}' for name in selected]
+        )
         (directory / 'FAST-PASSED').write_text(
             json.dumps(
                 {
@@ -242,14 +275,7 @@ def run_fixture(args, parser):
                     'source_sha256': digest(source / 'integration.tar'),
                     'kernel_in_transaction': bool(args.kernel_package),
                     'fast_stages': selected,
-                    'checks': [
-                        'ALPM boot policy regeneration',
-                        'package upgrade',
-                        'Niri and Dux bindings',
-                        'presets',
-                        'greetd login and unlocked keyring',
-                        'systemd drop-ins',
-                    ],
+                    'checks': checks,
                 },
                 indent=2,
             )
@@ -281,7 +307,7 @@ def run_stages(vm, passed, args, names):
     failures = {}
     skipped = []
     completed = set()
-    for name in names:
+    for index, name in enumerate(names):
         stage = STAGE_MAP[name]
         missing = [dep for dep in stage['requires'] if dep not in completed]
         if missing:
@@ -297,6 +323,7 @@ def run_stages(vm, passed, args, names):
             print(f'FAIL: {name} after {elapsed:.0f}s: {error}', flush=True)
             if not guest_alive(vm):
                 print(f'Stopping: guest no longer answers after {name} failed.', flush=True)
+                skipped.extend(n for n in names[index + 1 :] if n not in completed)
                 break
             continue
         elapsed = time.monotonic() - start
@@ -474,10 +501,11 @@ def main():
             succeeded = True
             return 0
         print(f'Stages: {", ".join(names)}', flush=True)
+        default_run = args.stages is None
         failures, skipped = run_stages(vm, passed, args, names)
         if failures or skipped:
             lines = [f'{name}: {error}' for name, error in failures.items()]
-            lines += [f'{name}: skipped (requires failed dependency)' for name in skipped]
+            lines += [f'{name}: skipped' for name in skipped]
             (directory / 'FAILURE.txt').write_text('\n'.join(lines) + '\n')
             for line in lines:
                 print(f'FAILED: {line}', file=sys.stderr)
@@ -486,6 +514,13 @@ def main():
                 file=sys.stderr,
             )
             return 1
+        if not default_run:
+            # Subset runs qualify their stages but never mint fixtures: only a
+            # default run covers the accepted set.
+            (directory / 'STAGES-PASSED').write_text(f'Selected stages passed: {", ".join(names)}\n')
+            print(f'Selected stages passed. Evidence: {directory}', flush=True)
+            succeeded = True
+            return 0
         (directory / 'ACCEPTANCE-PASSED').write_text('All acceptance stages passed.\n')
         print(f'Acceptance passed. Evidence: {directory}', flush=True)
         succeeded = True
