@@ -1,10 +1,13 @@
-.PHONY: lock iso iso-development iso-checksums verify verify-fast verify-release verify-hibernate lint lint-in-dev fmt test build-test verify-alongside provision-alongside fetch-alongside
+.PHONY: lock iso iso-development iso-checksums try verify verify-fast verify-release verify-hibernate lint lint-in-dev fmt test build-test verify-alongside provision-alongside fetch-alongside help
 lock:
 	./scripts/build-in-dev python3 scripts/package_lock.py resolve . $(ARGS)
 iso:
 	./scripts/build-in-dev ./scripts/build-iso
 iso-development:
 	./scripts/build-in-dev ./scripts/build-iso development
+# make try is for humans; agents use make verify-fast ARGS=--keep.
+try:
+	./scripts/build-in-dev python3 scripts/try_vm.py $(ARGS)
 verify:
 	./scripts/build-in-dev python3 scripts/verify.py $(ARGS)
 verify-fast:
@@ -35,6 +38,10 @@ provision-alongside:
 	./scripts/build-in-dev python3 scripts/provision_alongside.py $(ARGS)
 fetch-alongside:
 	./scripts/build-in-dev python3 scripts/fetch_alongside.py $(ARGS)
+help:
+	@printf '%s\n' 'lock, iso, iso-development, iso-checksums, verify, verify-fast, verify-release,' \
+		'verify-hibernate, verify-alongside, provision-alongside, fetch-alongside, gc' \
+		'try: interactive persistent test-drive VMs (for humans; agents use make verify-fast ARGS=--keep).'
 
 .PHONY: heavy-guard gc
 lock iso iso-development verify verify-fast verify-release verify-hibernate verify-alongside provision-alongside fetch-alongside: | heavy-guard
