@@ -69,12 +69,10 @@ def firmware():
     raise SystemExit(f'OVMF firmware missing under {base}; install edk2-ovmf.')
 
 
-def build_qemu_command(*, code, variables, disk, iso, memory_gib=MEMORY_GIB, display='gtk', gl=True):
-    command = ['qemu-system-x86_64', '-machine', 'q35,accel=kvm', '-cpu', 'host', '-m', str(memory_gib * 1024)]
+def build_qemu_command(*, code, variables, disk, iso, gl=True):
+    command = ['qemu-system-x86_64', '-machine', 'q35,accel=kvm', '-cpu', 'host', '-m', str(MEMORY_GIB * 1024)]
     command += ['-smp', '4']
-    if display == 'none':
-        command += ['-display', 'none', '-vga', 'none', '-device', 'VGA']
-    elif gl:
+    if gl:
         command += ['-display', 'gtk,gl=on,show-cursor=on', '-device', 'virtio-vga-gl']
     else:
         command += ['-display', 'gtk,show-cursor=on', '-device', 'virtio-vga']
@@ -101,35 +99,47 @@ def create_vm(name, base=None):
     if not os.access('/dev/kvm', os.R_OK | os.W_OK):
         raise SystemExit('KVM is required')
     directory.mkdir(parents=True)
-    subprocess.run(
-        ['qemu-img', 'create', '-f', 'qcow2', str(directory / 'disk.qcow2'), f'{DEFAULT_DISK_GIB}G'],
-        check=True,
-    )
-    shutil.copyfile(template, directory / 'OVMF_VARS.fd')
+    try:
+        subprocess.run(
+            ['qemu-img', 'create', '-f', 'qcow2', str(directory / 'disk.qcow2'), f'{DEFAULT_DISK_GIB}G'],
+            check=True,
+        )
+        shutil.copyfile(template, directory / 'OVMF_VARS.fd')
+    except KeyboardInterrupt:
+        shutil.rmtree(directory, ignore_errors=True)
+        print()
+        raise SystemExit('Aborted.')
+    except (subprocess.CalledProcessError, OSError) as error:
+        shutil.rmtree(directory, ignore_errors=True)
+        raise SystemExit(f'Could not create VM {name!r}: {error}')
 
 
-def open_vm(name, base=None, display='gtk'):
+def open_vm(name, base=None):
     directory = vm_dir(name, base)
     if not directory.is_dir():
         raise SystemExit(f"VM '{name}' does not exist.")
     disk = directory / 'disk.qcow2'
     if not disk.exists():
         raise SystemExit(f"Disk missing for VM '{name}': {disk}")
+    code, template = firmware()
     variables = directory / 'OVMF_VARS.fd'
     if not variables.exists():
-        _, template = firmware()
         shutil.copyfile(template, variables)
     iso = newest_iso()
     if iso is None:
         raise SystemExit('No installer ISO in out/; build one with: make iso-development')
     iso = iso.resolve()
-    code, _ = firmware()
     render = Path(os.environ.get('QEMU_RENDER_NODE', '/dev/dri/renderD128'))
     gl = os.access(render, os.R_OK | os.W_OK)
-    command = build_qemu_command(code=code, variables=variables, disk=disk, iso=iso, display=display, gl=gl)
+    command = build_qemu_command(code=code, variables=variables, disk=disk, iso=iso, gl=gl)
     print(f"Booting '{name}' (disk first, installer ISO second).")
     print('Install, then quit this window; reopen to boot the installed system.')
-    subprocess.run([str(part) for part in command], check=True)
+    try:
+        subprocess.run(command, check=True)
+    except KeyboardInterrupt:
+        print('\nVM closed.')
+    except subprocess.CalledProcessError as error:
+        raise SystemExit(f'QEMU exited with status {error.returncode}.')
 
 
 def delete_vm(name, base=None):
@@ -155,7 +165,7 @@ def interactive(base=None):
         for index, path in enumerate(vms, 1):
             print(f'  {index}. {path.name}')
         try:
-            answer = input("Open which VM? (number or name, 'new', 'delete NAME', Enter quits): ").strip()
+            answer = input("Open which VM? (number or name, 'new', 'delete', Enter quits): ").strip()
         except (EOFError, KeyboardInterrupt):
             print()
             return
@@ -176,24 +186,29 @@ def interactive(base=None):
         if answer.lower().startswith('delete'):
             target = answer.partition(' ')[2].strip()
             if not target:
-                print('Usage: delete NAME')
-                continue
+                try:
+                    target = input('Delete which VM? (Enter cancels): ').strip()
+                except (EOFError, KeyboardInterrupt):
+                    print()
+                    continue
+                if not target:
+                    continue
             try:
                 delete_vm(target, base)
             except SystemExit as error:
                 print(error)
             continue
-        target = None
-        if re.fullmatch(r'[0-9]+', answer):
-            index = int(answer) - 1
-            if 0 <= index < len(vms):
-                target = vms[index].name
+        if re.fullmatch(r'[0-9]+', answer) and 1 <= int(answer) <= len(vms):
+            target = vms[int(answer) - 1].name
         elif valid_name(answer) and vm_dir(answer, base).is_dir():
             target = answer
-        if target is None:
+        else:
             print(f"Unknown VM '{answer}'.")
             continue
-        open_vm(target, base)
+        try:
+            open_vm(target, base)
+        except SystemExit as error:
+            print(error)
 
 
 if __name__ == '__main__':
