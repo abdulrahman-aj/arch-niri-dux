@@ -238,6 +238,25 @@ def run_install(vm, passed, evidence, directory, package_digest, serial_preboot=
     vm.stop()
 
 
+def prepare_integration_inputs(directory):
+    """Stage integration build inputs for provenance checks. Shared by full and release runs."""
+    source = directory / 'integration-input'
+    source.mkdir()
+    manifest = json.loads((ROOT / 'out/packages.manifest.json').read_text())['integration']
+    (directory / 'release-manifest.json').write_text(json.dumps(manifest, indent=2) + '\n')
+    import integration_release as release
+
+    release.validate_manifest(ROOT, ROOT / 'out/integration')
+    for filename, target, field in [
+        ('integration.tar', 'integration.tar', 'source_sha256'),
+        ('integration.PKGBUILD', 'PKGBUILD', 'recipe_sha256'),
+    ]:
+        original = ROOT / 'out/integration' / filename
+        if digest(original) != manifest[field]:
+            raise ValueError(f'Integration build input changed: {filename}')
+        shutil.copyfile(original, source / target)
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--iso', type=Path)
@@ -348,21 +367,7 @@ def main():
     )
     evidence.key(PASSWORD)
 
-    source = directory / 'integration-input'
-    source.mkdir()
-    manifest = json.loads((ROOT / 'out/packages.manifest.json').read_text())['integration']
-    (directory / 'release-manifest.json').write_text(json.dumps(manifest, indent=2) + '\n')
-    import integration_release as release
-
-    release.validate_manifest(ROOT, ROOT / 'out/integration')
-    for filename, target, field in [
-        ('integration.tar', 'integration.tar', 'source_sha256'),
-        ('integration.PKGBUILD', 'PKGBUILD', 'recipe_sha256'),
-    ]:
-        original = ROOT / 'out/integration' / filename
-        if digest(original) != manifest[field]:
-            raise ValueError(f'Integration build input changed: {filename}')
-        shutil.copyfile(original, source / target)
+    prepare_integration_inputs(directory)
     vm = VM(directory, iso.resolve(), disk)
     succeeded = False
     if args.keep:

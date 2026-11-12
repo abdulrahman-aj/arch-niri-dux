@@ -11,7 +11,7 @@ import subprocess
 import sys
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from verify import ROOT, run_install
+from verify import ROOT, prepare_integration_inputs, run_install
 
 from workspace import disk_guard, own
 from verification.digest import digest
@@ -62,6 +62,7 @@ def main():
         }
     )
     evidence.key(PASSWORD)
+    prepare_integration_inputs(directory)
     subprocess.run(['qemu-img', 'create', '-f', 'qcow2', str(disk), '48G'], check=True)
     (directory / 'install.json').write_text(
         json.dumps(
@@ -76,6 +77,7 @@ def main():
             }
         )
     )
+    (directory / 'install.json').chmod(0o600)
     vm = VM(directory, iso, disk)
     try:
         run_install(vm, evidence.passed, evidence, directory, package_digest, serial_preboot=True)
