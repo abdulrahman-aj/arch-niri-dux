@@ -9,6 +9,7 @@ import os
 import re
 import shutil
 import subprocess
+import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -19,6 +20,7 @@ AGENT_VARS = ['CLAUDECODE', 'AI_AGENT', 'AGENT']
 AGENT_PREFIXES = ['CODEX_', 'OPENCODE', 'T3CODE_']
 
 NAME_RE = re.compile(r'[A-Za-z0-9][A-Za-z0-9._-]*')
+# No longer typed commands, but still rejected as names (validation parity).
 RESERVED_NAMES = ('new', 'delete')
 DEFAULT_NAME = 'default'
 DEFAULT_RAM_GIB = 8
@@ -28,6 +30,62 @@ DEVELOPMENT = 'development'
 # Release ISOs come from `make iso`; checkout ISOs from `make iso-development`
 # and carry a -development suffix (see scripts/build-guest) so both coexist.
 BUILD_TARGET = {RELEASE: 'iso', DEVELOPMENT: 'iso-development'}
+
+NEW_LABEL = 'New VM'
+DELETE_LABEL = 'Delete a VM'
+SOURCE_LABELS = {DEVELOPMENT: 'This checkout (your unreleased changes)', RELEASE: 'Latest release (what users get)'}
+
+GUM_MISSING = 'gum is missing; run inside the dev shell (make try enters it automatically).'
+
+
+class GumMissingError(SystemExit):
+    """gum cannot be spawned; unlike operational errors, retrying cannot help."""
+
+
+def require_gum():
+    """Exit unless gum can run interactively; without a TTY it would hang."""
+    if shutil.which('gum') is None:
+        raise SystemExit(GUM_MISSING)
+    if not sys.stdin.isatty() or not sys.stdout.isatty():
+        raise SystemExit('make try needs a terminal; it cannot read from a pipe.')
+
+
+def _run_gum(args, **kwargs):
+    try:
+        return subprocess.run(['gum', *args], check=False, **kwargs)
+    except OSError:
+        raise GumMissingError(GUM_MISSING)
+
+
+def gum_choose(header, options):
+    """Return the picked option, or None when the user backs out (Esc/Ctrl-C)."""
+    completed = _run_gum(['choose', '--header', header, *options], stdout=subprocess.PIPE, text=True)
+    if completed.returncode != 0:
+        return None
+    return completed.stdout.strip()
+
+
+def gum_input(header, placeholder, default):
+    """Return the typed value, or None when the user backs out (Esc/Ctrl-C)."""
+    completed = _run_gum(
+        ['input', '--header', header, '--placeholder', placeholder, '--value', str(default)],
+        stdout=subprocess.PIPE,
+        text=True,
+    )
+    if completed.returncode != 0:
+        return None
+    return completed.stdout.strip()
+
+
+def gum_confirm(prompt, default_yes):
+    args = ['confirm', prompt]
+    if not default_yes:
+        args.append('--default=false')
+    return _run_gum(args).returncode == 0
+
+
+def gum_style(text):
+    _run_gum(['style', '--border', 'rounded', '--padding', '0 1', text])
 
 
 def refuse_if_agent(env=None):
@@ -100,7 +158,10 @@ def write_choices(directory, ram_gib, disk_gib, source):
 
 def ask_name():
     while True:
-        name = input(f'VM name [{DEFAULT_NAME}]: ').strip() or DEFAULT_NAME
+        name = gum_input('VM name', 'Letters, digits, dot, dash or underscore', DEFAULT_NAME)
+        if name is None:
+            return None
+        name = name.strip() or DEFAULT_NAME
         if valid_name(name) and name.lower() not in RESERVED_NAMES:
             return name
         print(
@@ -110,7 +171,10 @@ def ask_name():
 
 def ask_positive_int(label, default):
     while True:
-        answer = input(f'{label} in GiB [{default}] ').strip()
+        answer = gum_input(f'{label} in GiB', 'Positive whole number', default)
+        if answer is None:
+            return None
+        answer = answer.strip()
         if not answer:
             return default
         if answer.isdigit() and int(answer) > 0:
@@ -119,25 +183,15 @@ def ask_positive_int(label, default):
 
 
 def ask_source():
-    print('Install from: 1) the latest release (what users get)  2) this checkout (your unreleased changes)')
-    while True:
-        answer = input('Install from [2]: ').strip()
-        if answer in ('', '2'):
-            return DEVELOPMENT
-        if answer == '1':
-            return RELEASE
-        print('Enter 1 or 2.')
+    choice = gum_choose('Install from:', [SOURCE_LABELS[DEVELOPMENT], SOURCE_LABELS[RELEASE]])
+    for kind, label in SOURCE_LABELS.items():
+        if choice == label:
+            return kind
+    return None
 
 
 def ask_yes_no(prompt, default_yes):
-    try:
-        answer = input(f'{prompt} [{"Y/n" if default_yes else "y/N"}] ').strip().lower()
-    except (EOFError, KeyboardInterrupt):
-        print()
-        return False
-    if not answer:
-        return default_yes
-    return answer.startswith('y')
+    return gum_confirm(prompt, default_yes)
 
 
 def iso_for_kind(kind):
@@ -276,51 +330,64 @@ def open_vm(name, base=None):
 
 def delete_vm(name, base=None):
     directory = require_vm_dir(name, base)
-    try:
-        answer = input(f"Delete VM '{name}' and its disk? [y/N] ").strip()
-    except (EOFError, KeyboardInterrupt):
-        print('\nKept.')
-        return
-    if not answer.lower().startswith('y'):
+    if not ask_yes_no(f"Delete VM '{name}' and its disk?", False):
         print('Kept.')
         return
     shutil.rmtree(directory)
     print(f"Deleted VM '{name}'.")
 
 
+def create_flow(base=None):
+    """Run the New VM prompts and boot the VM; return its name, or None when cancelled."""
+    name = ask_name()
+    if name is None:
+        return None
+    source = ask_source()
+    if source is None:
+        return None
+    ram_gib = ask_positive_int('RAM', DEFAULT_RAM_GIB)
+    if ram_gib is None:
+        return None
+    disk_gib = ask_positive_int('Disk', DEFAULT_DISK_GIB)
+    if disk_gib is None:
+        return None
+    create_vm(name, base, ram_gib=ram_gib, disk_gib=disk_gib, source=source)
+    disk = vm_dir(name, base) / 'disk.qcow2'
+    gum_style(f"VM '{name}' is ready.\nReopen it any time with make try.\nDisk: {disk}")
+    open_vm(name, base)
+    return name
+
+
 def interactive(base=None):
+    require_gum()
+    try:
+        gum_style('Test-drive VMs')
+    except KeyboardInterrupt:
+        print()
+        return
     while True:
-        vms = list_vms(base)
-        print('\nYour test-drive VMs:' if vms else '\nNo try VMs yet.')
-        for index, path in enumerate(vms, 1):
-            print(f'  {index}. {path.name}')
+        names = [path.name for path in list_vms(base)]
+        options = [*names, NEW_LABEL]
+        if names:
+            options.append(DELETE_LABEL)
+        header = 'Your test-drive VMs (Esc quits):' if names else 'No try VMs yet (Esc quits):'
         try:
-            answer = input("Open which VM? (number or name, 'new', 'delete', Enter quits): ").strip()
-        except (EOFError, KeyboardInterrupt):
-            print()
-            return
-        if not answer:
-            return
-        try:
-            if answer == 'new':
-                name = ask_name()
-                source = ask_source()
-                ram_gib = ask_positive_int('RAM', DEFAULT_RAM_GIB)
-                disk_gib = ask_positive_int('Disk', DEFAULT_DISK_GIB)
-                create_vm(name, base, ram_gib=ram_gib, disk_gib=disk_gib, source=source)
-                open_vm(name, base)
-            elif answer == 'delete':
-                target = input('Delete which VM? (Enter cancels): ').strip()
-                if target:
+            choice = gum_choose(header, options)
+            if choice is None:
+                return
+            if choice == NEW_LABEL:
+                create_flow(base)
+            elif choice == DELETE_LABEL and names:
+                target = gum_choose('Delete which VM? (Esc keeps all)', names)
+                if target is not None:
                     delete_vm(target, base)
-            elif re.fullmatch(r'[0-9]+', answer) and 1 <= int(answer) <= len(vms):
-                open_vm(vms[int(answer) - 1].name, base)
-            elif valid_name(answer) and vm_dir(answer, base).is_dir():
-                open_vm(answer, base)
-            else:
-                print(f"Unknown VM '{answer}'.")
+            elif choice in names:
+                open_vm(choice, base)
         except (EOFError, KeyboardInterrupt):
             print()
+            return
+        except GumMissingError as error:
+            print(error)
             return
         except SystemExit as error:
             print(error)
