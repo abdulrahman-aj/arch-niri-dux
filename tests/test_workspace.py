@@ -1,5 +1,6 @@
 import contextlib
 import io
+import json
 import os
 import subprocess
 from pathlib import Path
@@ -193,6 +194,187 @@ class WorkspaceTests(unittest.TestCase):
         workspace.disk_guard(Path.cwd(), minimum=0)
         with self.assertRaises(SystemExit):
             workspace.disk_guard(Path.cwd() / 'not-created', minimum=2**100)
+
+
+def git_run(*args, cwd, **kwargs):
+    return subprocess.run(['git', *args], cwd=str(cwd), capture_output=True, text=True, check=True, **kwargs)
+
+
+def init_repo(root):
+    git_run('init', '-b', 'main', cwd=root)
+    git_run('config', 'user.email', 'test@example.invalid', cwd=root)
+    git_run('config', 'user.name', 'Test', cwd=root)
+    (root / 'tracked.txt').write_text('base\n')
+    (root / '.gitignore').write_text('/out/\n')
+    git_run('add', '.', cwd=root)
+    git_run('commit', '-m', 'base', cwd=root)
+    return root
+
+
+class WorktreeGCTests(unittest.TestCase):
+    def test_status_filter_ignores_out(self):
+        self.assertFalse(workspace._status_entry_outside_out(' M out/report.txt'))
+        self.assertFalse(workspace._status_entry_outside_out('?? out/new-dir/file'))
+        self.assertFalse(workspace._status_entry_outside_out('R  out/a -> out/b'))
+        self.assertTrue(workspace._status_entry_outside_out(' M src/foo.py'))
+        self.assertTrue(workspace._status_entry_outside_out('?? notes.txt'))
+        self.assertTrue(workspace._status_entry_outside_out('R  old.txt -> out/moved.txt'))
+        self.assertTrue(workspace._status_entry_outside_out('R  out/a -> src/b'))
+
+    def test_status_outside_out_with_real_repo(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp) / 'repo'
+            root.mkdir()
+            init_repo(root)
+            (root / 'out').mkdir()
+            (root / 'out' / 'ignored.txt').write_text('x')
+            self.assertEqual(workspace.worktree_status_outside_out(root), [])
+            (root / 'tracked.txt').write_text('dirty\n')
+            self.assertEqual(workspace.worktree_status_outside_out(root), [' M tracked.txt'])
+            git_run('checkout', '--', 'tracked.txt', cwd=root)
+            (root / 'new.txt').write_text('untracked\n')
+            self.assertEqual(workspace.worktree_status_outside_out(root), ['?? new.txt'])
+
+    def test_merge_info_prefers_gh_then_ancestry(self):
+        with (
+            patch.object(workspace, 'merged_prs', return_value=[{'number': 7, 'title': 'Fix'}]),
+            patch.object(workspace, 'is_ancestor', return_value=False),
+        ):
+            self.assertEqual(workspace.merge_info('branch'), (True, 7, 'Fix', 'gh'))
+        with (
+            patch.object(workspace, 'merged_prs', return_value=[]),
+            patch.object(workspace, 'is_ancestor', return_value=True),
+        ):
+            self.assertEqual(workspace.merge_info('branch'), (True, None, '', 'ancestry'))
+        with (
+            patch.object(workspace, 'merged_prs', return_value=None),
+            patch.object(workspace, 'is_ancestor', return_value=False),
+        ):
+            self.assertEqual(workspace.merge_info('branch'), (False, None, '', 'none'))
+
+    def test_proven_old_fixture_needs_a_manifest(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            self.assertFalse(workspace.is_proven_old_fixture(root))
+            (root / 'release-manifest.json').write_text(json.dumps({'version': '0.2.9-1'}))
+            self.assertTrue(workspace.is_proven_old_fixture(root))
+            (root / 'release-manifest.json').write_text(json.dumps({'version': '0.3.2-1'}))
+            self.assertFalse(workspace.is_proven_old_fixture(root))
+            (root / 'release-manifest.json').write_text('not json')
+            self.assertFalse(workspace.is_proven_old_fixture(root))
+
+    def test_plan_splits_removals_and_skips(self):
+        with tempfile.TemporaryDirectory() as temp, patch.dict(os.environ, {'XDG_CACHE_HOME': temp}):
+            root = Path(temp) / 'repo'
+            root.mkdir()
+            init_repo(root)
+            for branch in ('merged-clean', 'merged-dirty', 'unmerged'):
+                git_run('branch', branch, cwd=root)
+            clean_wt = Path(temp) / 'wt-clean'
+            dirty_wt = Path(temp) / 'wt-dirty'
+            unmerged_wt = Path(temp) / 'wt-unmerged'
+            git_run('worktree', 'add', str(clean_wt), 'merged-clean', cwd=root)
+            git_run('worktree', 'add', str(dirty_wt), 'merged-dirty', cwd=root)
+            git_run('worktree', 'add', str(unmerged_wt), 'unmerged', cwd=root)
+            detached_wt = Path(temp) / 'wt-detached'
+            git_run('worktree', 'add', '--detach', str(detached_wt), cwd=root)
+            (dirty_wt / 'tracked.txt').write_text('dirty\n')
+
+            def fake_merge(branch, _checkout=workspace.ROOT):
+                if branch in ('merged-clean', 'merged-dirty'):
+                    return True, 11, 'Merged work', 'gh'
+                return False, None, '', 'none'
+
+            with (
+                patch.object(workspace, 'merge_info', side_effect=fake_merge),
+                patch.object(workspace, 'worktree_busy', return_value=(False, '')),
+                patch.object(workspace, 'open_prs', return_value=[]),
+            ):
+                removals, skipped, move = workspace.plan_worktree_gc(root)
+            self.assertEqual([item['branch'] for item in removals], ['merged-clean'])
+            reasons = {item['branch'] or 'detached': item['reason'] for item in skipped}
+            self.assertIn('current checkout', reasons['main'])
+            self.assertIn('dirty', reasons['merged-dirty'])
+            self.assertIn('unmerged', reasons['unmerged'])
+            self.assertIn('detached', reasons['detached'])
+            self.assertIsNone(move)
+
+    def make_fixture(self, parent, name, payload, mtime, owner=None):
+        directory = parent / name
+        directory.mkdir()
+        workspace.own(directory, owner or parent)
+        (directory / 'ACCEPTANCE-PASSED').write_text('All acceptance stages passed.\n')
+        (directory / 'disk.qcow2').write_bytes(payload)
+        (directory / 'install.json').write_text('{}\n')
+        (directory / 'inputs.json').write_text('{}\n')
+        (directory / 'OVMF_VARS.fd').write_bytes(b'vars')
+        os.utime(directory, (mtime, mtime))
+        return directory
+
+    def test_fixture_move_keeps_newest_readable(self):
+        with tempfile.TemporaryDirectory() as temp, patch.dict(os.environ, {'XDG_CACHE_HOME': temp}):
+            cache = Path(temp)
+            doomed_owner = cache / 'doomed-checkout'
+            doomed_owner.mkdir()
+            kept_owner = cache / 'kept-checkout'
+            kept_owner.mkdir()
+            doomed_home = cache / 'wt-doomed'
+            doomed_home.mkdir()
+            old = self.make_fixture(cache, 'old-fixture', b'old', 1000, kept_owner)
+            new = self.make_fixture(doomed_home, 'dux-verify-new', b'new-bytes', 2000, doomed_home)
+            self.assertTrue(old.exists())
+            self.assertEqual(workspace.newest_accepted_fixture(), new / 'disk.qcow2')
+            target = kept_owner / 'out' / 'verify' / new.name
+            moved = workspace.move_fixture(new, target, kept_owner)
+            self.assertFalse(new.exists())
+            self.assertEqual((moved / 'disk.qcow2').read_bytes(), b'new-bytes')
+            self.assertTrue((moved / 'ACCEPTANCE-PASSED').is_file())
+            picked = workspace.newest_accepted_fixture()
+            self.assertEqual(picked, moved / 'disk.qcow2')
+            self.assertEqual(picked.read_bytes(), b'new-bytes')
+
+    def test_dry_run_changes_nothing_then_real_run_preserves_fixture(self):
+        with tempfile.TemporaryDirectory() as temp, patch.dict(os.environ, {'XDG_CACHE_HOME': temp}):
+            cache = Path(temp)
+            root = cache / 'repo'
+            root.mkdir()
+            init_repo(root)
+            git_run('branch', 'merged-clean', cwd=root)
+            doomed = cache / 'wt-doomed'
+            git_run('worktree', 'add', str(doomed), 'merged-clean', cwd=root)
+            fixture = doomed / 'out' / 'verify' / 'dux-verify-new'
+            fixture.mkdir(parents=True)
+            workspace.own(fixture, doomed)
+            (fixture / 'ACCEPTANCE-PASSED').write_text('All acceptance stages passed.\n')
+            (fixture / 'disk.qcow2').write_bytes(b'fixture-bytes')
+            (fixture / 'install.json').write_text('{}\n')
+            (fixture / 'inputs.json').write_text('{}\n')
+            (fixture / 'OVMF_VARS.fd').write_bytes(b'vars')
+            before = workspace.newest_accepted_fixture()
+            self.assertEqual(before, fixture / 'disk.qcow2')
+
+            def fake_merge(branch, _checkout=workspace.ROOT):
+                return (True, 11, 'Merged work', 'gh') if branch == 'merged-clean' else (False, None, '', 'none')
+
+            with (
+                patch.object(workspace, 'merge_info', side_effect=fake_merge),
+                patch.object(workspace, 'worktree_busy', return_value=(False, '')),
+                patch.object(workspace, 'open_prs', return_value=[]),
+            ):
+                with contextlib.redirect_stdout(io.StringIO()):
+                    _removals, _skipped, move = workspace.gc_worktrees(root, True)
+                self.assertTrue(doomed.exists())
+                self.assertTrue(fixture.exists())
+                self.assertEqual(workspace.newest_accepted_fixture(), before)
+                self.assertIsNotNone(move)
+                with contextlib.redirect_stdout(io.StringIO()):
+                    workspace.gc_worktrees(root, False)
+            self.assertFalse(doomed.exists())
+            picked = workspace.newest_accepted_fixture()
+            self.assertIsNotNone(picked)
+            self.assertTrue(picked.is_file())
+            self.assertEqual(picked.read_bytes(), b'fixture-bytes')
+            self.assertTrue((picked.parent / 'ACCEPTANCE-PASSED').is_file())
 
 
 if __name__ == '__main__':
