@@ -17,7 +17,7 @@ from workspace import disk_guard, kept_running, newest_accepted_fixture, own, so
 from verification.digest import digest
 from verification.evidence import Evidence
 
-from verification import apps, boot, browser, camera, desktop, dux_update, integration, pdf, recovery, suspend
+from verification import apps, boot, browser, camera, desktop, dux_update, pdf, recovery, suspend
 from verification.vm import VM, PASSWORD, graphical_login, installed_login, stage_probes
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -31,16 +31,6 @@ def _policy(vm, passed):
 def _network(vm, passed):
     vm.probe('network', 'check', timeout=240)
     passed('Inbound firewall and resolve-only mDNS')
-
-
-def _online(vm, passed):
-    # Fallback leaves the guest stopped; a failed fallback can leave it
-    # running. Start published delivery from a known stopped state.
-    try:
-        vm.stop()
-    except Exception:
-        pass
-    integration.verify_published(vm, passed)
 
 
 def guest_alive(vm, timeout=30):
@@ -79,7 +69,7 @@ def run_stages(vm, passed, stages):
 
 def run_fixture(args, parser):
     """Fixture mode (folded verify_fast.py): qualify new packages on an accepted overlay."""
-    for flag in ('--iso', '--disk', '--install-only', '--online-repository', '--swap-gib', '--slow'):
+    for flag in ('--iso', '--disk', '--install-only', '--swap-gib', '--slow'):
         attr = flag.lstrip('-').replace('-', '_')
         value = args.__dict__.get(attr)
         if value is not None and value is not False:
@@ -255,14 +245,9 @@ def main():
     parser.add_argument('--disk', type=Path, help='New disposable qcow2 path; default inside the workspace')
     parser.add_argument('--install-only', action='store_true', help='Debug only; does not produce acceptance success')
     parser.add_argument(
-        '--online-repository',
-        action='store_true',
-        help='After offline acceptance, boot with networking and check published package delivery',
-    )
-    parser.add_argument(
         '--slow',
         action='store_true',
-        help='Include the slow Dux updater stage (releases via --online-repository always include it)',
+        help='Include the slow Dux updater stage',
     )
     parser.add_argument('--swap-gib', type=int, help='Override Auto swap sizing; 0 disables swap and hibernation')
     parser.add_argument('--keymap', default='us', help='Console keymap for the installed system (default: us)')
@@ -334,7 +319,7 @@ def main():
     package_digest = digest(ROOT / 'out/packages.manifest.json')
     probe_hashes = stage_probes(directory)
     probe_hashes['verify.py'] = digest(Path(__file__))
-    slow = args.slow or args.online_repository
+    slow = args.slow
     stages = [
         ('boot', lambda vm, passed: boot.verify_boot(vm, passed, args.swap_gib)),
         ('policy', _policy),
@@ -352,8 +337,6 @@ def main():
     ]
     if not slow:
         stages = [(name, func) for name, func in stages if name != 'dux_update']
-    if args.online_repository:
-        stages.append(('online', _online))
     evidence.inputs(
         {
             'iso': str(iso.resolve()),

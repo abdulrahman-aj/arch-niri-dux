@@ -4,6 +4,7 @@
 import argparse
 import hashlib
 import json
+import os
 from pathlib import Path
 import shutil
 import subprocess
@@ -28,14 +29,15 @@ def main():
     from verification import integration
 
     canonical_name = iso_checksums.iso_name(args.tag)
+    if not os.access('/dev/kvm', os.R_OK | os.W_OK):
+        parser.error('The VM verification requires access to /dev/kvm.')
     iso = args.iso.resolve() if args.iso else None
     if iso is None:
-        before = set((ROOT / 'out').glob('*.iso'))
         subprocess.run(['make', 'iso'], cwd=ROOT, check=True)
-        new = sorted(set((ROOT / 'out').glob('*.iso')) - before)
-        if len(new) != 1:
-            parser.error('Build produced !=1 new ISO; pass --iso.')
-        iso = new[0]
+        isos = sorted((ROOT / 'out').glob('*.iso'), key=lambda p: p.stat().st_mtime)
+        if not isos:
+            parser.error('The build produced no ISO; pass --iso to select one.')
+        iso = isos[-1]
     package_digest = digest(ROOT / 'out/packages.manifest.json')
     manifest = json.loads((ROOT / 'out/packages.manifest.json').read_text())['integration']
     if manifest.get('version') != args.tag[1:]:
