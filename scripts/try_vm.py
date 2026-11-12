@@ -289,11 +289,16 @@ def build_fraction(stages, current, stage_elapsed):
 
 
 def clock(seconds):
-    seconds = int(seconds)
-    return f'{seconds // 60}:{seconds % 60:02d}'
+    minutes, seconds = divmod(int(seconds), 60)
+    if minutes < 60:
+        return f'{minutes}:{seconds:02d}'
+    return f'{minutes // 60}:{minutes % 60:02d}:{seconds:02d}'
 
 
 WORD_RE = re.compile(r'[A-Za-z]{3}')
+# Tabs and control characters would make a line wider than fit() counts and
+# wrap, which breaks the in-place redraw.
+CONTROL_RE = re.compile(r'[\x00-\x1f\x7f]')
 
 
 class LogTail:
@@ -324,7 +329,7 @@ class LogTail:
         text = data[:cut].decode(errors='replace')
         # Keep lines with words for the on-screen tail; progress meters (curl's
         # columns of numbers, \r redraws) would only flicker there.
-        readable = [line.split('\r')[-1] for line in text.split('\n')]
+        readable = [CONTROL_RE.sub('', line.split('\r')[-1].expandtabs(8)) for line in text.split('\n')]
         self.lines = (self.lines + [line for line in readable if WORD_RE.search(line)])[-200:]
         return text
 
@@ -473,7 +478,9 @@ def ensure_iso(kind):
         return iso.resolve()
     minutes = round(sum(seconds for _, _, seconds in BUILD_STAGES[kind]) / 60)
     prompt = f'{reason} Build it now? That takes about {minutes} minutes.'
-    if ask_yes_no(prompt, default_yes) and run_build(kind):
+    if ask_yes_no(prompt, default_yes):
+        if not run_build(kind):
+            raise SystemExit(f'The {kind} ISO was not built, so the VM did not start.')
         iso = iso_for_kind(kind) or iso
     if iso is None:
         raise SystemExit(f'No {kind} installer ISO in out/; build one with: make {BUILD_TARGET[kind]}')

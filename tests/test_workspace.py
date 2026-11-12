@@ -1,6 +1,7 @@
 import contextlib
 import io
 import os
+import subprocess
 from pathlib import Path
 import sys
 import tempfile
@@ -174,6 +175,18 @@ class WorkspaceTests(unittest.TestCase):
         ):
             self.assertEqual(workspace.builder_memory({'CLAUDECODE': '1'}), (workspace.BUILDER_MIB, None))
             wait.assert_called_once()
+
+    def test_builder_memory_command_prints_only_the_size(self):
+        # build-iso captures stdout as QEMU's -m value; warnings must go to stderr.
+        env = {key: value for key, value in os.environ.items() if key not in workspace.AGENT_MARKERS}
+        result = subprocess.run(
+            [sys.executable, str(Path(workspace.__file__)), 'builder-memory'],
+            env=env,
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+        self.assertGreaterEqual(int(result.stdout), workspace.BUILDER_MIN_MIB)
 
     def test_guards(self):
         # Exercise the real filesystem without filling it or mocking commands.

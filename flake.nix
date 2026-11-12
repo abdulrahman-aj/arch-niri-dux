@@ -20,6 +20,7 @@
         <fontconfig>
           <include>${pkgs.fontconfig.out}/etc/fonts/conf.d</include>
           <dir>/usr/share/fonts</dir>
+          <dir>/usr/local/share/fonts</dir>
           <dir prefix="xdg">fonts</dir>
           <cachedir prefix="xdg">fontconfig</cachedir>
         </fontconfig>

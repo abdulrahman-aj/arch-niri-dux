@@ -140,7 +140,9 @@ def builder_memory(env=None):
         return BUILDER_MIB, None
     available = available_memory() // 1024**2
     mib = max(BUILDER_MIN_MIB, min(BUILDER_MIB, (available - MEMORY_HEADROOM_MIB) // 512 * 512))
-    if available - mib < MEMORY_HEADROOM_MIB:
+    if available < BUILDER_MIN_MIB + MEMORY_HEADROOM_MIB:
+        effect = 'That is below what a build needs, so the system will swap heavily. Close big apps first.'
+    elif available - mib < MEMORY_HEADROOM_MIB:
         effect = 'The build still runs, but the system may swap and slow down. Closing big apps helps.'
     elif mib < BUILDER_MIB:
         effect = 'The build works with less; closing big apps first is optional.'
