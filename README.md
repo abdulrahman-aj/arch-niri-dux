@@ -1,11 +1,14 @@
 # Arch + Niri + Dux
 
-An offline installer that sets up Arch Linux with the Niri compositor and the Dux desktop shell on an
-encrypted disk with Btrfs snapshots. Signed updates and migrations keep installed machines current after setup.
+An offline installer that sets up Arch Linux with the Niri compositor (a scrollable tiling window manager;
+windows form a horizontal strip you pan through — see https://github.com/YaLTeR/niri) and the Dux desktop
+shell (bar, launcher, settings, greeter) on an encrypted disk with Btrfs snapshots. Signed updates and
+migrations keep installed machines current after setup.
 
 The desktop software comes from upstream: Arch, Niri, Dux, Limine and snapper. This project chooses the
 defaults, wires the pieces together, tests the result in a VM before every release and ships fixes to
-machines that are already installed. The live ISO itself is terminal-only.
+machines that are already installed. The live ISO itself is terminal-only; the installed system boots to
+a graphical Dux greeter and Niri desktop.
 
 ## What you get
 
@@ -36,16 +39,23 @@ through suspend, updates and snapshot restore.
 ## What it isn't
 
 - It isn't a general Arch installer. It installs this one desktop with these choices.
-- It is young, and only x86_64 UEFI machines are supported.
-- It isn't frozen. It follows the live Arch repositories and takes a few packages from the Omarchy repository.
+- It is young.
+- It isn't frozen. It follows the live Arch repositories and takes two bootloader/snapshot helpers
+  (`limine-mkinitcpio-hook`, `limine-snapper-sync`) from the Omarchy repository (an opinionated Arch
+  distro's package source). If an update breaks boot, boot the previous snapshot from Limine and restore;
+  your home directory is kept.
 
 ## Install
+
+Requirements: x86_64 UEFI, ≥32 GiB disk (auto swap needs RAM plus 31 GiB), Secure Boot off. Alongside keeps your existing OS; it only uses
+unallocated space and never resizes, moves or formats existing partitions.
 
 1. Get the ISO. Build it with `make iso` (see [BUILDING.md](BUILDING.md)), or [verify a prebuilt
    ISO](#verify-a-prebuilt-iso) that someone gave you.
 2. Write it to a USB drive and boot it in UEFI mode with Secure Boot off.
-3. Follow the terminal wizard. **Erase mode erases the selected disk.** Alongside mode asks you to pick an
-   unallocated GPT region. See [supported layouts](ALONGSIDE.md).
+3. Follow the terminal wizard (disk, alongside region and existing OS if used, keymap, timezone, username,
+   hostname, swap, disk and login passphrases). **Erase mode erases the selected disk.** Alongside mode asks
+   you to pick an unallocated GPT region. See [supported layouts](ALONGSIDE.md).
 4. Remove the USB drive and reboot. Unlock the disk in the graphical prompt and log in. Press Esc to show
    boot messages. A text prompt appears if graphics are unavailable.
 

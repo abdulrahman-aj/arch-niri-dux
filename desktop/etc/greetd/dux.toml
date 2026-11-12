@@ -1,3 +1,4 @@
+# Managed by arch-niri-dux; do not run `dms-greeter sync` (targets stock config.toml).
 [general]
 service = "arch-niri-dux"
 [terminal]
