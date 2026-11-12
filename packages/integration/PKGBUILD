@@ -22,7 +22,7 @@ package_arch-niri-dux() {
              dux-files-bin greetd gnome-keyring matugen adw-gtk-theme gtk3
              xdg-desktop-portal-gnome xdg-desktop-portal-gtk xdg-terminal-exec xdg-utils nftables)
     backup=(etc/snapper/configs/root etc/mkinitcpio.conf.d/arch-niri-dux.conf
-            etc/fonts/conf.d/50-arabic.conf etc/greetd/dux.toml
+            etc/fonts/conf.d/50-arabic.conf etc/fonts/conf.d/51-cjk.conf etc/greetd/dux.toml
             etc/profile.d/dux-localbin.sh etc/profile.d/dux-editor.sh
             etc/pacman.d/arch-niri-dux.conf
             etc/systemd/logind.conf.d/30-lid.conf
