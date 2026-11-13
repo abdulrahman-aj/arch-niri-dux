@@ -91,22 +91,19 @@ class InstallerSafetyTests(unittest.TestCase):
                     patch.object(installer.os, 'geteuid', return_value=0),
                     patch.object(Path, 'exists', return_value=uefi),
                     patch.object(Path, 'glob', return_value=[variable]),
-                    patch.object(installer, 'wizard', return_value=settings()) as wizard,
-                    patch.object(installer, 'install') as installation,
+                    patch.object(installer, 'interactive') as interactive,
                     patch.object(installer, 'run') as commands,
                     patch('sys.stderr', output),
                 ):
                     if message is None:
                         self.assertEqual(installer.main(), 0)
-                        wizard.assert_called_once()
-                        installation.assert_called_once_with(wizard.return_value, wizard.call_args.args[0])
+                        interactive.assert_called_once()
                     else:
                         with self.assertRaises(SystemExit) as stopped:
                             installer.main()
                         self.assertEqual(stopped.exception.code, 2)
                         self.assertIn(message, output.getvalue())
-                        wizard.assert_not_called()
-                        installation.assert_not_called()
+                        interactive.assert_not_called()
                     commands.assert_not_called()
 
     def test_malformed_automation_config_stops_cleanly_without_installing(self):
@@ -224,9 +221,8 @@ class InstallerSafetyTests(unittest.TestCase):
 
     def test_post_write_failures_print_retry_cleanup(self):
         for started, present in ((True, True), (False, False)):
-            value = settings(swap_gib=0)
 
-            def fail_install(_settings, state):
+            def fail_install(state):
                 state.installation_started = started
                 raise ValueError('fixture failure')
 
@@ -237,8 +233,7 @@ class InstallerSafetyTests(unittest.TestCase):
                 patch.object(installer.os, 'geteuid', return_value=0),
                 patch.object(installer.Path, 'exists', return_value=True),
                 patch.object(installer.Path, 'glob', return_value=[]),
-                patch.object(installer, 'wizard', return_value=value),
-                patch.object(installer, 'install', side_effect=fail_install),
+                patch.object(installer, 'interactive', side_effect=fail_install),
                 patch('sys.stderr', output),
             ):
                 self.assertEqual(installer.main(), 1)
@@ -518,18 +513,17 @@ class InstallerSafetyTests(unittest.TestCase):
                 installer.install(value, state)
             run.assert_not_called()
 
-    def test_picker_starts_with_cancel_and_escape_cancels(self):
+    def test_picker_puts_the_default_first_and_escape_cancels(self):
         result = installer.subprocess.CompletedProcess([], 130, stdout='')
         with patch.object(installer.subprocess, 'run', return_value=result) as run:
             with self.assertRaises(installer.Cancelled):
-                installer.choose('Confirm installation', ['Erase and install', 'Cancel'], default='Cancel')
-            self.assertEqual(run.call_args.kwargs['input'], 'Cancel\nErase and install\n')
+                installer.choose('Keyboard layout', ['de', 'us'], default='us', search=True)
+            self.assertEqual(run.call_args.kwargs['input'], 'us\nde\n')
 
     def test_errors_distinguish_preflight_from_a_started_installation(self):
         for started in (False, True):
-            value = settings(swap_gib=0)
 
-            def fail_install(_settings, state):
+            def fail_install(state):
                 state.installation_started = started
                 raise ValueError('fixture failure')
 
@@ -540,8 +534,7 @@ class InstallerSafetyTests(unittest.TestCase):
                 patch.object(installer.os, 'geteuid', return_value=0),
                 patch.object(Path, 'exists', return_value=True),
                 patch.object(Path, 'glob', return_value=[]),
-                patch.object(installer, 'wizard', return_value=value),
-                patch.object(installer, 'install', side_effect=fail_install),
+                patch.object(installer, 'interactive', side_effect=fail_install),
                 patch('sys.stderr', output),
             ):
                 self.assertEqual(installer.main(), 1)
@@ -549,14 +542,33 @@ class InstallerSafetyTests(unittest.TestCase):
             self.assertEqual('may be incomplete' in output.getvalue(), started)
 
     def test_invalid_username_and_passwords_retry_inline(self):
-        with patch('builtins.input', side_effect=['root', 'tester']):
+        with patch.object(installer, 'say'), patch.object(installer, 'gum', side_effect=['root', 'tester']):
             self.assertEqual(installer.prompt('Username', validate=installer.validate_username), 'tester')
-        with patch.object(
-            installer.getpass,
-            'getpass',
-            side_effect=['short', 'long-password', 'different-password', 'long-password', 'long-password'],
-        ):
+        answers = ['short', 'long-password', 'different-password', 'long-password', 'long-password']
+        with patch.object(installer, 'say'), patch.object(installer, 'gum', side_effect=answers):
             self.assertEqual(installer.secret('Login password'), 'long-password')
+
+    def test_pacman_progress_counts_packages_then_hooks(self):
+        progress = installer.PacmanProgress()
+        self.assertIsNone(progress.fraction())
+        output = ['resolving dependencies...', 'Packages (4) a-1  b-1  c-1  d-1', '', 'Total Installed Size:  1 MiB']
+        output += [':: Processing package changes...', 'installing a...', 'installing b...', 'warning: noise']
+        for line in output:
+            progress.feed(line)
+        halfway = progress.fraction()
+        self.assertGreater(halfway, 0)
+        for line in ['installing c...', 'installing d...', ':: Running post-transaction hooks...']:
+            progress.feed(line)
+        packages_done = progress.fraction()
+        self.assertGreater(packages_done, halfway)
+        # Hooks continue the same bar, which never moves back.
+        seen = [packages_done]
+        for number in range(1, 11):
+            progress.feed(f'({number:2d}/10) Hook number {number}...')
+            seen.append(progress.fraction())
+        self.assertEqual(seen, sorted(seen))
+        self.assertLess(seen[-1], 1)
+        self.assertIn('10 of 10', progress.counts())
 
     def test_swap_auto_custom_disabled_and_capacity(self):
         with patch.object(installer, 'memory_gib', return_value=16):

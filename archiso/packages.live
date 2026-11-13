@@ -5,7 +5,7 @@ archiso
 mkinitcpio-archiso
 arch-install-scripts
 python
-fzf
+gum
 fastfetch
 cryptsetup
 btrfs-progs
