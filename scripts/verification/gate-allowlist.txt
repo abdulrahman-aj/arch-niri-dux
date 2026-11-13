@@ -1,6 +1,6 @@
 # Error-gate allowlist: one regex per line on the normalized guest text.
-# Each line ends with `# <reason>` naming the judgement row id(s) behind it
-# (~/error-inventory/judgement.md). Only the final clean boot's journal
+# Each line ends with `# <reason>` saying why the line is harmless; H-/G- ids
+# refer to the 2026-11-12 error inventory review. Only the final clean boot's journal
 # (`journalctl -b -p warning`) and failed units are scanned; deliberate-failure
 # probes run in earlier boots and never reach the gate. Entries the current
 # guest no longer produces are pruned; several recurring lines below still need
@@ -22,4 +22,4 @@ spa\.bluez5: BlueZ system service is not available # G-063, G-065: no bluetooth 
 dsearch\.service: Failed with result 'exit-code'\. # G-209: greeter dsearch crash loop; installer fix #125, accepted fixtures predate it; drop when fixtures are re-accepted
 gnome-keyring-daemon\[<PID>\]: unable to create keyring dir: /\.local/share/keyrings # G-214: greeter has no home on pre-#125 fixtures; installer fix #125; drop when fixtures are re-accepted
 wp-state: failed to create directory /\.local/state/wireplumber: Permission denied # G-213: greeter has no home on pre-#125 fixtures; installer fix #125; drop when fixtures are re-accepted
-greetd\[<PID>\]: gkr-pam: (couldn't unlock the login keyring|unable to locate daemon control file)\.? # G-216: greeter-session keyring unlock noise; #125 fixed the homeless crash loop (dsearch/keyring-dir/wp-state are gone) but this line persists on fresh installs; needs its own benign row or a follow-up fix
+greetd\[<PID>\]: gkr-pam: (couldn't unlock the login keyring|unable to locate daemon control file)\.? # G-216: the greeter account has no keyring password to unlock; harmless on fresh installs after #125
