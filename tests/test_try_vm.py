@@ -85,6 +85,34 @@ class TryVmTests(unittest.TestCase):
         for bad in ('', '../evil', 'a/b', ' name', '-lead', '123', '1.5'):
             self.assertFalse(try_vm.valid_name(bad))
 
+    def test_disk_size_refuses_below_what_the_installer_needs(self):
+        # 4 GiB RAM needs 35 GiB (32 floor vs 4+2 swap + 29 reserve); 8 GiB RAM needs 39.
+        with patch('try_vm.gum_input', side_effect=['32', '35']):
+            with patch('builtins.print') as printed:
+                self.assertEqual(try_vm.ask_disk_size(4), 35)
+            refusal = '\n'.join(call.args[0] for call in printed.call_args_list)
+            self.assertIn('35 GiB', refusal)
+            self.assertIn('automatic swap', refusal)
+        with patch('try_vm.gum_input', side_effect=['38', '39']):
+            self.assertEqual(try_vm.ask_disk_size(8), 39)
+        with patch('try_vm.gum_input', side_effect=['']):
+            self.assertEqual(try_vm.ask_disk_size(4), try_vm.DEFAULT_DISK_GIB)
+        with patch('try_vm.gum_input', return_value=None):
+            self.assertIsNone(try_vm.ask_disk_size(4))
+        with patch('try_vm.gum_input', side_effect=['abc', '0', '48']):
+            self.assertEqual(try_vm.ask_disk_size(4), 48)
+
+    def test_disk_minimum_comes_from_the_installer_constant(self):
+        import installer.storage
+
+        # A bigger installer floor raises the prompt's floor with it: no copied literal.
+        with (
+            patch.object(installer.storage, 'MIN_DISK_BYTES', 64 * installer.storage.GIB),
+            patch('try_vm.gum_input', side_effect=['48', '64']),
+            patch('builtins.print'),
+        ):
+            self.assertEqual(try_vm.ask_disk_size(4), 64)
+
     def test_ask_name_rejects_reserved_and_bad_names(self):
         with patch('try_vm.gum_input', side_effect=['new', '123', 'my vm', 'ok-name']):
             self.assertEqual(try_vm.ask_name(), 'ok-name')

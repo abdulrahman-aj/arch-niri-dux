@@ -16,6 +16,10 @@ from pathlib import Path
 import workspace
 
 ROOT = Path(__file__).resolve().parents[1]
+# The installer's disk floor lives in one place: read it (and the ESP/swap
+# reserve behind it) from installer/storage so the prompt cannot drift.
+sys.path.insert(0, str(ROOT))
+from installer import storage
 
 HUMAN_ONLY = 'make try is for humans; agents use make verify-fast ARGS=--keep'
 
@@ -181,6 +185,33 @@ def ask_positive_int(label, default):
         if answer.isdigit() and int(answer) > 0:
             return int(answer)
         print('Enter a positive whole number.')
+
+
+def ask_disk_size(ram_gib):
+    """Refuse disks the installer cannot finish on, naming the ESP/swap arithmetic.
+
+    The default install takes automatic swap (RAM + 2 GiB) beside the ESP and
+    system reserve, so the floor grows with RAM; 48 GiB stays the default.
+    """
+    auto_swap = ram_gib + storage.AUTO_SWAP_PAD_GIB
+    minimum = storage.min_disk_gib(auto_swap)
+    while True:
+        answer = gum_input(f'Disk (at least {minimum} GiB)', 'Positive whole number', DEFAULT_DISK_GIB)
+        if answer is None:
+            return None
+        answer = answer.strip()
+        size = DEFAULT_DISK_GIB if not answer else (int(answer) if answer.isdigit() and int(answer) > 0 else None)
+        if size is None:
+            print('Enter a positive whole number.')
+            continue
+        if size >= minimum:
+            return size
+        print(
+            f'Disks below {minimum} GiB cannot finish the default install: the installer needs at least '
+            f'{storage.MIN_DISK_BYTES // storage.GIB} GiB, and with {ram_gib} GiB RAM its automatic swap '
+            f'({auto_swap} GiB) needs room beside the {storage.ESP_GIB} GiB ESP and '
+            f'{storage.SYSTEM_RESERVE_GIB} GiB system reserve.'
+        )
 
 
 def ask_source():
@@ -648,7 +679,7 @@ def create_flow(base=None):
     ram_gib = ask_positive_int('RAM', DEFAULT_RAM_GIB)
     if ram_gib is None:
         return None
-    disk_gib = ask_positive_int('Disk', DEFAULT_DISK_GIB)
+    disk_gib = ask_disk_size(ram_gib)
     if disk_gib is None:
         return None
     create_vm(name, base, ram_gib=ram_gib, disk_gib=disk_gib, source=source)

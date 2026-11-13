@@ -13,6 +13,13 @@ import zlib
 
 GIB = 1024**3
 MIN_DISK_BYTES = 32 * GIB
+# A default install writes a 4 GiB EFI partition, keeps 24 GiB for the encrypted
+# system plus 1 GiB slack, and sizes swap from RAM (RAM + 2 GiB when automatic).
+# The disk must cover all three at once, so the true minimum grows with RAM.
+ESP_GIB = 4
+SYSTEM_RESERVE_GIB = 24
+DISK_SLACK_GIB = 1
+AUTO_SWAP_PAD_GIB = 2
 ESP_TYPE = 'c12a7328-f81f-11d2-ba4b-00a0c93ec93b'
 LUKS_TYPE = 'ca7d7ccb-63ed-4c53-861c-1742536059cc'
 
@@ -174,13 +181,27 @@ def descendants(disk):
         yield from descendants(child)
 
 
+def max_swap_gib(disk_gib):
+    """Largest swap that still leaves the ESP, system reserve and slack on this disk."""
+    return disk_gib - ESP_GIB - SYSTEM_RESERVE_GIB - DISK_SLACK_GIB
+
+
+def min_disk_gib(swap_gib):
+    """Smallest whole-GiB disk that fits the ESP, system reserve, slack and this swap.
+
+    The disk-size floor stands on its own: even with swap disabled the installer
+    still needs the EFI partition and room for the system.
+    """
+    return max(MIN_DISK_BYTES // GIB, ESP_GIB + SYSTEM_RESERVE_GIB + DISK_SLACK_GIB + swap_gib)
+
+
 def disk_rejection(disk, swaps):
     if disk['type'] != 'disk':
         return 'not a whole disk'
     if disk.get('ro'):
         return 'read-only'
     if int(disk['size']) < MIN_DISK_BYTES:
-        return 'smaller than 32 GiB'
+        return f'smaller than {MIN_DISK_BYTES // GIB} GiB'
     for child in descendants(disk):
         if any(child.get('mountpoints') or []):
             return 'contains a mounted filesystem (possibly the live USB)'
@@ -192,15 +213,29 @@ def disk_rejection(disk, swaps):
     return None
 
 
-def eligible_disks():
+def disk_rejections():
+    """Every disk lsblk reports, paired with its rejection reason or None when usable."""
     swaps = {line.split()[0] for line in Path('/proc/swaps').read_text().splitlines()[1:]}
-    return [disk for disk in disk_inventory() if disk_rejection(disk, swaps) is None]
+    return [(disk, disk_rejection(disk, swaps)) for disk in disk_inventory()]
+
+
+def eligible_disks():
+    return [disk for disk, reason in disk_rejections() if reason is None]
+
+
+def describe_rejections(rejections):
+    """One plain-words line per rejected disk, for errors that must name the cause."""
+    return '\n'.join(f'{disk_identity(disk)}: {reason}' for disk, reason in rejections if reason is not None)
 
 
 def require_disk(disk):
-    matches = [entry for entry in eligible_disks() if entry['name'] == disk]
+    rejections = disk_rejections()
+    matches = [entry for entry, reason in rejections if entry['name'] == disk and reason is None]
     if len(matches) != 1:
-        raise ValueError('Target disk is unavailable, mounted, in use, read-only or too small.')
+        detail = describe_rejections(rejections)
+        raise ValueError(
+            'Target disk is unavailable, mounted, in use, read-only or too small.' + (f'\n{detail}' if detail else '')
+        )
     device_stat = os.stat(disk)
     return (
         device_stat.st_rdev,
@@ -244,7 +279,7 @@ def alongside_refusal(table, regions, boots):
     free = f'{largest / GIB:.0f} GiB free' if largest >= GIB else 'less than 1 GiB free'
     if not regions:
         return (
-            f'This disk has {free}; Alongside needs at least 32 GiB of unallocated space in one piece. '
+            f'This disk has {free}; Alongside needs at least {MIN_DISK_BYTES // GIB} GiB of unallocated space in one piece. '
             "Shrink a partition with the other OS's own tools first, use Erase disk, or pick another disk."
         )
     if len(table['partitions']) > 126:
@@ -606,7 +641,7 @@ def create_partitions(settings, snapshot, identity, on_start):
         run(
             'sgdisk',
             '--zap-all',
-            '--new=1:0:+4G',
+            f'--new=1:0:+{ESP_GIB}G',
             '--typecode=1:ef00',
             '--change-name=1:EFI',
             '--new=2:0:0',
