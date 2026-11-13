@@ -13,7 +13,8 @@ keyring=$root/keys/trusted-packagers.gpg
     exit 1
 }
 name=archlinux-$version-x86_64.iso
-url=https://geo.mirror.pkgbuild.com/iso/$version/$name
+primary=https://mirror.omarchy.org/iso/$version/$name
+fallback=https://geo.mirror.pkgbuild.com/iso/$version/$name
 iso=$cache/$name
 mkdir -p "$cache" "$partial_dir"
 
@@ -30,17 +31,40 @@ if ! printf '%s  %s\n' "$sha256" "$iso" | sha256sum --check --status 2>/dev/null
     # The partial download lives in the build's own state so an interrupted
     # transfer resumes without two builds appending to one file.
     part=$partial_dir/$name.part
-    curl --fail --location --retry 5 --speed-limit 1024 --speed-time 60 --continue-at - "$url" -o "$part"
+    echo "Fetching Arch bootstrap image $name..." >&2
+    downloaded=
+    for url in "$primary" "$fallback"; do
+        if curl --fail --location --retry 5 --speed-limit 1024 --speed-time 60 --continue-at - "$url" -o "$part"; then
+            downloaded=$url
+            break
+        fi
+        echo "Download failed from $url, trying next mirror..." >&2
+    done
+    if [[ -z ${downloaded:-} ]]; then
+        echo "Bootstrap ISO download failed from all mirrors: $primary $fallback" >&2
+        exit 1
+    fi
     if ! printf '%s  %s\n' "$sha256" "$part" | sha256sum --check --status; then
         rm -f "$part"
-        echo "Bootstrap ISO checksum mismatch: $url" >&2
+        echo "Bootstrap ISO checksum mismatch: $downloaded" >&2
         exit 1
     fi
     publish "$part" "$iso"
 fi
 if ! gpgv --keyring "$keyring" "$iso.sig" "$iso" >/dev/null 2>&1; then
     signature=$partial_dir/$name.sig
-    curl --fail --location --retry 3 --max-time 120 "$url.sig" -o "$signature"
+    downloaded_sig=
+    for url in "${primary}.sig" "${fallback}.sig"; do
+        if curl --fail --location --retry 3 --max-time 120 "$url" -o "$signature"; then
+            downloaded_sig=$url
+            break
+        fi
+        echo "Signature download failed from $url, trying next mirror..." >&2
+    done
+    if [[ -z ${downloaded_sig:-} ]]; then
+        echo 'Bootstrap signature download failed from all mirrors' >&2
+        exit 1
+    fi
     gpgv --keyring "$keyring" "$signature" "$iso" >&2
     publish "$signature" "$iso.sig"
 fi

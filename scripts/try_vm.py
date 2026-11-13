@@ -244,20 +244,29 @@ def check_new_vm_space(base=None):
     return ask_yes_no('Continue anyway?', False)
 
 
-# A plain build log goes to out/try-build.log; the screen shows these stages,
-# detected from the commands the builder VM traces (set -x) into its log. The
+# A plain build log goes to out/try-build.log; the screen shows these stages.
+# Guest stages are detected from the commands the builder VM traces (set -x)
+# into its log. The bootstrap download happens on the host before the VM
+# boots, so its stage ends when the host prints 'Starting the builder VM'
+# into out/try-build.log, and its bar follows the .part file's bytes over the
+# known ISO size (falling back to elapsed time when the size is unknown). The
 # seconds are typical durations measured on msi-dux (16 cores), used only to
-# weight the progress bar; elapsed times on screen are real.
+# weight the progress bar; elapsed times on screen are real. The bootstrap
+# 80 s was a fresh-cache download on 2026-11-13 (1.64 GB at ~20 MB/s).
+# archlinux-2026.10.01-x86_64.iso Content-Length; update with bootstrap_version in scripts/build-iso.
+BOOTSTRAP_ISO_BYTES = 1640497152
 BUILD_STAGES = {
     DEVELOPMENT: [
-        ('Start the builder VM', None, 30),
+        ('Download the Arch bootstrap image', None, 80),
+        ('Start the builder VM', 'Starting the builder VM', 30),
         ('Download Arch packages', 'scripts/package_lock.py fetch', 70),
         ('Build Dux packages from this checkout', 'scripts/package_build.py', 195),
         ('Stage the offline package repository', 'scripts/iso_payload.py', 15),
         ('Assemble the ISO', 'mkarchiso', 80),
     ],
     RELEASE: [
-        ('Start the builder VM', None, 30),
+        ('Download the Arch bootstrap image', None, 80),
+        ('Start the builder VM', 'Starting the builder VM', 30),
         ('Download Arch packages', 'scripts/package_lock.py fetch', 70),
         ('Download the released Dux packages', 'scripts/integration_release.py fetch', 20),
         ('Stage the offline package repository', 'scripts/iso_payload.py', 15),
@@ -269,15 +278,42 @@ SPINNER = '⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏'
 GREEN, CYAN, RED, DIM, BOLD, RESET = (f'\x1b[{code}m' for code in (32, 36, 31, 2, 1, 0))
 
 
-def build_stage(stages, log_text, current=0):
-    """Index of the latest stage whose marker appears in a traced command of the builder log."""
+def build_stage(stages, log_text, host_text='', current=0):
+    """Index of the latest stage whose marker appears in the builder logs.
+
+    Guest markers match traced commands (lines starting with '+') in the
+    builder VM's log; host markers match any line the host printed into
+    out/try-build.log (the bootstrap download runs before the VM boots).
+    Untraced guest output never advances a stage."""
     for line in log_text.splitlines():
         if not line.startswith('+'):
             continue
         for index, (_, marker, _) in enumerate(stages):
             if marker and index > current and marker in line:
                 current = index
+    for line in host_text.splitlines():
+        for index, (_, marker, _) in enumerate(stages):
+            if marker and index > current and marker in line:
+                current = index
     return current
+
+
+def bootstrap_byte_fraction(state=None):
+    """Share (0..1) of the bootstrap ISO downloaded, or None when unknown.
+
+    The .part file lives in the build's own state (see
+    scripts/build-fetch-bootstrap); a cached ISO has no part file, so the
+    caller falls back to elapsed time and the host's 'Starting' marker skips
+    the stage quickly."""
+    try:
+        directory = Path(state) if state is not None else workspace.build_state(ROOT)
+        parts = sorted(directory.glob('archlinux-*.iso.part'), key=lambda path: path.stat().st_mtime)
+        size = parts[-1].stat().st_size
+    except (OSError, IndexError):
+        return None
+    if size <= 0:
+        return 0.0
+    return min(size / BOOTSTRAP_ISO_BYTES, 1.0)
 
 
 def build_fraction(stages, current, stage_elapsed):
@@ -412,8 +448,8 @@ def run_build(kind):
 
     def advance():
         nonlocal current
-        make_log.read()
-        current = build_stage(stages, guest_log.read(), current)
+        host_text = make_log.read()
+        current = build_stage(stages, guest_log.read(), host_text, current)
         while len(stage_starts) <= current:
             stage_starts.append(time.monotonic())
 
@@ -421,7 +457,12 @@ def run_build(kind):
         advance()
         now = time.monotonic()
         spinner = f'{CYAN}{SPINNER[tick % len(SPINNER)]}{RESET}'
-        fraction = build_fraction(stages, current, now - stage_starts[current])
+        byte_fraction = bootstrap_byte_fraction() if current == 0 else None
+        if byte_fraction is not None:
+            total = sum(seconds for _, _, seconds in stages)
+            fraction = min(byte_fraction, 0.99) * stages[0][2] / total
+        else:
+            fraction = build_fraction(stages, current, now - stage_starts[current])
         filled = int(fraction * 40)
         lines = [
             f'{BOLD}Building the {kind} ISO{RESET}  {clock(now - stage_starts[0])}',

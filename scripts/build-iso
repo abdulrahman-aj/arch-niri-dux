@@ -42,6 +42,8 @@ for tool in qemu-system-x86_64 qemu-img bsdtar curl gpgv python3; do
     }
 done
 bootstrap=$(./scripts/build-fetch-bootstrap "$bootstrap_version" "$bootstrap_sha256" "$downloads" "$state")
+# Plain host marker for make try's progress screen (the guest log starts later).
+echo 'Starting the builder VM...'
 bsdtar -xf "$bootstrap" -C "$state" arch/boot/x86_64/vmlinuz-linux arch/boot/x86_64/initramfs-linux.img
 # The guest runs only the checked-in builder; no root access on the host.
 if [[ ! -e "$state/builder.qcow2" ]]; then qemu-img create -f qcow2 "$state/builder.qcow2" 40G; fi
