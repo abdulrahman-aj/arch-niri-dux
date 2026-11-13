@@ -19,9 +19,8 @@ mount /dev/vda /build
 rm -rf /build/work /build/output
 fstrim /build || true
 mkdir -p /build/cache
-# Every guest package is pinned to the archive date or the reviewed Omarchy
-# pin; a rolling mirror only transports bytes the archive-date database and
-# signatures still verify.
+# Builder tools come only from the archive date: pacman syncs these databases
+# itself here, so a rolling mirror first would unpin them.
 archive_date=$(cat /source/packages/archive-date)
 cat >/etc/pacman.conf <<CONF
 [options]
