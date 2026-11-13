@@ -17,7 +17,7 @@ from workspace import disk_guard, kept_running, newest_accepted_fixture, own, so
 from verification.digest import digest
 from verification.evidence import Evidence
 
-from verification import apps, boot, browser, camera, desktop, dux_update, pdf, recovery, suspend
+from verification import apps, boot, browser, camera, desktop, dux_update, gate, pdf, recovery, suspend
 from verification.vm import VM, PASSWORD, graphical_login, installed_login, stage_probes
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -119,6 +119,7 @@ def run_fixture(args, parser):
     )
     disk = directory / 'disk.qcow2'
     subprocess.run(['qemu-img', 'create', '-f', 'qcow2', '-F', 'qcow2', '-b', str(fixture), str(disk)], check=True)
+    passed = evidence.passed
     vm = VM(directory, None, disk)
     if args.keep:
         vm.socket_directory = directory / '.sockets'
@@ -163,6 +164,11 @@ def run_fixture(args, parser):
         vm.probe('policy', 'check', timeout=180)
         vm.probe('desktop', 'niri-overrides', timeout=180)
         vm.probe('desktop', 'wallpaper-preserved', timeout=180)
+        # Error gate on the final clean boot, before FAST-PASSED is written.
+        # Deliberate-failure probes ran in earlier boots only.
+        gate.collect(vm, directory)
+        gate.check(directory)
+        passed('Final boot journal and failed units contain only reviewed lines')
         if not args.keep:
             vm.poweroff()
         (directory / 'FAST-PASSED').write_text(
@@ -396,6 +402,18 @@ def main():
                 file=sys.stderr,
             )
             return 1
+        # Error gate: one final clean boot, scanned before acceptance is written.
+        # Deliberate-failure probes (firewall containment, signature rejection)
+        # ran in earlier boots; journalctl -b sees only this boot.
+        if not guest_alive(vm):
+            vm.start(cdrom=False)
+            installed_login(vm)
+            vm.mount_probes()
+        graphical_login(vm)
+        gate.collect(vm, directory)
+        gate.check(directory)
+        passed('Final boot journal and failed units contain only reviewed lines')
+        vm.poweroff()
         (directory / 'ACCEPTANCE-PASSED').write_text('All acceptance stages passed.\n')
         print(f'Acceptance passed. Evidence: {directory}', flush=True)
         succeeded = True

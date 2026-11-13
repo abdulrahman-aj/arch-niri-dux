@@ -1,0 +1,25 @@
+# Error-gate allowlist: one regex per line on the normalized guest text.
+# Each line ends with `# <reason>` saying why the line is harmless; H-/G- ids
+# refer to the 2026-11-12 error inventory review. Only the final clean boot's journal
+# (`journalctl -b -p warning`) and failed units are scanned; deliberate-failure
+# probes run in earlier boots and never reach the gate. Entries the current
+# guest no longer produces are pruned; several recurring lines below still need
+# their own judgement rows (flagged "no judgement row") and cite the nearest
+# reviewed family instead.
+virt/tdx: TDX not supported by the host platform # H-011: kernel probes Intel TDX on QEMU; expected one-liner
+Activation request for 'org\.freedesktop\.home1' failed: The systemd unit 'dbus-org\.freedesktop\.home1\.service' could not be found\. # G-215: org.freedesktop.home1 activation fails because systemd-homed is deliberately absent
+accounts-daemon\[<PID>\]: couldn't list homed users: .*home1.* # G-215: no systemd-homed in the VM, surfaced via accounts-daemon
+accounts-daemon\[<PID>\]: Unable to open /etc/tcb: No such file or directory # no judgement row (below the row threshold); accounts-daemon tcb backend absent in the VM, same absent-backend family as G-215
+Service file '.*FileManager1\.service' is not named after the D-Bus name 'org\.freedesktop\.FileManager1' # no judgement row (below the row threshold); misnamed vendor activator removed by #126, drop this entry after it merges
+Ignoring duplicate name 'org\.freedesktop\.FileManager1' in service file '.*' # no judgement row (below the row threshold); dbus-broker precedence: Dux Files' user activator overrides Nautilus (#126)
+mod\.rt: RTKit error: org\.freedesktop\.DBus\.Error\.ServiceUnknown # no judgement row (below the row threshold); VM session has no RTKit daemon, same log-and-fallback family as G-063..G-068
+mod\.rt: RTKit does not give us (MaxRealtimePriority|MinNiceLevel|RTTimeUSecMax), using .* # no judgement row (below the row threshold); RTKit fallback notice, same family as G-063..G-068
+/usr/lib/xdg-desktop-portal\[<PID>\]: Failed to load RealtimeKit property: .* # no judgement row (below the row threshold); no RTKit daemon in the VM, same family as the mod.rt entries above
+/usr/lib/xdg-desktop-portal\[<PID>\]: g_value_unset: assertion 'value_table' failed # no judgement row (below the row threshold); xdg-desktop-portal GLib critical under Wayland, same upstream-noise family as G-017
+/usr/lib/xdg-desktop-portal\[<PID>\]: \.\./glib/gobject/gtype\.c:<LINE>: type id '2' is invalid # no judgement row (below the row threshold); same xdg-desktop-portal burst as above
+/usr/lib/xdg-desktop-portal\[<PID>\]: can't peek value table for type '<unknown>' which is not currently referenced # no judgement row (below the row threshold); same xdg-desktop-portal burst as above
+spa\.bluez5: BlueZ system service is not available # G-063, G-065: no bluetooth adapter in the VM; services report and continue
+dsearch\.service: Failed with result 'exit-code'\. # G-209: greeter dsearch crash loop; installer fix #125, accepted fixtures predate it; drop when fixtures are re-accepted
+gnome-keyring-daemon\[<PID>\]: unable to create keyring dir: /\.local/share/keyrings # G-214: greeter has no home on pre-#125 fixtures; installer fix #125; drop when fixtures are re-accepted
+wp-state: failed to create directory /\.local/state/wireplumber: Permission denied # G-213: greeter has no home on pre-#125 fixtures; installer fix #125; drop when fixtures are re-accepted
+greetd\[<PID>\]: gkr-pam: (couldn't unlock the login keyring|unable to locate daemon control file)\.? # G-216: the greeter account has no keyring password to unlock; harmless on fresh installs after #125
