@@ -29,14 +29,19 @@ def validate_recipe(root, recipe):
     return source
 
 
-def version(source):
-    """Read the package version from the hash-pinned .SRCINFO without running the recipe."""
-    fields = dict(re.findall(r'^\t(pkgver|pkgrel|epoch) = (\S+)$', (source / '.SRCINFO').read_text(), re.MULTILINE))
+def version_from_text(text, source='<srcinfo>'):
+    """Parse pkgver-pkgrel from .SRCINFO text without running the recipe."""
+    fields = dict(re.findall(r'^\t(pkgver|pkgrel|epoch) = (\S+)$', text, re.MULTILINE))
     if 'epoch' in fields or not all(
         re.fullmatch(r'[0-9]+(?:\.[0-9]+)*', fields.get(key, '')) for key in ('pkgver', 'pkgrel')
     ):
         raise ValueError(f'Expected a numeric pkgver/pkgrel without epoch: {source}')
     return f'{fields["pkgver"]}-{fields["pkgrel"]}'
+
+
+def version(source):
+    """Read the package version from the hash-pinned .SRCINFO without running the recipe."""
+    return version_from_text((source / '.SRCINFO').read_text(), source)
 
 
 def recipes(root):
