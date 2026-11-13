@@ -3,8 +3,8 @@
     "name": "dux-greeter-bin",
     "source_date_epoch": 1794152821,
     "files": {
-      ".SRCINFO": "b0c053c895b0a04f70d312e7e6a111337c1da416e4596ce6313621ddfc26cb1d",
-      "PKGBUILD": "0d1ccbf4b7024500bb9f84fca0a32117abd58ca99c595a9ec74a335014b61927",
+      ".SRCINFO": "922335c9357b814c8a32eb901c72e8b45cd8953b4351b7aa7ec5bf691bd55b53",
+      "PKGBUILD": "df304761b12f8f123e537b1ddecae8ad1f0bbe8a19875b6d9d6e141186c86efd",
       "dux-greeter.install": "115f1e98517114e83b12a8e985f53779932f63b24ff6d3d2436a91fea7716505",
       "tmpfiles-dms-greeter.conf": "3dc267a18f22d06f595a80fb77275db56fe88c48b838db364ba3a1d307572a50",
       "dms-niri.kdl": "0376981f71a7331e3a8e5fdf71628f8c0e3881328969011f31fc1da6d54036c0",
