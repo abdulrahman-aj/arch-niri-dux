@@ -403,7 +403,7 @@ def main():
             )
             return 1
         # Error gate: one final clean boot, scanned before acceptance is written.
-        # Deliberate-failure probes (firewall containment, migration fixtures)
+        # Deliberate-failure probes (firewall containment, signature rejection)
         # ran in earlier boots; journalctl -b sees only this boot.
         if not guest_alive(vm):
             vm.start(cdrom=False)
