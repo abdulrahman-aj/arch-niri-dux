@@ -1,6 +1,5 @@
 import contextlib
 import io
-import json
 import os
 import subprocess
 from pathlib import Path
@@ -235,47 +234,59 @@ class WorktreeGCTests(unittest.TestCase):
             (root / 'new.txt').write_text('untracked\n')
             self.assertEqual(workspace.worktree_status_outside_out(root), ['?? new.txt'])
 
-    def test_merge_info_prefers_gh_then_ancestry(self):
-        with (
-            patch.object(workspace, 'merged_prs', return_value=[{'number': 7, 'title': 'Fix'}]),
-            patch.object(workspace, 'is_ancestor', return_value=False),
-        ):
-            self.assertEqual(workspace.merge_info('branch'), (True, 7, 'Fix', 'gh'))
-        with (
-            patch.object(workspace, 'merged_prs', return_value=[]),
-            patch.object(workspace, 'is_ancestor', return_value=True),
-        ):
-            self.assertEqual(workspace.merge_info('branch'), (True, None, '', 'ancestry'))
-        with (
-            patch.object(workspace, 'merged_prs', return_value=None),
-            patch.object(workspace, 'is_ancestor', return_value=False),
-        ):
-            self.assertEqual(workspace.merge_info('branch'), (False, None, '', 'none'))
+    def test_merge_info_gh_decides_then_ancestry_fallback(self):
+        def run_result(returncode, stdout=''):
+            return subprocess.CompletedProcess([], returncode, stdout, '')
 
-    def test_proven_old_fixture_needs_a_manifest(self):
-        with tempfile.TemporaryDirectory() as temp:
-            root = Path(temp)
-            self.assertFalse(workspace.is_proven_old_fixture(root))
-            (root / 'release-manifest.json').write_text(json.dumps({'version': '0.2.9-1'}))
-            self.assertTrue(workspace.is_proven_old_fixture(root))
-            (root / 'release-manifest.json').write_text(json.dumps({'version': '0.3.2-1'}))
-            self.assertFalse(workspace.is_proven_old_fixture(root))
-            (root / 'release-manifest.json').write_text('not json')
-            self.assertFalse(workspace.is_proven_old_fixture(root))
+        scenarios = [
+            # gh decides merged; ancestry never runs.
+            (run_result(0, '[{"number": 7, "title": "Fix"}]'), None, (True, 7, 'Fix', 'gh'), ['gh']),
+            # gh decides not merged; ancestry never runs.
+            (run_result(0, '[]'), None, (False, None, '', 'gh'), ['gh']),
+            # gh fails; ancestry decides.
+            (run_result(1), run_result(0), (True, None, '', 'ancestry'), ['gh', 'git']),
+            (run_result(1), run_result(1), (False, None, '', 'ancestry'), ['gh', 'git']),
+            # Both fail: can't tell.
+            (run_result(1), run_result(128), (None, None, '', 'none'), ['gh', 'git']),
+        ]
+        for gh_result, ancestor_result, expected, commands in scenarios:
+            with self.subTest(expected=expected):
+                calls = []
+
+                def fake_run(cmd, _calls=calls, _gh=gh_result, _git=ancestor_result, **_kwargs):
+                    _calls.append(cmd[0])
+                    return _git if cmd[0] == 'git' else _gh
+
+                with patch.object(workspace.subprocess, 'run', side_effect=fake_run):
+                    self.assertEqual(workspace.merge_info('branch'), expected)
+                self.assertEqual(calls, commands)
+
+    def test_merge_info_gh_missing_falls_back_to_ancestry(self):
+        ancestor = subprocess.CompletedProcess([], 0, '', '')
+
+        def fake_run(cmd, **_kwargs):
+            if cmd[0] == 'gh':
+                raise OSError('no gh')
+            return ancestor
+
+        with patch.object(workspace.subprocess, 'run', side_effect=fake_run):
+            self.assertEqual(workspace.merge_info('branch'), (True, None, '', 'ancestry'))
 
     def test_plan_splits_removals_and_skips(self):
         with tempfile.TemporaryDirectory() as temp, patch.dict(os.environ, {'XDG_CACHE_HOME': temp}):
             root = Path(temp) / 'repo'
             root.mkdir()
             init_repo(root)
-            for branch in ('merged-clean', 'merged-dirty', 'unmerged'):
+            for branch in ('merged-clean', 'merged-dirty', 'unmerged', 'mystery'):
                 git_run('branch', branch, cwd=root)
             clean_wt = Path(temp) / 'wt-clean'
             dirty_wt = Path(temp) / 'wt-dirty'
             unmerged_wt = Path(temp) / 'wt-unmerged'
+            mystery_wt = Path(temp) / 'wt-mystery'
             git_run('worktree', 'add', str(clean_wt), 'merged-clean', cwd=root)
             git_run('worktree', 'add', str(dirty_wt), 'merged-dirty', cwd=root)
             git_run('worktree', 'add', str(unmerged_wt), 'unmerged', cwd=root)
+            git_run('worktree', 'add', str(mystery_wt), 'mystery', cwd=root)
             detached_wt = Path(temp) / 'wt-detached'
             git_run('worktree', 'add', '--detach', str(detached_wt), cwd=root)
             (dirty_wt / 'tracked.txt').write_text('dirty\n')
@@ -283,19 +294,21 @@ class WorktreeGCTests(unittest.TestCase):
             def fake_merge(branch, _checkout=workspace.ROOT):
                 if branch in ('merged-clean', 'merged-dirty'):
                     return True, 11, 'Merged work', 'gh'
+                if branch == 'mystery':
+                    return None, None, '', 'none'
                 return False, None, '', 'none'
 
             with (
                 patch.object(workspace, 'merge_info', side_effect=fake_merge),
                 patch.object(workspace, 'worktree_busy', return_value=(False, '')),
-                patch.object(workspace, 'open_prs', return_value=[]),
             ):
                 removals, skipped, move = workspace.plan_worktree_gc(root)
             self.assertEqual([item['branch'] for item in removals], ['merged-clean'])
             reasons = {item['branch'] or 'detached': item['reason'] for item in skipped}
             self.assertIn('current checkout', reasons['main'])
             self.assertIn('dirty', reasons['merged-dirty'])
-            self.assertIn('unmerged', reasons['unmerged'])
+            self.assertIn('not merged', reasons['unmerged'])
+            self.assertIn("can't tell", reasons['mystery'])
             self.assertIn('detached', reasons['detached'])
             self.assertIsNone(move)
 
@@ -359,7 +372,6 @@ class WorktreeGCTests(unittest.TestCase):
             with (
                 patch.object(workspace, 'merge_info', side_effect=fake_merge),
                 patch.object(workspace, 'worktree_busy', return_value=(False, '')),
-                patch.object(workspace, 'open_prs', return_value=[]),
             ):
                 with contextlib.redirect_stdout(io.StringIO()):
                     _removals, _skipped, move = workspace.gc_worktrees(root, True)
