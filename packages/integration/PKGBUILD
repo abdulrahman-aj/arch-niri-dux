@@ -29,11 +29,13 @@ package_arch-niri-dux() {
             etc/xdg/mimeapps.list etc/xdg/xdg-desktop-portal/niri-portals.conf
             etc/xdg/xdg-terminals.list)
     cp -a "$srcdir/desktop/etc" "$srcdir/desktop/usr" "$pkgdir/"
-    # New homes need the file-manager activator; a link tracks dux-files-bin
-    # instead of a copy that drifts.
+    # Dux Files answers org.freedesktop.FileManager1 ("Show in folder"); a link
+    # tracks dux-files-bin instead of a copy that drifts. The user directory
+    # wins over Nautilus's system file of the same name; dbus-broker logs one
+    # expected duplicate-name line for the shadowed file.
     install -d "$pkgdir/etc/skel/.local/share/dbus-1/services"
-    ln -s /usr/share/dbus-1/services/dev.duxlabs.files.FileManager1.service \
-        "$pkgdir/etc/skel/.local/share/dbus-1/services/"
+    ln -s /usr/share/dfiles/org.freedesktop.FileManager1.service \
+        "$pkgdir/etc/skel/.local/share/dbus-1/services/org.freedesktop.FileManager1.service"
     # The pinned DMS fragments are the source of truth; new homes seed from them.
     install -Dm644 "$srcdir/desktop/usr/share/arch-niri-dux/niri/dms/"{colors,layout,alttab,input}.kdl \
         -t "$pkgdir/etc/skel/.config/niri/dms/"
