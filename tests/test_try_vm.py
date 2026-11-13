@@ -20,18 +20,35 @@ class TryVmTests(unittest.TestCase):
 
     def test_build_stage_follows_traced_commands(self):
         stages = try_vm.BUILD_STAGES[try_vm.DEVELOPMENT]
+        self.assertEqual(stages[0][0], 'Download the Arch bootstrap image')
         self.assertEqual(try_vm.build_stage(stages, ''), 0)
+        # The host-side download runs before the VM boots; its end is a plain
+        # host log line, not a traced guest command.
+        self.assertEqual(try_vm.build_stage(stages, '', 'Starting the builder VM'), 1)
         log = '+ python /source/scripts/package_lock.py fetch /source /build/payload/repo\nfetched 700 packages\n'
-        self.assertEqual(try_vm.build_stage(stages, log), 1)
+        self.assertEqual(try_vm.build_stage(stages, log, 'Starting the builder VM'), 2)
         # Untraced output that mentions a later stage does not advance it.
         self.assertEqual(try_vm.build_stage(stages, 'installing archiso and mkarchiso\n'), 0)
         log += '+ runuser -u nobody -- python /source/scripts/package_build.py /source\n'
-        self.assertEqual(try_vm.build_stage(stages, log), 2)
+        self.assertEqual(try_vm.build_stage(stages, log, 'Starting the builder VM'), 3)
         # Stages never move backwards between incremental reads.
-        self.assertEqual(try_vm.build_stage(stages, '+ echo done\n', current=3), 3)
+        self.assertEqual(try_vm.build_stage(stages, '+ echo done\n', current=4), 4)
         fractions = [try_vm.build_fraction(stages, index, 10**6) for index in range(len(stages))]
         self.assertEqual(fractions, sorted(fractions))
         self.assertLess(fractions[-1], 1)
+
+    def test_bootstrap_byte_fraction_follows_part_file(self):
+        with tempfile.TemporaryDirectory() as temp:
+            self.assertIsNone(try_vm.bootstrap_byte_fraction(state=temp))
+            part = Path(temp) / 'archlinux-2026.10.01-x86_64.iso.part'
+            part.write_bytes(b'x' * 100)
+            self.assertAlmostEqual(try_vm.bootstrap_byte_fraction(state=temp), 100 / try_vm.BOOTSTRAP_ISO_BYTES)
+            part.write_bytes(b'')
+            self.assertEqual(try_vm.bootstrap_byte_fraction(state=temp), 0.0)
+            part.write_bytes(b'x' * 100)
+            with patch.object(try_vm, 'BOOTSTRAP_ISO_BYTES', 50):
+                # A stale size constant caps instead of overshooting the bar.
+                self.assertEqual(try_vm.bootstrap_byte_fraction(state=temp), 1.0)
 
     def test_log_tail_ignores_previous_build_and_follows_rewrites(self):
         with tempfile.TemporaryDirectory() as temp:

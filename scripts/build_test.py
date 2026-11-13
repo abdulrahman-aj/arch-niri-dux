@@ -342,3 +342,56 @@ class VendorDesktopTests(unittest.TestCase):
             root = self.tree(directory, "depends=('niri')\n")
             with self.assertRaisesRegex(ValueError, 'no dux-shell floor'):
                 module.vendor_desktop(root, 'v2.1.2', [b'body\n'] * 6)
+
+
+class BootstrapMirrorTests(unittest.TestCase):
+    """build-fetch-bootstrap tries the Omarchy mirror before geo.mirror.pkgbuild.com."""
+
+    def test_omarchy_is_tried_first_with_geo_fallback(self):
+        import os
+        import subprocess
+
+        body = b'bootstrap-image'
+        sha = hashlib.sha256(body).hexdigest()
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            fake_bin = root / 'bin'
+            fake_bin.mkdir()
+            requests_log = root / 'requests.txt'
+            requests_log.write_text('')
+            (fake_bin / 'curl').write_text(
+                '#!/bin/bash\n'
+                'url=; out=; prev=\n'
+                'for arg in "$@"; do\n'
+                '    if [[ $prev == -o ]]; then out=$arg; fi\n'
+                '    if [[ $arg == http* ]]; then url=$arg; fi\n'
+                '    prev=$arg\n'
+                'done\n'
+                'printf "%s\\n" "$url" >> "$REQUESTS_LOG"\n'
+                'if [[ $url == *mirror.omarchy.org* ]]; then exit 22; fi\n'
+                'printf bootstrap-image > "$out"\n'
+            )
+            (fake_bin / 'curl').chmod(0o755)
+            (fake_bin / 'gpgv').write_text('#!/bin/bash\ntest -f "$3"\n')
+            (fake_bin / 'gpgv').chmod(0o755)
+            cache, partial = root / 'cache', root / 'partial'
+            cache.mkdir()
+            partial.mkdir()
+            script = Path(__file__).with_name('build-fetch-bootstrap')
+            environment = os.environ | {
+                'PATH': str(fake_bin) + ':' + os.environ['PATH'],
+                'REQUESTS_LOG': str(requests_log),
+            }
+            result = subprocess.run(
+                ['bash', str(script), '2026.10.01', sha, str(cache), str(partial)],
+                env=environment,
+                check=False,
+                capture_output=True,
+                text=True,
+            )
+            self.assertEqual(result.returncode, 0, result.stderr)
+            requested = requests_log.read_text().splitlines()
+            self.assertGreaterEqual(len(requested), 2, requested)
+            self.assertTrue(requested[0].startswith('https://mirror.omarchy.org/iso/'), requested)
+            self.assertTrue(requested[1].startswith('https://geo.mirror.pkgbuild.com/iso/'), requested)
+            self.assertEqual((cache / 'archlinux-2026.10.01-x86_64.iso').read_bytes(), body)
