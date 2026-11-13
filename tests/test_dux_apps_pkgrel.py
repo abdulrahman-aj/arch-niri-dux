@@ -59,14 +59,23 @@ def base_versions(root, tag, recipes):
 
 
 def find_violations(base, base_version, current, current_version):
-    """Recipe file changes without a version change, the release-time pkgrel rule."""
-    old_files = {recipe['name']: recipe['files'] for recipe in base}
-    new_files = {recipe['name']: recipe['files'] for recipe in current}
+    """Recipe changes without a version change, the release-time pkgrel rule.
+
+    Source-level proxy for the publisher's byte-level rule
+    (integration_release.py refuses a changed rebuild under a published
+    filename): recipe file or epoch changes alter built bytes, so they need
+    a new pkgver-pkgrel even when the edit looks cosmetic.
+    """
+    old = {recipe['name']: recipe for recipe in base}
+    new = {recipe['name']: recipe for recipe in current}
     problems = []
-    for name, files in new_files.items():
-        if name not in old_files:
+    for name, recipe in new.items():
+        if name not in old:
             continue
-        if files != old_files[name] and current_version.get(name) == base_version.get(name):
+        changed = recipe['files'] != old[name]['files'] or recipe.get('source_date_epoch') != old[name].get(
+            'source_date_epoch'
+        )
+        if changed and current_version.get(name) == base_version.get(name):
             problems.append(
                 f'{name} changed since the release without a new pkgrel '
                 f'(still {current_version.get(name)}); bump pkgrel and refresh .SRCINFO.'
@@ -106,9 +115,28 @@ class RecipeBumpTests(unittest.TestCase):
             find_violations(recipe, {'dux-example-bin': '2.1.2-1'}, recipe, {'dux-example-bin': '2.1.2-1'}), []
         )
 
+    def test_epoch_only_change_without_a_bump_fails(self):
+        base = [dict(name='dux-example-bin', files={'.SRCINFO': 'a'}, source_date_epoch=100)]
+        current = [dict(name='dux-example-bin', files={'.SRCINFO': 'a'}, source_date_epoch=200)]
+        problems = find_violations(base, {'dux-example-bin': '2.1.2-1'}, current, {'dux-example-bin': '2.1.2-1'})
+        self.assertEqual(len(problems), 1)
+
+    def test_new_app_is_not_a_violation(self):
+        base = [dict(name='dux-example-bin', files={'.SRCINFO': 'a'})]
+        current = [
+            dict(name='dux-example-bin', files={'.SRCINFO': 'a'}),
+            dict(name='dux-new-bin', files={'.SRCINFO': 'b'}),
+        ]
+        self.assertEqual(
+            find_violations(
+                base, {'dux-example-bin': '2.1.2-1'}, current, {'dux-example-bin': '2.1.2-1', 'dux-new-bin': '1.0.0-1'}
+            ),
+            [],
+        )
+
     def test_published_recipes_require_a_bump(self):
         tag, problems = live_violations(ROOT)
-        self.assertEqual(problems, [], f'Base release {tag} still publishes these versions: {problems}')
+        self.assertEqual(problems, [], f'Recipe violations against base release {tag}: {problems}')
 
 
 if __name__ == '__main__':
