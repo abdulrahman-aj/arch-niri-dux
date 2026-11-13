@@ -348,12 +348,14 @@ def file_manager_activation():
     # it over Nautilus's system file of the same name; dbus-broker logs one
     # expected duplicate-name line for the shadowed file. No misnamed file may
     # remain. Cold activation is observable here, not just in packaging.
-    home = Path('/home/tester')
+    home = Path(pwd.getpwnam('tester').pw_dir)
     link = home / '.local/share/dbus-1/services/org.freedesktop.FileManager1.service'
     assert link.is_symlink(), f'FileManager1 user activator is not a link: {link}'
     assert os.readlink(link) == '/usr/share/dfiles/org.freedesktop.FileManager1.service', os.readlink(link)
-    assert not (home / '.local/share/dbus-1/services/dev.duxlabs.files.FileManager1.service').exists()
-    assert not Path('/usr/share/dbus-1/services/dev.duxlabs.files.FileManager1.service').exists()
+    assert not os.path.lexists(home / '.local/share/dbus-1/services/dev.duxlabs.files.FileManager1.service')
+    assert not os.path.lexists(Path('/usr/share/dbus-1/services/dev.duxlabs.files.FileManager1.service'))
+    nautilus_service = Path('/usr/share/dbus-1/services/org.freedesktop.FileManager1.service')
+    assert nautilus_service.is_file() and not nautilus_service.is_symlink(), nautilus_service
     # Cold activation: stop the session service and any lingering owners, so a
     # running dfiles cannot mask a broken activator.
     user_command('systemctl', '--user', 'stop', 'dfiles')
@@ -438,6 +440,7 @@ def file_manager_activation():
         and expected not in line
     ]
     assert not bad, bad
+    assert duplicates, expected
     Path('/run/verify/file-manager-activation.json').write_text(
         json.dumps(
             {'activator': os.readlink(link), 'owner': 'dfiles', 'duplicate_lines': duplicates},

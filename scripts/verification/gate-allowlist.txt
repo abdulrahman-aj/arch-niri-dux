@@ -10,7 +10,6 @@ virt/tdx: TDX not supported by the host platform # H-011: kernel probes Intel TD
 Activation request for 'org\.freedesktop\.home1' failed: The systemd unit 'dbus-org\.freedesktop\.home1\.service' could not be found\. # G-215: org.freedesktop.home1 activation fails because systemd-homed is deliberately absent
 accounts-daemon\[<PID>\]: couldn't list homed users: .*home1.* # G-215: no systemd-homed in the VM, surfaced via accounts-daemon
 accounts-daemon\[<PID>\]: Unable to open /etc/tcb: No such file or directory # no judgement row (below the row threshold); accounts-daemon tcb backend absent in the VM, same absent-backend family as G-215
-Service file '.*FileManager1\.service' is not named after the D-Bus name 'org\.freedesktop\.FileManager1' # no judgement row (below the row threshold); misnamed vendor activator removed by #126, drop this entry after it merges
 Ignoring duplicate name 'org\.freedesktop\.FileManager1' in service file '.*' # no judgement row (below the row threshold); dbus-broker precedence: Dux Files' user activator overrides Nautilus (#126)
 mod\.rt: RTKit error: org\.freedesktop\.DBus\.Error\.ServiceUnknown # no judgement row (below the row threshold); VM session has no RTKit daemon, same log-and-fallback family as G-063..G-068
 mod\.rt: RTKit does not give us (MaxRealtimePriority|MinNiceLevel|RTTimeUSecMax), using .* # no judgement row (below the row threshold); RTKit fallback notice, same family as G-063..G-068

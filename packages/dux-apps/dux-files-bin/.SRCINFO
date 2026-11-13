@@ -1,7 +1,7 @@
 pkgbase = dux-files-bin
 	pkgdesc = File manager for Wayland from Dux Labs (prebuilt binary)
 	pkgver = 2.1.2
-	pkgrel = 1
+	pkgrel = 2
 	url = https://github.com/duxlabs-dev/dux-files
 	arch = x86_64
 	arch = aarch64

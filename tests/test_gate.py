@@ -55,9 +55,6 @@ class AllowlistTests(unittest.TestCase):
             'Nov 12 20:43:17 dux-verify dbus-broker-launch[766]: Ignoring duplicate name'
             " 'org.freedesktop.FileManager1' in service file"
             " '/usr/share/dbus-1/services/org.freedesktop.FileManager1.service'",
-            'Nov 12 20:43:17 dux-verify dbus-broker-launch[982]: Service file'
-            " '/home/tester/.local/share/dbus-1/services/dev.duxlabs.files.FileManager1.service'"
-            " is not named after the D-Bus name 'org.freedesktop.FileManager1'.",
             'Nov 12 20:43:17 dux-verify pipewire[829]: mod.rt: RTKit error: org.freedesktop.DBus.Error.ServiceUnknown',
             'Nov 12 20:43:17 dux-verify wireplumber[830]: spa.bluez5: BlueZ system service is not available',
             'Nov 12 23:28:12 dux-verify /usr/lib/xdg-desktop-portal[1118]:'

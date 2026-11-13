@@ -7,7 +7,7 @@ _portalservice=org.freedesktop.impl.portal.desktop.dfiles.service
 
 pkgname=dux-files-bin
 pkgver=2.1.2
-pkgrel=1
+pkgrel=2
 pkgdesc="File manager for Wayland from Dux Labs (prebuilt binary)"
 arch=('x86_64' 'aarch64')
 _barch=('amd64' 'arm64')
