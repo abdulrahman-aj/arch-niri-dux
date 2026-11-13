@@ -177,6 +177,21 @@ class AlongsideDiskTests(unittest.TestCase):
             installer.create_alongside_partitions(self.value, self.snapshot, self.identity, lambda: None)
         self.assert_old_data()
 
+    def test_secondary_disk_booting_elsewhere_is_refused_for_its_missing_firmware_entry(self):
+        # Issue #99's layout: free space and slots are fine, the kept OS boots from another disk.
+        before = digest_range(self.disk, 0, 1024 * 1024)
+        with patch.object(installer, 'firmware_boot_path', return_value=None):
+            with self.assertRaisesRegex(ValueError, 'firmware entry') as refused:
+                installer.alongside_snapshot(self.value.disk)
+        self.assertNotIn('32 GiB', str(refused.exception))
+        self.assertEqual(digest_range(self.disk, 0, 1024 * 1024), before)
+        self.assert_old_data()
+
+    def test_blank_disk_is_refused_in_plain_words(self):
+        subprocess.run(['sgdisk', '--zap-all', str(self.disk)], check=True, capture_output=True)
+        with self.assertRaisesRegex(ValueError, 'no partition table'):
+            installer.alongside_snapshot(self.value.disk)
+
     def test_hybrid_mbr_is_rejected_without_repair(self):
         with self.disk.open('r+b') as stream:
             stream.seek(466)
@@ -291,6 +306,39 @@ class AlongsidePlanningTests(unittest.TestCase):
             ],
         )
         self.assertEqual(installer.free_regions(table_value), [])
+
+    def test_refusal_names_the_one_missing_requirement(self):
+        gib = installer.GIB // 512
+        fragmented = dict(
+            label='gpt',
+            unit='sectors',
+            sectorsize=512,
+            firstlba=34,
+            lastlba=100 * gib,
+            partitions=[dict(start=20 * gib, size=1), dict(start=40 * gib, size=60 * gib - 1)],
+        )
+        roomy = dict(fragmented, partitions=[dict(start=2048, size=10 * gib)])
+        full = dict(roomy, partitions=[dict(start=2048 + n, size=1) for n in range(128)])
+        boots = {'0001': {}}
+        cases = {
+            'space': (fragmented, boots),
+            'table': (full, boots),
+            'firmware': (roomy, {}),
+        }
+        refusals = {}
+        for check, (value, value_boots) in cases.items():
+            with self.subTest(check=check):
+                refusal = installer.alongside_refusal(value, installer.free_regions(value), value_boots)
+                self.assertIsNotNone(refusal)
+                self.assertIn('Erase disk', refusal)
+                refusals[check] = refusal
+        # Each failing check gets its own explanation, and only that one.
+        self.assertEqual(len(set(refusals.values())), len(cases))
+        self.assertIn('32 GiB', refusals['space'])
+        self.assertNotIn('firmware', refusals['space'])
+        self.assertNotIn('32 GiB', refusals['firmware'])
+        self.assertIn('firmware entry', refusals['firmware'])
+        self.assertIsNone(installer.alongside_refusal(roomy, installer.free_regions(roomy), boots))
 
     def test_rejects_mbr_overlaps_and_unsupported_sector_sizes(self):
         for changes in (

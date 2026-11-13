@@ -3,7 +3,6 @@
 
 import argparse
 from dataclasses import dataclass
-import getpass
 import hashlib
 import json
 import os
@@ -13,6 +12,8 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import textwrap
+import threading
 import time
 
 if __package__:
@@ -128,58 +129,123 @@ def swap_size(swap_gib, disk_bytes):
     return size
 
 
-def prompt(label, default='', validate=None):
-    while True:
-        answer = input(f'{label}' + (f' [{default}]' if default else '') + ': ').strip() or default
-        try:
-            if validate:
-                validate(answer)
-            return answer
-        except ValueError as error:
-            print(error)
+# Interactive presentation. Only the wizard and the live progress below touch the
+# console; automated --config runs keep plain, parseable output.
+ACCENT = '6'
+WARNING = '1'
+DIM = '8'
+# Every element shares one left margin, so text and widgets line up.
+PAD = '0 0 0 2'
+LOG = Path('/var/log/arch-niri-install.log')
 
 
-def choose(label, choices, default=None, header=''):
+def gum(*args, stdin=None, show=False):
+    """Run a gum widget and return what it printed, or let it print to the console when show is set.
+    Esc or Ctrl-C cancels the installation."""
+    stdout = None if show else subprocess.PIPE
+    result = subprocess.run(['gum', *args], input=stdin, text=True, stdout=stdout, check=False)
+    if result.returncode != 0:
+        raise Cancelled()
+    return '' if show else result.stdout.removesuffix('\n')
+
+
+def say(text, color=None, bold=False):
+    args = ['style', '--padding', PAD]
+    if color:
+        args += ['--foreground', color]
+    if bold:
+        args.append('--bold')
+    gum(*args, text, show=True)
+
+
+def screen(title, intro=''):
+    """Clear the console and start a wizard screen under the installer banner."""
+    print('\x1b[H\x1b[2J\n', end='', flush=True)
+    say('Arch + Niri + Dux', ACCENT, bold=True)
+    say(title, bold=True)
+    if intro:
+        say(intro, DIM)
+    print()
+
+
+def choose(label, choices, default=None, search=False):
     if not choices:
         raise ValueError(f'No choices available for {label.lower()}.')
     if default in choices:
         choices = [default] + [choice for choice in choices if choice != default]
-    result = subprocess.run(
-        [
-            'fzf',
-            '--layout=reverse',
-            '--border',
-            '--no-sort',
-            '--no-multi',
-            '--prompt',
-            label + '> ',
-            '--header',
-            header + ('\n\n' if header else '') + 'Type to search · ↑/↓ to choose · Enter to select · Esc to cancel',
-        ],
-        input='\n'.join(choices) + '\n',
-        text=True,
-        stdout=subprocess.PIPE,
-        check=False,
-    )
-    if result.returncode in (1, 130):
-        raise Cancelled()
-    result.check_returncode()
-    selected = result.stdout.strip()
+    style = ['--header', label, '--header.foreground', ACCENT, '--padding', PAD]
+    if search:
+        # Word-start matching: "amm" finds Asia/Amman, "ber" Europe/Berlin; fuzzy ranks those poorly.
+        widget = ['filter', *style, '--placeholder', 'Type to search', '--height', '12', '--no-fuzzy']
+        widget += ['--indicator.foreground', ACCENT, '--match.foreground', ACCENT]
+    else:
+        widget = ['choose', *style, '--cursor.foreground', ACCENT, '--selected.foreground', ACCENT]
+    selected = gum(*widget, stdin='\n'.join(choices) + '\n')
     if selected not in choices:
         raise ValueError('The picker returned an invalid selection.')
     return selected
 
 
+def show_error(error):
+    say(str(error), WARNING)
+
+
+def prompt(label, default='', validate=None, placeholder=''):
+    while True:
+        answer = gum(
+            'input',
+            '--header',
+            label,
+            '--header.foreground',
+            ACCENT,
+            '--padding',
+            PAD,
+            '--value',
+            default,
+            '--placeholder',
+            placeholder,
+        ).strip()
+        try:
+            if validate:
+                validate(answer)
+            return answer
+        except ValueError as error:
+            show_error(error)
+
+
 def secret(label):
     while True:
-        first = getpass.getpass(label + ': ')
+        first = gum('input', '--password', '--header', label, '--header.foreground', ACCENT, '--padding', PAD)
         try:
             validate_secret(first, label)
-            if first != getpass.getpass('Repeat ' + label.lower() + ': '):
+            repeat = gum(
+                'input',
+                '--password',
+                '--header',
+                'Repeat ' + label.lower(),
+                '--header.foreground',
+                ACCENT,
+                '--padding',
+                PAD,
+            )
+            if first != repeat:
                 raise ValueError('Passwords did not match. Try again.')
             return first
         except ValueError as error:
-            print(error)
+            show_error(error)
+
+
+def done(label, value):
+    say(f'{label}: {value}', DIM)
+
+
+def table(rows):
+    width = max(len(key) for key, _ in rows)
+    return '\n'.join(f'{key.ljust(width)}  {value}' for key, value in rows)
+
+
+def boot_name(snapshot, number):
+    return storage.entry_label(snapshot['entries'][number])
 
 
 def disk_label(disk):
@@ -187,47 +253,67 @@ def disk_label(disk):
 
 
 def wizard(state):
-    print('\nArch + Niri + Dux — offline installation\n')
-    print('Choose erasure or existing unallocated space. Secure Boot must be disabled.\n')
+    if not shutil.which('gum'):
+        raise ValueError('The live installer is missing gum, required for its menus.')
+    if not sys.stdin.isatty():
+        raise ValueError('The guided installer needs the console; automated runs use --config.')
     disks = storage.eligible_disks()
     if not disks:
         raise ValueError('No unused writable disk of at least 32 GiB found. TTY2 is available for recovery.')
-    if not shutil.which('fzf'):
-        raise ValueError('The live installer is missing fzf, required for its selection menus.')
     labels = {disk_label(disk): disk for disk in disks}
     boot_map = storage.boot_entry_nodes(disks)
-    contents = '\n\n'.join(storage.describe_disk(disk, boot_map) for disk in disks)
-    disk = labels[choose('Installation disk', list(labels), header=contents)]
-    mode = choose('Storage mode', ['Erase disk', 'Alongside in existing free space'])
+    screen(
+        'Welcome',
+        'Installs the full desktop from this USB; no network needed. Secure Boot must be disabled.\n'
+        'Esc cancels at any point before the final confirmation. TTY2 has a root shell.',
+    )
+    for disk in disks:
+        say(disk_label(disk), bold=True)
+        say(textwrap.indent(storage.describe_contents(disk, boot_map), '  '))
+    print()
+    disk = labels[choose('Install on which disk?', list(labels))]
+    erase = f'Erase disk: replace everything on {disk["name"]}'
+    alongside = 'Alongside: use existing free space and keep every partition'
+    screen('Storage', disk_label(disk))
     snapshot = None
     region = None
     boot_number = None
-    if mode.startswith('Alongside'):
-        snapshot = storage.alongside_snapshot(disk['name'])
+    while choose('How should this disk be used?', [erase, alongside]) == alongside:
+        try:
+            snapshot = storage.alongside_snapshot(disk['name'])
+            break
+        except ValueError as error:
+            # The refusal names what this disk lacks; Erase disk is still on offer.
+            show_error(error)
+    if snapshot:
+        sector = snapshot['table']['sectorsize']
         regions = {
-            f'Sectors {first}–{last} ({(last - first + 1) * snapshot["table"]["sectorsize"] / GIB:.2f} GiB)': [
-                first,
-                last,
-            ]
+            f'{(last - first + 1) * sector / GIB:.1f} GiB free (sectors {first}–{last})': [first, last]
             for first, last in snapshot['regions']
         }
-        region = regions[choose('Unallocated region', list(regions))]
-        boots = {snapshot['entries'][number]: number for number in snapshot['boots']}
-        boot_number = boots[choose('Existing OS to keep in Limine', list(boots))]
+        region = regions[choose('Install into which unallocated region?', list(regions))]
+        boots = {f'{boot_name(snapshot, number)} (Boot{number})': number for number in snapshot['boots']}
+        boot_number = boots[choose('Which existing OS should stay in the Limine boot menu?', list(boots))]
         storage.validate_existing_loader(snapshot['boots'][boot_number])
+    screen('Keyboard and time zone')
     keymaps = run('localectl', 'list-keymaps', capture=True).splitlines()
-    keymap = choose('Keyboard layout', keymaps, default='us')
+    keymap = choose('Keyboard layout', keymaps, default='us', search=True)
     run('loadkeys', keymap)
+    done('Keyboard layout', keymap)
     timezones = run('timedatectl', 'list-timezones', capture=True).splitlines()
-    timezone = choose('Timezone', timezones, default='Asia/Amman')
-    username = prompt('Username', validate=validate_username)
-    hostname = prompt('Hostname', 'dux', validate=validate_hostname)
+    timezone = choose('Time zone', timezones, default='Asia/Amman', search=True)
+    done('Time zone', timezone)
+    screen('Your account')
+    username = prompt('Username', validate=validate_username, placeholder='lowercase letters, digits, - or _')
+    done('Username', username)
+    hostname = prompt('Computer name (hostname)', 'dux', validate=validate_hostname)
+    done('Computer name', hostname)
     state.confirmed_layout = snapshot
     available_bytes = (region[1] - region[0] + 1) * snapshot['table']['sectorsize'] if snapshot else int(disk['size'])
-    swap_error = ''
+    screen('Swap and hibernation', 'Swap lives in an encrypted file; hibernation needs at least as much swap as RAM.')
     while True:
-        automatic = f'Auto — {memory_gib() + 2} GiB encrypted swap and hibernation'
-        choice = choose('Swap / hibernation', [automatic, 'Custom size', 'No swap / no hibernation'], header=swap_error)
+        automatic = f'Auto: {memory_gib() + 2} GiB encrypted swap with hibernation'
+        choice = choose('Swap size', [automatic, 'Custom size', 'No swap and no hibernation'])
         if choice == automatic:
             swap_gib = None
         elif choice == 'Custom size':
@@ -243,16 +329,24 @@ def wizard(state):
             size = swap_size(swap_gib, available_bytes)
             break
         except ValueError as error:
-            swap_error = str(error)
+            show_error(error)
     state.confirmed_device = storage.require_disk(disk['name'])
+    screen(
+        'Passwords',
+        'The disk passphrase unlocks the encrypted disk at every boot.\n'
+        'The login password is for your account and for sudo. Each needs at least 8 characters.',
+    )
+    passphrase = secret('Disk passphrase')
+    done('Disk passphrase', 'set')
+    password = secret('Login password')
     settings = Settings(
         disk['name'],
         username,
         hostname,
         timezone,
         keymap,
-        secret('Disk passphrase'),
-        secret('Login password'),
+        passphrase,
+        password,
         swap_gib=swap_gib,
         mode='alongside' if snapshot else 'erase',
         free_region=region,
@@ -261,34 +355,307 @@ def wizard(state):
     settings.validate()
     if storage.require_disk(disk['name']) != state.confirmed_device:
         raise ValueError('Disk identity changed while entering installation settings.')
-    summary = (
-        f'ERASE ALL DATA on {disk_label(disk)}\n'
-        f'User: {settings.username}    Host: {settings.hostname}\n'
-        f'Timezone: {settings.timezone}    Keyboard: {settings.keymap}\n'
-        'Storage: 4 GiB EFI + encrypted Btrfs, with separate /home\n'
-        f'Swap: {str(size) + " GiB encrypted; hibernation enabled" if size else "disabled; hibernation disabled"}\n'
-        f'Current contents of this disk — everything below is destroyed:\n{storage.describe_contents(disk, boot_map)}'
-    )
+    swap = f'{size} GiB encrypted, hibernation on' if size else 'none, hibernation off'
+    rows = [
+        ('Disk', disk_label(disk)),
+        ('Account', f'{settings.username} on {settings.hostname}'),
+        ('Keyboard', settings.keymap),
+        ('Time zone', settings.timezone),
+        ('Swap', swap),
+    ]
     if snapshot:
         plan = storage.alongside_plan(settings, snapshot)
-        summary = (
-            f'ALONGSIDE on {disk_label(disk)}; preserve every existing partition.\n'
-            + '\n'.join(
-                f'Create {storage.partition_name(settings.disk, n)}: sectors {a}–{b}, '
-                f'{(b - a + 1) * snapshot["table"]["sectorsize"]} bytes, {label} ({kind})'
-                for n, a, b, kind, label in plan
-            )
-            + f'\nExisting OS: {snapshot["entries"][boot_number]}\n'
-            + f'Swap: {size} GiB; Limine becomes firmware default.'
+        title = 'Alongside: every existing partition is kept'
+        rows.append(('Keep booting', boot_name(snapshot, boot_number)))
+        changes = 'New partitions (Limine becomes the firmware default):\n' + '\n'.join(
+            f'  {storage.partition_name(settings.disk, n)}  sectors {a}–{b}, '
+            f'{(b - a + 1) * snapshot["table"]["sectorsize"] / GIB:.2f} GiB, {label}'
+            for n, a, b, _kind, label in plan
         )
+        border = ACCENT
+        action = 'Create partitions and install'
+    else:
+        title = f'ERASE ALL DATA on {settings.disk}'
+        rows.append(('Layout', '4 GiB EFI + encrypted Btrfs with a separate /home'))
+        changes = 'Destroyed: everything currently on this disk\n' + textwrap.indent(
+            storage.describe_contents(disk, boot_map), '  '
+        )
+        border = WARNING
+        action = 'Erase and install'
     if size and size < memory_gib():
-        summary += '\nWarning: swap is smaller than RAM; hibernation may fail under heavy memory use.'
-    print('\n' + summary + '\n')
-    action = 'Create partitions and install' if snapshot else 'Erase and install'
-    if choose('Confirm installation', ['Cancel', action], header=summary) != action:
+        changes += '\nWarning: swap is smaller than RAM; hibernation may fail under heavy memory use.'
+    screen('Review')
+    say(title, border, bold=True)
+    gum(
+        'style',
+        '--border',
+        'normal',
+        '--border-foreground',
+        border,
+        '--padding',
+        '0 1',
+        '--margin',
+        PAD,
+        table(rows) + '\n\n' + changes,
+        show=True,
+    )
+    print()
+    confirmed = subprocess.run(
+        ['gum', 'confirm', '--padding', PAD, '--default=false', '--affirmative', action, '--negative', 'Cancel']
+        + ['--selected.background', border, '--prompt.foreground', border, 'Start the installation?'],
+        check=False,
+    )
+    if confirmed.returncode != 0:
         raise Cancelled()
     settings.swap_gib = size
     return settings
+
+
+STEPS = 6
+
+
+class PlainProgress:
+    """Numbered step lines on stdout. Automated runs and their log readers rely on this format."""
+
+    def step(self, number, label, packages=False):
+        print(f'\n[{number}/{STEPS}] {label}…', flush=True)
+
+
+# Share of the package step's time spent before post-transaction hooks start
+# (about 70% in a VM: hooks such as the initramfs build take the rest).
+HOOK_START = 0.7
+
+
+class PacmanProgress:
+    """Follows pacman's output without a terminal: plain 'installing NAME...' and '(i/n) hook' lines."""
+
+    def __init__(self):
+        self.total = None
+        self.installed = 0
+        self.hook = None
+        self.activity = ''
+
+    def feed(self, line):
+        line = line.strip()
+        if match := re.fullmatch(r'Packages \((\d+)\).*', line):
+            self.total = int(match[1])
+        elif re.fullmatch(r'installing \S+\.\.\.', line):
+            self.installed += 1
+            self.activity = line
+        elif match := re.fullmatch(r'\(\s*(\d+)/(\d+)\) (.+)', line):
+            self.hook = (int(match[1]), int(match[2]))
+            self.activity = match[3]
+        elif line.startswith((':: ', 'checking ', 'loading ')):
+            self.activity = line.removeprefix(':: ')
+
+    def fraction(self):
+        """Share done for one bar that never moves back: packages fill most of it, hooks the rest.
+        None before pacman reports a total."""
+        if self.hook:
+            return HOOK_START + (1 - HOOK_START) * (self.hook[0] - 1) / self.hook[1]
+        if self.total:
+            return HOOK_START * min(self.installed / self.total, 1)
+        return None
+
+    def counts(self):
+        if self.hook:
+            return f'finishing up {self.hook[0]} of {self.hook[1]}'
+        if self.total:
+            return f'{self.installed} of {self.total} packages'
+        return 'preparing'
+
+
+def clock(seconds):
+    minutes, seconds = divmod(int(seconds), 60)
+    return f'{minutes}:{seconds:02d}'
+
+
+def visible(line):
+    return re.sub(r'\x1b\[[0-9;?]*[A-Za-z]|[\x00-\x08\x0b-\x1f\x7f]', '', line.split('\r')[-1]).rstrip()
+
+
+class LiveProgress:
+    """Shows install steps, elapsed time and a package bar on the console while every
+    command's output goes to the log.
+
+    Redirecting file descriptors 1 and 2 captures the installer's own prints and every
+    child process without changing how commands run. gum has no progress bar, so this
+    redraws a small block in place, like `make try`. It sticks to glyphs in the Linux
+    console's default font.
+    """
+
+    SPINNER = '|/-\\'
+
+    def __init__(self, log_path=LOG):
+        self.log_path = log_path
+        self.steps = []
+        self.pacman = None
+        self.lock = threading.Lock()
+        self.stopped = threading.Event()
+        self.started = time.monotonic()
+        self.height = 0
+        self.last_line = ''
+        self.partial = ''
+
+    def __enter__(self):
+        # Open the console first, so a missing one leaves the previous log intact.
+        self.tty = open('/dev/tty', 'w')
+        self.log_path.parent.mkdir(parents=True, exist_ok=True)
+        self.log = self.log_path.open('w')
+        self.reader = self.log_path.open('r', errors='replace')
+        sys.stdout.flush()
+        sys.stderr.flush()
+        self.saved = [os.dup(1), os.dup(2)]
+        os.dup2(self.log.fileno(), 1)
+        os.dup2(self.log.fileno(), 2)
+        self.tty.write('\x1b[H\x1b[2J\x1b[?25l')
+        self.thread = threading.Thread(target=self.animate, daemon=True)
+        self.thread.start()
+        return self
+
+    def step(self, number, label, packages=False):
+        print(f'\n[{number}/{STEPS}] {label}…', flush=True)
+        with self.lock:
+            self.steps.append((number, label, time.monotonic()))
+            self.pacman = PacmanProgress() if packages else None
+
+    def follow_log(self):
+        # Hold back an unfinished last line so the parser never sees half of one.
+        *lines, self.partial = (self.partial + self.reader.read()).split('\n')
+        for line in lines:
+            line = visible(line)
+            if self.pacman:
+                self.pacman.feed(line)
+            if re.search('[A-Za-z]{3}', line):
+                self.last_line = line.strip()
+
+    def frame(self, tick, failed=False):
+        now = time.monotonic()
+        width = max(40, os.get_terminal_size(self.tty.fileno()).columns - 1)
+        lines = ['', f'  \x1b[1;36mInstalling Arch + Niri + Dux\x1b[0m  {clock(now - self.started)}', '']
+        for index, (number, label, began) in enumerate(self.steps):
+            current = index == len(self.steps) - 1
+            ended = now if current else self.steps[index + 1][2]
+            if not current:
+                mark = '\x1b[32m√\x1b[0m'
+            elif failed:
+                mark = '\x1b[31mx\x1b[0m'
+            else:
+                mark = '\x1b[36m' + self.SPINNER[tick % len(self.SPINNER)] + '\x1b[0m'
+            lines.append(f'  {mark} {number}/{STEPS}  {label.ljust(46)} {clock(ended - began)}')
+            if current and self.pacman:
+                fraction = self.pacman.fraction()
+                bar = 36
+                filled = int((fraction or 0) * bar)
+                lines.append(
+                    f'          \x1b[36m{"█" * filled}\x1b[2m{"░" * (bar - filled)}\x1b[0m  {self.pacman.counts()}'
+                )
+        if not failed and self.last_line:
+            lines += ['', '\x1b[2m  ' + self.last_line[: width - 4] + '\x1b[0m']
+        lines += ['', f'\x1b[2m  Full log: {self.log_path}\x1b[0m']
+        return lines
+
+    def draw(self, lines):
+        up = f'\x1b[{self.height}F' if self.height else ''
+        self.tty.write(up + '\x1b[J' + ''.join(line + '\n' for line in lines))
+        self.tty.flush()
+        self.height = len(lines)
+
+    def animate(self):
+        tick = 0
+        while not self.stopped.wait(0.2):
+            try:
+                with self.lock:
+                    self.follow_log()
+                    self.draw(self.frame(tick))
+            except OSError as error:
+                # The display is a convenience; the installation must go on without it.
+                print(f'Progress display stopped: {error}', flush=True)
+                return
+            tick += 1
+
+    def __exit__(self, kind, error, traceback):
+        self.stopped.set()
+        self.thread.join()
+        sys.stdout.flush()
+        sys.stderr.flush()
+        # Restore the console before anything else can fail, so the installer's
+        # own error message is never lost in the log.
+        os.dup2(self.saved[0], 1)
+        os.dup2(self.saved[1], 2)
+        for descriptor in self.saved:
+            os.close(descriptor)
+        try:
+            with self.lock:
+                self.follow_log()
+                self.draw(self.frame(0, failed=kind is not None))
+            self.tty.write('\x1b[?25h')
+            self.tty.close()
+        except OSError:
+            pass
+        self.log.close()
+        self.reader.close()
+        if kind is not None and kind is not Cancelled:
+            tail = [visible(line) for line in self.log_path.read_text(errors='replace').splitlines()]
+            tail = [line for line in tail if line.strip()][-15:]
+            print('\nLast lines of the log:')
+            print('\n'.join('  ' + line for line in tail))
+            print(f'Full log: {self.log_path}')
+        return False
+
+
+def finish(settings, packages, seconds):
+    """Say what was installed, then reboot when the user is ready."""
+    screen('Installation complete', f'Installed {packages} packages in {clock(seconds)}.')
+    swap = f'{settings.swap_gib} GiB encrypted, hibernation on' if settings.swap_gib else 'none'
+    rows = [
+        ('Desktop', 'Niri with Dux, from this USB'),
+        ('Disk', f'{settings.disk}, encrypted Btrfs'),
+        ('Account', f'{settings.username} on {settings.hostname}'),
+        ('Swap', swap),
+        ('Recovery', 'snapshot "Fresh installation" in the Limine boot menu'),
+    ]
+    gum(
+        'style',
+        '--border',
+        'normal',
+        '--border-foreground',
+        ACCENT,
+        '--padding',
+        '0 1',
+        '--margin',
+        PAD,
+        table(rows),
+        show=True,
+    )
+    say(
+        'At boot, type the disk passphrase, then log in as '
+        f'{settings.username}.\nWi-Fi and updates are set up from the desktop.'
+    )
+    print()
+    reboot = subprocess.run(
+        ['gum', 'confirm', '--padding', PAD, '--affirmative', 'Reboot', '--negative', 'Stay in the live system']
+        + [
+            '--selected.background',
+            ACCENT,
+            '--prompt.foreground',
+            ACCENT,
+            'Remove the USB, then press Enter to reboot.',
+        ],
+        check=False,
+    )
+    if reboot.returncode == 0:
+        run('systemctl', 'reboot')
+    else:
+        print('Type reboot when you are ready.')
+
+
+def interactive(state):
+    settings = wizard(state)
+    started = time.monotonic()
+    with LiveProgress() as progress:
+        packages = install(settings, state, progress)
+    finish(settings, packages, time.monotonic() - started)
 
 
 def write(relative, contents, mode=0o644):
@@ -436,8 +803,10 @@ def offline_pacman_config(repository, database):
     )
 
 
-def install(settings, state=None):
+def install(settings, state=None, progress=None):
+    """Install offline onto the confirmed disk and return how many packages were installed."""
     state = state if state is not None else InstallationState()
+    progress = progress or PlainProgress()
     started_at = time.monotonic()
     settings.validate()
     original_device = storage.require_disk(settings.disk)
@@ -452,7 +821,7 @@ def install(settings, state=None):
     packages = [package for package in packages if package]
     if not packages or any(not re.fullmatch(r'[a-zA-Z0-9@+_.-]+', package) for package in packages):
         raise ValueError('Invalid or missing target package list.')
-    print('\n[1/6] Checking the offline package payload…', flush=True)
+    progress.step(1, 'Checking the offline package payload')
     check_installation_clock()
     verify_repository(REPO)
     for name in (('sfdisk', 'efibootmgr') if settings.mode == 'alongside' else ()) + (
@@ -522,7 +891,7 @@ def install(settings, state=None):
         if storage.require_disk(settings.disk) != original_device:
             raise ValueError('Disk identity changed during package preflight; refusing to erase it.')
         try:
-            print('\n[2/6] Partitioning and encrypting the selected disk…', flush=True)
+            progress.step(2, 'Partitioning and encrypting the selected disk')
             esp, encrypted = storage.create_partitions(settings, snapshot, original_device, state.begin)
             run('mkfs.fat', '-F', '32', '-n', 'DUX_EFI', esp)
             # LUKS2 uses cryptsetup's default argon2id (benchmarked memory, ~1 GiB here);
@@ -568,7 +937,7 @@ def install(settings, state=None):
                 )
                 if not re.fullmatch(r'[0-9]+', resume_offset):
                     raise ValueError('Btrfs returned an invalid swap resume offset.')
-            print('\n[3/6] Installing packages from the USB…', flush=True)
+            progress.step(3, 'Installing packages from the USB', packages=True)
             # Delay snap-pac until Snapper and a bootable baseline exist.
             base_packages = [package for package in packages if package != 'snap-pac'] + ['arch-niri-dux']
             luks_uuid = run('blkid', '-s', 'UUID', '-o', 'value', encrypted, capture=True)
@@ -581,7 +950,7 @@ def install(settings, state=None):
             if size:
                 fstab += '\n/swap/swapfile none swap defaults 0 0\n'
             write('/etc/fstab', recovery_fstab(fstab))
-            print('\n[4/6] Configuring the desktop, user and bootloader…', flush=True)
+            progress.step(4, 'Configuring the desktop, user and bootloader')
             write('/etc/hostname', settings.hostname + '\n')
             write(
                 '/etc/hosts',
@@ -597,7 +966,7 @@ def install(settings, state=None):
             run('arch-chroot', str(TARGET), 'bash', '/root/configure-target.sh', settings.username, settings.timezone)
             target_script.unlink()
             run('arch-chroot', str(TARGET), 'chpasswd', data=f'{settings.username}:{settings.password}\n')
-            print('\n[5/6] Preparing automatic snapshots and recovery…', flush=True)
+            progress.step(5, 'Preparing automatic snapshots and recovery')
             run('pacstrap', '-C', str(offline_conf), '-G', '-M', str(TARGET), 'arch-niri-dux-baseline')
             run(
                 'arch-chroot',
@@ -613,7 +982,7 @@ def install(settings, state=None):
                 'Fresh installation',
             )
             run('arch-chroot', str(TARGET), 'limine-snapper-sync')
-            print('\n[6/6] Saving changes and unmounting the installation…', flush=True)
+            progress.step(6, 'Saving changes and unmounting the installation')
             if snapshot:
                 register_alongside_boot(settings, snapshot, plan)
                 write_boot_config(luks_uuid, filesystem_uuid, resume_offset)
@@ -629,6 +998,7 @@ def install(settings, state=None):
         'Use the disk passphrase at boot, then your username and login password.\n'
         'Snapshot recovery is available in the Limine boot menu.'
     )
+    return sum('.pkg.tar.' in line for line in resolved.splitlines())
 
 
 def main():
@@ -651,9 +1021,9 @@ def main():
             settings = Settings(**json.loads(args.config.read_text()))
             if args.confirm_disk != settings.disk:
                 parser.error('--config requires --confirm-disk with the exact target disk path.')
+            install(settings, state)
         else:
-            settings = wizard(state)
-        install(settings, state)
+            interactive(state)
     except (Cancelled, EOFError):
         print('\nInstallation cancelled. No disk was changed.')
         return 130

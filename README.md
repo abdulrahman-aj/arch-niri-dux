@@ -52,12 +52,16 @@ unallocated space and never resizes, moves or formats existing partitions.
 
 1. Get the ISO. Build it with `make iso` (see [BUILDING.md](BUILDING.md)), or [verify a prebuilt
    ISO](#verify-a-prebuilt-iso) that someone gave you.
-2. Write it to a USB drive and boot it in UEFI mode with Secure Boot off.
+2. Write it to a USB drive and boot it in UEFI mode with Secure Boot off. Its boot menu waits one
+   second (press any key to stay in it), then the installer starts.
 3. Follow the terminal wizard (disk, alongside region and existing OS if used, keymap, timezone, username,
    hostname, swap, disk and login passphrases). **Erase mode erases the selected disk.** Alongside mode asks
-   you to pick an unallocated GPT region. See [supported layouts](ALONGSIDE.md).
-4. Remove the USB drive and reboot. Unlock the disk in the graphical prompt and log in. Press Esc to show
-   boot messages. A text prompt appears if graphics are unavailable.
+   you to pick an unallocated GPT region. See [supported layouts](ALONGSIDE.md). A summary comes before
+   anything is written. While it installs, the full output goes to `/var/log/arch-niri-install.log` on the
+   live system.
+4. When the installer says it is done, remove the USB drive and press Enter to reboot. Unlock the disk in the
+   graphical prompt and log in. Press Esc to show boot messages. A text prompt appears if graphics are
+   unavailable.
 
 Super+Return opens a terminal, Super+Space opens the launcher, and Super+Alt+L locks the screen.
 

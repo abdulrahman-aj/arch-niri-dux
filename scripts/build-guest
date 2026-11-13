@@ -96,6 +96,10 @@ profile=/build/profile
 cp /source/archiso/packages.live "$profile/packages.x86_64"
 cp /source/archiso/pacman.conf "$profile/pacman.conf"
 cp -a /source/archiso/airootfs/. "$profile/airootfs/"
+# Offline, the clock never syncs, so systemd-time-wait-sync kept boot unfinished
+# and the Type=idle tty1 getty waited its full 5 seconds before the installer.
+time_wait_sync=$(readlink "$profile/airootfs/etc/systemd/system/systemd-time-wait-sync.service")
+[[ $time_wait_sync == /dev/null ]]
 # Installation trusts only the pinned package signers, plus our release identity
 # (or this development build's public identity). No signing secrets are shipped.
 install_keyring="$profile/airootfs/usr/local/share/arch-niri-dux/install-keyring"
@@ -122,6 +126,10 @@ cp /source/packages/packages.target "$profile/airootfs/usr/local/share/arch-niri
 date -u +%s >"$profile/airootfs/usr/local/share/arch-niri-dux/iso-build-date"
 # Both interactive gettys remain available after cancellation or errors.
 rm -f "$profile/airootfs/root/.zlogin"
+# Releng waits 15 seconds in the boot menu. One second keeps the menu visible
+# (speech, memtest; any key stops the countdown) without delaying the installer.
+sed -i 's/^timeout .*/timeout 1/' "$profile/efiboot/loader/loader.conf"
+grep -qx 'timeout 1' "$profile/efiboot/loader/loader.conf"
 # Keep the USB mounted: archiso's automatic RAM copy contains only airootfs,
 # while our offline repository lives beside it on the installation medium.
 sed -i '/^options /s/$/ copytoram=n console=tty0 console=ttyS0,115200/' "$profile"/efiboot/loader/entries/*.conf

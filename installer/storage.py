@@ -212,7 +212,7 @@ def require_disk(disk):
     )
 
 
-def free_regions(table):
+def free_regions(table, minimum=MIN_DISK_BYTES):
     """Only return complete aligned extents; never infer space inside a partition."""
     if table.get('label') != 'gpt' or table.get('unit') != 'sectors':
         raise ValueError('Alongside requires an existing GPT partition table.')
@@ -228,13 +228,36 @@ def free_regions(table):
         if start < cursor or end > last or part['size'] <= 0:
             raise ValueError('Overlapping or invalid GPT partitions.')
         aligned = (cursor + alignment - 1) // alignment * alignment
-        if (start - aligned) * sector >= MIN_DISK_BYTES:
+        if (start - aligned) * sector >= minimum:
             regions.append([aligned, start - 1])
         cursor = end + 1
     aligned = (cursor + alignment - 1) // alignment * alignment
-    if (last - aligned + 1) * sector >= MIN_DISK_BYTES:
+    if (last - aligned + 1) * sector >= minimum:
         regions.append([aligned, last])
     return regions
+
+
+def alongside_refusal(table, regions, boots):
+    """Name the first missing Alongside requirement in plain words, or None when all are met."""
+    sector = table['sectorsize']
+    largest = max(((last - first + 1) * sector for first, last in free_regions(table, minimum=1)), default=0)
+    free = f'{largest / GIB:.0f} GiB free' if largest >= GIB else 'less than 1 GiB free'
+    if not regions:
+        return (
+            f'This disk has {free}; Alongside needs at least 32 GiB of unallocated space in one piece. '
+            "Shrink a partition with the other OS's own tools first, use Erase disk, or pick another disk."
+        )
+    if len(table['partitions']) > 126:
+        return (
+            f'This disk has {free}, but its partition table is full ({len(table["partitions"])} of 128 entries used); '
+            'Alongside needs two free entries. Delete an unused partition first, use Erase disk, or pick another disk.'
+        )
+    if not boots:
+        return (
+            f'This disk has {free} and room for partitions, but no boot partition with a firmware entry. '
+            'Alongside needs the other OS to boot from this same disk; use Erase disk or pick another disk.'
+        )
+    return None
 
 
 def firmware_entries(text):
@@ -343,7 +366,15 @@ def firmware_order(text):
 
 def alongside_snapshot(disk):
     require_disk(disk)
-    table = json.loads(run('sfdisk', '--json', disk, capture=True))['partitiontable']
+    # Capture stderr too: on a blank disk sfdisk's complaint would land on the wizard screen.
+    listing = subprocess.run(['sfdisk', '--json', disk], capture_output=True, text=True, check=False)
+    if listing.returncode != 0 and 'does not contain a recognized partition table' in listing.stderr:
+        raise ValueError(
+            'This disk has no partition table, so there is no other OS to keep; use Erase disk or pick another disk.'
+        )
+    if listing.returncode != 0:
+        raise ValueError(f'Cannot read the partition table: {listing.stderr.strip()}')
+    table = json.loads(listing.stdout)['partitiontable']
     regions = free_regions(table)
     verify_gpt(disk)
     mbr, header, primary, backup_header, secondary = read_gpt_metadata(disk, table['sectorsize'])
@@ -369,8 +400,9 @@ def alongside_snapshot(disk):
         if not re.fullmatch(r'/[A-Za-z0-9_./-]+\.efi', path, re.I) or '..' in path.split('/'):
             continue
         boots[number] = dict(partition=part['node'], guid=str(uuid.UUID(guid)), path=path)
-    if not regions or not boots or len(table['partitions']) > 126:
-        raise ValueError('Need a free region of at least 32 GiB, two GPT slots and an existing ESP firmware entry.')
+    refusal = alongside_refusal(table, regions, boots)
+    if refusal:
+        raise ValueError(refusal)
     occupied = {
         index: primary[index * 128 : (index + 1) * 128].hex()
         for index in range(128)
