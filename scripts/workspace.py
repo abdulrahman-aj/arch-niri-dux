@@ -1,11 +1,14 @@
 """Checkout-owned build and verification storage, guards, and garbage collection."""
 
 import argparse
+import fcntl
 import hashlib
+import json
 import os
 from pathlib import Path
 import shutil
 import socket
+import subprocess
 import sys
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -236,6 +239,264 @@ def newest_accepted_fixture(registry=None):
     return fixtures[0] / 'disk.qcow2' if fixtures else None
 
 
+PROTECTED_BRANCHES = ('main', 'master')
+
+
+def linked_worktrees(checkout=ROOT):
+    """Linked worktrees from `git worktree list --porcelain`.
+
+    Returns dicts with path, branch (short name or None when detached),
+    and is_main (first entry owns the git dir).
+    """
+    result = subprocess.run(
+        ['git', '-C', str(checkout), 'worktree', 'list', '--porcelain'],
+        capture_output=True,
+        text=True,
+        check=True,
+        timeout=30,
+    )
+    worktrees = []
+    current = None
+    for line in result.stdout.splitlines():
+        if line.startswith('worktree '):
+            current = {'path': Path(line[len('worktree ') :]), 'branch': None, 'is_main': not worktrees}
+            worktrees.append(current)
+        elif line.startswith('branch ') and current is not None:
+            ref = line[len('branch ') :].strip()
+            current['branch'] = ref[len('refs/heads/') :] if ref.startswith('refs/heads/') else ref
+    return worktrees
+
+
+def _status_entry_outside_out(line):
+    """True when a `git status --porcelain` line touches anything outside out/."""
+    body = line[3:] if len(line) > 3 else ''
+    parts = [part.strip().strip('"') for part in body.split(' -> ')] if ' -> ' in body else [body.strip().strip('"')]
+    return any(part != 'out' and not part.startswith('out/') for part in parts)
+
+
+def worktree_status_outside_out(worktree):
+    """Porcelain lines outside out/, or None when git status fails."""
+    try:
+        result = subprocess.run(
+            ['git', '-C', str(worktree), 'status', '--porcelain'],
+            capture_output=True,
+            text=True,
+            check=False,
+            timeout=30,
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        return None
+    if result.returncode != 0:
+        return None
+    return [line for line in result.stdout.splitlines() if line and _status_entry_outside_out(line)]
+
+
+def worktree_busy(worktree):
+    """(busy, reason) when the ISO build lock is held or a kept VM answers."""
+    lock = build_state(worktree) / 'build.lock'
+    if lock.is_file():
+        try:
+            with lock.open() as stream:
+                fcntl.flock(stream, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except OSError:
+            return True, 'ISO build holds build.lock'
+    out = Path(worktree) / 'out'
+    if out.is_dir():
+        evidence = [child for child in out.iterdir() if child.is_dir() and not child.is_symlink()]
+        verification = out / 'verify'
+        if verification.is_dir():
+            evidence.extend(child for child in verification.iterdir() if child.is_dir() and not child.is_symlink())
+        if any(kept_running(directory) for directory in evidence):
+            return True, 'kept VM still answers under out/'
+    return False, ''
+
+
+def merge_info(branch, checkout=ROOT):
+    """(merged, number, title, method) for a branch; merged None means can't tell.
+
+    gh decides; merge-base runs only when gh fails (squash merges are not ancestors).
+    """
+    try:
+        listed = subprocess.run(
+            ['gh', 'pr', 'list', '--state', 'merged', '--head', branch, '--json', 'number,title', '--limit', '1'],
+            cwd=str(checkout),
+            capture_output=True,
+            text=True,
+            check=False,
+            timeout=30,
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        listed = None
+    if listed is not None and listed.returncode == 0:
+        records = json.loads(listed.stdout or '[]')
+        if records:
+            return True, records[0].get('number'), records[0].get('title', ''), 'gh'
+        return False, None, '', 'gh'
+    ancestor = subprocess.run(
+        ['git', '-C', str(checkout), 'merge-base', '--is-ancestor', branch, 'origin/main'],
+        capture_output=True,
+        text=True,
+        check=False,
+        timeout=30,
+    )
+    if ancestor.returncode in (0, 1):
+        return ancestor.returncode == 0, None, '', 'ancestry'
+    return None, None, '', 'none'
+
+
+def plan_worktree_gc(checkout=ROOT):
+    """Removals, skips, and a fixture move for linked worktrees.
+
+    Removable: not the runner, main, detached, or protected; clean outside
+    out/; idle; merged. The newest accepted fixture moves into the runner's
+    out/verify when a removal would take it away.
+    """
+    runner = Path(checkout).resolve()
+    removals = []
+    skipped = []
+    for entry in linked_worktrees(checkout):
+        path = entry['path']
+        try:
+            resolved = path.resolve()
+        except OSError:
+            skipped.append({'path': path, 'branch': entry['branch'], 'reason': 'path does not resolve'})
+            continue
+        branch = entry['branch']
+        if resolved == runner:
+            reason = 'current checkout (running gc)'
+        elif entry['is_main']:
+            reason = 'main worktree'
+        elif branch is None:
+            reason = 'detached HEAD'
+        elif branch in PROTECTED_BRANCHES:
+            reason = f'protected branch {branch}'
+        else:
+            reason = ''
+        if reason:
+            skipped.append({'path': path, 'branch': branch, 'reason': reason})
+            continue
+        outside = worktree_status_outside_out(path)
+        if outside is None:
+            skipped.append({'path': path, 'branch': branch, 'reason': 'git status failed'})
+            continue
+        if outside:
+            preview = ', '.join(outside[:3])
+            skipped.append({'path': path, 'branch': branch, 'reason': f'dirty worktree ({preview})'})
+            continue
+        busy, reason = worktree_busy(path)
+        if busy:
+            skipped.append({'path': path, 'branch': branch, 'reason': reason})
+            continue
+        merged, number, title, method = merge_info(branch, checkout)
+        if merged is None:
+            skipped.append({'path': path, 'branch': branch, 'reason': "can't tell whether merged"})
+            continue
+        if not merged:
+            skipped.append({'path': path, 'branch': branch, 'reason': 'not merged'})
+            continue
+        state = build_state(path)
+        removals.append(
+            {
+                'path': path,
+                'resolved': resolved,
+                'branch': branch,
+                'pr_number': number,
+                'pr_title': title,
+                'method': method,
+                'worktree_size': tree_size(path),
+                'build_state': state,
+                'build_size': tree_size(state),
+            }
+        )
+    fixture_move = None
+    fixtures = accepted_fixtures()
+    if fixtures:
+        newest = fixtures[0].resolve()
+        if any(newest == item['resolved'] or item['resolved'] in newest.parents for item in removals):
+            target_dir = runner / 'out' / 'verify'
+            target = target_dir / newest.name
+            counter = 1
+            while target.exists():
+                counter += 1
+                target = target_dir / f'{newest.name}-gc-{counter}'
+            fixture_move = {'src': newest, 'dst': target, 'size': tree_size(newest)}
+    return removals, skipped, fixture_move
+
+
+def move_fixture(src, dst, new_owner):
+    """Move an accepted workspace and re-point its marker and registry at new_owner."""
+    src = Path(src).resolve()
+    dst = Path(dst)
+    dst.parent.mkdir(parents=True, exist_ok=True)
+    old_key = hashlib.sha256(os.fsencode(src)).hexdigest()
+    shutil.move(str(src), str(dst))
+    resolved = dst.resolve()
+    (resolved / MARKER).write_text(str(Path(new_owner).resolve()) + '\n')
+    registry = cache_root() / 'arch-niri-dux-states'
+    registry.mkdir(parents=True, exist_ok=True)
+    key = hashlib.sha256(os.fsencode(resolved)).hexdigest()
+    (registry / key).write_text(str(resolved) + '\n')
+    (registry / old_key).unlink(missing_ok=True)
+    return resolved
+
+
+def gc_worktrees(checkout, dry_run):
+    """Remove worktrees of merged PRs, preserving the newest fixture first."""
+    removals, skipped, fixture_move = plan_worktree_gc(checkout)
+    verb = 'Would remove' if dry_run else 'Removing'
+    move_verb = 'Would move' if dry_run else 'Moving'
+    freed_worktrees = 0
+    if fixture_move is not None:
+        print(
+            f'{move_verb} fixture: {fixture_move["src"]} -> {fixture_move["dst"]} ({fixture_move["size"] / 1024**3:.2f} GiB)'
+        )
+    for item in removals:
+        if item['pr_number'] is not None:
+            pr = f'PR #{item["pr_number"]} {item["pr_title"]}'.rstrip()
+        else:
+            pr = 'merged by ancestry'
+        print(
+            f'{verb} worktree: {item["path"]} (branch {item["branch"]}, {pr} via {item["method"]}; '
+            f'worktree {item["worktree_size"] / 1024**3:.2f} GiB, build state {item["build_size"] / 1024**3:.2f} GiB)'
+        )
+        freed_worktrees += item['worktree_size']
+    for item in skipped:
+        print(f'Skipped worktree: {item["path"]} (branch {item["branch"] or "detached"}): {item["reason"]}')
+    if fixture_move is not None:
+        freed_worktrees -= fixture_move['size']
+    if removals:
+        print(f'{"Would free" if dry_run else "Freeing"} {freed_worktrees / 1024**3:.2f} GiB from worktrees')
+        if dry_run and (orphaned := sum(item['build_size'] for item in removals)):
+            print(
+                f'Would orphan build states of removed checkouts ({orphaned / 1024**3:.2f} GiB), '
+                'freed by the existing cleanup below'
+            )
+    if dry_run:
+        return removals, skipped, fixture_move
+    if fixture_move is not None:
+        try:
+            move_fixture(fixture_move['src'], fixture_move['dst'], checkout)
+        except OSError as error:
+            print(f'Fixture move failed ({error}); keeping its worktree.')
+            removals = [
+                item
+                for item in removals
+                if item['resolved'] != fixture_move['src'] and item['resolved'] not in fixture_move['src'].parents
+            ]
+    for item in removals:
+        result = subprocess.run(
+            ['git', '-C', str(checkout), 'worktree', 'remove', str(item['path'])],
+            capture_output=True,
+            text=True,
+            check=False,
+            timeout=120,
+        )
+        if result.returncode != 0:
+            detail = (result.stderr or result.stdout).strip().splitlines()
+            print(f'Worktree remove failed: {item["path"]} ({"; ".join(detail[:2])})')
+    return removals, skipped, fixture_move
+
+
 def candidates(cache, checkout):
     paths = set(cache.glob('arch-niri-dux-build*'))
     verification = cache / 'arch-niri-dux-verification'
@@ -303,6 +564,7 @@ def main():
             print(warning, file=sys.stderr)
         print(mib)
     elif args.command == 'gc':
+        gc_worktrees(ROOT, args.dry_run)
         collect(cache_root(), ROOT, args.dry_run)
     else:
         state = build_state()
