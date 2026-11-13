@@ -192,6 +192,8 @@ def ask_disk_size(ram_gib):
 
     The default install takes automatic swap (RAM + 2 GiB) beside the ESP and
     system reserve, so the floor grows with RAM; 48 GiB stays the default.
+    The installer rechecks against actual RAM at its swap screen, so a stale
+    answer here still fails safe later.
     """
     auto_swap = ram_gib + storage.AUTO_SWAP_PAD_GIB
     minimum = storage.min_disk_gib(auto_swap)
@@ -209,8 +211,8 @@ def ask_disk_size(ram_gib):
         print(
             f'Disks below {minimum} GiB cannot finish the default install: the installer needs at least '
             f'{storage.MIN_DISK_BYTES // storage.GIB} GiB, and with {ram_gib} GiB RAM its automatic swap '
-            f'({auto_swap} GiB) needs room beside the {storage.ESP_GIB} GiB ESP and '
-            f'{storage.SYSTEM_RESERVE_GIB} GiB system reserve.'
+            f'({auto_swap} GiB) needs room beside the {storage.ESP_GIB} GiB ESP, '
+            f'{storage.SYSTEM_RESERVE_GIB} GiB system reserve and {storage.DISK_SLACK_GIB} GiB slack.'
         )
 
 

@@ -93,6 +93,7 @@ class TryVmTests(unittest.TestCase):
             refusal = '\n'.join(call.args[0] for call in printed.call_args_list)
             self.assertIn('35 GiB', refusal)
             self.assertIn('automatic swap', refusal)
+            self.assertIn('slack', refusal)
         with patch('try_vm.gum_input', side_effect=['38', '39']):
             self.assertEqual(try_vm.ask_disk_size(8), 39)
         with patch('try_vm.gum_input', side_effect=['']):

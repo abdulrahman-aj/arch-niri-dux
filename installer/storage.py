@@ -224,17 +224,31 @@ def eligible_disks():
 
 
 def describe_rejections(rejections):
-    """One plain-words line per rejected disk, for errors that must name the cause."""
-    return '\n'.join(f'{disk_identity(disk)}: {reason}' for disk, reason in rejections if reason is not None)
+    """One plain-words line per rejected whole disk, for errors that must name the cause.
+
+    Loop, ROM and other non-disk nodes are never install targets; listing them
+    would bury the disks a human can actually pick.
+    """
+    return '\n'.join(
+        f'{disk_identity(disk)}: {reason}'
+        for disk, reason in rejections
+        if reason is not None and disk.get('type') == 'disk'
+    )
 
 
 def require_disk(disk):
     rejections = disk_rejections()
     matches = [entry for entry, reason in rejections if entry['name'] == disk and reason is None]
     if len(matches) != 1:
-        detail = describe_rejections(rejections)
+        present = next(((entry, reason) for entry, reason in rejections if entry['name'] == disk), None)
+        if present is None:
+            detail = f'{disk} was not found among the disks the installer sees.'
+        else:
+            detail = f'{disk_identity(present[0])}: {present[1]}'
+        others = describe_rejections([(entry, reason) for entry, reason in rejections if entry['name'] != disk])
         raise ValueError(
-            'Target disk is unavailable, mounted, in use, read-only or too small.' + (f'\n{detail}' if detail else '')
+            'Target disk is unavailable, mounted, in use, read-only or too small.'
+            f'\n{detail}' + (f'\n{others}' if others else '')
         )
     device_stat = os.stat(disk)
     return (
