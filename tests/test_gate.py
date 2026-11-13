@@ -60,7 +60,8 @@ class AllowlistTests(unittest.TestCase):
             'Nov 12 23:28:12 dux-verify /usr/lib/xdg-desktop-portal[1118]:'
             " g_value_unset: assertion 'value_table' failed",
             'Nov 12 23:28:13 dux-verify accounts-daemon[1134]: Unable to open /etc/tcb: No such file or directory',
-            "Nov 12 20:43:17 dux-verify systemd[734]: dsearch.service: Failed with result 'exit-code'.",
+            'Nov 13 03:19:38 dux-verify systemd-sysusers[532]: /usr/lib/sysusers.d/greetd.conf:1: Conflict with'
+            " earlier configuration for user 'greeter' in /usr/lib/sysusers.d/dms-greeter.conf:3, ignoring line.",
             "Nov 12 20:43:17 dux-verify greetd[725]: gkr-pam: couldn't unlock the login keyring.",
         ]
         for raw in samples:

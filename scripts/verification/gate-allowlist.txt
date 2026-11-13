@@ -18,7 +18,5 @@ mod\.rt: RTKit does not give us (MaxRealtimePriority|MinNiceLevel|RTTimeUSecMax)
 /usr/lib/xdg-desktop-portal\[<PID>\]: \.\./glib/gobject/gtype\.c:<LINE>: type id '2' is invalid # no judgement row (below the row threshold); same xdg-desktop-portal burst as above
 /usr/lib/xdg-desktop-portal\[<PID>\]: can't peek value table for type '<unknown>' which is not currently referenced # no judgement row (below the row threshold); same xdg-desktop-portal burst as above
 spa\.bluez5: BlueZ system service is not available # G-063, G-065: no bluetooth adapter in the VM; services report and continue
-dsearch\.service: Failed with result 'exit-code'\. # G-209: greeter dsearch crash loop; installer fix #125, accepted fixtures predate it; drop when fixtures are re-accepted
-gnome-keyring-daemon\[<PID>\]: unable to create keyring dir: /\.local/share/keyrings # G-214: greeter has no home on pre-#125 fixtures; installer fix #125; drop when fixtures are re-accepted
-wp-state: failed to create directory /\.local/state/wireplumber: Permission denied # G-213: greeter has no home on pre-#125 fixtures; installer fix #125; drop when fixtures are re-accepted
 greetd\[<PID>\]: gkr-pam: (couldn't unlock the login keyring|unable to locate daemon control file)\.? # G-216: the greeter account has no keyring password to unlock; harmless on fresh installs after #125
+systemd-sysusers\[<PID>\]: /usr/lib/sysusers\.d/greetd\.conf:1: Conflict with earlier configuration for user 'greeter' in /usr/lib/sysusers\.d/dms-greeter\.conf:3, ignoring line\. # by design (#125): dux-greeter's fragment sorts first and gives the greeter its home; logged when sysusers reruns after a package update
