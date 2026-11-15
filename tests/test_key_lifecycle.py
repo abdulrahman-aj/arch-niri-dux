@@ -44,11 +44,11 @@ class LifecycleTests(unittest.TestCase):
                         '',
                         *args,
                     ],
-                    stderr=subprocess.DEVNULL,
                 )
 
             try:
-                gpg('--faked-system-time', '1577836800', '--quick-gen-key', 'Expired fixture', 'ed25519', 'cert', '0')
+                # Freeze time so key creation cannot advance past the next command's clock.
+                gpg('--faked-system-time', '1577836800!', '--quick-gen-key', 'Expired fixture', 'ed25519', 'cert', '0')
                 primary = next(
                     line.split(':')[9]
                     for line in gpg('--with-colons', '--list-keys').decode().splitlines()
@@ -58,7 +58,7 @@ class LifecycleTests(unittest.TestCase):
                 anchor = work / 'anchor'
                 anchor.write_bytes(gpg('--export', primary))
                 samples = [b'malformed certificate', anchor.read_bytes()]
-                gpg('--faked-system-time', '1577836800', '--quick-add-key', primary, 'ed25519', 'sign', '1d')
+                gpg('--faked-system-time', '1577836800!', '--quick-add-key', primary, 'ed25519', 'sign', '1d')
                 samples.append(gpg('--export', primary))
                 samples.append(gpg('--export-secret-keys', primary))
                 gpg('--quick-gen-key', 'Unrelated fixture', 'ed25519', 'sign', '1d')
