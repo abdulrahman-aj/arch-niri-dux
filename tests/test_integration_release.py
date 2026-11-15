@@ -506,13 +506,14 @@ class SignedReleaseTests(unittest.TestCase):
         gpg = ['gpg', '--homedir', str(home), '--batch', '--yes', '--pinentry-mode', 'loopback', '--passphrase', '']
 
         def run(*arguments):
-            return subprocess.check_output(gpg + list(arguments), stderr=subprocess.DEVNULL)
+            return subprocess.check_output(gpg + list(arguments))
 
         try:
-            run('--faked-system-time', '1577836800', '--quick-gen-key', 'Historical fixture', 'ed25519', 'cert', '0')
+            # Freeze time so key creation cannot advance past the next command's clock.
+            run('--faked-system-time', '1577836800!', '--quick-gen-key', 'Historical fixture', 'ed25519', 'cert', '0')
             listing = run('--with-colons', '--list-keys').decode()
             primary = next(line.split(':')[9] for line in listing.splitlines() if line.startswith('fpr:'))
-            run('--faked-system-time', '1577836800', '--quick-add-key', primary, 'ed25519', 'sign', '1d')
+            run('--faked-system-time', '1577836800!', '--quick-add-key', primary, 'ed25519', 'sign', '1d')
             payload = self.root / 'old-package'
             payload.write_text('Historical package')
             run('--faked-system-time', '1577836860', '--local-user', primary, '--detach-sign', str(payload))
