@@ -635,6 +635,8 @@ def create_partitions(settings, snapshot, identity, on_start):
     if snapshot:
         esp, encrypted = create_alongside_partitions(settings, snapshot, identity, on_start)
     else:
+        if require_disk(settings.disk) != identity:
+            raise ValueError('Disk identity changed during package preflight; refusing to erase it.')
         on_start()
         run('wipefs', '--all', settings.disk)
         run(
