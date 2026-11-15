@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Drive a kept VM (verify --keep or verify-fast --keep): attach to its sockets and run one verb.
+"""Drive a kept VM (verification or installer preview): attach to its sockets and run one verb.
 
 The guest mounts this evidence directory at /run/verify, so files reach it
 without a push verb: copy on the host, then sh 'cp /run/verify/<name> <dest>'.
@@ -37,7 +37,9 @@ def clean_output(output):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('--directory', required=True, type=Path, help='Evidence directory of a kept (--keep) VM')
+    parser.add_argument(
+        '--directory', required=True, type=Path, help='Evidence directory of a kept VM or installer preview'
+    )
     parser.add_argument('verb', choices=('sh', 'probe', 'shot', 'click', 'key', 'poweroff', 'stage', 'preview-sync'))
     parser.add_argument('args', nargs='*', help='Verb arguments')
     args = parser.parse_args()
@@ -79,7 +81,10 @@ def main():
                 parser.error('shot needs a screenshot name.')
             name = args.args[0]
             if (directory / 'installer-preview.json').is_file():
-                print(vm.screenshot(str(Path(name).with_suffix(''))))
+                path = vm.screenshot(str(Path(name).with_suffix('')))
+                if path is None:
+                    raise RuntimeError('Preview has no readable screenshot surface.')
+                print(path)
             else:
                 vm.probe('guest', 'screenshot', name)
                 print(directory / name)
