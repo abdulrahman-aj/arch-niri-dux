@@ -5,6 +5,7 @@ Disks persist under ~/.local/share/arch-niri-dux/try/<name>/; every open
 attaches the VM's stored install source (release or checkout ISO) with the
 disk first in boot order."""
 
+import argparse
 import hashlib
 import os
 import re
@@ -730,5 +731,6 @@ def interactive(base=None):
 
 
 if __name__ == '__main__':
+    argparse.ArgumentParser(description=__doc__).parse_args()
     refuse_if_agent()
     interactive()
