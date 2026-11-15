@@ -173,3 +173,37 @@ full run writes `SUCCESS`. Run Debian first, then Windows, sequentially.
   does not qualify every device.
 - Synthetic audio, camera, network and printer checks qualify software paths.
   Package and ISO verification do not change physical machines.
+
+## Installer UI preview
+
+`make installer-preview ARGS='--disk-gib 32 --ram-gib 4'` boots the newest
+checkout development ISO in `out/` with a disposable disk, ISO-first boot
+order and a root serial console. Build it once with `make iso-development`.
+Use `--iso PATH` to select a development ISO from another checkout and
+`--directory out/preview-2` for a fresh preview workspace. It stages this
+checkout's `installer/` over the evidence share, copies it into the live
+system and restarts the tty1 installer. No network is enabled.
+
+After editing installer files, drive the running preview with:
+
+```
+./scripts/in-dev-shell python3 scripts/vm_console.py --directory out/preview preview-sync
+./scripts/in-dev-shell python3 scripts/vm_console.py --directory out/preview shot installer.png
+./scripts/in-dev-shell python3 scripts/vm_console.py --directory out/preview key ret
+./scripts/in-dev-shell python3 scripts/vm_console.py --directory out/preview poweroff
+```
+
+Screenshots use QMP's PNG screendump, including the live text console.
+`sh '<command>'` provides the same serial shell used by kept desktop VMs.
+Power off before removing the preview directory or starting another VM.
+`make try` remains human-only; this disposable preview uses the regular
+agent machine, memory and disk guards.
+
+Previews never qualify a change. Final installer work still requires an
+unmodified ISO built with `make iso-development` and full `make verify`.
+Runtime copies bypass packaging and payload verification.
+
+For desktop QML, use the [kept verify-fast loop](#debugging-loop-kept-verify-fast-vm).
+For example, copy a widget into `out/debug/`, use `vm_console sh` to copy
+`/run/verify/Widget.qml` to its installed path, then use `shot widget.png`.
+Run package qualification after the final edit and stop with `poweroff`.

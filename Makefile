@@ -41,7 +41,7 @@ fetch-alongside:
 	./scripts/in-dev-shell python3 scripts/fetch_alongside.py $(ARGS)
 help:
 	@printf '%s\n' 'lock, iso, iso-development, iso-checksums, verify, verify-fast, verify-release,' \
-		'verify-hibernate, verify-alongside, provision-alongside, fetch-alongside, gc' \
+		'verify-hibernate, verify-alongside, provision-alongside, fetch-alongside, installer-preview, gc' \
 		'try: guided persistent test-drive VMs (for humans; agents use make verify-fast ARGS=--keep).'
 
 .PHONY: heavy-guard gc
@@ -53,3 +53,7 @@ gc:
 
 iso-checksums:
 	./scripts/in-dev-shell python3 scripts/iso_checksums.py prepare $(ARGS)
+
+.PHONY: installer-preview
+installer-preview: | heavy-guard
+	./scripts/in-dev-shell python3 scripts/installer_preview.py $(ARGS)

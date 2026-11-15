@@ -43,6 +43,7 @@ class VM:
         self.directory = directory
         self.iso = iso
         self.disk = disk
+        self.memory_mib = 8192
         self.optical_interface = 'usb'
         self.graphics = 'virtio-vga-gl'
         self.disk_interface = 'virtio'
@@ -144,7 +145,7 @@ class VM:
             '-cpu',
             'host',
             '-m',
-            '8192',
+            str(self.memory_mib),
             '-smp',
             '4',
             '-display',
