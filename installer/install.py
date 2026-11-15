@@ -421,8 +421,6 @@ def install(settings, state=None, progress=None):
         payload.verify_payload_signatures(
             offline_conf, package_db, payload.REPO, [line for line in resolved.splitlines() if '.pkg.tar.' in line]
         )
-        if storage.require_disk(settings.disk) != original_device:
-            raise ValueError('Disk identity changed during package preflight; refusing to erase it.')
         progress.step(2, 'Partitioning and encrypting the selected disk')
         with storage.prepared_target(settings, snapshot, original_device, state.begin, TARGET, size) as (
             encrypted,

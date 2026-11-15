@@ -11,7 +11,7 @@ import zlib
 import subprocess
 import tempfile
 import unittest
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 from test_installer import settings
 from installer import storage as installer
@@ -412,6 +412,17 @@ class AlongsideBootTests(unittest.TestCase):
                 with self.assertRaisesRegex(ValueError, 'Kernel partition geometry'):
                     installer.verify_partition_nodes(settings(), [(2, 513, 1536, 'ef00', 'ESP')], 4096)
 
+    def test_erase_replaced_identity_refuses_before_start_or_commands(self):
+        on_start = Mock()
+        with (
+            patch.object(installer, 'require_disk', return_value=(99, 2, 3)),
+            patch.object(installer, 'run') as command,
+        ):
+            with self.assertRaisesRegex(ValueError, 'Disk identity changed'):
+                installer.create_partitions(settings(), None, (1, 2, 3), on_start)
+            on_start.assert_not_called()
+            command.assert_not_called()
+
     def test_erase_mode_verifies_kernel_geometry_against_created_table(self):
         table = {
             'sectorsize': 512,
@@ -440,6 +451,7 @@ class AlongsideBootTests(unittest.TestCase):
 
             with (
                 patch.object(installer, 'run', side_effect=command),
+                patch.object(installer, 'require_disk', return_value=(1, 2, 3)),
                 patch.object(installer, 'Path', side_effect=path),
             ):
                 self.assertEqual(
@@ -449,6 +461,7 @@ class AlongsideBootTests(unittest.TestCase):
             (sysfs / 'vda2/size').write_text(str(table['partitions'][1]['size'] + 2))
             with (
                 patch.object(installer, 'run', side_effect=command),
+                patch.object(installer, 'require_disk', return_value=(1, 2, 3)),
                 patch.object(installer, 'Path', side_effect=path),
                 self.assertRaisesRegex(ValueError, 'Kernel partition geometry'),
             ):
