@@ -46,8 +46,9 @@ class PayloadTests(unittest.TestCase):
             self.assertNotEqual(before, digest(path))
 
     def test_unreadable_cache_falls_back_to_download(self):
-        with patch.object(module, 'digest', side_effect=PermissionError):
-            self.assertFalse(module.cache_matches(Path('/cache/package'), 'a' * 64))
+        with tempfile.TemporaryDirectory() as directory:
+            # digest() on a directory raises OSError; the cache stays optional.
+            self.assertFalse(module.cache_matches(Path(directory), 'a' * 64))
 
     def test_lock_refresh_removes_old_package_and_signature(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -162,8 +163,17 @@ class SharedCacheTests(unittest.TestCase):
 
     def fetch(self, entry, dest, url):
         # validate_entry demands HTTPS; the loopback server speaks plain HTTP.
-        real_download = module.download
-        with patch.object(module, 'download', lambda _, *rest: real_download(url, *rest)):
+        # Redirect at the stdlib boundary so the real download runs unpatched.
+        import urllib.request
+
+        real_urlopen = urllib.request.urlopen
+
+        def redirect(target, *args, **kwargs):
+            if isinstance(target, str) and target.startswith('https://127.0.0.1:'):
+                target = 'http://' + target[len('https://') :]
+            return real_urlopen(target, *args, **kwargs)
+
+        with patch.object(module.urllib.request, 'urlopen', side_effect=redirect):
             module.fetch_package(entry, dest, self.downloads, None)
 
     def test_second_build_reuses_the_shared_download(self):
@@ -243,11 +253,19 @@ class ResolveDateTests(unittest.TestCase):
         available = MagicMock()
         available.__enter__.return_value = available
         missing = urllib.error.HTTPError('https://example.invalid/core.db', 404, 'Not Found', None, None)
-        with patch('urllib.request.urlopen', side_effect=[missing, available]) as opened:
+        attempts = []
+
+        def fake_urlopen(*args, **_kwargs):
+            attempts.append(args)
+            if len(attempts) == 1:
+                raise missing
+            return available
+
+        with patch('urllib.request.urlopen', side_effect=fake_urlopen):
             self.assertEqual(
                 module.resolve_date(None), (datetime.date.today() - datetime.timedelta(days=1)).strftime('%Y/%m/%d')
             )
-        self.assertEqual(opened.call_count, 2)
+        self.assertEqual(len(attempts), 2)
 
     def test_server_error_aborts_instead_of_drifting_to_an_older_date(self):
         import urllib.error
@@ -262,9 +280,8 @@ class ResolveDateTests(unittest.TestCase):
 
         available = MagicMock()
         available.__enter__.return_value = available
-        with patch('urllib.request.urlopen', return_value=available) as opened:
+        with patch('urllib.request.urlopen', return_value=available):
             self.assertEqual(module.resolve_date('2026/11/10'), '2026/11/10')
-        self.assertEqual(opened.call_count, 1)
 
 
 class OmarchyDepsTests(unittest.TestCase):

@@ -12,7 +12,7 @@ from unittest.mock import patch
 
 from tests.test_workspace import git_run, init_repo
 from tools.verification.scenarios.fixture import run_fixture
-from tools.workspace import fixtures, state
+from tools.workspace import fixtures, resources, state
 
 
 class FixtureSelectionTests(unittest.TestCase):
@@ -67,14 +67,9 @@ class FixtureSelectionTests(unittest.TestCase):
         self.fixture('dirty', self.ancestor, 300, dirty=True)
         destination = self.root / 'overlay'
         args = argparse.Namespace(fixture='auto', directory=destination)
-        # Bind discovery to the temporary repo without replacing its behavior.
-        with (
-            patch(
-                'tools.verification.scenarios.fixture.newest_accepted_fixture',
-                lambda: fixtures.newest_accepted_fixture(checkout=self.repo),
-            ),
-            contextlib.redirect_stderr(io.StringIO()) as output,
-        ):
+        # The temporary commits are unknown to the real checkout, so discovery
+        # finds no main fixture without replacing its behavior.
+        with contextlib.redirect_stderr(io.StringIO()) as output:
             with self.assertRaises(SystemExit) as error:
                 run_fixture(args, argparse.ArgumentParser())
         self.assertNotEqual(error.exception.code, 0)
@@ -89,7 +84,9 @@ class FixtureSelectionTests(unittest.TestCase):
         args = argparse.Namespace(fixture=explicit, directory=destination, keep=False, kernel_package=None)
         # Stop before staging packages or starting a VM. The copied firmware
         # proves the explicit fixture reached overlay preparation unchanged.
-        with patch('tools.verification.scenarios.fixture.disk_guard'):
+        # Fake free space (stdlib boundary) so the real guard passes on small /tmp.
+        roomy = type('Usage', (), {'free': 100 * 1024**3})()
+        with patch.object(resources.shutil, 'disk_usage', return_value=roomy):
             with self.assertRaises(FileNotFoundError):
                 run_fixture(args, argparse.ArgumentParser())
         self.assertEqual((destination / 'OVMF_VARS.fd').read_bytes(), b'explicit firmware')

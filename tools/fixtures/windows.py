@@ -38,7 +38,7 @@ class WindowsVM(VM):
             self.tpm_process.wait(timeout=10)
             self.tpm_process = None
 
-    def start(self, cdrom=True, network=False, software_display=False):
+    def start_tpm(self):
         self.stop_tpm()
         control = self.control_path('tpm.sock')
         control.unlink(missing_ok=True)
@@ -61,6 +61,10 @@ class WindowsVM(VM):
             if self.tpm_process.poll() is not None:
                 raise RuntimeError('TPM emulator exited before its control socket appeared.')
             time.sleep(0.1)
+        return control
+
+    def start(self, cdrom=True, network=False, software_display=False):
+        control = self.start_tpm()
         tpm_args = [
             '-chardev',
             f'socket,id=chrtpm,path={control}',

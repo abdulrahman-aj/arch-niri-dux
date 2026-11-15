@@ -158,25 +158,45 @@ class WorkspaceTests(unittest.TestCase):
             with patch.object(resources, 'BUILD_SPACE', 1024), patch.object(resources, 'DOWNLOADS_SPACE', 1024):
                 self.assertEqual(resources.build_space_needed(state), 0)
 
+    def meminfo(self, gib_available):
+        kib = int(gib_available * 1024**2)
+        return f'MemTotal:       16384000 kB\nMemAvailable:    {kib} kB\n'
+
     def test_builder_memory_fits_humans_and_waits_for_agents(self):
-        gib = 1024**3
-        with patch.object(resources, 'available_memory', return_value=24 * gib):
+        real_read_text = Path.read_text
+
+        def fake_read_text(path_self, *args, **kwargs):
+            if str(path_self) == '/proc/meminfo':
+                return self.current_meminfo
+            return real_read_text(path_self, *args, **kwargs)
+
+        with patch.object(Path, 'read_text', fake_read_text):
+            self.current_meminfo = self.meminfo(24)
             self.assertEqual(resources.builder_memory({}), (resources.BUILDER_MIB, None))
-        with patch.object(resources, 'available_memory', return_value=6 * gib):
+            self.current_meminfo = self.meminfo(6)
             mib, warning = resources.builder_memory({})
             self.assertLess(mib, resources.BUILDER_MIB)
             self.assertLessEqual(mib + resources.MEMORY_HEADROOM_MIB, 6 * 1024)
             self.assertTrue(warning)
-        with patch.object(resources, 'available_memory', return_value=3 * gib):
+            self.current_meminfo = self.meminfo(3)
             mib, warning = resources.builder_memory({})
             self.assertEqual(mib, resources.BUILDER_MIN_MIB)
             self.assertTrue(warning)
+        # Agents wait for memory and get the full builder without a warning.
+        # Fake abundant memory at the stdlib boundary so the real wait returns at once.
+        import tools.vm.control as control
+
+        def fake_control_read_text(path_self, *args, **kwargs):
+            if str(path_self) == '/proc/meminfo':
+                return self.meminfo(24)
+            return real_read_text(path_self, *args, **kwargs)
+
         with (
-            patch.object(resources, 'available_memory', return_value=3 * gib),
-            patch('tools.vm.control.wait_for_memory') as wait,
+            patch.object(Path, 'read_text', fake_control_read_text),
+            patch.object(control.subprocess, 'run', return_value=None),
+            patch.object(control.time, 'sleep'),
         ):
             self.assertEqual(resources.builder_memory({'CLAUDECODE': '1'}), (resources.BUILDER_MIB, None))
-            wait.assert_called_once()
 
     def test_builder_memory_command_prints_only_the_size(self):
         # build-iso captures stdout as QEMU's -m value; warnings must go to stderr.
@@ -258,38 +278,34 @@ class WorktreeGCTests(unittest.TestCase):
             self.assertEqual(gc.collect(cache, cache / 'runner'), [evidence])
 
     def test_merge_proof_must_cover_current_tip(self):
-        with tempfile.TemporaryDirectory() as temp:
+        with tempfile.TemporaryDirectory() as temp, tempfile.TemporaryDirectory() as bindir:
             root = init_repo(Path(temp))
             git_run('branch', 'topic', cwd=root)
             old_head = git_run('rev-parse', 'HEAD', cwd=root).stdout.strip()
             git_run('update-ref', 'refs/remotes/origin/main', old_head, cwd=root)
-            real_run = subprocess.run
-
-            def run(cmd, **kwargs):
-                if cmd[0] == 'gh':
-                    return subprocess.CompletedProcess(
-                        cmd, 0, json.dumps([{'number': 7, 'title': 'Old PR', 'headRefOid': old_head}]), ''
-                    )
-                return real_run(cmd, **kwargs)
-
-            with patch.object(gc.subprocess, 'run', side_effect=run):
+            gh = Path(bindir) / 'gh'
+            gh.write_text(
+                f"#!/bin/sh\nprintf '%s' '{json.dumps([{'number': 7, 'title': 'Old PR', 'headRefOid': old_head}])}'\n"
+            )
+            gh.chmod(0o755)
+            with patch.dict(os.environ, {'PATH': bindir + os.pathsep + os.environ['PATH']}):
                 self.assertTrue(gc.merge_info('topic', root)[0])
                 git_run('checkout', 'topic', cwd=root)
                 (root / 'tracked.txt').write_text('new work')
                 git_run('commit', '-am', 'unmerged work', cwd=root)
                 self.assertFalse(gc.merge_info('topic', root)[0])
-            with patch.object(
-                gc.subprocess,
-                'run',
-                side_effect=lambda cmd, **kw: (
-                    subprocess.CompletedProcess(cmd, 1, '', '') if cmd[0] == 'gh' else real_run(cmd, **kw)
-                ),
-            ):
+            failing = Path(bindir) / 'gh'
+            failing.write_text('#!/bin/sh\nexit 1\n')
+            failing.chmod(0o755)
+            with patch.dict(os.environ, {'PATH': bindir + os.pathsep + os.environ['PATH']}):
                 self.assertFalse(gc.merge_info('topic', root)[0])
                 git_run('update-ref', 'refs/remotes/origin/main', 'HEAD', cwd=root)
                 self.assertTrue(gc.merge_info('topic', root)[0])
 
     def test_merge_unknowns_never_authorize_removal(self):
+        import shutil
+
+        real_git = shutil.which('git')
         cases = [
             (0, [], 0, False),
             (0, [{'number': 7}], 0, None),
@@ -298,17 +314,24 @@ class WorktreeGCTests(unittest.TestCase):
         ]
         for gh_code, records, git_code, expected in cases:
             with self.subTest(gh_code=gh_code, records=records, git_code=git_code):
-
-                def run(cmd, _gh=gh_code, _git=git_code, _records=records, **_kwargs):
-                    return subprocess.CompletedProcess(
-                        cmd,
-                        _gh if cmd[0] == 'gh' else _git,
-                        json.dumps(_records) if cmd[0] == 'gh' else '',
-                        '',
+                with tempfile.TemporaryDirectory() as bindir:
+                    gh = Path(bindir) / 'gh'
+                    if gh_code == 0:
+                        gh.write_text("#!/bin/sh\nprintf '%s' '" + json.dumps(records).replace("'", "'\"'\"'") + "'\n")
+                    else:
+                        gh.write_text('#!/bin/sh\nexit 1\n')
+                    gh.chmod(0o755)
+                    git = Path(bindir) / 'git'
+                    # Fake only merge-base; delegate everything else to the real git.
+                    git.write_text(
+                        '#!/bin/sh\n'
+                        'if [ "$1" = "-C" ]; then shift 2; fi\n'
+                        'if [ "$1" = "merge-base" ]; then exit ' + str(git_code) + '; fi\n'
+                        f'exec {real_git} "$@"\n'
                     )
-
-                with patch.object(gc.subprocess, 'run', side_effect=run):
-                    self.assertIs(gc.merge_info('topic')[0], expected)
+                    git.chmod(0o755)
+                    with patch.dict(os.environ, {'PATH': bindir + os.pathsep + os.environ['PATH']}):
+                        self.assertIs(gc.merge_info('topic')[0], expected)
 
     def test_gc_keeps_parent_of_running_registered_evidence(self):
         with tempfile.TemporaryDirectory() as temp, patch.dict(os.environ, {'XDG_CACHE_HOME': temp}):
@@ -327,12 +350,23 @@ class WorktreeGCTests(unittest.TestCase):
                 self.assertTrue(evidence.exists())
 
     def test_plan_splits_removals_and_skips(self):
-        with tempfile.TemporaryDirectory() as temp, patch.dict(os.environ, {'XDG_CACHE_HOME': temp}):
+        with (
+            tempfile.TemporaryDirectory() as temp,
+            tempfile.TemporaryDirectory() as bindir,
+            patch.dict(os.environ, {'XDG_CACHE_HOME': temp}),
+        ):
             root = Path(temp) / 'repo'
             root.mkdir()
             init_repo(root)
-            for branch in ('merged-clean', 'merged-dirty', 'unmerged', 'mystery'):
+            main_sha = git_run('rev-parse', 'HEAD', cwd=root).stdout.strip()
+            git_run('update-ref', 'refs/remotes/origin/main', main_sha, cwd=root)
+            for branch in ('merged-clean', 'merged-dirty', 'mystery'):
                 git_run('branch', branch, cwd=root)
+            git_run('branch', 'unmerged', cwd=root)
+            git_run('checkout', 'unmerged', cwd=root)
+            (root / 'tracked.txt').write_text('unmerged work\n')
+            git_run('commit', '-am', 'unmerged work', cwd=root)
+            git_run('checkout', 'main', cwd=root)
             clean_wt = Path(temp) / 'wt-clean'
             dirty_wt = Path(temp) / 'wt-dirty'
             unmerged_wt = Path(temp) / 'wt-unmerged'
@@ -344,18 +378,19 @@ class WorktreeGCTests(unittest.TestCase):
             detached_wt = Path(temp) / 'wt-detached'
             git_run('worktree', 'add', '--detach', str(detached_wt), cwd=root)
             (dirty_wt / 'tracked.txt').write_text('dirty\n')
-
-            def fake_merge(branch, _checkout=workspace.ROOT):
-                if branch in ('merged-clean', 'merged-dirty'):
-                    return True, 11, 'Merged work', 'gh'
-                if branch == 'mystery':
-                    return None, None, '', 'none'
-                return False, None, '', 'none'
-
-            with (
-                patch.object(gc, 'merge_info', side_effect=fake_merge),
-                patch.object(gc, 'worktree_busy', return_value=(False, '')),
-            ):
+            gh = Path(bindir) / 'gh'
+            gh.write_text(
+                '#!/bin/sh\n'
+                'branch=""; prev=""\n'
+                'for arg in "$@"; do if [ "$prev" = "--head" ]; then branch="$arg"; fi; prev="$arg"; done\n'
+                'case "$branch" in\n'
+                f"  merged-clean|merged-dirty) printf '%s' '{json.dumps([{'number': 11, 'title': 'Merged work', 'headRefOid': main_sha}])}';;\n"
+                "  mystery) printf '%s' '[{\"number\": 7}]';;\n"
+                "  *) printf '%s' '[]';;\n"
+                'esac\n'
+            )
+            gh.chmod(0o755)
+            with patch.dict(os.environ, {'PATH': bindir + os.pathsep + os.environ['PATH']}):
                 removals, skipped, move = gc.plan_worktree_gc(root)
             self.assertEqual([item['branch'] for item in removals], ['merged-clean'])
             reasons = {item['branch'] or 'detached': item['reason'] for item in skipped}
@@ -401,12 +436,18 @@ class WorktreeGCTests(unittest.TestCase):
             self.assertEqual(picked.read_bytes(), b'new-bytes')
 
     def test_dry_run_changes_nothing_then_real_run_preserves_fixture(self):
-        with tempfile.TemporaryDirectory() as temp, patch.dict(os.environ, {'XDG_CACHE_HOME': temp}):
+        with (
+            tempfile.TemporaryDirectory() as temp,
+            tempfile.TemporaryDirectory() as bindir,
+            patch.dict(os.environ, {'XDG_CACHE_HOME': temp}),
+        ):
             cache = Path(temp)
             root = cache / 'repo'
             root.mkdir()
             init_repo(root)
             git_run('branch', 'merged-clean', cwd=root)
+            main_sha = git_run('rev-parse', 'HEAD', cwd=root).stdout.strip()
+            git_run('update-ref', 'refs/remotes/origin/main', main_sha, cwd=root)
             doomed = cache / 'wt-doomed'
             git_run('worktree', 'add', str(doomed), 'merged-clean', cwd=root)
             fixture = doomed / 'out' / 'verify' / 'dux-verify-new'
@@ -420,13 +461,10 @@ class WorktreeGCTests(unittest.TestCase):
             before = fixtures.accepted_fixtures()[0] / 'disk.qcow2'
             self.assertEqual(before, fixture / 'disk.qcow2')
 
-            def fake_merge(branch, _checkout=workspace.ROOT):
-                return (True, 11, 'Merged work', 'gh') if branch == 'merged-clean' else (False, None, '', 'none')
-
-            with (
-                patch.object(gc, 'merge_info', side_effect=fake_merge),
-                patch.object(gc, 'worktree_busy', return_value=(False, '')),
-            ):
+            gh = Path(bindir) / 'gh'
+            gh.write_text('#!/bin/sh\nexit 1\n')
+            gh.chmod(0o755)
+            with patch.dict(os.environ, {'PATH': bindir + os.pathsep + os.environ['PATH']}):
                 with contextlib.redirect_stdout(io.StringIO()):
                     _removals, _skipped, move = gc.gc_worktrees(root, True)
                 self.assertTrue(doomed.exists())
@@ -443,12 +481,18 @@ class WorktreeGCTests(unittest.TestCase):
             self.assertTrue((picked.parent / 'ACCEPTANCE-PASSED').is_file())
 
     def test_shared_alongside_home_survives_merged_worktree_gc(self):
-        with tempfile.TemporaryDirectory() as temp, patch.dict(os.environ, {'XDG_CACHE_HOME': temp}):
+        with (
+            tempfile.TemporaryDirectory() as temp,
+            tempfile.TemporaryDirectory() as bindir,
+            patch.dict(os.environ, {'XDG_CACHE_HOME': temp}),
+        ):
             cache = Path(temp)
             root = cache / 'repo'
             root.mkdir()
             init_repo(root)
             git_run('branch', 'merged-clean', cwd=root)
+            main_sha = git_run('rev-parse', 'HEAD', cwd=root).stdout.strip()
+            git_run('update-ref', 'refs/remotes/origin/main', main_sha, cwd=root)
             doomed = cache / 'wt-doomed'
             git_run('worktree', 'add', str(doomed), 'merged-clean', cwd=root)
             # Shared alongside home outside every worktree (the documented default).
@@ -469,13 +513,10 @@ class WorktreeGCTests(unittest.TestCase):
             (inner / 'disk.qcow2').write_bytes(b'inner-fixture-bytes')
             (inner / 'READY').write_text('Real Windows 11 Enterprise LTSC evaluation\n')
 
-            def fake_merge(branch, _checkout=workspace.ROOT):
-                return (True, 11, 'Merged work', 'gh') if branch == 'merged-clean' else (False, None, '', 'none')
-
-            with (
-                patch.object(gc, 'merge_info', side_effect=fake_merge),
-                patch.object(gc, 'worktree_busy', return_value=(False, '')),
-            ):
+            gh = Path(bindir) / 'gh'
+            gh.write_text('#!/bin/sh\nexit 1\n')
+            gh.chmod(0o755)
+            with patch.dict(os.environ, {'PATH': bindir + os.pathsep + os.environ['PATH']}):
                 removals, _skipped, move = gc.plan_worktree_gc(root)
                 # The worktree holding a real alongside dir is reported as a removal ...
                 self.assertEqual([item['branch'] for item in removals], ['merged-clean'])

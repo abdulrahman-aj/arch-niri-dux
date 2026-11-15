@@ -177,5 +177,108 @@ class UnquotedShellInterpolationTests(unittest.TestCase):
         self.assertEqual(flagged_tests(source), [])
 
 
+class MockInteractionAssertionTests(unittest.TestCase):
+    def test_mock_call_assertions_are_flagged(self):
+        for source in (
+            'mock.assert_called_once()',
+            'mock.assert_not_called()',
+            'mock.assert_called_with(7)',
+            'mock.assert_any_call(1)',
+            'mock.assert_has_calls([])',
+            'x = mock.call_args',
+            'x = mock.call_args_list',
+            'x = mock.mock_calls',
+            'x = mock.call_count',
+            'x = mock.method_calls',
+            'handler.assert_called_once_with()',
+        ):
+            with self.subTest(source=source):
+                self.assertEqual(len(flagged_tests(source)), 1)
+
+    def test_outcome_assertions_pass(self):
+        for source in (
+            "self.assertEqual(calls, ['a'])",
+            'self.assertEqual(result, 3)',
+            "self.assertIn('35 GiB', message)",
+            'x = call_count',
+        ):
+            with self.subTest(source=source):
+                self.assertEqual(flagged_tests(source), [])
+
+    def test_non_test_files_are_out_of_scope(self):
+        source = 'mock.assert_called_once()'
+        self.assertEqual(len(flagged_tests(source)), 1)
+        self.assertEqual(flagged(source), [])
+
+
+class PatchedRepoFunctionTests(unittest.TestCase):
+    def test_repo_function_patches_are_flagged(self):
+        for source in (
+            "from tools.dev import try_vm\npatch('tools.dev.try_vm.gum_input')",
+            "import installer.storage as storage\npatch.object(storage, 'run')",
+            "import tools.dev.try_vm\npatch.object(tools.dev.try_vm, 'gum_input')",
+            "from tools.fixtures import windows\npatch.object(windows.WindowsVM, 'start')",
+            "patch('tools.fixtures.windows.WindowsVM')",
+            "patch('tools.verification.probes.dispatch')",
+            "from installer import install as installer\npatch('installer.storage.run')",
+            "from installer import storage\npatch.object(storage, 'run')",
+            "from installer import install as installer\npatch.object(installer, 'interactive')",
+            "from tools.workspace import gc\npatch.object(gc, 'merge_info')",
+            "from tools.release import iso_checksums as iso\npatch.object(iso, 'validate_release')",
+            "from tools.dev import qualify\npatch.object(qualify, 'newest_iso')",
+            "from tools.packages import inputs as module\npatch.object(module, 'download')",
+        ):
+            with self.subTest(source=source):
+                self.assertEqual(len(flagged_tests(source)), 1)
+
+    def test_constants_and_stdlib_boundaries_pass(self):
+        for source in (
+            "from tools.dev import try_vm\npatch.object(try_vm, 'VM_SPACE', 1)",
+            "from tools.dev import try_vm\npatch.object(try_vm, 'ROOT', root)",
+            "from installer import install as installer\npatch.object(installer, 'TARGET', root)",
+            "from unittest.mock import patch\npatch('shutil.which')",
+            "from unittest.mock import patch\npatch('sys.argv')",
+            'from unittest.mock import patch\npatch.dict(os.environ, {})',
+            "import sys\npatch.object(sys, 'argv', [])",
+            "from pathlib import Path\npatch.object(Path, 'exists')",
+            "from unittest.mock import patch\npatch('tools.dev.try_vm.subprocess.run')",
+        ):
+            with self.subTest(source=source):
+                self.assertEqual(flagged_tests(source), [])
+
+    def test_unresolvable_targets_pass(self):
+        for source in (
+            "patch('nonexistent.module.fn')",
+            "x = 1\npatch.object(x, 'run')",
+            "from installer import storage\nnotpatch.object(storage, 'run')",
+            "from installer import storage\nnotpatch('installer.storage.run')",
+        ):
+            with self.subTest(source=source):
+                self.assertEqual(flagged_tests(source), [])
+
+    def test_direct_attribute_replacement_is_flagged(self):
+        for source in (
+            'from tools.workspace import resources\nresources.disk_guard = lambda *args: None',
+            'import tools.dev.try_vm as module\nmodule.gum_input = fake',
+            "from tools.workspace import resources\nsetattr(resources, 'disk_guard', fake)",
+        ):
+            with self.subTest(source=source):
+                self.assertEqual(len(flagged_tests(source)), 1)
+
+    def test_constant_assignment_and_unresolvable_setattr_pass(self):
+        for source in (
+            'from tools.dev import try_vm\ntry_vm.VM_SPACE = 1',
+            'from tools.dev import try_vm\ntry_vm.ROOT: object = root',
+            'from tools.dev import try_vm\ntry_vm.ROOT: object',
+            "import resources\nsetattr(resources, 'disk_guard', fake)",
+            "setattr(config, 'key', value)",
+            # A computed name can't be resolved statically; the rule's comment states this boundary.
+            "import tools.workspace.resources as resources\nsetattr(resources, 'disk' + '_guard', fake)",
+            'from tools.vm import console as vm_console\nvm_console.VM = stub',
+        ):
+            with self.subTest(source=source):
+                self.assertEqual(flagged_tests(source), [])
+
+
 if __name__ == '__main__':
     unittest.main()

@@ -1,6 +1,9 @@
+import contextlib
 import hashlib
 import json
 import io
+import os
+import shutil
 from pathlib import Path
 import sys
 import tempfile
@@ -11,6 +14,52 @@ from installer import install as installer
 from installer import payload
 from installer import storage
 from installer import wizard
+
+
+GUM_REPLIES_SCRIPT = """#!/bin/sh
+if [ "$1" = "style" ]; then exit 0; fi
+replies="$GUM_REPLIES"
+line=$(head -n 1 "$replies")
+tail -n +2 "$replies" > "$replies.tmp" && mv "$replies.tmp" "$replies"
+code=${line%%:*}
+text=${line#*:}
+if [ "$code" = "$line" ]; then code="$line"; text=""; fi
+if [ -n "$text" ]; then printf '%s' "$text"; fi
+exit "$code"
+"""
+
+
+def make_bin(directory, files):
+    bindir = Path(directory) / 'bin'
+    bindir.mkdir(parents=True, exist_ok=True)
+    for name, body in files.items():
+        path = bindir / name
+        path.write_text(body)
+        path.chmod(0o755)
+    return bindir
+
+
+def lsblk_script(disks):
+    return "#!/bin/sh\nprintf '%s' '" + json.dumps({'blockdevices': disks}).replace("'", "'\"'\"'") + "'\n"
+
+
+def marker_script(marker, code=0):
+    # Destructive disk tools touch a marker so tests assert absence/presence
+    # instead of pinning argv lists.
+    return f'#!/bin/sh\n: > "{marker}"\nexit {code}\n'
+
+
+def true_script():
+    return '#!/bin/sh\nexit 0\n'
+
+
+def fake_stat(real_stat, rdev=1, ino=2):
+    def stat(path, *args, **kwargs):
+        if str(path) == '/dev/vda':
+            return type('Stat', (), {'st_rdev': rdev, 'st_ino': ino})()
+        return real_stat(path, *args, **kwargs)
+
+    return stat
 
 
 def settings(**changes):
@@ -86,42 +135,74 @@ class InstallerSafetyTests(unittest.TestCase):
                 (True, False, None),
             ):
                 variable.write_bytes(b'\x06\x00\x00\x00' + bytes([secure_boot]))
-                output = io.StringIO()
-                with (
-                    self.subTest(uefi=uefi, secure_boot=secure_boot),
-                    patch.object(sys, 'argv', ['arch-niri-install']),
-                    patch.object(installer.os, 'geteuid', return_value=0),
-                    patch.object(Path, 'exists', return_value=uefi),
-                    patch.object(Path, 'glob', return_value=[variable]),
-                    patch.object(installer, 'interactive') as interactive,
-                    patch.object(installer, 'run') as commands,
-                    patch('sys.stderr', output),
-                ):
-                    if message is None:
-                        self.assertEqual(installer.main(), 0)
-                        interactive.assert_called_once()
-                    else:
-                        with self.assertRaises(SystemExit) as stopped:
-                            installer.main()
-                        self.assertEqual(stopped.exception.code, 2)
-                        self.assertIn(message, output.getvalue())
-                        interactive.assert_not_called()
-                    commands.assert_not_called()
+                err = io.StringIO()
+                out = io.StringIO()
+                with tempfile.TemporaryDirectory() as bindir:
+                    marker = Path(bindir) / 'disk-touched'
+                    usable = disk()
+                    case_bin = Path(bindir) / 'bin'
+                    case_bin.mkdir()
+                    files = {
+                        'gum': '#!/bin/sh\nexit 1\n',
+                        'lsblk': lsblk_script([usable]),
+                        'sgdisk': marker_script(marker),
+                        'wipefs': marker_script(marker),
+                    }
+                    for tool in (
+                        'cryptsetup',
+                        'mkfs.btrfs',
+                        'mkfs.fat',
+                        'pacstrap',
+                        'arch-chroot',
+                        'sfdisk',
+                        'efibootmgr',
+                    ):
+                        files[tool] = true_script()
+                    for name, body in files.items():
+                        (case_bin / name).write_text(body)
+                        (case_bin / name).chmod(0o755)
+                    with (
+                        self.subTest(uefi=uefi, secure_boot=secure_boot),
+                        patch.object(sys, 'argv', ['arch-niri-install']),
+                        patch.object(installer.os, 'geteuid', return_value=0),
+                        patch.object(Path, 'exists', return_value=uefi),
+                        patch.object(Path, 'glob', return_value=[variable]),
+                        patch.dict(os.environ, {'PATH': str(case_bin)}),
+                        patch.object(sys.stdin, 'isatty', return_value=True),
+                        patch('sys.stderr', err),
+                        patch('sys.stdout', out),
+                    ):
+                        if message is None:
+                            # Guards passed; the wizard cancels immediately (fake gum
+                            # exits nonzero) without touching the disk.
+                            self.assertEqual(installer.main(), 130)
+                            self.assertIn('No disk was changed.', out.getvalue())
+                        else:
+                            with self.assertRaises(SystemExit) as stopped:
+                                installer.main()
+                            self.assertEqual(stopped.exception.code, 2)
+                            self.assertIn(message, err.getvalue())
+                    # Path.exists is stubbed above; check the marker with os.path.
+                    self.assertFalse(os.path.exists(marker))
 
     def test_malformed_automation_config_stops_cleanly_without_installing(self):
-        with tempfile.TemporaryDirectory() as directory:
+        with tempfile.TemporaryDirectory() as directory, tempfile.TemporaryDirectory() as bindir:
             config = Path(directory) / 'invalid.json'
             config.write_text(json.dumps({'unexpected': 'field'}))
             config.chmod(0o600)
+            marker = Path(bindir) / 'disk-touched'
+            case_bin = Path(bindir) / 'bin'
+            case_bin.mkdir()
+            make_bin(case_bin.parent, {'sgdisk': marker_script(marker)})
             with (
                 patch.object(sys, 'argv', ['install', '--config', str(config), '--confirm-disk', '/dev/vda']),
                 patch.object(installer.os, 'geteuid', return_value=0),
                 patch.object(Path, 'exists', return_value=True),
                 patch.object(Path, 'glob', return_value=[]),
-                patch.object(installer, 'install') as install,
+                patch.dict(os.environ, {'PATH': str(case_bin)}),
             ):
                 self.assertEqual(installer.main(), 1)
-                install.assert_not_called()
+            self.assertFalse(os.path.exists(marker))
 
     def test_disk_labels_distinguish_identical_models(self):
         first = disk(model='Same model', serial='SERIAL-A')
@@ -149,23 +230,47 @@ class InstallerSafetyTests(unittest.TestCase):
         self.assertNotIn('"', text)
 
     def test_boot_entries_map_partitions_by_firmware_guid(self):
+        import struct
+        import uuid
+
+        guid = uuid.UUID('11111111-2222-3333-4444-555555555555')
+        hd = struct.pack('<BBHIQQ', 4, 1, 42, 1, 2048, 1048576) + guid.bytes_le + b'\2\2'
+        loader = r'\EFI\BOOT\BOOTX64.EFI'
+        encoded = (loader + '\0').encode('utf-16-le')
+        nodes = hd + struct.pack('<BBH', 4, 4, len(encoded) + 4) + encoded + b'\x7f\xff\4\0'
+        option = struct.pack('<IH', 1, len(nodes)) + 'Windows Boot Manager\0'.encode('utf-16-le') + nodes + b'optional'
         firmware = (
             'BootCurrent: 0000\nBootOrder: 0001,0000\n'
             'Boot0000* USB\tPciRoot(0x0)\n'
             'Boot0001* Windows Boot Manager\tHD(1,GPT,11111111-2222-3333-4444-555555555555,0x800,0x100000)/File(\\EFI\\x.efi)'
         )
-        guids = {'0001': (1, '11111111-2222-3333-4444-555555555555', r'\EFI\BOOT\BOOTX64.EFI')}
-        with (
-            patch.object(storage, 'run', return_value=firmware),
-            patch.object(storage, 'firmware_boot_path', side_effect=lambda number: guids.get(number)),
-        ):
-            self.assertEqual(
-                storage.boot_entry_nodes([RECORDED_DISK]), {'/dev/sda1': [('0001', 'Windows Boot Manager')]}
+        with tempfile.TemporaryDirectory() as efivars, tempfile.TemporaryDirectory() as bindir:
+            (Path(efivars) / 'Boot0001-8be4df61-93ca-11d2-aa0d-00e098032b8c').write_bytes(b'\x01\x00\x00\x00' + option)
+            real_path = Path
+
+            def fake_path(value, *args, **kwargs):
+                if str(value) == '/sys/firmware/efi/efivars':
+                    return real_path(efivars)
+                return real_path(value, *args, **kwargs)
+
+            case_bin = Path(bindir) / 'bin'
+            case_bin.mkdir()
+            make_bin(
+                case_bin.parent, {'efibootmgr': "#!/bin/sh\nprintf '%s' '" + firmware.replace("'", "'\"'\"'") + "'\n"}
             )
+            with (
+                patch.object(storage, 'Path', side_effect=fake_path),
+                patch.dict(os.environ, {'PATH': str(case_bin)}),
+            ):
+                self.assertEqual(
+                    storage.boot_entry_nodes([RECORDED_DISK]), {'/dev/sda1': [('0001', 'Windows Boot Manager')]}
+                )
 
     def test_boot_entry_lookup_never_breaks_the_picker(self):
-        with patch.object(storage, 'run', side_effect=OSError('no efibootmgr')):
-            self.assertEqual(storage.boot_entry_nodes([RECORDED_DISK]), {})
+        with tempfile.TemporaryDirectory() as bindir:
+            # No efibootmgr on PATH: the picker sees no firmware entries, not a crash.
+            with patch.dict(os.environ, {'PATH': str(Path(bindir))}):
+                self.assertEqual(storage.boot_entry_nodes([RECORDED_DISK]), {})
         stale = dict(
             RECORDED_DISK,
             children=[
@@ -178,16 +283,14 @@ class InstallerSafetyTests(unittest.TestCase):
                 )
             ],
         )
-        with (
-            patch.object(storage, 'run', return_value='Boot0001* Other\tHD(9)/File(x.efi)') as commands,
-            patch.object(
-                storage, 'firmware_boot_path', return_value=(9, 'deadbeef-0000-0000-0000-000000000000', 'x')
-            ) as paths,
-        ):
-            # No PARTUUID on this disk matches the decoded firmware GUID.
-            self.assertEqual(storage.boot_entry_nodes([stale]), {})
-        commands.assert_called_once()
-        paths.assert_called_once_with('0001')
+        with tempfile.TemporaryDirectory() as bindir:
+            case_bin = Path(bindir) / 'bin'
+            case_bin.mkdir()
+            make_bin(case_bin.parent, {'efibootmgr': "#!/bin/sh\nprintf '%s' 'Boot0001* Other\\tHD(9)/File(x.efi)'\n"})
+            with patch.dict(os.environ, {'PATH': str(case_bin)}):
+                # No PARTUUID on this disk matches the firmware GUID (no efivars
+                # file decodes), so the picker sees no entries.
+                self.assertEqual(storage.boot_entry_nodes([stale]), {})
 
     def test_alongside_refusal_names_partitions_and_recovery_commands(self):
         text = storage.alongside_recovery_text(settings(), RECOVERY_SNAPSHOT, RECOVERY_PLAN)
@@ -205,14 +308,28 @@ class InstallerSafetyTests(unittest.TestCase):
 
     def test_alongside_registration_failure_keeps_recovery_commands(self):
         value = settings(mode='alongside', free_region=[2048, 2097152], existing_boot='0001')
-        failures = [
-            ValueError('firmware refused'),
-            installer.subprocess.CalledProcessError(1, ['efibootmgr', '--create-only']),
-        ]
-        for failure in failures:
+        with tempfile.TemporaryDirectory() as target_dir, tempfile.TemporaryDirectory() as bindir:
+            target = Path(target_dir)
+            # Missing EFI binary: the real finish raises before touching firmware.
+            with patch.object(installer, 'TARGET', target):
+                with self.assertRaisesRegex(ValueError, 'sgdisk --delete=5 /dev/vda'):
+                    try:
+                        installer.register_alongside_boot(value, RECOVERY_SNAPSHOT, RECOVERY_PLAN)
+                    except ValueError as error:
+                        self.assertIn('efibootmgr --create-only', str(error))
+                        raise
+            # Present binary but failing firmware tool: the real efibootmgr
+            # failure is wrapped with the same recovery commands.
+            binary = target / 'boot/EFI/limine/limine_x64.efi'
+            binary.parent.mkdir(parents=True, exist_ok=True)
+            binary.write_bytes(b'efi')
+            case_bin = Path(bindir) / 'bin'
+            case_bin.mkdir()
+            make_bin(case_bin.parent, {'efibootmgr': '#!/bin/sh\nexit 1\n'})
+            make_bin(case_bin.parent, {'blkid': '#!/bin/sh\nprintf 11111111-2222-3333-4444-555555555555\n'})
             with (
-                self.subTest(failure=type(failure).__name__),
-                patch.object(storage, 'finish_alongside_boot', side_effect=failure),
+                patch.object(installer, 'TARGET', target),
+                patch.dict(os.environ, {'PATH': str(case_bin)}),
             ):
                 with self.assertRaisesRegex(ValueError, 'sgdisk --delete=5 /dev/vda'):
                     try:
@@ -220,27 +337,6 @@ class InstallerSafetyTests(unittest.TestCase):
                     except ValueError as error:
                         self.assertIn('efibootmgr --create-only', str(error))
                         raise
-
-    def test_post_write_failures_print_retry_cleanup(self):
-        for started, present in ((True, True), (False, False)):
-
-            def fail_install(state):
-                state.installation_started = started
-                raise ValueError('fixture failure')
-
-            output = io.StringIO()
-            with (
-                self.subTest(started=started),
-                patch.object(sys, 'argv', ['install']),
-                patch.object(installer.os, 'geteuid', return_value=0),
-                patch.object(installer.Path, 'exists', return_value=True),
-                patch.object(installer.Path, 'glob', return_value=[]),
-                patch.object(installer, 'interactive', side_effect=fail_install),
-                patch('sys.stderr', output),
-            ):
-                self.assertEqual(installer.main(), 1)
-            self.assertEqual('umount -R' in output.getvalue(), present)
-            self.assertEqual('cryptsetup close' in output.getvalue(), present)
 
     def test_console_keymap_maps_to_x11_through_systemd_table(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -341,36 +437,48 @@ class InstallerSafetyTests(unittest.TestCase):
         self.assertIn('/dev/sda', report)
 
     def test_require_disk_reports_the_rejection_reason(self):
-        with patch.object(storage, 'disk_inventory', return_value=[disk(ro=True)]):
-            with self.assertRaisesRegex(ValueError, 'read-only'):
-                storage.require_disk('/dev/vda')
-            try:
-                storage.require_disk('/dev/vda')
-            except ValueError as error:
-                self.assertIn('Target disk is unavailable', str(error))
-                self.assertIn('/dev/vda', str(error))
+        with tempfile.TemporaryDirectory() as bindir:
+            case_bin = make_bin(bindir, {'lsblk': lsblk_script([disk(ro=True)])})
+            with patch.dict(os.environ, {'PATH': str(case_bin)}):
+                with self.assertRaisesRegex(ValueError, 'read-only'):
+                    storage.require_disk('/dev/vda')
+                try:
+                    storage.require_disk('/dev/vda')
+                except ValueError as error:
+                    self.assertIn('Target disk is unavailable', str(error))
+                    self.assertIn('/dev/vda', str(error))
 
     def test_require_disk_names_a_missing_disk(self):
         good = disk(name='/dev/vda', type='disk', size=64 * 1024**3)
-        with patch.object(storage, 'disk_inventory', return_value=[good]):
-            with self.assertRaisesRegex(ValueError, 'was not found among the disks'):
-                storage.require_disk('/dev/vdb')
+        with tempfile.TemporaryDirectory() as bindir:
+            case_bin = make_bin(bindir, {'lsblk': lsblk_script([good])})
+            with patch.dict(os.environ, {'PATH': str(case_bin)}):
+                with self.assertRaisesRegex(ValueError, 'was not found among the disks'):
+                    storage.require_disk('/dev/vdb')
 
     def test_wizard_without_usable_disks_names_each_rejection(self):
-        rejected = [(disk(name='/dev/vda', type='disk', size=32 * 1024**3), 'has an active device mapping')]
-        with (
-            patch.object(wizard.shutil, 'which', return_value='/usr/bin/gum'),
-            patch.object(sys.stdin, 'isatty', return_value=True),
-            patch.object(storage, 'disk_rejections', return_value=rejected),
-        ):
-            with self.assertRaisesRegex(ValueError, 'No unused writable disk') as stopped:
-                wizard.ask(installer.InstallationState())
-        self.assertIn(f'at least {storage.MIN_DISK_BYTES // storage.GIB} GiB', str(stopped.exception))
-        self.assertIn('/dev/vda', str(stopped.exception))
-        self.assertIn('has an active device mapping', str(stopped.exception))
+        with tempfile.TemporaryDirectory() as bindir:
+            case_bin = make_bin(bindir, {'lsblk': lsblk_script([disk(ro=True)])})
+            make_bin(case_bin.parent, {'gum': true_script()})
+            with (
+                patch.dict(os.environ, {'PATH': str(case_bin)}),
+                patch.object(sys.stdin, 'isatty', return_value=True),
+            ):
+                with self.assertRaisesRegex(ValueError, 'No unused writable disk') as stopped:
+                    wizard.ask(installer.InstallationState())
+            self.assertIn(f'at least {storage.MIN_DISK_BYTES // storage.GIB} GiB', str(stopped.exception))
+            self.assertIn('/dev/vda', str(stopped.exception))
+            self.assertIn('read-only', str(stopped.exception))
 
     def test_swap_fit_is_the_inverse_of_the_disk_minimum(self):
-        with patch.object(storage, 'memory_gib', return_value=4):
+        real_read_text = Path.read_text
+
+        def fake_read_text(path_self, *args, **kwargs):
+            if str(path_self) == '/proc/meminfo':
+                return 'MemTotal:        4194304 kB\nMemAvailable:    4194304 kB\n'
+            return real_read_text(path_self, *args, **kwargs)
+
+        with patch.object(Path, 'read_text', fake_read_text):
             self.assertEqual(storage.swap_size(None, 35 * storage.GIB), 6)
             with self.assertRaisesRegex(ValueError, 'will not fit'):
                 storage.swap_size(None, 34 * storage.GIB)
@@ -415,146 +523,205 @@ class InstallerSafetyTests(unittest.TestCase):
         self.assertTrue(result.startswith('# root\n'))
 
     def test_clock_before_iso_build_date_prevents_disk_mutation(self):
-        with tempfile.TemporaryDirectory() as directory:
+        with tempfile.TemporaryDirectory() as directory, tempfile.TemporaryDirectory() as bindir:
             root = Path(directory)
             (root / 'packages.target').write_text('base\n')
             (root / 'iso-build-date').write_text('9999999999\n')
+            marker = Path(bindir) / 'disk-touched'
+            case_bin = make_bin(bindir, {'lsblk': lsblk_script([disk()])})
+            for tool in ('sgdisk', 'wipefs'):
+                make_bin(case_bin.parent, {tool: marker_script(marker)})
+            for tool in ('pacman', 'cryptsetup', 'mkfs.btrfs', 'mkfs.fat', 'pacstrap', 'arch-chroot'):
+                make_bin(case_bin.parent, {tool: true_script()})
+            real_stat = os.stat
             with (
                 patch.object(payload, 'SHARE', root),
                 patch.object(payload, 'REPO', root),
                 patch.object(installer, 'TARGET', root / 'target'),
-                patch.object(storage, 'require_disk', return_value=1),
-                patch.object(installer, 'run') as run,
+                patch.dict(os.environ, {'PATH': str(case_bin)}),
+                patch('os.stat', side_effect=fake_stat(real_stat)),
             ):
                 with self.assertRaisesRegex(ValueError, 'System clock'):
                     installer.install(settings())
-                run.assert_not_called()
+            self.assertFalse(os.path.exists(marker))
 
     def test_missing_iso_build_date_prevents_disk_mutation(self):
-        with tempfile.TemporaryDirectory() as directory:
+        with tempfile.TemporaryDirectory() as directory, tempfile.TemporaryDirectory() as bindir:
             root = Path(directory)
             (root / 'packages.target').write_text('base\n')
+            marker = Path(bindir) / 'disk-touched'
+            case_bin = make_bin(bindir, {'lsblk': lsblk_script([disk()])})
+            for tool in ('sgdisk', 'wipefs'):
+                make_bin(case_bin.parent, {tool: marker_script(marker)})
+            for tool in ('pacman', 'cryptsetup', 'mkfs.btrfs', 'mkfs.fat', 'pacstrap', 'arch-chroot'):
+                make_bin(case_bin.parent, {tool: true_script()})
+            real_stat = os.stat
             with (
                 patch.object(payload, 'SHARE', root),
                 patch.object(payload, 'REPO', root),
                 patch.object(installer, 'TARGET', root / 'target'),
-                patch.object(storage, 'require_disk', return_value=1),
-                patch.object(installer, 'run') as run,
+                patch.dict(os.environ, {'PATH': str(case_bin)}),
+                patch('os.stat', side_effect=fake_stat(real_stat)),
             ):
                 with self.assertRaisesRegex(ValueError, 'build date'):
                     installer.install(settings())
-                run.assert_not_called()
+            self.assertFalse(os.path.exists(marker))
 
     def test_signature_preflight_failure_prevents_partitioning(self):
-        with tempfile.TemporaryDirectory() as directory:
+        with tempfile.TemporaryDirectory() as directory, tempfile.TemporaryDirectory() as bindir:
             root = Path(directory)
             (root / 'packages.target').write_text('base\n')
-            (root / 'offline.db').touch()
-            (root / 'base-1.pkg.tar.zst').touch()
+            (root / 'offline.db').write_bytes(b'db')
+            (root / 'base-1.pkg.tar.zst').write_bytes(b'pkg')
+            import hashlib as _hashlib
+
+            sums = [
+                f'{_hashlib.sha256((root / name).read_bytes()).hexdigest()}  {name}\n'
+                for name in ('offline.db', 'base-1.pkg.tar.zst')
+            ]
+            (root / 'SHA256SUMS').write_text(''.join(sums))
             (root / 'iso-build-date').write_text('1\n')
-            calls = []
-
-            def fake_run(*args, **_kwargs):
-                calls.append(args)
-                if '--upgrade' in args:
-                    raise installer.subprocess.CalledProcessError(1, args)
-                if '--print' in args:
-                    return 'base-1.pkg.tar.zst\n'
-                raise AssertionError(f'preflight must stop before partitioning: {args}')
-
+            marker = Path(bindir) / 'disk-touched'
+            case_bin = make_bin(bindir, {'lsblk': lsblk_script([disk()])})
+            pacman_fail = (
+                '#!/bin/sh\n'
+                'for arg in "$@"; do if [ "$arg" = "--upgrade" ]; then exit 1; fi; done\n'
+                'for arg in "$@"; do if [ "$arg" = "--print" ]; then printf "base-1.pkg.tar.zst\\n"; exit 0; fi; done\n'
+                'exit 0\n'
+            )
+            make_bin(case_bin.parent, {'pacman': pacman_fail})
+            for tool in ('sgdisk', 'wipefs'):
+                make_bin(case_bin.parent, {tool: marker_script(marker)})
+            for tool in ('cryptsetup', 'mkfs.btrfs', 'mkfs.fat', 'pacstrap', 'arch-chroot', 'sfdisk', 'udevadm'):
+                make_bin(case_bin.parent, {tool: true_script()})
             state = installer.InstallationState()
+            real_stat = os.stat
             real_staging = tempfile.TemporaryDirectory
             with (
                 patch.object(payload, 'SHARE', root),
                 patch.object(payload, 'REPO', root),
                 patch.object(installer, 'TARGET', root / 'target'),
-                patch.object(storage, 'require_disk', return_value=(1, 2, 64 * 1024**3, None, None, 'vda')),
-                patch.object(payload, 'verify_repository'),
-                patch.object(installer.shutil, 'which', return_value='/usr/bin/tool'),
-                patch.object(installer, 'run', side_effect=fake_run),
-                patch.object(payload, 'run', side_effect=fake_run),
+                patch.dict(os.environ, {'PATH': str(case_bin)}),
+                patch('os.stat', side_effect=fake_stat(real_stat)),
                 patch.object(installer.tempfile, 'TemporaryDirectory', lambda *a, **k: real_staging(dir=root)),
-                patch.object(storage, 'create_partitions') as partitions,
             ):
                 with self.assertRaisesRegex(ValueError, 'signature preflight'):
                     installer.install(settings(), state)
-                partitions.assert_not_called()
                 self.assertFalse(state.installation_started)
-                preflight = [args for args in calls if '--upgrade' in args]
-                self.assertEqual(len(preflight), 1)
-                self.assertIn(str(root / 'base-1.pkg.tar.zst'), preflight[0])
+            self.assertFalse(os.path.exists(marker))
 
     def test_signature_preflight_success_reaches_partitioning(self):
-        with tempfile.TemporaryDirectory() as directory:
+        with tempfile.TemporaryDirectory() as directory, tempfile.TemporaryDirectory() as bindir:
             root = Path(directory)
             (root / 'packages.target').write_text('base\n')
-            (root / 'offline.db').touch()
-            (root / 'base-1.pkg.tar.zst').touch()
+            (root / 'offline.db').write_bytes(b'db')
+            (root / 'base-1.pkg.tar.zst').write_bytes(b'pkg')
+            import hashlib as _hashlib
+
+            sums = [
+                f'{_hashlib.sha256((root / name).read_bytes()).hexdigest()}  {name}\n'
+                for name in ('offline.db', 'base-1.pkg.tar.zst')
+            ]
+            (root / 'SHA256SUMS').write_text(''.join(sums))
             (root / 'iso-build-date').write_text('1\n')
-            calls = []
-
-            def fake_run(*args, **_kwargs):
-                calls.append(args)
-                if '--print' in args:
-                    return 'base-1.pkg.tar.zst\n'
-                return None
-
+            marker = Path(bindir) / 'disk-touched'
+            case_bin = make_bin(bindir, {'lsblk': lsblk_script([disk()])})
+            pacman_ok = (
+                '#!/bin/sh\n'
+                'for arg in "$@"; do if [ "$arg" = "--print" ]; then printf "base-1.pkg.tar.zst\\n"; exit 0; fi; done\n'
+                'exit 0\n'
+            )
+            make_bin(case_bin.parent, {'pacman': pacman_ok})
+            for tool in ('sgdisk', 'wipefs'):
+                make_bin(case_bin.parent, {tool: marker_script(marker)})
+            for tool in ('cryptsetup', 'mkfs.btrfs', 'mkfs.fat', 'pacstrap', 'arch-chroot', 'udevadm'):
+                make_bin(case_bin.parent, {tool: true_script()})
+            # sfdisk returns invalid JSON so partitioning stops after the marker.
+            make_bin(case_bin.parent, {'sfdisk': '#!/bin/sh\nprintf "not json\\n"\n'})
             state = installer.InstallationState()
+            real_stat = os.stat
             real_staging = tempfile.TemporaryDirectory
             with (
                 patch.object(payload, 'SHARE', root),
                 patch.object(payload, 'REPO', root),
                 patch.object(installer, 'TARGET', root / 'target'),
-                patch.object(storage, 'require_disk', return_value=(1, 2, 64 * 1024**3, None, None, 'vda')),
-                patch.object(payload, 'verify_repository'),
-                patch.object(installer.shutil, 'which', return_value='/usr/bin/tool'),
-                patch.object(installer, 'run', side_effect=fake_run),
-                patch.object(payload, 'run', side_effect=fake_run),
+                patch.dict(os.environ, {'PATH': str(case_bin)}),
+                patch('os.stat', side_effect=fake_stat(real_stat)),
                 patch.object(installer.tempfile, 'TemporaryDirectory', lambda *a, **k: real_staging(dir=root)),
-                patch.object(storage, 'create_partitions', side_effect=ValueError('sentinel partitioning reached')),
             ):
-                with self.assertRaisesRegex(ValueError, 'sentinel partitioning'):
+                with self.assertRaises(ValueError):
                     installer.install(settings(), state)
-                self.assertFalse(state.installation_started)
-            preflight = [args for args in calls if '--upgrade' in args]
-            self.assertEqual(len(preflight), 1)
-            self.assertIn(str(root / 'base-1.pkg.tar.zst'), preflight[0])
-            self.assertNotIn('--downloadonly', preflight[0])
+                # Preflight passed: partitioning was attempted and the install started.
+                self.assertTrue(os.path.exists(marker))
+                self.assertTrue(state.installation_started)
 
     def test_disk_swap_between_confirmation_and_install_prevents_all_commands(self):
-        with tempfile.TemporaryDirectory() as directory:
+        with tempfile.TemporaryDirectory() as directory, tempfile.TemporaryDirectory() as bindir:
             root = Path(directory)
             (root / 'packages.target').write_text('base\nlinux\n')
-            (root / 'offline.db').touch()
+            (root / 'offline.db').write_bytes(b'db')
+            (root / 'base-1.pkg.tar.zst').write_bytes(b'pkg')
+            import hashlib as _hashlib
+
+            sums = [
+                f'{_hashlib.sha256((root / name).read_bytes()).hexdigest()}  {name}\n'
+                for name in ('offline.db', 'base-1.pkg.tar.zst')
+            ]
+            (root / 'SHA256SUMS').write_text(''.join(sums))
             (root / 'iso-build-date').write_text('1\n')
+            marker = Path(bindir) / 'disk-touched'
+            case_bin = Path(bindir) / 'bin'
+            case_bin.mkdir()
+            # lsblk answers differently on the first and second inventory.
+            first = json.dumps({'blockdevices': [disk()]})
+            second_disk = disk(size=128 * 1024**3)
+            second = json.dumps({'blockdevices': [second_disk]})
+            (case_bin / 'lsblk').write_text(
+                '#!/bin/sh\n'
+                'count_file="' + str(Path(bindir) / 'count') + '"\n'
+                "if [ -f \"$count_file\" ]; then printf '%s' '" + second.replace("'", "'\"'\"'") + "'; "
+                "else : > \"$count_file\"; printf '%s' '" + first.replace("'", "'\"'\"'") + "'; fi\n"
+            )
+            (case_bin / 'lsblk').chmod(0o755)
+            (case_bin / 'pacman').write_text(
+                '#!/bin/sh\nfor arg in "$@"; do if [ "$arg" = "--print" ]; then printf "base-1.pkg.tar.zst\\n"; exit 0; fi; done\nexit 0\n'
+            )
+            (case_bin / 'pacman').chmod(0o755)
+            for tool in ('sgdisk', 'wipefs'):
+                make_bin(case_bin.parent, {tool: marker_script(marker)})
+            for tool in ('cryptsetup', 'mkfs.btrfs', 'mkfs.fat', 'pacstrap', 'arch-chroot'):
+                make_bin(case_bin.parent, {tool: true_script()})
+            real_stat = os.stat
             with (
                 patch.object(payload, 'SHARE', root),
                 patch.object(payload, 'REPO', root),
                 patch.object(installer, 'TARGET', root / 'target'),
-                patch.object(storage, 'require_disk', side_effect=[1, 2]),
-                patch.object(payload, 'verify_repository'),
-                patch.object(installer.shutil, 'which', return_value='/usr/bin/tool'),
-                patch.object(installer, 'run') as run,
+                patch.dict(os.environ, {'PATH': str(case_bin)}),
+                patch('os.stat', side_effect=fake_stat(real_stat)),
             ):
                 with self.assertRaisesRegex(ValueError, 'identity changed'):
                     installer.install(settings())
-                run.assert_not_called()
+            self.assertFalse(os.path.exists(marker))
 
     def test_bad_payload_package_name_prevents_disk_mutation(self):
-        with tempfile.TemporaryDirectory() as directory:
+        with tempfile.TemporaryDirectory() as directory, tempfile.TemporaryDirectory() as bindir:
             root = Path(directory)
             (root / 'packages.target').write_text('base\n--root=/\n')
+            marker = Path(bindir) / 'disk-touched'
+            case_bin = make_bin(bindir, {'lsblk': lsblk_script([disk()])})
+            make_bin(case_bin.parent, {'sgdisk': marker_script(marker)})
+            real_stat = os.stat
             with (
                 patch.object(payload, 'SHARE', root),
-                patch.object(storage, 'require_disk', return_value=1),
-                patch.object(installer, 'run') as run,
+                patch.dict(os.environ, {'PATH': str(case_bin)}),
+                patch('os.stat', side_effect=fake_stat(real_stat)),
             ):
                 with self.assertRaisesRegex(ValueError, 'package list'):
                     installer.install(settings())
-                run.assert_not_called()
+            self.assertFalse(os.path.exists(marker))
 
     def test_missing_repository_database_prevents_disk_mutation(self):
-        with tempfile.TemporaryDirectory() as directory:
+        with tempfile.TemporaryDirectory() as directory, tempfile.TemporaryDirectory() as bindir:
             root = Path(directory)
             (root / 'packages.target').write_text('base\n')
             package = root / 'base.pkg.tar.zst'
@@ -562,65 +729,246 @@ class InstallerSafetyTests(unittest.TestCase):
             checksum = hashlib.sha256(package.read_bytes()).hexdigest()
             (root / 'SHA256SUMS').write_text(f'{checksum}  {package.name}\n')
             (root / 'iso-build-date').write_text('1\n')
+            marker = Path(bindir) / 'disk-touched'
+            case_bin = make_bin(bindir, {'lsblk': lsblk_script([disk()])})
+            make_bin(case_bin.parent, {'sgdisk': marker_script(marker)})
+            real_stat = os.stat
             with (
                 patch.object(payload, 'SHARE', root),
                 patch.object(payload, 'REPO', root),
                 patch.object(installer, 'TARGET', root / 'target'),
-                patch.object(storage, 'require_disk', return_value=1),
-                patch.object(installer, 'run') as run,
+                patch.dict(os.environ, {'PATH': str(case_bin)}),
+                patch('os.stat', side_effect=fake_stat(real_stat)),
             ):
                 value = settings()
                 state = installer.InstallationState()
                 with self.assertRaisesRegex(ValueError, 'repository database'):
                     installer.install(value, state)
-                run.assert_not_called()
                 self.assertFalse(state.installation_started)
+            self.assertFalse(os.path.exists(marker))
 
     def test_disk_replacement_after_wizard_confirmation_is_rejected(self):
-        value = settings()
-        state = installer.InstallationState(confirmed_device=(1, 2, 64 * 1024**3))
-        with (
-            patch.object(storage, 'require_disk', return_value=(1, 3, 64 * 1024**3)),
-            patch.object(installer, 'run') as run,
-        ):
-            with self.assertRaisesRegex(ValueError, 'confirmed disk was replaced'):
-                installer.install(value, state)
-            run.assert_not_called()
+        with tempfile.TemporaryDirectory() as bindir:
+            marker = Path(bindir) / 'disk-touched'
+            case_bin = make_bin(bindir, {'lsblk': lsblk_script([disk()])})
+            make_bin(case_bin.parent, {'sgdisk': marker_script(marker)})
+            value = settings()
+            # Confirmed identity differs in the device number: the disk was replaced.
+            state = installer.InstallationState(confirmed_device=(1, 2, 64 * 1024**3))
+            real_stat = os.stat
+
+            def swapped_stat(path, *args, **kwargs):
+                if str(path) == '/dev/vda':
+                    return type('Stat', (), {'st_rdev': 1, 'st_ino': 3})()
+                return real_stat(path, *args, **kwargs)
+
+            with (
+                patch.dict(os.environ, {'PATH': str(case_bin)}),
+                patch('os.stat', side_effect=swapped_stat),
+            ):
+                with self.assertRaisesRegex(ValueError, 'confirmed disk was replaced'):
+                    installer.install(value, state)
+            self.assertFalse(os.path.exists(marker))
 
     def test_picker_puts_the_default_first_and_escape_cancels(self):
-        result = wizard.subprocess.CompletedProcess([], 130, stdout='')
-        with patch.object(wizard.subprocess, 'run', return_value=result) as run:
-            with self.assertRaises(wizard.Cancelled):
-                wizard.choose('Keyboard layout', ['de', 'us'], default='us', search=True)
-            self.assertEqual(run.call_args.kwargs['input'], 'us\nde\n')
+        with tempfile.TemporaryDirectory() as bindir:
+            case_bin = Path(bindir) / 'bin'
+            case_bin.mkdir()
+            # Echo the first stdin line: the default must sort first to be returned.
+            make_bin(case_bin.parent, {'gum': '#!/bin/sh\nIFS= read -r first || exit 1\nprintf "%s" "$first"\n'})
+            with patch.dict(os.environ, {'PATH': str(case_bin)}):
+                self.assertEqual(wizard.choose('Keyboard layout', ['de', 'us'], default='us', search=True), 'us')
+            make_bin(case_bin.parent, {'gum': '#!/bin/sh\nexit 1\n'})
+            with patch.dict(os.environ, {'PATH': str(case_bin)}):
+                with self.assertRaises(wizard.Cancelled):
+                    wizard.choose('Keyboard layout', ['de', 'us'], default='us', search=True)
 
     def test_errors_distinguish_preflight_from_a_started_installation(self):
-        for started in (False, True):
-
-            def fail_install(state):
-                state.installation_started = started
-                raise ValueError('fixture failure')
-
-            output = io.StringIO()
+        # Preflight failure (bad package list) never starts the install: no partitioning.
+        with tempfile.TemporaryDirectory() as directory, tempfile.TemporaryDirectory() as bindir:
+            root = Path(directory)
+            (root / 'packages.target').write_text('base\n--root=/\n')
+            marker = Path(bindir) / 'disk-touched'
+            case_bin = make_bin(bindir, {'lsblk': lsblk_script([disk()])})
+            make_bin(case_bin.parent, {'sgdisk': marker_script(marker)})
+            real_stat = os.stat
             with (
-                self.subTest(started=started),
-                patch.object(sys, 'argv', ['install']),
-                patch.object(installer.os, 'geteuid', return_value=0),
-                patch.object(Path, 'exists', return_value=True),
-                patch.object(Path, 'glob', return_value=[]),
-                patch.object(installer, 'interactive', side_effect=fail_install),
-                patch('sys.stderr', output),
+                patch.object(payload, 'SHARE', root),
+                patch.dict(os.environ, {'PATH': str(case_bin)}),
+                patch('os.stat', side_effect=fake_stat(real_stat)),
             ):
-                self.assertEqual(installer.main(), 1)
-            self.assertEqual('No disk was changed.' in output.getvalue(), not started)
-            self.assertEqual('may be incomplete' in output.getvalue(), started)
+                with self.assertRaisesRegex(ValueError, 'package list'):
+                    installer.install(settings(), installer.InstallationState())
+            self.assertFalse(os.path.exists(marker))
+        # Started failure (pacstrap fails after partitioning) leaves the install started.
+        with tempfile.TemporaryDirectory() as directory, tempfile.TemporaryDirectory() as bindir:
+            root = Path(directory)
+            (root / 'packages.target').write_text('base\n')
+            (root / 'offline.db').write_bytes(b'db')
+            (root / 'base-1.pkg.tar.zst').write_bytes(b'pkg')
+            import hashlib as _hashlib
+
+            sums = [
+                f'{_hashlib.sha256((root / name).read_bytes()).hexdigest()}  {name}\n'
+                for name in ('offline.db', 'base-1.pkg.tar.zst')
+            ]
+            (root / 'SHA256SUMS').write_text(''.join(sums))
+            (root / 'iso-build-date').write_text('1\n')
+            case_bin = make_bin(bindir, {'lsblk': lsblk_script([disk()])})
+            (case_bin / 'pacman').write_text(
+                '#!/bin/sh\nfor arg in "$@"; do if [ "$arg" = "--print" ]; then printf "base-1.pkg.tar.zst\\n"; exit 0; fi; done\nexit 0\n'
+            )
+            (case_bin / 'pacman').chmod(0o755)
+            for tool in ('sgdisk', 'wipefs'):
+                make_bin(case_bin.parent, {tool: marker_script(Path(bindir) / 'touched')})
+            for tool in ('cryptsetup', 'mkfs.btrfs', 'mkfs.fat', 'arch-chroot', 'udevadm', 'sfdisk'):
+                make_bin(case_bin.parent, {tool: true_script()})
+            make_bin(case_bin.parent, {'pacstrap': '#!/bin/sh\nexit 1\n'})
+            real_stat = os.stat
+            real_staging = tempfile.TemporaryDirectory
+            with (
+                patch.object(payload, 'SHARE', root),
+                patch.object(payload, 'REPO', root),
+                patch.object(installer, 'TARGET', root / 'target'),
+                patch.dict(os.environ, {'PATH': str(case_bin)}),
+                patch('os.stat', side_effect=fake_stat(real_stat)),
+                patch.object(installer.tempfile, 'TemporaryDirectory', lambda *a, **k: real_staging(dir=root)),
+            ):
+                state = installer.InstallationState()
+                with self.assertRaises((ValueError, installer.subprocess.CalledProcessError, OSError)):
+                    installer.install(settings(), state)
+                self.assertTrue(state.installation_started)
+
+    def test_main_reports_retry_cleanup_only_for_a_started_installation(self):
+        # main() maps a started failure to exit 1 plus the retry/cleanup
+        # guidance, while a preflight failure reports no disk was changed.
+        host_exists = Path.exists
+        real_glob = Path.glob
+
+        def efi_exists(path):
+            if str(path) == '/sys/firmware/efi':
+                return True
+            return host_exists(path)
+
+        def efi_glob(path_self, pattern):
+            # Only the Secure Boot probe is faked; payload globs stay real.
+            if str(path_self) == '/sys/firmware/efi/efivars':
+                return []
+            return real_glob(path_self, pattern)
+
+        def config_argv(root):
+            config = root / 'settings.json'
+            config.write_text(
+                json.dumps(
+                    {
+                        'disk': '/dev/vda',
+                        'username': 'tester',
+                        'hostname': 'dux',
+                        'timezone': 'UTC',
+                        'keymap': 'us',
+                        'passphrase': 'test-passphrase',
+                        'password': 'test-password',
+                    }
+                )
+            )
+            config.chmod(0o600)
+            return ['install', '--config', str(config), '--confirm-disk', '/dev/vda']
+
+        def run_main(case_bin, *extra):
+            # The failure handler needs root, UEFI and a tool PATH; the stack
+            # keeps those patches scoped to the single main() call.
+            real_stat = os.stat
+            with contextlib.ExitStack() as stack:
+                for pending in (
+                    patch.object(installer.os, 'geteuid', return_value=0),
+                    patch.object(Path, 'exists', efi_exists),
+                    patch.object(Path, 'glob', efi_glob),
+                    patch.dict(os.environ, {'PATH': str(case_bin)}),
+                    patch('os.stat', side_effect=fake_stat(real_stat)),
+                    *extra,
+                ):
+                    stack.enter_context(pending)
+                return installer.main()
+
+        # Preflight failure (bad package list) never starts the install.
+        with tempfile.TemporaryDirectory() as directory, tempfile.TemporaryDirectory() as bindir:
+            root = Path(directory)
+            (root / 'packages.target').write_text('base\n--root=/\n')
+            marker = Path(bindir) / 'disk-touched'
+            case_bin = make_bin(bindir, {'lsblk': lsblk_script([disk()])})
+            make_bin(case_bin.parent, {'sgdisk': marker_script(marker)})
+            err, out = io.StringIO(), io.StringIO()
+            with (
+                patch.object(payload, 'SHARE', root),
+                patch.object(sys, 'argv', config_argv(root)),
+                patch('sys.stderr', err),
+                patch('sys.stdout', out),
+            ):
+                self.assertEqual(run_main(case_bin), 1)
+            self.assertIn('No disk was changed.', err.getvalue())
+            self.assertNotIn('umount -R', err.getvalue())
+            self.assertFalse(os.path.exists(marker))
+        # Started failure (pacstrap fails after partitioning) names the
+        # retry/cleanup steps for this attempt's mounts and mappings.
+        with tempfile.TemporaryDirectory() as directory, tempfile.TemporaryDirectory() as bindir:
+            root = Path(directory)
+            (root / 'packages.target').write_text('base\n')
+            (root / 'offline.db').write_bytes(b'db')
+            (root / 'base-1.pkg.tar.zst').write_bytes(b'pkg')
+            import hashlib as _hashlib
+
+            sums = [
+                f'{_hashlib.sha256((root / name).read_bytes()).hexdigest()}  {name}\n'
+                for name in ('offline.db', 'base-1.pkg.tar.zst')
+            ]
+            (root / 'SHA256SUMS').write_text(''.join(sums))
+            (root / 'iso-build-date').write_text('1\n')
+            case_bin = make_bin(bindir, {'lsblk': lsblk_script([disk()])})
+            (case_bin / 'pacman').write_text(
+                '#!/bin/sh\nfor arg in "$@"; do if [ "$arg" = "--print" ]; then printf "base-1.pkg.tar.zst\\n"; exit 0; fi; done\nexit 0\n'
+            )
+            (case_bin / 'pacman').chmod(0o755)
+            for tool in ('sgdisk', 'wipefs'):
+                make_bin(case_bin.parent, {tool: marker_script(Path(bindir) / 'touched')})
+            for tool in ('cryptsetup', 'mkfs.btrfs', 'mkfs.fat', 'arch-chroot', 'udevadm', 'sfdisk', 'blkid'):
+                make_bin(case_bin.parent, {tool: true_script()})
+            make_bin(case_bin.parent, {'pacstrap': '#!/bin/sh\nexit 1\n'})
+            real_staging = tempfile.TemporaryDirectory
+            err, out = io.StringIO(), io.StringIO()
+            with (
+                patch.object(payload, 'SHARE', root),
+                patch.object(payload, 'REPO', root),
+                patch.object(installer, 'TARGET', root / 'target'),
+                patch.object(sys, 'argv', config_argv(root)),
+                patch('sys.stderr', err),
+                patch('sys.stdout', out),
+            ):
+                self.assertEqual(
+                    run_main(
+                        case_bin,
+                        patch.object(installer.tempfile, 'TemporaryDirectory', lambda *a, **k: real_staging(dir=root)),
+                    ),
+                    1,
+                )
+            self.assertIn('may be incomplete', err.getvalue())
+            self.assertIn('umount -R', err.getvalue())
+            self.assertIn('cryptsetup close', err.getvalue())
+            self.assertTrue(os.path.exists(Path(bindir) / 'touched'))
 
     def test_invalid_username_and_passwords_retry_inline(self):
-        with patch.object(wizard, 'say'), patch.object(wizard, 'gum', side_effect=['root', 'tester']):
-            self.assertEqual(wizard.prompt('Username', validate=wizard.validate_username), 'tester')
-        answers = ['short', 'long-password', 'different-password', 'long-password', 'long-password']
-        with patch.object(wizard, 'say'), patch.object(wizard, 'gum', side_effect=answers):
-            self.assertEqual(wizard.secret('Login password'), 'long-password')
+        with tempfile.TemporaryDirectory() as bindir:
+            case_bin = Path(bindir) / 'bin'
+            case_bin.mkdir()
+            replies = Path(bindir) / 'replies'
+            replies.write_text('0:root\n0:tester\n')
+            make_bin(case_bin.parent, {'gum': GUM_REPLIES_SCRIPT})
+            for name in ('head', 'tail', 'mv'):
+                (case_bin / name).symlink_to(shutil.which(name))
+            with patch.dict(os.environ, {'PATH': str(case_bin), 'GUM_REPLIES': str(replies)}):
+                self.assertEqual(wizard.prompt('Username', validate=wizard.validate_username), 'tester')
+            replies.write_text('0:short\n0:long-password\n0:different-password\n0:long-password\n0:long-password\n')
+            with patch.dict(os.environ, {'PATH': str(case_bin), 'GUM_REPLIES': str(replies)}):
+                self.assertEqual(wizard.secret('Login password'), 'long-password')
 
     def test_pacman_progress_counts_packages_then_hooks(self):
         progress = installer.PacmanProgress()
@@ -645,7 +993,14 @@ class InstallerSafetyTests(unittest.TestCase):
         self.assertIn('10 of 10', progress.counts())
 
     def test_swap_auto_custom_disabled_and_capacity(self):
-        with patch.object(storage, 'memory_gib', return_value=16):
+        real_read_text = Path.read_text
+
+        def fake_read_text(path_self, *args, **kwargs):
+            if str(path_self) == '/proc/meminfo':
+                return 'MemTotal:       16777216 kB\nMemAvailable:    16777216 kB\n'
+            return real_read_text(path_self, *args, **kwargs)
+
+        with patch.object(Path, 'read_text', fake_read_text):
             self.assertEqual(storage.swap_size(None, 64 * storage.GIB), 18)
             self.assertEqual(storage.swap_size(8, 64 * storage.GIB), 8)
             self.assertEqual(storage.swap_size(0, 32 * storage.GIB), 0)

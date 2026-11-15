@@ -68,22 +68,22 @@ class WindowsTPMRestartTests(unittest.TestCase):
             sentinel.write_text('retain fixture state')
             pids = []
 
-            # Match the keyword interface of VM.start in this test double.
-            def boot(instance, cdrom=True, network=False, software_display=False):  # noqa: ARG001
+            def connect():
                 connection = socket.socket(socket.AF_UNIX)
                 try:
-                    connection.connect(str(instance.control_path('tpm.sock')))
-                    pids.append(instance.tpm_process.pid)
+                    connection.connect(str(vm.control_path('tpm.sock')))
+                    pids.append(vm.tpm_process.pid)
                 finally:
                     connection.close()
 
             try:
-                with patch.object(windows.VM, 'start', new=boot):
-                    vm.start()
-                    # A QEMU shutdown also ends the connected TPM emulator.
-                    vm.tpm_process.terminate()
-                    vm.tpm_process.wait(timeout=10)
-                    vm.start()
+                vm.start_tpm()
+                connect()
+                # A QEMU shutdown also ends the connected TPM emulator.
+                vm.tpm_process.terminate()
+                vm.tpm_process.wait(timeout=10)
+                vm.start_tpm()
+                connect()
                 self.assertEqual(len(set(pids)), 2)
                 self.assertEqual(sentinel.read_text(), 'retain fixture state')
             finally:

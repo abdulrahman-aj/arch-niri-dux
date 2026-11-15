@@ -8,14 +8,16 @@ import tempfile
 from textwrap import dedent
 import unittest
 
+from tools.workspace.resources import AGENT_MARKERS
+
 
 class ProbeEntrypointTests(unittest.TestCase):
     def run_entrypoint(self, module, arguments, cache):
         program = dedent("""\
             import runpy
+            import shutil
             import sys
             from tools.vm import control
-            from tools.workspace import resources
 
             class VM:
                 commands = 0
@@ -29,17 +31,26 @@ class ProbeEntrypointTests(unittest.TestCase):
                     return ''
 
             control.VM = VM
-            resources.disk_guard = lambda *args, **kwargs: None
-            resources.heavy_guard = lambda *args, **kwargs: None
+            # disk_guard still runs its real check; only the capacity is faked
+            # at the stdlib boundary so the test needs no host free space.
+            real_disk_usage = shutil.disk_usage
+            def ample_disk_usage(path):
+                return real_disk_usage(path)._replace(free=100 * 1024**3)
+            shutil.disk_usage = ample_disk_usage
             module = sys.argv[1]
             sys.argv = [module, *sys.argv[2:]]
             runpy.run_module(module, run_name='__main__')
             assert VM.commands > 0
             """)
+        # heavy_guard reads the harness environment, so scrub the agent
+        # markers and the deny flag; the real guard then passes either way.
+        environment = {
+            name: value for name, value in os.environ.items() if name not in (*AGENT_MARKERS, 'AGENT_HEAVY_JOBS')
+        }
         subprocess.run(
             [sys.executable, '-c', program, module, *arguments],
             cwd=Path(__file__).resolve().parents[1],
-            env=os.environ | {'XDG_CACHE_HOME': str(cache)},
+            env=environment | {'XDG_CACHE_HOME': str(cache)},
             capture_output=True,
             text=True,
             check=True,

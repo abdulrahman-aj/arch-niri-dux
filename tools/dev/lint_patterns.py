@@ -147,7 +147,118 @@ def _unquoted_interpolation(command):
     return is_format or (isinstance(command, ast.BinOp) and isinstance(command.op, ast.Mod))
 
 
-RULES = (swallowed_broad_except, pass_through_wrapper, probe_local_helpers, unquoted_shell_interpolation)
+def mock_interaction_assertion(path, tree):
+    # Tests that pin how code was called break on every refactor and pass while
+    # the real command is wrong; assert outcomes (return values, files, errors).
+    if not str(path).startswith('tests/'):
+        return
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Attribute) and node.attr in (
+            'assert_called',
+            'assert_called_once',
+            'assert_called_with',
+            'assert_called_once_with',
+            'assert_any_call',
+            'assert_has_calls',
+            'assert_not_called',
+            'call_args',
+            'call_args_list',
+            'mock_calls',
+            'call_count',
+            'method_calls',
+        ):
+            yield node.lineno, ('mock interaction assertion pins how code was called; assert outcomes instead')
+
+
+def _import_map(tree):
+    mapping = {}
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Import):
+            for alias in node.names:
+                mapping[alias.asname or alias.name.split('.')[0]] = (
+                    alias.name if alias.asname else alias.name.split('.')[0]
+                )
+        elif isinstance(node, ast.ImportFrom) and not node.level:
+            for alias in node.names:
+                mapping[alias.asname or alias.name] = f'{node.module}.{alias.name}'
+    return mapping
+
+
+def _resolve(dotted, mapping):
+    first, separator, rest = dotted.partition('.')
+    return mapping.get(first, first) + separator + rest
+
+
+def _repo_callable(dotted):
+    parts = dotted.split('.')
+    for index in range(len(parts) - 1, 0, -1):
+        source = ROOT.joinpath(*parts[:index]).with_suffix('.py')
+        if not source.is_file():
+            source = ROOT.joinpath(*parts[:index], '__init__.py')
+        if not source.is_file():
+            continue
+        definitions = ast.parse(source.read_text()).body
+        target = parts[index:]
+        for name in target:
+            definition = next(
+                (
+                    node
+                    for node in definitions
+                    if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)) and node.name == name
+                ),
+                None,
+            )
+            if definition is None:
+                return False
+            definitions = definition.body if isinstance(definition, ast.ClassDef) else []
+        return True
+    return False
+
+
+def patched_repo_function(path, tree):
+    # Replacing a repo callable bypasses the behavior under test; keep fakes at external boundaries
+    # (stdlib, executables on PATH, constants). Attribute assignment and setattr with a literal name
+    # replace callables just like patch(); a setattr with a computed name can't be resolved statically.
+    # Code inside a string that a test runs as a subprocess program is not parsed either; the probe
+    # entrypoint test uses that only to swap the QEMU-backed VM class, the hardware boundary.
+    if not str(path).startswith('tests/'):
+        return
+    mapping = _import_map(tree)
+    for node in ast.walk(tree):
+        for target in _replaced_targets(node):
+            if _repo_callable(target) or _repo_callable(_resolve(target, mapping)):
+                yield node.lineno, f"replaces repo callable '{target}'; use a real seam instead"
+
+
+def _replaced_targets(node):
+    if isinstance(node, ast.Assign):
+        for target in node.targets:
+            for element in target.elts if isinstance(target, (ast.Tuple, ast.List)) else [target]:
+                if isinstance(element, ast.Attribute):
+                    yield ast.unparse(element)
+        return
+    if not isinstance(node, ast.Call):
+        return
+    function = ast.unparse(node.func).split('.')
+    names = [argument.value if isinstance(argument, ast.Constant) else None for argument in node.args]
+    if function[-1] == 'patch' and names and isinstance(names[0], str):
+        yield names[0]
+    elif (
+        (function[-2:] == ['patch', 'object'] or function == ['setattr'])
+        and len(names) >= 2
+        and isinstance(names[1], str)
+    ):
+        yield f'{ast.unparse(node.args[0])}.{names[1]}'
+
+
+RULES = (
+    swallowed_broad_except,
+    pass_through_wrapper,
+    probe_local_helpers,
+    unquoted_shell_interpolation,
+    mock_interaction_assertion,
+    patched_repo_function,
+)
 
 
 def violations(path, source):
