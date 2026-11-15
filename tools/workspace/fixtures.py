@@ -46,10 +46,10 @@ def newest_accepted_fixture(registry=None, checkout=ROOT):
                 capture_output=True,
             )
             if result.returncode == 0:
-                if selected is None:
-                    selected = directory / 'disk.qcow2'
-                    print(f'Using fixture {directory} at commit {commit}.', file=sys.stderr)
-                continue
+                # Newest first: stop here so older fixtures are not listed as skipped.
+                selected = directory / 'disk.qcow2'
+                print(f'Using fixture {directory} at commit {commit}.', file=sys.stderr)
+                break
             reason = (
                 f'{commit} is not an ancestor of origin/main'
                 if result.returncode == 1
