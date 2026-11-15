@@ -1,5 +1,9 @@
 # Package inputs
 
+`tools.packages.artifacts` verifies and fetches release artifacts using the pinned public key.
+`tools.release.repository` owns signing, publication and release history selection.
+The builder uses the artifact consumer; publication remains behind `tools/release/publish.sh`.
+
 [`integration/PKGBUILD`](integration/PKGBUILD) builds two packages.
 `arch-niri-dux` installs the desktop configuration and scripts. The
 `arch-niri-dux-baseline` metapackage requires the packages listed in

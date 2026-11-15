@@ -37,13 +37,13 @@ if [[ $current != null ]]; then
     fi
 fi
 mkdir -p "$history"
-python -m tools.packages.artifacts history-tags "$root" "$releases" --tag "$tag" >"$temporary/history-tags"
+python -m tools.release.repository history-tags "$root" "$releases" --tag "$tag" >"$temporary/history-tags"
 while IFS= read -r previous; do
     gh release download "$previous" --repo "$repository" --dir "$history" --skip-existing \
         --pattern 'arch-niri-dux-*.pkg.tar.zst' --pattern 'arch-niri-dux-*.pkg.tar.zst.sig' \
         --pattern 'dux-*.pkg.tar.zst' --pattern 'dux-*.pkg.tar.zst.sig'
 done <"$temporary/history-tags"
-python -m tools.packages.artifacts publish "$root" "$packages" "$history" "$output" \
+python -m tools.release.repository publish "$root" "$packages" "$history" "$output" \
     --tag "$tag" --commit "$commit"
 if [[ $published == false ]]; then
     assets=()
