@@ -98,8 +98,9 @@ def unquoted_shell_interpolation(path, tree):
     # A value spliced unquoted into a shell string breaks on spaces or becomes
     # injection the first time an agent copies the line for a real path; quoting
     # is a no-op on today's safe values, so every interpolation goes through shlex.
-    # Scope: the string passed straight to vm.command or after 'sh'/'bash' '-c';
-    # a command assembled in a variable first is not followed.
+    # Scope: the string passed straight to vm.command or after 'sh'/'bash' '-c'
+    # (including combined flags such as '-lc'); a command assembled in a
+    # variable first is not followed.
     # Tests build shell code on purpose (sourcing fixtures), so this watches tools/.
     if not str(path).startswith('tools/'):
         return
@@ -123,12 +124,21 @@ def unquoted_shell_interpolation(path, tree):
 
 
 def _dash_c_command(elements):
-    words = [element.value if isinstance(element, ast.Constant) else None for element in elements]
-    if '-c' not in words:
-        return []
-    index = words.index('-c')
-    if index + 1 < len(elements) and {'sh', 'bash'} & set(words[:index]):
-        return [elements[index + 1]]
+    words = [
+        element.value if isinstance(element, ast.Constant) and isinstance(element.value, str) else None
+        for element in elements
+    ]
+    for index, word in enumerate(words):
+        if (
+            word is not None
+            and index + 1 < len(elements)
+            # A combined short-flag cluster such as '-lc' still runs its
+            # next argument as shell code; long options never match.
+            and re.fullmatch(r'-[A-Za-z]+', word)
+            and 'c' in word
+            and {'sh', 'bash'} & set(words[:index])
+        ):
+            return [elements[index + 1]]
     return []
 
 
