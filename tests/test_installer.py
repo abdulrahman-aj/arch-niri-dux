@@ -304,6 +304,76 @@ class InstallerSafetyTests(unittest.TestCase):
             with self.subTest(device=device):
                 self.assertIsNotNone(storage.disk_rejection(device, set()))
 
+    def test_exactly_32gib_disk_passes_the_size_check(self):
+        self.assertIsNone(storage.disk_rejection(disk(size=32 * 1024**3), set()))
+
+    def test_min_disk_gib_covers_esp_reserve_and_swap(self):
+        self.assertEqual(storage.min_disk_gib(0), 32)
+        self.assertEqual(storage.min_disk_gib(6), 35)
+        self.assertEqual(storage.min_disk_gib(10), 39)
+        self.assertEqual(storage.max_swap_gib(32), 3)
+        self.assertEqual(storage.max_swap_gib(48), 19)
+
+    def test_rejection_report_names_each_disk_with_its_reason(self):
+        small = disk(name='/dev/sda', type='disk', size=1024**3, model='USB')
+        held = disk(
+            name='/dev/vda',
+            type='disk',
+            size=32 * 1024**3,
+            children=[dict(name='/dev/vda1', type='part', mountpoints=[None])],
+        )
+        with patch.object(storage, 'disk_rejections', return_value=[(small, 'smaller than 32 GiB')]):
+            self.assertEqual(storage.eligible_disks(), [])
+            self.assertIn('/dev/sda', storage.describe_rejections(storage.disk_rejections()))
+            self.assertIn('smaller than 32 GiB', storage.describe_rejections(storage.disk_rejections()))
+        report = storage.describe_rejections([(held, 'has an active device mapping')])
+        self.assertIn('/dev/vda  32.0 GiB', report)
+        self.assertIn('has an active device mapping', report)
+
+    def test_rejection_report_lists_only_whole_disks(self):
+        rom = disk(name='/dev/sr0', type='rom', size=1024**3)
+        small = disk(name='/dev/sda', type='disk', size=1024**3)
+        self.assertEqual(storage.describe_rejections([(rom, 'not a whole disk')]), '')
+        report = storage.describe_rejections([(rom, 'not a whole disk'), (small, 'smaller than 32 GiB')])
+        self.assertNotIn('sr0', report)
+        self.assertIn('/dev/sda', report)
+
+    def test_require_disk_reports_the_rejection_reason(self):
+        with patch.object(storage, 'disk_inventory', return_value=[disk(ro=True)]):
+            with self.assertRaisesRegex(ValueError, 'read-only'):
+                storage.require_disk('/dev/vda')
+            try:
+                storage.require_disk('/dev/vda')
+            except ValueError as error:
+                self.assertIn('Target disk is unavailable', str(error))
+                self.assertIn('/dev/vda', str(error))
+
+    def test_require_disk_names_a_missing_disk(self):
+        good = disk(name='/dev/vda', type='disk', size=64 * 1024**3)
+        with patch.object(storage, 'disk_inventory', return_value=[good]):
+            with self.assertRaisesRegex(ValueError, 'was not found among the disks'):
+                storage.require_disk('/dev/vdb')
+
+    def test_wizard_without_usable_disks_names_each_rejection(self):
+        rejected = [(disk(name='/dev/vda', type='disk', size=32 * 1024**3), 'has an active device mapping')]
+        with (
+            patch.object(installer.shutil, 'which', return_value='/usr/bin/gum'),
+            patch.object(sys.stdin, 'isatty', return_value=True),
+            patch.object(storage, 'disk_rejections', return_value=rejected),
+        ):
+            with self.assertRaisesRegex(ValueError, 'No unused writable disk') as stopped:
+                installer.wizard(installer.InstallationState())
+        self.assertIn(f'at least {storage.MIN_DISK_BYTES // storage.GIB} GiB', str(stopped.exception))
+        self.assertIn('/dev/vda', str(stopped.exception))
+        self.assertIn('has an active device mapping', str(stopped.exception))
+
+    def test_swap_fit_is_the_inverse_of_the_disk_minimum(self):
+        with patch.object(installer, 'memory_gib', return_value=4):
+            self.assertEqual(installer.swap_size(None, 35 * installer.GIB), 6)
+            with self.assertRaisesRegex(ValueError, 'will not fit'):
+                installer.swap_size(None, 34 * installer.GIB)
+            self.assertEqual(storage.min_disk_gib(installer.swap_size(None, 35 * installer.GIB)), 35)
+
     def test_input_validation_blocks_unsafe_identity_values(self):
         for change in (
             {'username': 'root'},

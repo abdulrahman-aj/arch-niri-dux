@@ -118,9 +118,9 @@ def memory_gib():
 
 
 def swap_size(swap_gib, disk_bytes):
-    size = memory_gib() + 2 if swap_gib is None else swap_gib
+    size = memory_gib() + storage.AUTO_SWAP_PAD_GIB if swap_gib is None else swap_gib
     # Leave room for the ESP, LUKS metadata and a usable desktop installation.
-    maximum = disk_bytes // GIB - 4 - 24 - 1
+    maximum = storage.max_swap_gib(disk_bytes // GIB)
     if size and size > maximum:
         raise ValueError(
             f'{size} GiB swap will not fit while leaving 24 GiB for the system. '
@@ -257,9 +257,14 @@ def wizard(state):
         raise ValueError('The live installer is missing gum, required for its menus.')
     if not sys.stdin.isatty():
         raise ValueError('The guided installer needs the console; automated runs use --config.')
-    disks = storage.eligible_disks()
+    rejections = storage.disk_rejections()
+    disks = [disk for disk, reason in rejections if reason is None]
     if not disks:
-        raise ValueError('No unused writable disk of at least 32 GiB found. TTY2 is available for recovery.')
+        detail = storage.describe_rejections(rejections)
+        raise ValueError(
+            f'No unused writable disk of at least {storage.MIN_DISK_BYTES // storage.GIB} GiB found. '
+            'TTY2 is available for recovery.' + (f'\n{detail}' if detail else '')
+        )
     labels = {disk_label(disk): disk for disk in disks}
     boot_map = storage.boot_entry_nodes(disks)
     screen(
@@ -376,7 +381,7 @@ def wizard(state):
         action = 'Create partitions and install'
     else:
         title = f'ERASE ALL DATA on {settings.disk}'
-        rows.append(('Layout', '4 GiB EFI + encrypted Btrfs with a separate /home'))
+        rows.append(('Layout', f'{storage.ESP_GIB} GiB EFI + encrypted Btrfs with a separate /home'))
         changes = 'Destroyed: everything currently on this disk\n' + textwrap.indent(
             storage.describe_contents(disk, boot_map), '  '
         )
