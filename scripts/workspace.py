@@ -300,25 +300,45 @@ def worktree_busy(worktree):
                 fcntl.flock(stream, fcntl.LOCK_EX | fcntl.LOCK_NB)
         except OSError:
             return True, 'ISO build holds build.lock'
+    evidence = []
+    for directory in registered_paths(cache_root() / 'arch-niri-dux-states'):
+        marker = directory / MARKER
+        try:
+            if marker.is_file() and marker.read_text().strip() == str(Path(worktree).resolve()):
+                evidence.append(directory)
+        except FileNotFoundError:
+            continue
     out = Path(worktree) / 'out'
     if out.is_dir():
-        evidence = [child for child in out.iterdir() if child.is_dir() and not child.is_symlink()]
+        evidence += [child for child in out.iterdir() if child.is_dir() and not child.is_symlink()]
         verification = out / 'verify'
         if verification.is_dir():
             evidence.extend(child for child in verification.iterdir() if child.is_dir() and not child.is_symlink())
-        if any(kept_running(directory) for directory in evidence):
-            return True, 'kept VM still answers under out/'
+    if any(kept_running(directory) for directory in evidence):
+        return True, 'kept VM still answers'
     return False, ''
 
 
 def merge_info(branch, checkout=ROOT):
     """(merged, number, title, method) for a branch; merged None means can't tell.
 
-    gh decides; merge-base runs only when gh fails (squash merges are not ancestors).
+    A merged PR proves only commits through its head. If gh fails, use origin/main ancestry.
     """
     try:
         listed = subprocess.run(
-            ['gh', 'pr', 'list', '--state', 'merged', '--head', branch, '--json', 'number,title', '--limit', '1'],
+            [
+                'gh',
+                'pr',
+                'list',
+                '--state',
+                'merged',
+                '--head',
+                branch,
+                '--json',
+                'number,title,headRefOid',
+                '--limit',
+                '1',
+            ],
             cwd=str(checkout),
             capture_output=True,
             text=True,
@@ -330,7 +350,19 @@ def merge_info(branch, checkout=ROOT):
     if listed is not None and listed.returncode == 0:
         records = json.loads(listed.stdout or '[]')
         if records:
-            return True, records[0].get('number'), records[0].get('title', ''), 'gh'
+            record = records[0]
+            head = record.get('headRefOid')
+            if not head:
+                return None, None, '', 'none'
+            ancestor = subprocess.run(
+                ['git', '-C', str(checkout), 'merge-base', '--is-ancestor', branch, head],
+                capture_output=True,
+                text=True,
+                check=False,
+                timeout=30,
+            )
+            merged = ancestor.returncode == 0 if ancestor.returncode in (0, 1) else None
+            return merged, record.get('number'), record.get('title', ''), 'gh'
         return False, None, '', 'gh'
     ancestor = subprocess.run(
         ['git', '-C', str(checkout), 'merge-base', '--is-ancestor', branch, 'origin/main'],
@@ -516,6 +548,7 @@ def collect(cache, checkout, dry_run=False):
     protected = [cache / 'arch-niri-dux-downloads', cache / 'arch-niri-dux-states']
     if os.environ.get('BUILD_STATE'):
         protected.append(build_state())
+    running = [path.resolve() for path in registered_paths(cache / 'arch-niri-dux-states') if kept_running(path)]
     for path in candidates(cache, checkout):
         if not path.exists():
             continue
@@ -540,6 +573,9 @@ def collect(cache, checkout, dry_run=False):
             continue
         if owner.exists():
             print(f'Kept, checkout exists: {path}')
+            continue
+        if kept_running(path) or any(resolved == vm or resolved in vm.parents for vm in running):
+            print(f'Kept, VM still answers: {path}')
             continue
         size = sum(item.lstat().st_blocks * 512 for item in path.rglob('*') if not item.is_symlink())
         print(f'{"Would delete" if dry_run else "Deleting"}: {path} ({size / 1024**3:.2f} GiB)')

@@ -1,6 +1,8 @@
 import contextlib
 import io
+import json
 import os
+import socket
 import subprocess
 from pathlib import Path
 import sys
@@ -234,43 +236,95 @@ class WorktreeGCTests(unittest.TestCase):
             (root / 'new.txt').write_text('untracked\n')
             self.assertEqual(workspace.worktree_status_outside_out(root), ['?? new.txt'])
 
-    def test_merge_info_gh_decides_then_ancestry_fallback(self):
-        def run_result(returncode, stdout=''):
-            return subprocess.CompletedProcess([], returncode, stdout, '')
+    def test_registered_custom_evidence_protects_busy_checkout_and_orphan(self):
+        with tempfile.TemporaryDirectory() as temp, patch.dict(os.environ, {'XDG_CACHE_HOME': temp, 'BUILD_STATE': ''}):
+            cache = Path(temp)
+            owner = cache / 'checkout'
+            owner.mkdir()
+            evidence = cache / 'custom'
+            evidence.mkdir()
+            workspace.own(evidence, owner)
+            sockets = evidence / '.sockets'
+            sockets.mkdir()
+            with socket.socket(socket.AF_UNIX) as server:
+                server.bind(str(sockets / 'qmp.sock'))
+                server.listen()
+                with self.subTest(check='busy checkout'):
+                    self.assertTrue(workspace.worktree_busy(owner)[0])
+                owner.rmdir()
+                with self.subTest(check='orphan evidence'):
+                    self.assertEqual(workspace.collect(cache, cache / 'runner'), [])
+                    self.assertTrue(evidence.exists())
+            self.assertEqual(workspace.collect(cache, cache / 'runner'), [evidence])
 
-        scenarios = [
-            # gh decides merged; ancestry never runs.
-            (run_result(0, '[{"number": 7, "title": "Fix"}]'), None, (True, 7, 'Fix', 'gh'), ['gh']),
-            # gh decides not merged; ancestry never runs.
-            (run_result(0, '[]'), None, (False, None, '', 'gh'), ['gh']),
-            # gh fails; ancestry decides.
-            (run_result(1), run_result(0), (True, None, '', 'ancestry'), ['gh', 'git']),
-            (run_result(1), run_result(1), (False, None, '', 'ancestry'), ['gh', 'git']),
-            # Both fail: can't tell.
-            (run_result(1), run_result(128), (None, None, '', 'none'), ['gh', 'git']),
+    def test_merge_proof_must_cover_current_tip(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = init_repo(Path(temp))
+            git_run('branch', 'topic', cwd=root)
+            old_head = git_run('rev-parse', 'HEAD', cwd=root).stdout.strip()
+            git_run('update-ref', 'refs/remotes/origin/main', old_head, cwd=root)
+            real_run = subprocess.run
+
+            def run(cmd, **kwargs):
+                if cmd[0] == 'gh':
+                    return subprocess.CompletedProcess(
+                        cmd, 0, json.dumps([{'number': 7, 'title': 'Old PR', 'headRefOid': old_head}]), ''
+                    )
+                return real_run(cmd, **kwargs)
+
+            with patch.object(workspace.subprocess, 'run', side_effect=run):
+                self.assertTrue(workspace.merge_info('topic', root)[0])
+                git_run('checkout', 'topic', cwd=root)
+                (root / 'tracked.txt').write_text('new work')
+                git_run('commit', '-am', 'unmerged work', cwd=root)
+                self.assertFalse(workspace.merge_info('topic', root)[0])
+            with patch.object(
+                workspace.subprocess,
+                'run',
+                side_effect=lambda cmd, **kw: (
+                    subprocess.CompletedProcess(cmd, 1, '', '') if cmd[0] == 'gh' else real_run(cmd, **kw)
+                ),
+            ):
+                self.assertFalse(workspace.merge_info('topic', root)[0])
+                git_run('update-ref', 'refs/remotes/origin/main', 'HEAD', cwd=root)
+                self.assertTrue(workspace.merge_info('topic', root)[0])
+
+    def test_merge_unknowns_never_authorize_removal(self):
+        cases = [
+            (0, [], 0, False),
+            (0, [{'number': 7}], 0, None),
+            (0, [{'headRefOid': 'unavailable'}], 128, None),
+            (1, [], 128, None),
         ]
-        for gh_result, ancestor_result, expected, commands in scenarios:
-            with self.subTest(expected=expected):
-                calls = []
+        for gh_code, records, git_code, expected in cases:
+            with self.subTest(gh_code=gh_code, records=records, git_code=git_code):
 
-                def fake_run(cmd, _calls=calls, _gh=gh_result, _git=ancestor_result, **_kwargs):
-                    _calls.append(cmd[0])
-                    return _git if cmd[0] == 'git' else _gh
+                def run(cmd, _gh=gh_code, _git=git_code, _records=records, **_kwargs):
+                    return subprocess.CompletedProcess(
+                        cmd,
+                        _gh if cmd[0] == 'gh' else _git,
+                        json.dumps(_records) if cmd[0] == 'gh' else '',
+                        '',
+                    )
 
-                with patch.object(workspace.subprocess, 'run', side_effect=fake_run):
-                    self.assertEqual(workspace.merge_info('branch'), expected)
-                self.assertEqual(calls, commands)
+                with patch.object(workspace.subprocess, 'run', side_effect=run):
+                    self.assertIs(workspace.merge_info('topic')[0], expected)
 
-    def test_merge_info_gh_missing_falls_back_to_ancestry(self):
-        ancestor = subprocess.CompletedProcess([], 0, '', '')
-
-        def fake_run(cmd, **_kwargs):
-            if cmd[0] == 'gh':
-                raise OSError('no gh')
-            return ancestor
-
-        with patch.object(workspace.subprocess, 'run', side_effect=fake_run):
-            self.assertEqual(workspace.merge_info('branch'), (True, None, '', 'ancestry'))
+    def test_gc_keeps_parent_of_running_registered_evidence(self):
+        with tempfile.TemporaryDirectory() as temp, patch.dict(os.environ, {'XDG_CACHE_HOME': temp}):
+            cache = Path(temp)
+            state = cache / 'arch-niri-dux-build-test'
+            state.mkdir()
+            workspace.own(state, cache / 'gone')
+            evidence = state / 'custom'
+            evidence.mkdir()
+            workspace.own(evidence, cache / 'gone')
+            (evidence / '.sockets').mkdir()
+            with socket.socket(socket.AF_UNIX) as server:
+                server.bind(str(evidence / '.sockets/qmp.sock'))
+                server.listen()
+                self.assertEqual(workspace.collect(cache, cache / 'runner'), [])
+                self.assertTrue(evidence.exists())
 
     def test_plan_splits_removals_and_skips(self):
         with tempfile.TemporaryDirectory() as temp, patch.dict(os.environ, {'XDG_CACHE_HOME': temp}):
