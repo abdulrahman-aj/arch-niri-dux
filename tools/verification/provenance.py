@@ -25,7 +25,7 @@ def host_sources(root):
         relative = path.relative_to(root)
         package = '.'.join(relative.parent.parts)
         names = set()
-        for node in ast.walk(ast.parse(path.read_text())):
+        for node in ast.walk(ast.parse(path.read_text(encoding='utf-8'))):
             if isinstance(node, ast.Import):
                 names.update(alias.name for alias in node.names)
             elif isinstance(node, ast.ImportFrom):

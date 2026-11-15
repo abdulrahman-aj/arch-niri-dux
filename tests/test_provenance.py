@@ -54,10 +54,15 @@ class ProvenanceTests(unittest.TestCase):
                 return subprocess.check_output(['git', *args], cwd=root, text=True).strip()
 
             git('init', '-q')
+            (root / '.gitignore').write_text('out/\n')
+            git('add', '.gitignore')
             git(
                 '-c', 'user.name=Test', '-c', 'user.email=test@example.com', 'commit', '-qm', 'Initial', '--allow-empty'
             )
             self.assertEqual(checkout_state(root), {'commit': git('rev-parse', 'HEAD'), 'dirty': False})
+            (root / 'out').mkdir()
+            (root / 'out/build.log').write_text('ignored output')
+            self.assertFalse(checkout_state(root)['dirty'])
             (root / 'untracked').touch()
             self.assertTrue(checkout_state(root)['dirty'])
             git('add', 'untracked')
