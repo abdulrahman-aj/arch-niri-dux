@@ -1,11 +1,14 @@
 """Accepted verification fixture discovery and relocation."""
 
 import hashlib
+import json
 import os
 from pathlib import Path
 import shutil
+import subprocess
+import sys
 
-from tools.workspace.state import MARKER, cache_root, registered_paths
+from tools.workspace.state import ROOT, MARKER, cache_root, registered_paths
 
 
 def accepted_fixtures(registry=None):
@@ -21,10 +24,33 @@ def accepted_fixtures(registry=None):
     return [directory for _, directory in sorted(entries, reverse=True)]
 
 
-def newest_accepted_fixture(registry=None):
-    """Newest accepted disk.qcow2, or None when no full run has passed."""
-    fixtures = accepted_fixtures(registry)
-    return fixtures[0] / 'disk.qcow2' if fixtures else None
+def newest_accepted_fixture(registry=None, checkout=ROOT):
+    """Newest accepted ancestor of HEAD, falling back to an unrecorded fixture."""
+    fallback = None
+    for directory in accepted_fixtures(registry):
+        try:
+            inputs = json.loads((directory / 'inputs.json').read_text())
+        except FileNotFoundError:
+            inputs = {}
+        commit = inputs.get('checkout', {}).get('commit')
+        if not commit:
+            if fallback is None:
+                fallback = directory
+            continue
+        result = subprocess.run(
+            ['git', 'merge-base', '--is-ancestor', commit, 'HEAD'],
+            cwd=checkout,
+            check=False,
+            capture_output=True,
+        )
+        if result.returncode == 0:
+            return directory / 'disk.qcow2'
+        reason = 'not an ancestor of HEAD' if result.returncode == 1 else 'commit unavailable for ancestry check'
+        print(f'Skipping fixture {directory}: {commit} is {reason}.', file=sys.stderr)
+    if fallback is not None:
+        print(f'Warning: using fixture {fallback} without a recorded checkout commit.', file=sys.stderr)
+        return fallback / 'disk.qcow2'
+    return None
 
 
 def move_fixture(src, dst, new_owner):

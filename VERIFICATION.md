@@ -105,9 +105,12 @@ Suspend qualification requires logind `LockedHint=yes`, Niri's lock event, an un
 
 `make verify-fast` is a thin alias for fixture mode in `verify.py`
 (`--fixture`), not a second script. It builds current
-integration packages inside a disposable overlay of the newest accepted
-`make verify` image. `--fixture` defaults to
-the newest registered 0.3+ workspace holding `ACCEPTANCE-PASSED` and `disk.qcow2`,
+integration packages inside a disposable overlay of an accepted
+`make verify` image. `--fixture` defaults to the newest registered 0.3+
+workspace holding `ACCEPTANCE-PASSED` and `disk.qcow2` whose recorded
+`checkout.commit` is an ancestor of HEAD. Non-ancestor commits are skipped
+with a reason. If none qualify, the newest fixture without a recorded commit
+is used with a warning. An explicit `--fixture PATH` overrides discovery,
 and `--directory` defaults to a fresh `out/fast-<timestamp>`; pass explicit
 paths to override either default. Keep `ACCEPTANCE-PASSED`,
 `install.json`, `inputs.json` and `OVMF_VARS.fd` next to the fixture disk. It checks ALPM
