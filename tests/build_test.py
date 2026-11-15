@@ -242,7 +242,7 @@ class LiveKeyringTests(unittest.TestCase):
         import os
         import subprocess
 
-        source = Path(__file__).with_name('build-guest').read_text()
+        source = (Path(__file__).resolve().parents[1] / 'scripts/build-guest').read_text()
         preparation = source.split('# Serialize keyring preparation', 1)[1].split('# Import the existing', 1)[0]
         preparation = '# Serialize keyring preparation' + preparation
         for status in (0, 9):
@@ -380,7 +380,7 @@ class BootstrapMirrorTests(unittest.TestCase):
             cache, partial = root / 'cache', root / 'partial'
             cache.mkdir()
             partial.mkdir()
-            script = Path(__file__).with_name('build-fetch-bootstrap')
+            script = Path(__file__).resolve().parents[1] / 'scripts/build-fetch-bootstrap'
             environment = os.environ | {
                 'PATH': str(fake_bin) + ':' + os.environ['PATH'],
                 'REQUESTS_LOG': str(requests_log),
