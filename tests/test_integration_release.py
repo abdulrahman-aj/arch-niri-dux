@@ -1,4 +1,3 @@
-import sys
 import base64
 import gzip
 import json
@@ -13,8 +12,7 @@ import unittest
 
 
 ROOT = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'scripts'))
-import integration_release as release
+from tools.packages import artifacts as release
 
 
 class SignedReleaseTests(unittest.TestCase):
@@ -175,15 +173,16 @@ class SignedReleaseTests(unittest.TestCase):
         release.publish(self.root, packages, history, output, 'v' + release.build.version(self.root), commit)
 
     def test_split_signing_entrypoint_uses_disposable_secret_and_cleans_home(self):
-        import release_key
+        from tools.release import key as release_key
 
         packages = self.packages(self.root / 'built')
-        scripts = self.root / 'scripts'
-        scripts.mkdir()
+        scripts = self.root / 'tools/release'
+        scripts.mkdir(parents=True)
         # Replace only network publication; run the real import, validation and signing path.
-        (scripts / 'publish-integration').write_text(
-            'set -euo pipefail\npython '
-            + str(ROOT / 'scripts/integration_release.py')
+        (scripts / 'publish.sh').write_text(
+            'set -euo pipefail\ncd '
+            + str(ROOT)
+            + '\npython -m tools.packages.artifacts'
             + ' publish "$1" "$2" "$3" "$4" --tag v0.1.0-1 --commit '
             + 'a' * 40
             + '\n'
@@ -193,7 +192,7 @@ class SignedReleaseTests(unittest.TestCase):
         subprocess.run(
             [
                 'bash',
-                str(ROOT / 'scripts/sign-integration'),
+                str(ROOT / 'tools/release/sign.sh'),
                 str(self.root),
                 str(packages),
                 str(self.root / 'history'),

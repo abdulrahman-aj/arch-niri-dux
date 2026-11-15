@@ -3,13 +3,11 @@
 import copy
 from pathlib import Path
 import subprocess
-import sys
 import tempfile
 import unittest
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'scripts'))
-import dux_apps as apps
-from verification.digest import digest
+from tools.packages import dux_apps as apps
+from tools.digest import digest
 
 
 class AppCacheTests(unittest.TestCase):

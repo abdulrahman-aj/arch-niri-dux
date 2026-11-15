@@ -9,10 +9,8 @@ from unittest.mock import patch
 
 
 ROOT = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(ROOT / 'scripts'))
-import iso_checksums as iso
-import release_key as key
-
+from tools.release import iso_checksums as iso
+from tools.release import key as key
 
 TAG = 'v0.3.0-2'
 

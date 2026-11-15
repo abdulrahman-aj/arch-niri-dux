@@ -1,12 +1,10 @@
 """Unit tests for the verification error gate (normalize, allowlist, check)."""
 
-import sys
 import tempfile
 import unittest
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'scripts'))
-from verification import gate
+from tools.verification import gate
 
 
 class NormalizeTests(unittest.TestCase):

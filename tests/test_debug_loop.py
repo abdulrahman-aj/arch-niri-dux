@@ -10,10 +10,9 @@ import sys
 import tempfile
 import unittest
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'scripts'))
-from verification import vm as verify
-import vm_console
-import workspace
+from tools.verification import vm as verify
+from tools.vm import console as vm_console
+from tools.workspace import state as workspace
 
 
 def kept_machine(directory):
@@ -154,7 +153,7 @@ class CleanOutputTests(unittest.TestCase):
 
 
 class StubVM:
-    """Stand-in for verification.vm.VM: echoes each script back with a completion marker."""
+    """Stand-in for tools.verification.vm.VM: echoes each script back with a completion marker."""
 
     def __init__(self):
         self.scripts = []

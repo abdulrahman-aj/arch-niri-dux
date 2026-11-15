@@ -61,7 +61,7 @@ button, its seeds, or Dux itself. Releases qualify delivery separately through
 serial/QMP sockets under `<evidence>/.sockets` and prints attach commands;
 the failed disk is still unlinked, so it can never become a fixture (QEMU
 holds the open file; the space frees at poweroff). Attach with
-`scripts/vm_console.py --directory <evidence> sh '<command>'`, rerun one
+`tools/vm/console.py --directory <evidence> sh '<command>'`, rerun one
 reboot-free stage (`... stage <apps|browser|camera|desktop|dux_update|pdf>`),
 then `... poweroff`. Suspend and recovery reboot the guest, so they are
 rejected. On success `--keep` changes nothing.
@@ -91,7 +91,7 @@ hooks.
 `make verify` and `make verify-fast` end with an error gate: a final clean
 boot collects `journalctl -b -p warning` and `systemctl --failed` (system and
 the tester's user manager) into the evidence dir, and any line without a
-reviewed entry in `scripts/verification/gate-allowlist.txt` fails the run
+reviewed entry in `tools/verification/gate-allowlist.txt` fails the run
 before `ACCEPTANCE-PASSED` / `FAST-PASSED` is written. Each allowlist line is
 one regex on the normalized text with a `# <reason>` naming its judgement
 rows. Deliberate-failure probes (firewall containment, signature rejection)
@@ -108,15 +108,15 @@ sockets under `out/debug/.sockets` and prints paste-ready attach commands
 (the same block prints if the run fails, when the live guest is most useful).
 Without `--keep`, behavior is unchanged.
 
-Drive the kept VM with `scripts/vm_console.py` (one driver at a time):
+Drive the kept VM with `tools/vm/console.py` (one driver at a time):
 
 ```
-./scripts/in-dev-shell python3 scripts/vm_console.py --directory out/debug sh '<command>'
-./scripts/in-dev-shell python3 scripts/vm_console.py --directory out/debug shot <name.png>
-./scripts/in-dev-shell python3 scripts/vm_console.py --directory out/debug click <x_frac> <y_frac>
-./scripts/in-dev-shell python3 scripts/vm_console.py --directory out/debug key <qcode>
-./scripts/in-dev-shell python3 scripts/vm_console.py --directory out/debug probe <module> <function>
-./scripts/in-dev-shell python3 scripts/vm_console.py --directory out/debug poweroff
+./scripts/in-dev-shell python3 -m tools.vm.console --directory out/debug sh '<command>'
+./scripts/in-dev-shell python3 -m tools.vm.console --directory out/debug shot <name.png>
+./scripts/in-dev-shell python3 -m tools.vm.console --directory out/debug click <x_frac> <y_frac>
+./scripts/in-dev-shell python3 -m tools.vm.console --directory out/debug key <qcode>
+./scripts/in-dev-shell python3 -m tools.vm.console --directory out/debug probe <module> <function>
+./scripts/in-dev-shell python3 -m tools.vm.console --directory out/debug poweroff
 ```
 
 Per iteration there is no ISO rebuild, reinstall or scheduler wait. The
@@ -124,7 +124,7 @@ evidence directory is mounted in the guest at `/run/verify`, so copy a changed
 file into `out/debug/` on the host, then e.g.
 `sh 'cp /run/verify/ReleaseWidget.qml /etc/xdg/quickshell/dms-plugins/archNiriDuxRelease/ReleaseWidget.qml'`.
 For multi-line guest work, pipe a script on stdin instead of nested quoting:
-`scripts/vm_console.py --directory out/debug sh < fix.sh`. Commands needing
+`tools/vm/console.py --directory out/debug sh < fix.sh`. Commands needing
 the tester user's environment are best run as probes (`probe <module>
 <function>`), which get the full environment from `guest.user_command`.
 `shot <name.png>` takes a real desktop screenshot via the guest.
@@ -187,10 +187,10 @@ system and restarts the tty1 installer. No network is enabled.
 After editing installer files, drive the running preview with:
 
 ```
-./scripts/in-dev-shell python3 scripts/vm_console.py --directory out/preview preview-sync
-./scripts/in-dev-shell python3 scripts/vm_console.py --directory out/preview shot installer.png
-./scripts/in-dev-shell python3 scripts/vm_console.py --directory out/preview key ret
-./scripts/in-dev-shell python3 scripts/vm_console.py --directory out/preview poweroff
+./scripts/in-dev-shell python3 -m tools.vm.console --directory out/preview preview-sync
+./scripts/in-dev-shell python3 -m tools.vm.console --directory out/preview shot installer.png
+./scripts/in-dev-shell python3 -m tools.vm.console --directory out/preview key ret
+./scripts/in-dev-shell python3 -m tools.vm.console --directory out/preview poweroff
 ```
 
 Screenshots use QMP's PNG screendump, including the live text console.

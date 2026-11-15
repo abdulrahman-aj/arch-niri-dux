@@ -3,13 +3,11 @@
 import json
 import re
 import subprocess
-import sys
 import unittest
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(ROOT / 'scripts'))
-import dux_apps as apps
+from tools.packages import dux_apps as apps
 
 RELEASE_TAG = re.compile(r'v[0-9]+(?:\.[0-9]+)*-[0-9]+(?:\.[0-9]+)*$')
 
@@ -62,7 +60,7 @@ def find_violations(base, base_version, current, current_version):
     """Recipe changes without a version change, the release-time pkgrel rule.
 
     Source-level proxy for the publisher's byte-level rule
-    (integration_release.py refuses a changed rebuild under a published
+    (tools.packages.artifacts refuses a changed rebuild under a published
     filename): recipe file or epoch changes alter built bytes, so they need
     a new pkgver-pkgrel even when the edit looks cosmetic.
     """

@@ -1,12 +1,10 @@
-import sys
 from pathlib import Path
 import subprocess
 import tempfile
 import unittest
 
 ROOT = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'scripts'))
-import bump_dux_apps as bump
+from tools.packages import update_dux_apps as bump
 
 REPOSITORY = 'https://github.com/duxlabs-dev/dux-example'
 RECIPE = """pkgname=dux-example-bin

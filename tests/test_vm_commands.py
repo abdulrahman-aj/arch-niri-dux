@@ -6,7 +6,7 @@ import subprocess
 import tempfile
 import unittest
 
-from scripts.verification import vm as verify
+from tools.verification import vm as verify
 
 
 class VMCommandTests(unittest.TestCase):

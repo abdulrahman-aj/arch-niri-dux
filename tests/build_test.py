@@ -1,19 +1,16 @@
 """Build artifact unit tests."""
 
-import sys
 import hashlib
 from pathlib import Path
 import tempfile
 import unittest
 from unittest.mock import patch
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'scripts'))
 
-import package_lock as module
+from tools.packages import inputs as module
+from tools.digest import digest
 
-from verification.digest import digest
-
-import dux_apps
+from tools.packages import dux_apps
 
 
 class PayloadTests(unittest.TestCase):
@@ -242,7 +239,7 @@ class LiveKeyringTests(unittest.TestCase):
         import os
         import subprocess
 
-        source = Path(__file__).with_name('build-guest').read_text()
+        source = (Path(__file__).resolve().parents[1] / 'tools/build/guest.sh').read_text()
         preparation = source.split('# Serialize keyring preparation', 1)[1].split('# Import the existing', 1)[0]
         preparation = '# Serialize keyring preparation' + preparation
         for status in (0, 9):
@@ -380,7 +377,7 @@ class BootstrapMirrorTests(unittest.TestCase):
             cache, partial = root / 'cache', root / 'partial'
             cache.mkdir()
             partial.mkdir()
-            script = Path(__file__).with_name('build-fetch-bootstrap')
+            script = Path(__file__).resolve().parents[1] / 'tools/build/fetch_bootstrap.sh'
             environment = os.environ | {
                 'PATH': str(fake_bin) + ':' + os.environ['PATH'],
                 'REQUESTS_LOG': str(requests_log),
