@@ -3,7 +3,7 @@
 import unittest
 
 
-from tools.verification.session import run_stages
+from tools.verification.stages import run_stages
 
 
 class FakeProcess:
