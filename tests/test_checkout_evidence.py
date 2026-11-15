@@ -62,7 +62,7 @@ class CheckoutEvidenceTests(unittest.TestCase):
                 return subprocess.CompletedProcess(command, 0, stdout=manifest)
             return real_run(command, **kwargs)
 
-        def prepare_source(root, source, epoch):
+        def prepare_source(_root, source, _epoch):
             (source / 'integration.tar').write_bytes(b'fixture source')
 
         with tempfile.TemporaryDirectory() as temporary:
