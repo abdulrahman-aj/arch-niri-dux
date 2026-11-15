@@ -15,7 +15,9 @@ class EvidenceTests(unittest.TestCase):
             evidence = Evidence(directory)
             inputs = {'iso': '/tmp/disposable.iso', 'scripts': {'probe': 'abc'}}
             evidence.inputs(inputs)
-            self.assertEqual(evidence.inputs(), inputs)
+            recorded = evidence.inputs()
+            self.assertEqual({key: recorded[key] for key in inputs}, inputs)
+            self.assertIn('tools/verification/evidence.py', recorded['host_verifier']['sources'])
             evidence.key('secret')
             self.assertEqual((directory / 'key').read_text(), 'secret')
             self.assertEqual((directory / 'key').stat().st_mode & 0o777, 0o600)
@@ -31,4 +33,4 @@ class EvidenceTests(unittest.TestCase):
             evidence.inputs({'fixture': 'accepted'})
             with self.assertRaises(FileExistsError):
                 Evidence(directory)
-            self.assertEqual(evidence.inputs(), {'fixture': 'accepted'})
+            self.assertEqual(evidence.inputs()['fixture'], 'accepted')

@@ -5,6 +5,8 @@ from pathlib import Path
 import shlex
 
 from tools.digest import digest
+from tools.workspace.state import ROOT
+from tools.verification.provenance import host_sources, checkout_state
 
 
 class Evidence:
@@ -21,6 +23,7 @@ class Evidence:
     def inputs(self, values=None):
         if values is None:
             return json.loads((self.directory / 'inputs.json').read_text())
+        values = values | {'host_verifier': {'sources': host_sources(ROOT), 'checkout': checkout_state(ROOT)}}
         (self.directory / 'inputs.json').write_text(json.dumps(values, indent=2) + '\n')
         return values
 

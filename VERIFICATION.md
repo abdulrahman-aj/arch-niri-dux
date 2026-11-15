@@ -9,6 +9,14 @@ recipes are excluded. `make test` adds source and build tests. CI runs these
 checks without graphical VM acceptance. `make qualify` runs the tier matching
 the branch's changed files and writes `out/qualify/<head>/EVIDENCE.md`.
 
+Each scenario's `inputs.json` retains the staged guest hashes in
+`verification_scripts`. `host_verifier` adds a sorted `sources` map of SHA-256
+hashes for the host verifier, VM transport, their transitive local Python
+imports and the error-gate allowlist. Imports inside functions are included
+without executing them. `checkout` records the commit and whether tracked or
+untracked changes were present. Ignored build output does not mark it dirty.
+The legacy `verify.py` hash remains in full and fixture evidence.
+
 Guest probes live under `tools/verification/probes/` and execute from the staged
 `/run/verify` tree. `tools/verification/payload.py` stages the complete probe
 package, shared constants/image helpers, and the package builder plus its inputs
