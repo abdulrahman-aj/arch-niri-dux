@@ -70,8 +70,6 @@ def unmatched(directory, entries=None):
     sources = [JOURNAL_FILE, *FAILED_FILES]
     for source in sources:
         path = directory / source
-        if not path.is_file():
-            continue
         for raw in path.read_text().splitlines():
             if not raw.strip():
                 continue

@@ -80,9 +80,9 @@ class TryVmTests(unittest.TestCase):
                 text.assert_not_called()
 
     def test_name_validation(self):
-        for good in ('default', 'a', 'my-vm_1.2', 'new', '123abc'):
+        for good in ('default', 'a', 'my-vm_1.2', 'new', 'delete', '123', '1.5', '123abc'):
             self.assertTrue(try_vm.valid_name(good))
-        for bad in ('', '../evil', 'a/b', ' name', '-lead', '123', '1.5'):
+        for bad in ('', '../evil', 'a/b', ' name', '-lead'):
             self.assertFalse(try_vm.valid_name(bad))
 
     def test_disk_size_refuses_below_what_the_installer_needs(self):
@@ -117,8 +117,8 @@ class TryVmTests(unittest.TestCase):
         ):
             self.assertEqual(try_vm.ask_disk_size(4), 64)
 
-    def test_ask_name_rejects_reserved_and_bad_names(self):
-        with patch('try_vm.gum_input', side_effect=['new', '123', 'my vm', 'ok-name']):
+    def test_ask_name_rejects_bad_names(self):
+        with patch('try_vm.gum_input', side_effect=['my vm', 'ok-name']):
             self.assertEqual(try_vm.ask_name(), 'ok-name')
         with patch('try_vm.gum_input', side_effect=['']):
             self.assertEqual(try_vm.ask_name(), try_vm.DEFAULT_NAME)
@@ -196,22 +196,38 @@ class TryVmTests(unittest.TestCase):
                 self.assertFalse(try_vm.iso_for_kind(try_vm.RELEASE).name.endswith('-development.iso'))
                 self.assertTrue(try_vm.iso_for_kind(try_vm.DEVELOPMENT).name.endswith('-development.iso'))
 
-    def test_ensure_iso_and_staleness(self):
-        commit_time = int(
-            subprocess.check_output(['git', '-C', str(ROOT), 'log', '-1', '--format=%ct'], text=True).strip()
-        )
+    def test_checkout_changes_require_rebuild_regardless_of_timestamps(self):
         with tempfile.TemporaryDirectory() as temp:
-            with patch.dict(os.environ, {'TRY_OUT_DIR': temp}):
-                with patch('try_vm.gum_confirm', return_value=False):
-                    with self.assertRaises(SystemExit):
-                        try_vm.ensure_iso(try_vm.DEVELOPMENT)
-                iso = Path(temp) / 'x-development.iso'
-                iso.write_bytes(b'data')
-                os.utime(iso, (commit_time - 100, commit_time - 100))
-                self.assertTrue(try_vm.checkout_newer_than(iso))
-                os.utime(iso, (commit_time, commit_time))
-                self.assertFalse(try_vm.checkout_newer_than(iso))
-                self.assertEqual(try_vm.ensure_iso(try_vm.DEVELOPMENT), iso.resolve())
+            root = Path(temp)
+
+            def git(*args, **kwargs):
+                return subprocess.check_output(['git', '-C', str(root), *args], text=True, **kwargs).strip()
+
+            git('init', '-b', 'main')
+            git('config', 'user.name', 'Test')
+            git('config', 'user.email', 'test@example.invalid')
+            (root / '.gitignore').write_text('*.iso*\n')
+            tracked = root / 'tracked'
+            tracked.write_text('base')
+            git('add', '.')
+            git('commit', '-m', 'base')
+            old = git('rev-parse', 'HEAD')
+            tracked.write_text('new')
+            git('commit', '-am', 'new')
+            iso = root / 'test.iso'
+            iso.write_bytes(b'iso')
+            with patch.object(try_vm, 'ROOT', root):
+                self.assertTrue(try_vm.checkout_changed_since(iso))
+                iso.with_suffix('.iso.commit').write_text(git('rev-parse', 'HEAD'))
+                self.assertFalse(try_vm.checkout_changed_since(iso))
+                tracked.write_text('dirty')
+                self.assertTrue(try_vm.checkout_changed_since(iso))
+                git('checkout', '--', 'tracked')
+                (root / 'untracked').touch()
+                self.assertTrue(try_vm.checkout_changed_since(iso))
+                (root / 'untracked').unlink()
+                git('checkout', old)
+                self.assertTrue(try_vm.checkout_changed_since(iso))
 
     def test_choices_roundtrip_and_defaults(self):
         with tempfile.TemporaryDirectory() as temp:

@@ -24,8 +24,6 @@ from installer import storage
 HUMAN_ONLY = 'make try is for humans; agents use make verify-fast ARGS=--keep'
 
 NAME_RE = re.compile(r'[A-Za-z0-9][A-Za-z0-9._-]*')
-# No longer typed commands, but still rejected as names (validation parity).
-RESERVED_NAMES = ('new', 'delete')
 DEFAULT_NAME = 'default'
 DEFAULT_RAM_GIB = 8
 DEFAULT_DISK_GIB = 48
@@ -108,7 +106,7 @@ def try_base():
 
 
 def valid_name(name):
-    return bool(name and NAME_RE.fullmatch(name) and any(character.isalpha() for character in name))
+    return bool(name and NAME_RE.fullmatch(name))
 
 
 def resolve_base(base):
@@ -167,11 +165,9 @@ def ask_name():
         if name is None:
             return None
         name = name.strip() or DEFAULT_NAME
-        if valid_name(name) and name.lower() not in RESERVED_NAMES:
+        if valid_name(name):
             return name
-        print(
-            f'Use letters, digits, dot, dash or underscore; {", ".join(repr(word) for word in RESERVED_NAMES)} and digits-only names are reserved.'
-        )
+        print('Use letters, digits, dot, dash or underscore.')
 
 
 def ask_positive_int(label, default):
@@ -239,14 +235,13 @@ def iso_for_kind(kind):
     return candidates[-1] if candidates else None
 
 
-def checkout_newer_than(iso):
+def checkout_changed_since(iso):
     try:
-        commit_time = int(
-            subprocess.check_output(['git', '-C', str(ROOT), 'log', '-1', '--format=%ct'], text=True).strip()
-        )
-    except (subprocess.CalledProcessError, ValueError, OSError):
-        return False
-    return iso.stat().st_mtime < commit_time
+        head = subprocess.check_output(['git', '-C', str(ROOT), 'rev-parse', 'HEAD'], text=True).strip()
+        dirty = subprocess.check_output(['git', '-C', str(ROOT), 'status', '--porcelain'], text=True).strip()
+        return bool(dirty) or iso.with_suffix('.iso.commit').read_text().strip() != head
+    except (subprocess.CalledProcessError, OSError):
+        return True
 
 
 def gib(size):
@@ -548,7 +543,7 @@ def ensure_iso(kind):
     iso = iso_for_kind(kind)
     if iso is None:
         reason, default_yes = f'No {kind} installer ISO in out/ yet.', True
-    elif kind == DEVELOPMENT and checkout_newer_than(iso):
+    elif kind == DEVELOPMENT and checkout_changed_since(iso):
         reason, default_yes = 'This checkout changed since the checkout ISO was built.', False
     else:
         return iso.resolve()
@@ -595,7 +590,7 @@ def build_qemu_command(*, code, variables, disk, iso, ram_gib, gl):
 
 
 def create_vm(name, base=None, ram_gib=DEFAULT_RAM_GIB, disk_gib=DEFAULT_DISK_GIB, source=DEVELOPMENT):
-    if not valid_name(name) or name.lower() in RESERVED_NAMES:
+    if not valid_name(name):
         raise SystemExit(f'Invalid VM name {name!r}; use letters, digits, dot, dash or underscore.')
     directory = vm_dir(name, base)
     if directory.exists():

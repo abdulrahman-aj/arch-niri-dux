@@ -155,7 +155,9 @@ lsinitcpio /build/work/iso/arch/boot/x86_64/initramfs-linux.img | grep -qx 'hook
 # keep mkarchiso's name for the canonical rename in packages/RELEASING.md.
 if [[ $integration_mode == development ]]; then
     for iso in /build/output/*.iso; do
-        cp "$iso" "/source/out/$(basename "$iso" .iso)-development.iso"
+        output="/source/out/$(basename "$iso" .iso)-development.iso"
+        cp "$iso" "$output"
+        cp /state/iso-commit "$output.commit"
     done
 else
     cp /build/output/*.iso /source/out/

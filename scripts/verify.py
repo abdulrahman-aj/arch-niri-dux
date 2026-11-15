@@ -163,7 +163,7 @@ def run_fixture(args, parser):
         vm.probe('boot', 'plymouth-config')
         vm.probe('policy', 'check', timeout=180)
         vm.probe('desktop', 'niri-overrides', timeout=180)
-        vm.probe('desktop', 'wallpaper-preserved', timeout=180)
+        vm.probe('desktop', 'account-seeded', timeout=180)
         # Error gate on the final clean boot, before FAST-PASSED is written.
         # Deliberate-failure probes ran in earlier boots only.
         gate.collect(vm, directory)

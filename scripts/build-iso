@@ -26,6 +26,7 @@ mode=${1:-release}
 printf '%s\n' "$mode" >"$state/integration-mode"
 printf '%s\n' "$bootstrap_label" >"$state/bootstrap-label"
 # Linked worktrees point outside the guest's source mount. Resolve Git here.
+git rev-parse HEAD >"$state/iso-commit"
 git log -1 --format=%ct >"$state/integration-epoch"
 [[ -s keys/integration-signing.gpg && -s keys/integration-signing.fingerprint ]] || {
     echo 'Provision the integration public signing identity before building an ISO.' >&2

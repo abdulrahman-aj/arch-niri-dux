@@ -108,6 +108,30 @@ class CheckTests(unittest.TestCase):
             )
             self.assertEqual(gate.check(directory), [])
 
+    def test_missing_evidence_fails(self):
+        for source in (gate.JOURNAL_FILE, *gate.FAILED_FILES):
+            with self.subTest(source=source), tempfile.TemporaryDirectory() as root:
+                directory = self.write_evidence(root)
+                (directory / source).unlink()
+                with self.assertRaises(FileNotFoundError):
+                    gate.check(directory)
+
+    def test_duplicate_file_manager_warning_only_allows_the_vendor_path(self):
+        for service in ('org.freedesktop.FileManager1', 'org.gnome.Nautilus'):
+            with self.subTest(service=service), tempfile.TemporaryDirectory() as root:
+                directory = self.write_evidence(
+                    root,
+                    journal=[
+                        "Ignoring duplicate name 'org.freedesktop.FileManager1' in service file "
+                        f"'/usr/share/dbus-1/services/{service}.service'"
+                    ],
+                )
+                if service == 'org.freedesktop.FileManager1':
+                    self.assertEqual(gate.check(directory), [])
+                else:
+                    with self.assertRaises(gate.GateFailure):
+                        gate.check(directory)
+
     def test_planted_error_fails_with_raw_and_normalized(self):
         with tempfile.TemporaryDirectory() as root:
             directory = self.write_evidence(
