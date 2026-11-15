@@ -12,7 +12,7 @@ import unittest
 
 from tools.verification import vm as verify
 from tools.vm import console as vm_console
-from tools.workspace import state as workspace
+from tools.workspace import fixtures, resources
 
 
 def kept_machine(directory):
@@ -87,7 +87,7 @@ class KeptRunningGuardTests(unittest.TestCase):
             try:
                 listener.bind(str(sockets / 'qmp.sock'))
                 listener.listen(1)
-                self.assertTrue(workspace.kept_running(Path(root)))
+                self.assertTrue(resources.kept_running(Path(root)))
             finally:
                 listener.close()
 
@@ -99,13 +99,13 @@ class KeptRunningGuardTests(unittest.TestCase):
             stale.bind(str(sockets / 'qmp.sock'))
             stale.close()
             try:
-                self.assertFalse(workspace.kept_running(Path(root)))
+                self.assertFalse(resources.kept_running(Path(root)))
             finally:
                 (sockets / 'qmp.sock').unlink(missing_ok=True)
 
     def test_missing_sockets_counts_as_not_running(self):
         with tempfile.TemporaryDirectory() as root:
-            self.assertFalse(workspace.kept_running(Path(root)))
+            self.assertFalse(resources.kept_running(Path(root)))
 
 
 class FixtureSelectionTests(unittest.TestCase):
@@ -114,7 +114,7 @@ class FixtureSelectionTests(unittest.TestCase):
             root = Path(temp)
             registry = root / 'registry'
             registry.mkdir()
-            self.assertIsNone(workspace.newest_accepted_fixture(registry))
+            self.assertIsNone(fixtures.newest_accepted_fixture(registry))
             old = root / 'old'
             old.mkdir()
             (old / 'ACCEPTANCE-PASSED').write_text('All acceptance stages passed.\n')
@@ -134,8 +134,8 @@ class FixtureSelectionTests(unittest.TestCase):
             os.utime(old, (1000, 1000))
             os.utime(new, (2000, 2000))
             os.utime(unlinked, (3000, 3000))
-            self.assertEqual(workspace.newest_accepted_fixture(registry), new / 'disk.qcow2')
-            self.assertEqual(workspace.accepted_fixtures(registry), [new, old])
+            self.assertEqual(fixtures.newest_accepted_fixture(registry), new / 'disk.qcow2')
+            self.assertEqual(fixtures.accepted_fixtures(registry), [new, old])
 
 
 class CleanOutputTests(unittest.TestCase):

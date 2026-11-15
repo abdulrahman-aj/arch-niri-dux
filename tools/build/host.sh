@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 cd "$(dirname "$0")/../.."
-state=$(python3 -m tools.workspace.state prepare-build)
+state=$(python3 -m tools.workspace prepare-build)
 mkdir -p "$state" out
 state=$(realpath "$state")
 # Verified immutable downloads outlive any one BUILD_STATE. Every use rechecks
@@ -97,7 +97,7 @@ if [[ ! -s "$port_file" ]]; then
 fi
 port=$(cat "$port_file")
 # Agents wait for memory on the shared build machine; humans get a VM sized to fit.
-memory=$(python3 -m tools.workspace.state builder-memory)
+memory=$(python3 -m tools.workspace builder-memory)
 for _ in $(seq 1 100); do
     if curl --fail --silent --output /dev/null "http://127.0.0.1:$port/startup.sh"; then
         break

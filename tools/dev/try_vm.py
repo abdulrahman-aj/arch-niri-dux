@@ -15,6 +15,7 @@ import time
 from pathlib import Path
 
 from tools.workspace import state as workspace
+from tools.workspace import resources
 
 ROOT = Path(__file__).resolve().parents[2]
 # The installer's disk floor lives in one place: read it (and the ESP/swap
@@ -96,7 +97,7 @@ def gum_style(text, warning=False):
 
 
 def refuse_if_agent(env=None):
-    markers = workspace.agent_markers(env)
+    markers = resources.agent_markers(env)
     if markers:
         raise SystemExit(f'{HUMAN_ONLY} (agent environment: {", ".join(markers)})')
 
@@ -255,7 +256,7 @@ def gib(size):
 
 def space_report(needs):
     """Plain-words explanation when a filesystem lacks room for needs, else None."""
-    shortfalls = workspace.space_shortfalls(needs)
+    shortfalls = resources.space_shortfalls(needs)
     if not shortfalls:
         return None
     lines = ['Not enough free disk space.']
@@ -271,7 +272,7 @@ def check_new_vm_space(base=None):
     needs = [(resolve_base(base), VM_SPACE, "the VM's disk once installed")]
     if iso_for_kind(DEVELOPMENT) is None:
         # The default source has no ISO yet, so the first boot likely builds one.
-        needs += workspace.build_needs(workspace.build_state(ROOT))
+        needs += resources.build_needs(workspace.build_state(ROOT))
     report = space_report(needs)
     if report is None:
         return True
@@ -464,11 +465,11 @@ def watch(process, frame, interval=0.2):
 def run_build(kind):
     """Run the build's make target with its output in out/try-build.log and live stages on screen.
     The triggered build keeps its heavy-guard; agents never reach it (refuse_if_agent exits first)."""
-    report = space_report(workspace.build_needs(workspace.build_state(ROOT)))
+    report = space_report(resources.build_needs(workspace.build_state(ROOT)))
     if report is not None:
         gum_style(report, warning=True)
         return False
-    _, memory_warning = workspace.builder_memory()
+    _, memory_warning = resources.builder_memory()
     if memory_warning:
         gum_style(memory_warning, warning=True)
     stages = BUILD_STAGES[kind]

@@ -12,7 +12,9 @@ import sys
 import tempfile
 import time
 
-from tools.workspace.state import disk_guard, kept_running, newest_accepted_fixture, own, socket_guard
+from tools.workspace.state import own
+from tools.workspace.resources import disk_guard, kept_running, socket_guard
+from tools.workspace.fixtures import newest_accepted_fixture
 
 from tools.digest import digest
 from tools.verification.evidence import Evidence

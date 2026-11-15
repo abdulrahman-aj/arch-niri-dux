@@ -13,7 +13,8 @@ import urllib.parse
 
 from tools.verification.session import ROOT, prepare_integration_inputs, run_install
 
-from tools.workspace.state import disk_guard, own
+from tools.workspace.state import own
+from tools.workspace.resources import disk_guard
 from tools.digest import digest
 from tools.verification.evidence import Evidence
 from tools.verification.vm import VM, PASSWORD, stage_probes

@@ -48,9 +48,9 @@ help:
 .PHONY: heavy-guard gc
 lock iso iso-development verify verify-fast verify-release verify-hibernate verify-alongside provision-alongside fetch-alongside: | heavy-guard
 heavy-guard:
-	@python3 -m tools.workspace.state heavy-guard
+	@python3 -m tools.workspace heavy-guard
 gc:
-	python3 -m tools.workspace.state gc $(ARGS)
+	python3 -m tools.workspace gc $(ARGS)
 
 iso-checksums:
 	./scripts/in-dev-shell python3 -m tools.release.iso_checksums prepare $(ARGS)

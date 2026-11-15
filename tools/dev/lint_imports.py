@@ -25,6 +25,8 @@ def violations(path, source):
             forbidden = ['tools.build', 'tools.release', 'tools.verification']
         elif module.startswith('tools.build.'):
             forbidden = ['tools.release']
+        elif module in ('tools.workspace.state', 'tools.workspace.resources', 'tools.workspace.fixtures'):
+            forbidden = ['tools.workspace.gc', 'tools.workspace.__main__']
         elif module.startswith('installer.'):
             forbidden = ['tools']
         for name in names:
@@ -32,7 +34,6 @@ def violations(path, source):
                 yield f'{path}:{node.lineno}: forbidden import {name}'
 
 
-# TODO phase 4: state/fixtures must not import gc after workspace is split.
 # TODO phase 5: guest probes must not import host VM controls after their split.
 def main():
     errors = []

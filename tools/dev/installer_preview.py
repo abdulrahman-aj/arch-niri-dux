@@ -9,6 +9,7 @@ import shutil
 import subprocess
 
 from tools.workspace import state as workspace
+from tools.workspace import resources
 from tools.verification.vm import VM
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -33,12 +34,12 @@ def main():
     parser.add_argument('--disk-gib', type=int, default=32)
     parser.add_argument('--ram-gib', type=int, default=4)
     args = parser.parse_args()
-    workspace.heavy_guard()
+    resources.heavy_guard()
     if args.disk_gib < 1 or args.ram_gib < 1:
         parser.error('Disk and RAM sizes must be positive GiB values.')
     directory = args.directory.resolve()
-    workspace.socket_guard(directory)
-    if workspace.kept_running(directory):
+    resources.socket_guard(directory)
+    if resources.kept_running(directory):
         parser.error('Preview already running. Use vm_console preview-sync or poweroff first.')
     # A preview is disposable, but an earlier directory may contain valuable evidence.
     if directory.exists():
@@ -47,7 +48,7 @@ def main():
     iso = args.iso or (images[-1] if images else None)
     if iso is None or not iso.is_file():
         parser.error('Build a development ISO with make iso-development, or pass --iso.')
-    workspace.disk_guard(directory)
+    resources.disk_guard(directory)
     directory.mkdir(parents=True)
     workspace.own(directory)
     (directory / 'installer-preview.json').write_text(json.dumps(dict(iso=str(iso.resolve()))))

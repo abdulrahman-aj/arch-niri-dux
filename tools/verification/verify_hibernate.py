@@ -8,7 +8,7 @@ import re
 import subprocess
 import sys
 
-from tools.workspace.state import disk_guard
+from tools.workspace.resources import disk_guard
 
 from tools.digest import digest
 from tools.verification.evidence import Evidence
