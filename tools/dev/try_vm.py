@@ -224,10 +224,6 @@ def ask_source():
     return None
 
 
-def ask_yes_no(prompt, default_yes):
-    return gum_confirm(prompt, default_yes)
-
-
 def iso_for_kind(kind):
     out = Path(os.environ.get('TRY_OUT_DIR', str(ROOT / 'out')))
     if kind == DEVELOPMENT:
@@ -271,7 +267,7 @@ def check_new_vm_space(base=None):
     if report is None:
         return True
     gum_style(report, warning=True)
-    return ask_yes_no('Continue anyway?', False)
+    return gum_confirm('Continue anyway?', False)
 
 
 # A plain build log goes to out/try-build.log; the screen shows these stages.
@@ -549,7 +545,7 @@ def ensure_iso(kind):
         return iso.resolve()
     minutes = round(sum(seconds for _, _, seconds in BUILD_STAGES[kind]) / 60)
     prompt = f'{reason} Build it now? That takes about {minutes} minutes.'
-    if ask_yes_no(prompt, default_yes):
+    if gum_confirm(prompt, default_yes):
         if not run_build(kind):
             raise SystemExit(f'The {kind} ISO was not built, so the VM did not start.')
         iso = iso_for_kind(kind) or iso
@@ -658,7 +654,7 @@ def open_vm(name, base=None):
 
 def delete_vm(name, base=None):
     directory = require_vm_dir(name, base)
-    if not ask_yes_no(f"Delete VM '{name}' and its disk?", False):
+    if not gum_confirm(f"Delete VM '{name}' and its disk?", False):
         print('Kept.')
         return
     shutil.rmtree(directory)

@@ -102,7 +102,7 @@ def main():
         elif args.verb == 'key':
             if len(args.args) != 1:
                 parser.error('key needs a QMP key name.')
-            vm.key(args.args[0])
+            vm.chord(args.args[0])
         elif args.verb == 'poweroff':
             if args.args:
                 parser.error('poweroff takes no arguments.')

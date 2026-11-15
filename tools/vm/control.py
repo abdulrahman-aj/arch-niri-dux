@@ -253,9 +253,6 @@ class VM:
             return None
         return path
 
-    def key(self, name):
-        self.chord(name)
-
     def chord(self, *names):
         self.qmp_command('send-key', {'keys': [{'type': 'qcode', 'data': name} for name in names], 'hold-time': 50})
 
@@ -276,9 +273,9 @@ class VM:
     def type_graphical(self, value):
         for character in value:
             if character.islower() or character.isdigit():
-                self.key(character)
+                self.chord(character)
             elif character == '-':
-                self.key('minus')
+                self.chord('minus')
             else:
                 raise ValueError('Unsupported verification keyboard character.')
             time.sleep(0.08)

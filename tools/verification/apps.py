@@ -28,7 +28,7 @@ def verify(vm, passed):
         capture_file = vm.directory / ('apps-' + kind + '.json')
         if not json.loads(capture_file.read_text())['tone_detected']:
             # Some players open paused; exercise their normal play shortcut.
-            vm.key('spc')
+            vm.chord('spc')
             probe(vm, 'apps', 'capture-' + kind, timeout=30)
         probe(vm, 'apps', 'played-' + kind, timeout=60)
     passed('Decibels audio and four Celluloid open/play/close cycles output the expected fixture tones')

@@ -89,7 +89,7 @@ def verify(vm, passed):
         if time.monotonic() > deadline:
             raise TimeoutError(f"Dux's updater panel did not list our package; see {PANEL}.")
         time.sleep(1)
-    vm.key('esc')
+    vm.chord('esc')
     probe(vm, 'dux_update', 'upgrade', timeout=120)
     # Dux's polkit agent opens its authentication dialog for pkexec.
     deadline = time.monotonic() + 60
@@ -101,6 +101,6 @@ def verify(vm, passed):
             raise TimeoutError(f'Dux authentication dialog did not appear; see {PROMPT}.')
         time.sleep(2)
     vm.type_graphical(PASSWORD)
-    vm.key('ret')
+    vm.chord('ret')
     probe(vm, 'dux_update', 'check', timeout=420)
     passed("The bar button opened Dux's updater, which installed the offered release")

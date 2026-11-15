@@ -204,10 +204,6 @@ def disk_rejections():
     return [(disk, disk_rejection(disk, swaps)) for disk in disk_inventory()]
 
 
-def eligible_disks():
-    return [disk for disk, reason in disk_rejections() if reason is None]
-
-
 def describe_rejections(rejections):
     """One plain-words line per rejected whole disk, for errors that must name the cause.
 

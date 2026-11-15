@@ -38,5 +38,41 @@ class SwallowedBroadExceptTests(unittest.TestCase):
         self.assertEqual(len(flagged(source)), 1)
 
 
+class PassThroughWrapperTests(unittest.TestCase):
+    def test_forward_only_bodies_are_flagged(self):
+        for source in (
+            'def label(disk):\n    return storage.disk_identity(disk)\n',
+            'def ask(prompt, default):\n    return gum_confirm(prompt, default)\n',
+            'class VM:\n    def key(self, name):\n        self.chord(name)\n',
+            'def confirm(prompt, default):\n    gum_confirm(prompt, default)\n',
+            'def label(disk):\n    """Describe a disk for the picker."""\n    return storage.disk_identity(disk)\n',
+        ):
+            with self.subTest(source=source):
+                self.assertEqual(len(flagged(source)), 1)
+
+    def test_wrappers_that_add_or_reorder_arguments_pass(self):
+        for source in (
+            'def label(disk):\n    return storage.disk_identity(disk, 1)\n',
+            'def ask(prompt, default):\n    return gum_confirm(prompt, default_yes=default)\n',
+            'def ask(default, prompt):\n    return gum_confirm(prompt, default)\n',
+            'def label(disk):\n    return storage.disk_identity(disk["name"])\n',
+            'def label(disk):\n    return storage.disk_identity(disk["name"] + "!")\n',
+            'def version(source):\n    return version_from_text((source / ".SRCINFO").read_text(), source)\n',
+            'def installed():\n    return subprocess.check_output(["pacman", "-Q", *PACKAGES], text=True).strip()\n',
+            'def label(disk):\n    name = storage.disk_identity(disk)\n    return name\n',
+            'def label(disk):\n    return storage.disk_identity(disk)\n    return None\n',
+        ):
+            with self.subTest(source=source):
+                self.assertEqual(flagged(source), [])
+
+    def test_decorated_and_variadic_definitions_pass(self):
+        for source in (
+            'import functools\n@functools.cache\ndef label(disk):\n    return storage.disk_identity(disk)\n',
+            'def run(*args):\n    return subprocess.run(*args)\n',
+        ):
+            with self.subTest(source=source):
+                self.assertEqual(flagged(source), [])
+
+
 if __name__ == '__main__':
     unittest.main()

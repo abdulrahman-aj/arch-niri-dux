@@ -126,10 +126,10 @@ class InstallerSafetyTests(unittest.TestCase):
     def test_disk_labels_distinguish_identical_models(self):
         first = disk(model='Same model', serial='SERIAL-A')
         second = disk(model='Same model', serial='SERIAL-B')
-        self.assertNotEqual(wizard.disk_label(first), wizard.disk_label(second))
-        self.assertIn('SERIAL-A', wizard.disk_label(first))
-        self.assertIn('WWN-A', wizard.disk_label(disk(wwn='WWN-A')))
-        self.assertIn('usb', wizard.disk_label(disk(tran='usb')))
+        self.assertNotEqual(storage.disk_identity(first), storage.disk_identity(second))
+        self.assertIn('SERIAL-A', storage.disk_identity(first))
+        self.assertIn('WWN-A', storage.disk_identity(disk(wwn='WWN-A')))
+        self.assertIn('usb', storage.disk_identity(disk(tran='usb')))
 
     def test_erase_description_lists_transport_partitions_and_boot_entries(self):
         boots = {'/dev/sda1': [('0001', 'Windows Boot Manager')]}
@@ -325,10 +325,9 @@ class InstallerSafetyTests(unittest.TestCase):
             size=32 * 1024**3,
             children=[dict(name='/dev/vda1', type='part', mountpoints=[None])],
         )
-        with patch.object(storage, 'disk_rejections', return_value=[(small, 'smaller than 32 GiB')]):
-            self.assertEqual(storage.eligible_disks(), [])
-            self.assertIn('/dev/sda', storage.describe_rejections(storage.disk_rejections()))
-            self.assertIn('smaller than 32 GiB', storage.describe_rejections(storage.disk_rejections()))
+        report = storage.describe_rejections([(small, 'smaller than 32 GiB')])
+        self.assertIn('/dev/sda', report)
+        self.assertIn('smaller than 32 GiB', report)
         report = storage.describe_rejections([(held, 'has an active device mapping')])
         self.assertIn('/dev/vda  32.0 GiB', report)
         self.assertIn('has an active device mapping', report)

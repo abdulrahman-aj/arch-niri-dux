@@ -32,7 +32,7 @@ def verify_lock(vm, passed):
     probe(vm, 'desktop', 'locked')
     vm.screenshot('03-locked')
     vm.type_graphical(PASSWORD)
-    vm.key('ret')
+    vm.chord('ret')
     vm.command(
         'for attempt in $(seq 1 30); do cd /run/verify && python -m tools.verification.probes.desktop unlocked && exit 0; sleep 1; done; exit 1',
         timeout=60,

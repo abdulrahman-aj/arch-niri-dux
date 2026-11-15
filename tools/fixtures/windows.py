@@ -139,7 +139,7 @@ class BootReports:
                     raise RuntimeError('Windows VM exited without reporting a successful real OS boot.')
                 # The Windows optical boot loader requires a key on first boot.
                 if install and time.monotonic() - last_key > 1 and deadline - time.monotonic() > timeout - 12:
-                    vm.key('ret')
+                    vm.chord('ret')
                     last_key = time.monotonic()
         vm.screenshot(name + '-timeout')
         raise TimeoutError('Windows did not report; inspect QEMU screenshot and setup evidence.')
