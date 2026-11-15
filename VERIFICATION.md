@@ -156,7 +156,7 @@ pass writes `HIBERNATE-RESUME-PASSED`.
 `make verify-alongside` qualifies installation into existing unallocated GPT
 space against real Debian 13 and Windows 11 LTSC fixtures provisioned per
 [ALONGSIDE.md](ALONGSIDE.md#automated-provisioning-and-acceptance). Fixtures
-live in the shared home `~/arch-niri-dux-fixtures/alongside/` (outside every
+live in the shared home `~/.local/share/arch-niri-dux/alongside/` (outside every
 checkout, so `make gc` cannot remove them with a worktree); per-run evidence
 stays under `out/`. It boots
 the existing OS first and hashes every byte of every original partition while
