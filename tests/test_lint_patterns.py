@@ -176,6 +176,27 @@ class UnquotedShellInterpolationTests(unittest.TestCase):
         self.assertEqual(len(flagged_shell(source)), 1)
         self.assertEqual(flagged_tests(source), [])
 
+    def test_shlex_quote_directly_wrapped_in_double_quotes_is_flagged(self):
+        # Double quotes re-enable $(...) substitution on the quoted value.
+        for source in (
+            'import shlex\nvm.command(f\'printf "%s" "{shlex.quote(value)}"\')',
+            "import shlex\nrun('sh', '-c', f'echo \"{shlex.join(parts)}\"')",
+        ):
+            with self.subTest(source=source):
+                found = flagged_shell(source)
+                self.assertEqual(len(found), 1)
+                self.assertIn('shlex', found[0])
+
+    def test_shlex_quote_outside_or_inside_single_quotes_passes(self):
+        for source in (
+            'import shlex\nvm.command(f\'printf "%s" {shlex.quote(value)}\')',
+            "import shlex\nvm.command(f\"printf '%s' '{shlex.quote(value)}'\")",
+            # Inside $(...) the single quotes stay syntactic, so the value is safe.
+            'import shlex\nvm.command(f\'test "$(sha256sum {shlex.quote(path)} | cut -d " " -f 1)" = {shlex.quote(digest)}\')',
+        ):
+            with self.subTest(source=source):
+                self.assertEqual(flagged_shell(source), [])
+
 
 class MockInteractionAssertionTests(unittest.TestCase):
     def test_mock_call_assertions_are_flagged(self):
