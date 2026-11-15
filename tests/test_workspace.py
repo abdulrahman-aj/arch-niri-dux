@@ -185,20 +185,37 @@ class WorkspaceTests(unittest.TestCase):
             self.assertEqual(mib, resources.BUILDER_MIN_MIB)
             self.assertTrue(warning)
         # Agents wait for memory and get the full builder without a warning.
-        # Fake abundant memory at the stdlib boundary so the real wait returns at once.
+        # Feed low-then-high MemAvailable through the stdlib boundary and
+        # require observable waiting: without the wait the loop never runs.
         import tools.vm.control as control
+
+        reads = []
+        slept = []
+        free_runs = []
 
         def fake_control_read_text(path_self, *args, **kwargs):
             if str(path_self) == '/proc/meminfo':
+                reads.append(len(reads))
+                if len(reads) < 3:
+                    return self.meminfo(6)
                 return self.meminfo(24)
             return real_read_text(path_self, *args, **kwargs)
 
+        def fake_run(*args, **_kwargs):
+            free_runs.append(args)
+
         with (
             patch.object(Path, 'read_text', fake_control_read_text),
-            patch.object(control.subprocess, 'run', return_value=None),
-            patch.object(control.time, 'sleep'),
+            patch.object(control.subprocess, 'run', fake_run),
+            patch.object(control.time, 'sleep', slept.append),
+            contextlib.redirect_stderr(io.StringIO()),
         ):
             self.assertEqual(resources.builder_memory({'CLAUDECODE': '1'}), (resources.BUILDER_MIB, None))
+        # The wait looped through low memory (reporting with free) instead
+        # of starting builders under pressure, then saw room and returned.
+        self.assertEqual(len(reads), 3)
+        self.assertEqual(len(slept), 2)
+        self.assertEqual(len(free_runs), 3)
 
     def test_builder_memory_command_prints_only_the_size(self):
         # build-iso captures stdout as QEMU's -m value; warnings must go to stderr.

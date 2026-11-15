@@ -166,15 +166,51 @@ class UnquotedShellInterpolationTests(unittest.TestCase):
             "run('useradd', '-m', '-s', '/bin/bash', user)",
             "subprocess.run(['qemu-img', 'snapshot', '-c', 'pristine', str(disk)], check=True)",
             "run('bash', '-lc', 'command -v dux-path-probe')",
+            "run('tar', '-czf', package, '.PKGINFO', 'etc')",
+            "run('bash', '-l', f'echo {value}')",
+            "run('bash', '--login', f'echo {value}')",
             "user_command('niri', 'msg', 'action', 'spawn', '--', 'sh', '-c', 'test x')",
         ):
             with self.subTest(source=source):
                 self.assertEqual(flagged_shell(source), [])
 
+    def test_combined_shell_flags_with_unquoted_interpolation_are_flagged(self):
+        for source in (
+            "import shlex\nrun('bash', '-lc', f'echo {value}')",
+            "import shlex\nrun('sh', '-ec', f'userdel -r {user} 2>/dev/null || true')",
+        ):
+            with self.subTest(source=source):
+                self.assertEqual(len(flagged_shell(source)), 1)
+
+    def test_combined_shell_flags_with_quoted_interpolation_pass(self):
+        source = "import shlex\nrun('bash', '-lc', f'echo {shlex.quote(value)}')"
+        self.assertEqual(flagged_shell(source), [])
+
     def test_shell_code_built_by_tests_is_out_of_scope(self):
         source = "output = subprocess.check_output(['bash', '-c', f'source \"$1\"; {expression}'], text=True)"
         self.assertEqual(len(flagged_shell(source)), 1)
         self.assertEqual(flagged_tests(source), [])
+
+    def test_shlex_quote_directly_wrapped_in_double_quotes_is_flagged(self):
+        # Double quotes re-enable $(...) substitution on the quoted value.
+        for source in (
+            'import shlex\nvm.command(f\'printf "%s" "{shlex.quote(value)}"\')',
+            "import shlex\nrun('sh', '-c', f'echo \"{shlex.join(parts)}\"')",
+        ):
+            with self.subTest(source=source):
+                found = flagged_shell(source)
+                self.assertEqual(len(found), 1)
+                self.assertIn('shlex', found[0])
+
+    def test_shlex_quote_outside_or_inside_single_quotes_passes(self):
+        for source in (
+            'import shlex\nvm.command(f\'printf "%s" {shlex.quote(value)}\')',
+            "import shlex\nvm.command(f\"printf '%s' '{shlex.quote(value)}'\")",
+            # Inside $(...) the single quotes stay syntactic, so the value is safe.
+            'import shlex\nvm.command(f\'test "$(sha256sum {shlex.quote(path)} | cut -d " " -f 1)" = {shlex.quote(digest)}\')',
+        ):
+            with self.subTest(source=source):
+                self.assertEqual(flagged_shell(source), [])
 
 
 class MockInteractionAssertionTests(unittest.TestCase):

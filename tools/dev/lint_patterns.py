@@ -98,8 +98,9 @@ def unquoted_shell_interpolation(path, tree):
     # A value spliced unquoted into a shell string breaks on spaces or becomes
     # injection the first time an agent copies the line for a real path; quoting
     # is a no-op on today's safe values, so every interpolation goes through shlex.
-    # Scope: the string passed straight to vm.command or after 'sh'/'bash' '-c';
-    # a command assembled in a variable first is not followed.
+    # Scope: the string passed straight to vm.command or after 'sh'/'bash' '-c'
+    # (including combined flags such as '-lc'); a command assembled in a
+    # variable first is not followed.
     # Tests build shell code on purpose (sourcing fixtures), so this watches tools/.
     if not str(path).startswith('tools/'):
         return
@@ -115,15 +116,29 @@ def unquoted_shell_interpolation(path, tree):
         commands += _dash_c_command(elements)
         if any(_unquoted_interpolation(command) for command in commands):
             yield node.lineno, 'shell command interpolates a value without shlex.quote/shlex.join'
+        elif any(_double_quoted_shlex(command) for command in commands):
+            yield (
+                node.lineno,
+                'shlex quoting inside double quotes still allows substitution; move the value out of the quotes',
+            )
 
 
 def _dash_c_command(elements):
-    words = [element.value if isinstance(element, ast.Constant) else None for element in elements]
-    if '-c' not in words:
-        return []
-    index = words.index('-c')
-    if index + 1 < len(elements) and {'sh', 'bash'} & set(words[:index]):
-        return [elements[index + 1]]
+    words = [
+        element.value if isinstance(element, ast.Constant) and isinstance(element.value, str) else None
+        for element in elements
+    ]
+    for index, word in enumerate(words):
+        if (
+            word is not None
+            and index + 1 < len(elements)
+            # A combined short-flag cluster such as '-lc' still runs its
+            # next argument as shell code; long options never match.
+            and re.fullmatch(r'-[A-Za-z]+', word)
+            and 'c' in word
+            and {'sh', 'bash'} & set(words[:index])
+        ):
+            return [elements[index + 1]]
     return []
 
 
@@ -135,6 +150,35 @@ def _shlex_call(node):
         and isinstance(node.func.value, ast.Name)
         and node.func.value.id == 'shlex'
     )
+
+
+def _contains_shlex_call(node):
+    return any(_shlex_call(inner) for inner in ast.walk(node))
+
+
+def _double_quoted_shlex(command):
+    # shlex.quote inside existing double quotes still allows $(...)
+    # substitution, so quoting there is a different mistake: the value must
+    # move out of the quotes, not gain more quoting. Only the simple case
+    # is rejected: an interpolation containing a shlex call directly wrapped
+    # in literal double quotes. A shell parser would be needed to judge
+    # quotes balanced across longer strings or command substitutions.
+    if not isinstance(command, ast.JoinedStr):
+        return False
+    for index, value in enumerate(command.values):
+        if not (isinstance(value, ast.FormattedValue) and _contains_shlex_call(value.value)):
+            continue
+        previous = command.values[index - 1] if index else None
+        following = command.values[index + 1] if index + 1 < len(command.values) else None
+        quoted_before = (
+            isinstance(previous, ast.Constant) and isinstance(previous.value, str) and previous.value.endswith('"')
+        )
+        quoted_after = (
+            isinstance(following, ast.Constant) and isinstance(following.value, str) and following.value.startswith('"')
+        )
+        if quoted_before and quoted_after:
+            return True
+    return False
 
 
 def _unquoted_interpolation(command):
