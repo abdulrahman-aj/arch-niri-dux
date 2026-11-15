@@ -21,13 +21,6 @@ from .pdf import sample_pdf_bytes
 FILES = Path('/tmp/dux-apps-files')
 
 
-EVIDENCE = Path('/run/verify')
-
-
-def record(name, value):
-    (EVIDENCE / (name + '.json')).write_text(json.dumps(value, indent=2) + '\n')
-
-
 def daemon_request(method, params=None):
     session = Path('/run/user') / str(pwd.getpwnam('tester').pw_uid)
     api = next(session.glob('dms*.sock'))
@@ -52,7 +45,7 @@ def focus_app(name):
     try:
         window = guest.wait_until(name + ' window', lambda: app_window(name))
     except TimeoutError:
-        record('apps-missing-' + name.lower(), {'windows': guest.windows()})
+        guest.record('apps-missing-' + name.lower(), {'windows': guest.windows()})
         guest.screenshot('apps-missing-' + name.lower() + '.png')
         raise
     guest.focus_window(window['id'])
@@ -101,7 +94,7 @@ test -s open-files.txt
         capture=True,
         timeout=90,
     )
-    record('apps-cli', {'passed': True, 'output': result.stdout})
+    guest.record('apps-cli', {'passed': True, 'output': result.stdout})
 
 
 def png_sample():
@@ -250,7 +243,7 @@ def prepare():
     guest.user_command('pactl', 'load-module', 'module-null-sink', 'sink_name=dux_verify_audio', capture=True)
     guest.user_command('pactl', 'set-default-sink', 'dux_verify_audio')
     guest.user_command('pactl', 'set-sink-volume', 'dux_verify_audio', '100%')
-    record(
+    guest.record(
         'apps-codecs',
         {
             'decoded': ['MP4/H.264/AAC', 'Matroska/H.264/AAC', 'WebM/VP8/Vorbis', 'FLAC', 'MP3'],
@@ -265,7 +258,11 @@ def open_file(filename, name):
     guest.user_command(
         'sh',
         '-c',
-        'xdg-open ' + shlex.quote(str(path)) + ' >' + str(EVIDENCE / ('apps-' + name.lower() + '.log')) + ' 2>&1 &',
+        'xdg-open '
+        + shlex.quote(str(path))
+        + ' >'
+        + str(guest.EVIDENCE / ('apps-' + name.lower() + '.log'))
+        + ' 2>&1 &',
     )
     focus_app(name)
     guest.screenshot('apps-' + name.lower() + '.png')
@@ -276,7 +273,7 @@ def image():
     actual = guest.user_command('xdg-mime', 'query', 'default', 'image/png', capture=True).stdout.strip()
     assert actual == expected, actual
     open_file('apps-image.png', 'Loupe')
-    record('apps-image', {'default': actual, 'opened': True})
+    guest.record('apps-image', {'default': actual, 'opened': True})
     close_app('Loupe')
 
 
@@ -308,7 +305,7 @@ def text_saved():
         timeout=10,
     )
     guest.screenshot('apps-text-saved.png')
-    record('apps-text', {'opened_with': 'org.gnome.TextEditor.desktop', 'edited_and_saved': True})
+    guest.record('apps-text', {'opened_with': 'org.gnome.TextEditor.desktop', 'edited_and_saved': True})
     close_app('TextEditor')
 
 
@@ -316,7 +313,7 @@ def calculator():
     guest.user_command('sh', '-c', 'gtk-launch org.gnome.Calculator >/run/verify/apps-calculator.log 2>&1 &')
     focus_app('Calculator')
     guest.screenshot('apps-calculator.png')
-    record('apps-calculator', {'launched': True})
+    guest.record('apps-calculator', {'launched': True})
     close_app('Calculator')
 
 
@@ -370,7 +367,7 @@ def capture_audio(kind):
     )
     frequency = 440 if kind == 'audio' else 660
     amplitude = tone_amplitude(path, frequency)
-    record(
+    guest.record(
         'apps-' + kind,
         {
             'frequency_hz': frequency,
@@ -382,7 +379,7 @@ def capture_audio(kind):
 
 
 def media_played(kind):
-    data = json.loads((EVIDENCE / ('apps-' + kind + '.json')).read_text())
+    data = json.loads((guest.EVIDENCE / ('apps-' + kind + '.json')).read_text())
     assert data['tone_detected'], data
     application = 'Decibels' if kind == 'audio' else 'Celluloid'
     guest.screenshot('apps-' + application.lower() + '-playing.png')
@@ -505,7 +502,7 @@ def backends():
     shared_address = shared_connection()
     guest.run('udevadm', 'verify', '/usr/lib/udev/rules.d/60-arch-niri-dux-ddc.rules')
     assert Path('/sys/module/i2c_dev').is_dir(), 'i2c-tools did not load i2c-dev at boot'
-    record(
+    guest.record(
         'apps-backends',
         {
             'phone_camera_binaries_load': True,
@@ -538,7 +535,7 @@ def printing():
     assert Path('/usr/share/dbus-1/system-services/org.opensuse.CupsPkHelper.Mechanism.service').is_file()
     spool = FILES / 'print-spool'
     spool.mkdir(exist_ok=True)
-    with (EVIDENCE / 'apps-printer.log').open('w') as log:
+    with (guest.EVIDENCE / 'apps-printer.log').open('w') as log:
         printer = subprocess.Popen(
             [
                 'ippeveprinter',
@@ -589,7 +586,7 @@ def printing():
                 return files if files and not pending.strip() else None
 
             documents = guest.wait_until('PDF delivered through driverless CUPS queue', completed, timeout=60)
-            record(
+            guest.record(
                 'apps-printing',
                 {
                     'driverless_queue': True,
@@ -607,7 +604,7 @@ def printing():
 
 if __name__ == '__main__':
     if (
-        not (EVIDENCE / 'install.json').is_file()
+        not (guest.EVIDENCE / 'install.json').is_file()
         or subprocess.run(['systemd-detect-virt', '--vm', '--quiet'], check=False).returncode != 0
     ):
         raise SystemExit('Run this probe only inside the disposable verification VM.')

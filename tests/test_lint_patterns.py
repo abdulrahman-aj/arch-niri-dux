@@ -9,6 +9,14 @@ def flagged(source):
     return list(violations(Path('tools/example.py'), textwrap.dedent(source)))
 
 
+def flagged_probe(source):
+    return list(violations(Path('tools/verification/probes/example.py'), textwrap.dedent(source)))
+
+
+def flagged_guest(source):
+    return list(violations(Path('tools/verification/probes/guest.py'), textwrap.dedent(source)))
+
+
 class SwallowedBroadExceptTests(unittest.TestCase):
     def test_broad_handlers_that_drop_the_error_are_flagged(self):
         for handler in ('except Exception:', 'except BaseException:', 'except:', 'except Exception as error:'):
@@ -72,6 +80,47 @@ class PassThroughWrapperTests(unittest.TestCase):
         ):
             with self.subTest(source=source):
                 self.assertEqual(flagged(source), [])
+
+
+class ProbeLocalHelpersTests(unittest.TestCase):
+    def test_evidence_writes_through_the_shared_constant_are_flagged(self):
+        for source in (
+            "(EVIDENCE / 'dux-update-state.json').write_text(json.dumps(state(), indent=2))",
+            "Path('/run/verify/camera.json').write_text(json.dumps(state, indent=2) + '\\n')",
+            "evidence.write_text(json.dumps(state, indent=2) + '\\n')",
+        ):
+            with self.subTest(source=source):
+                self.assertEqual(len(flagged_probe(source)), 1)
+
+    def test_local_helper_definitions_are_flagged(self):
+        for source in (
+            'EVIDENCE = Path("/run/verify")',
+            'def record(name, value):\n    pass',
+            'def output(*args):\n    pass',
+        ):
+            with self.subTest(source=source):
+                self.assertEqual(len(flagged_probe(source)), 1)
+
+    def test_same_code_in_guest_or_outside_probes_passes(self):
+        source = (
+            'EVIDENCE = Path("/run/verify")\n'
+            'def record(name, value):\n    pass\n'
+            "Path('/run/verify/a.json').write_text(json.dumps(value, indent=2) + '\\n')\n"
+        )
+        self.assertEqual(flagged_guest(source), [])
+        self.assertEqual(flagged(source), [])
+
+    def test_scratch_json_and_non_evidence_writes_pass(self):
+        for source in (
+            "(WORK / 'before.json').write_text(json.dumps(before, indent=2) + '\\n')",
+            "Path('/run/systemd/system/foo.conf').write_text('[Service]\\n')",
+            'payload = json.dumps(state)',
+            'def record_boot():\n    pass',
+            'class Probe:\n    def record(self, name):\n        pass',
+            'def check():\n    def output(*args):\n        pass',
+        ):
+            with self.subTest(source=source):
+                self.assertEqual(flagged_probe(source), [])
 
 
 if __name__ == '__main__':

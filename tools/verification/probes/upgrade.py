@@ -8,15 +8,7 @@ import subprocess
 import tempfile
 from tools.digest import digest
 from . import dispatch
-from .guest import run
-
-
-def output(*args, **kwargs):
-    try:
-        return subprocess.check_output(args, text=True, **kwargs).strip()
-    except subprocess.CalledProcessError as error:
-        print(error.output, flush=True)
-        raise
+from .guest import EVIDENCE, output, record, run
 
 
 def assert_personal_preserved(personal, before):
@@ -26,8 +18,7 @@ def assert_personal_preserved(personal, before):
 
 
 def verify_upgrade():
-    evidence = Path('/run/verify')
-    if not (evidence / 'install.json').is_file():
+    if not (EVIDENCE / 'install.json').is_file():
         raise SystemExit('Requires the disposable installation verification fixture.')
     subprocess.run(['systemd-detect-virt', '--vm'], check=True)
     user = pwd.getpwnam('tester')
@@ -58,8 +49,8 @@ def verify_upgrade():
         work = Path(directory)
         source = work / 'source'
         source.mkdir()
-        output('tar', '-xf', str(evidence / 'integration-input/integration.tar'), '-C', str(source))
-        recipe = (evidence / 'integration-input/PKGBUILD').read_text()
+        output('tar', '-xf', str(EVIDENCE / 'integration-input/integration.tar'), '-C', str(source))
+        recipe = (EVIDENCE / 'integration-input/PKGBUILD').read_text()
         recipe, changes = re.subn(
             r'^pkgrel=(\d+)$', lambda match: f'pkgrel={int(match[1]) + 1}', recipe, flags=re.MULTILINE
         )
@@ -100,7 +91,7 @@ def verify_upgrade():
             str(work / 'skipped-candidate'),
             '--epoch',
             '1234',
-            cwd=evidence,
+            cwd=EVIDENCE,
         )
         recipe_path.write_text(
             re.sub(
@@ -120,7 +111,7 @@ def verify_upgrade():
             str(packages),
             '--epoch',
             '1234',
-            cwd=evidence,
+            cwd=EVIDENCE,
         )
         output(
             *prefix,
@@ -197,32 +188,29 @@ def verify_upgrade():
         assert 'Usage = Install Sync' in omarchy_section, omarchy_section
         for home in (signing, keyring):
             output('gpgconf', '--homedir', str(home), '--kill', 'all')
-        (evidence / 'integration-upgrade.json').write_text(
-            json.dumps(
-                {
-                    'before': versions.splitlines(),
-                    'after': updated.splitlines(),
-                    'personal_sha256': before,
-                    'owned_file_added_and_removed': True,
-                    'baseline_addition_installed': True,
-                    'baseline_can_be_removed_independently': True,
-                    'signed_packages_and_database': True,
-                    'tampered_database_rejected': True,
-                    'installed_keyring_refresh_hook_ran': True,
-                    'omarchy_usage_excludes_upgrade': True,
-                    'restoration': {
-                        'files_present': [str(old_file)],
-                        'files_absent': [str(new_file)],
-                        'packages_absent': [fake_name],
-                    },
+        record(
+            'integration-upgrade',
+            {
+                'before': versions.splitlines(),
+                'after': updated.splitlines(),
+                'personal_sha256': before,
+                'owned_file_added_and_removed': True,
+                'baseline_addition_installed': True,
+                'baseline_can_be_removed_independently': True,
+                'signed_packages_and_database': True,
+                'tampered_database_rejected': True,
+                'installed_keyring_refresh_hook_ran': True,
+                'omarchy_usage_excludes_upgrade': True,
+                'restoration': {
+                    'files_present': [str(old_file)],
+                    'files_absent': [str(new_file)],
+                    'packages_absent': [fake_name],
                 },
-                indent=2,
-            )
-            + '\n'
+            },
         )
 
 
-def assert_restored(root=Path('/'), evidence=Path('/run/verify')):
+def assert_restored(root=Path('/'), evidence=EVIDENCE):
     """Check the fixture's own recorded expectations after snapshot restoration."""
     expected = json.loads((evidence / 'integration-upgrade.json').read_text())
     actual = output('pacman', '-Q', 'arch-niri-dux', 'arch-niri-dux-baseline').splitlines()
@@ -242,11 +230,10 @@ def assert_restored(root=Path('/'), evidence=Path('/run/verify')):
 
 
 def published_repository():
-    evidence = Path('/run/verify')
-    assert (evidence / 'install.json').is_file(), 'Requires the disposable installation fixture.'
+    assert (EVIDENCE / 'install.json').is_file(), 'Requires the disposable installation fixture.'
     run('systemd-detect-virt', '--vm')
     server = output('pacman-conf', '--repo', 'arch-niri-dux', 'Server')
-    override = evidence / 'repository-url'
+    override = EVIDENCE / 'repository-url'
     if override.exists():
         server = override.read_text().strip()
     else:
@@ -258,7 +245,7 @@ def published_repository():
         Path('/home/tester/.config') / name for name in ('niri/config.kdl', 'niri/dms/binds.kdl', 'xdg-terminals.list')
     ]
     before = {str(path): digest(path) for path in personal}
-    manifest = json.loads((evidence / 'release-manifest.json').read_text())
+    manifest = json.loads((EVIDENCE / 'release-manifest.json').read_text())
     hashes = {}
     with tempfile.TemporaryDirectory(prefix='dux-published-repository-') as directory:
         work = Path(directory)
@@ -281,20 +268,17 @@ def published_repository():
             assert hashes[package['name']] == package['sha256'], package['name']
     assert_personal_preserved(personal, before)
     run('pacman', '-Dk')
-    (evidence / 'published-repository.json').write_text(
-        json.dumps(
-            {
-                'version': manifest['version'],
-                'package_sha256': hashes,
-                'personal_sha256': before,
-                'offline_trust_used': True,
-                'database_and_packages_required_signed': True,
-                'repository_url': server,
-                'https_delivery': server.startswith('https://'),
-            },
-            indent=2,
-        )
-        + '\n'
+    record(
+        'published-repository',
+        {
+            'version': manifest['version'],
+            'package_sha256': hashes,
+            'personal_sha256': before,
+            'offline_trust_used': True,
+            'database_and_packages_required_signed': True,
+            'repository_url': server,
+            'https_delivery': server.startswith('https://'),
+        },
     )
 
 

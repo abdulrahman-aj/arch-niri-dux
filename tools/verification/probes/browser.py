@@ -2,12 +2,11 @@
 
 import json
 import html
-from pathlib import Path
 import re
 import urllib.error
 import urllib.request
 from . import dispatch
-from .guest import wait_until, focus_window, windows, screenshot
+from .guest import record, wait_until, focus_window, windows, screenshot
 
 
 def browser_state():
@@ -57,7 +56,7 @@ def captured_frame():
 
 def capture():
     state = wait_until('Chromium screen sharing producing nonblank video content', captured_frame)
-    Path('/run/verify/screen-sharing.json').write_text(json.dumps(state, indent=2) + '\n')
+    record('screen-sharing', state)
     screenshot('02-screen-sharing.png')
 
 

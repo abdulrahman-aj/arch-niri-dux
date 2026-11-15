@@ -5,7 +5,7 @@ from pathlib import Path
 import shutil
 import subprocess
 from . import dispatch
-from .guest import wait_until, user_command, windows, screenshot, focus_window
+from .guest import record, wait_until, user_command, windows, screenshot, focus_window
 from tools.verification.images import png_dimensions
 
 
@@ -95,18 +95,15 @@ def camera():
         focus_camera()
         screenshot('02-snapshot.png')
         width, height = png_dimensions(Path('/run/verify/02-snapshot.png'))
-        Path('/run/verify/camera.json').write_text(
-            json.dumps(
-                {
-                    'synthetic': True,
-                    'source': 'DuxTestCamera',
-                    'before': before,
-                    'width': width,
-                    'height': height,
-                },
-                indent=2,
-            )
-            + '\n'
+        record(
+            'camera',
+            {
+                'synthetic': True,
+                'source': 'DuxTestCamera',
+                'before': before,
+                'width': width,
+                'height': height,
+            },
         )
     except Exception:
         camera_cleanup()
@@ -136,7 +133,7 @@ def camera_media(video=False):
     target = target.with_suffix(captured.suffix)
     shutil.copyfile(captured, target)
     state['video' if video else 'photo'] = {'path': str(captured), 'bytes': captured.stat().st_size}
-    evidence.write_text(json.dumps(state, indent=2) + '\n')
+    record('camera', state)
     if video:
         screenshot('02-snapshot-captured.png')
     else:

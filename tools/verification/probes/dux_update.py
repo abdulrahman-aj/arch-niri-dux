@@ -24,11 +24,8 @@ import subprocess
 import time
 from . import dispatch
 from .apps import daemon_request
-from .guest import run, screenshot, user_command, wait_until
+from .guest import EVIDENCE, record, run, screenshot, user_command, wait_until
 from tools.verification.constants import AVAILABLE, NONE, PANEL, PROMPT
-
-
-EVIDENCE = Path('/run/verify')
 
 
 WORK = Path('/var/tmp/dux-update-fixture')
@@ -165,7 +162,7 @@ def relogin(interval):
     try:
         return wait_until('Dux server after login', connected)
     except TimeoutError:
-        (EVIDENCE / 'dux-update-state.json').write_text(json.dumps(state(), indent=2))
+        record('dux-update-state', state())
         raise
 
 
@@ -182,7 +179,7 @@ def scheduled_check(previous):
         # The next check is at most one interval plus Dux's startup grace away.
         return wait_until("Dux's scheduled update check", checked, timeout=SHORT + 180)
     except TimeoutError:
-        (EVIDENCE / 'dux-update-state.json').write_text(json.dumps(state(), indent=2))
+        record('dux-update-state', state())
         raise
 
 
@@ -207,7 +204,7 @@ def prepare():
     try:
         initial = wait_until('Dux daemon with seeded updater interval', seeded, timeout=180)
     except TimeoutError:
-        (EVIDENCE / 'dux-update-state.json').write_text(json.dumps(state(), indent=2))
+        record('dux-update-state', state())
         raise
     assert not initial.get('error'), initial
     # The schedule must outlive reboots, so its state can't be on tmpfs.
@@ -312,7 +309,7 @@ def check():
         try:
             state = wait_until('Dux upgrade transaction', finished, timeout=300)
         except (TimeoutError, AssertionError):
-            (EVIDENCE / 'dux-update-state.json').write_text(json.dumps(daemon_request('sysupdate.getState'), indent=2))
+            record('dux-update-state', daemon_request('sysupdate.getState'))
             raise
         after = installed().splitlines()
         assert f'arch-niri-dux {before["candidate"]}' in after, after
@@ -323,28 +320,23 @@ def check():
         ).strip()
         # The transaction came from Dux's backend argv, not another upgrade.
         assert 'COMMAND=/usr/bin/pacman -Syu --needed --noconfirm' in journal, journal
-        (EVIDENCE / 'dux-update.json').write_text(
-            json.dumps(
-                {
-                    'trigger': "Dux's scheduled checks, the bar button, then Update All's server request",
-                    'first_check': before['first_check'],
-                    'relogin_kept_schedule': before['relogin_kept_schedule'],
-                    'none_check': before['none_check'],
-                    'available_check': before['available_check'],
-                    'check_mechanism_present': 'checkupdates'
-                    if before['checkupdates']
-                    else 'fakeroot private database',
-                    'backends': before['backends'],
-                    'found': before['found'],
-                    'before': before['packages'],
-                    'after': after,
-                    'upgrade_log': state.get('recentLog', []),
-                    'pkexec_journal': journal.splitlines(),
-                    'authentication_dialog_answered': True,
-                },
-                indent=2,
-            )
-            + '\n'
+        record(
+            'dux-update',
+            {
+                'trigger': "Dux's scheduled checks, the bar button, then Update All's server request",
+                'first_check': before['first_check'],
+                'relogin_kept_schedule': before['relogin_kept_schedule'],
+                'none_check': before['none_check'],
+                'available_check': before['available_check'],
+                'check_mechanism_present': 'checkupdates' if before['checkupdates'] else 'fakeroot private database',
+                'backends': before['backends'],
+                'found': before['found'],
+                'before': before['packages'],
+                'after': after,
+                'upgrade_log': state.get('recentLog', []),
+                'pkexec_journal': journal.splitlines(),
+                'authentication_dialog_answered': True,
+            },
         )
     finally:
         restore_pacman_conf()

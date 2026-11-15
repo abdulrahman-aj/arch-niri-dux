@@ -33,6 +33,23 @@ def run(*args, **kwargs):
     return subprocess.run(args, check=True, text=True, **kwargs)
 
 
+EVIDENCE = Path('/run/verify')
+
+
+def record(name, value):
+    (EVIDENCE / (name + '.json')).write_text(json.dumps(value, indent=2) + '\n')
+
+
+def output(*args, **kwargs):
+    # Probe failures surface on the serial console; print the captured output
+    # before re-raising so the log shows what the command actually said.
+    try:
+        return run(*args, stdout=subprocess.PIPE, **kwargs).stdout.strip()
+    except subprocess.CalledProcessError as error:
+        print(error.stdout, flush=True)
+        raise
+
+
 def run_interactive(command, replies, timeout=180):
     pending = list(replies)
     process = subprocess.Popen(
@@ -120,7 +137,7 @@ def focus_window(window_id):
 
 
 def screenshot(name):
-    path = Path('/run/verify') / name
+    path = EVIDENCE / name
     path.unlink(missing_ok=True)
     user_command('niri', 'msg', 'action', 'screenshot-screen', '--path', str(path))
     wait_until('Desktop screenshot', lambda: png_ready(path), timeout=10)

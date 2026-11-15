@@ -8,7 +8,7 @@ import stat
 import subprocess
 import sys
 from . import dispatch
-from .guest import run
+from .guest import record, run
 
 
 def configured_cmdline(root):
@@ -45,9 +45,7 @@ def luks_pbkdf():
     assert device, status
     dump = run('cryptsetup', 'luksDump', device.group(1), stdout=subprocess.PIPE).stdout
     memories = assert_luks_pbkdf(dump)
-    Path('/run/verify/luks-pbkdf.json').write_text(
-        json.dumps({'device': device.group(1), 'pbkdf': 'argon2id', 'memory_kib': memories}, indent=2) + '\n'
-    )
+    record('luks-pbkdf', {'device': device.group(1), 'pbkdf': 'argon2id', 'memory_kib': memories})
 
 
 def x11_keyboard(keymap, map_path=Path('/usr/share/systemd/kbd-model-map')):
@@ -90,7 +88,7 @@ def prepare(root):
         assert ('noresume' in tokens) == snapshot, tokens
         entries.append(tokens)
     assert entries and any('noresume' in entry for entry in entries), entries
-    Path('/run/verify/limine-cmdlines.json').write_text(json.dumps(entries, indent=2) + '\n')
+    record('limine-cmdlines', entries)
     run('arch-chroot', str(root), 'systemctl', 'enable', 'serial-getty@ttyS0.service')
     configuration = json.loads(Path('/run/verify/install.json').read_text())
     keymap = configuration.get('keymap', 'us')
@@ -158,16 +156,13 @@ def storage():
     assert 'resume=/dev/mapper/dux-root' in cmdline
     assert f'resume_offset={offset}' in cmdline, (offset, cmdline)
     assert stat.S_IMODE(Path('/swap/swapfile').stat().st_mode) == 0o600
-    Path('/run/verify/swap-evidence.json').write_text(
-        json.dumps(
-            {
-                'subvolume': mounted_subvolume,
-                'resume_offset': int(offset),
-                'active_swap': swaps,
-            },
-            indent=2,
-        )
-        + '\n'
+    record(
+        'swap-evidence',
+        {
+            'subvolume': mounted_subvolume,
+            'resume_offset': int(offset),
+            'active_swap': swaps,
+        },
     )
 
 
@@ -216,7 +211,7 @@ def plymouth_status():
     assert 'plymouth' in journal.lower(), 'No Plymouth activity in this boot journal.'
     run('systemctl', 'is-active', 'greetd')
     evidence = {'theme': theme, 'cmdline': cmdline}
-    Path('/run/verify/plymouth-evidence.json').write_text(json.dumps(evidence, indent=2) + '\n')
+    record('plymouth-evidence', evidence)
 
 
 def prepare_hibernate():
@@ -228,15 +223,12 @@ def prepare_hibernate():
     token = secrets.token_hex(16)
     Path('/run/dux-hibernate-memory-marker').write_text(token)
     Path('/run/dux-hibernate-resumed').unlink(missing_ok=True)
-    Path('/run/verify/hibernate-expected.json').write_text(
-        json.dumps(
-            {
-                'boot_id': Path('/proc/sys/kernel/random/boot_id').read_text().strip(),
-                'memory_token': token,
-            },
-            indent=2,
-        )
-        + '\n'
+    record(
+        'hibernate-expected',
+        {
+            'boot_id': Path('/proc/sys/kernel/random/boot_id').read_text().strip(),
+            'memory_token': token,
+        },
     )
     dropin = Path('/run/systemd/system/systemd-hibernate.service.d/90-verification.conf')
     dropin.parent.mkdir(parents=True, exist_ok=True)

@@ -1,9 +1,8 @@
 """Pdf acceptance behavior."""
 
-import json
 from pathlib import Path
 from . import dispatch
-from .guest import wait_until, user_command, ipc, windows, screenshot, focus_window
+from .guest import record, wait_until, user_command, ipc, windows, screenshot, focus_window
 from tools.verification.images import png_dimensions
 
 
@@ -56,20 +55,17 @@ def pdf():
         screenshot('02-papers.png')
         rendered = Path('/run/verify/02-papers.png')
         width, height = png_dimensions(rendered)
-        Path('/run/verify/pdf.json').write_text(
-            json.dumps(
-                {
-                    'default': 'org.gnome.Papers.desktop',
-                    'method': 'xdg-open',
-                    'sample': str(sample),
-                    'sample_size': sample.stat().st_size,
-                    'width': width,
-                    'height': height,
-                    'note': 'Parent reviews 02-papers.png for document content vs an error page.',
-                },
-                indent=2,
-            )
-            + '\n'
+        record(
+            'pdf',
+            {
+                'default': 'org.gnome.Papers.desktop',
+                'method': 'xdg-open',
+                'sample': str(sample),
+                'sample_size': sample.stat().st_size,
+                'width': width,
+                'height': height,
+                'note': 'Parent reviews 02-papers.png for document content vs an error page.',
+            },
         )
     finally:
         user_command('sh', '-c', 'pkill -x papers || pkill -f papers || true')

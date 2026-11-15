@@ -4,7 +4,6 @@ The neighbour is a network namespace joined to the guest by a veth pair, so the
 check needs no QEMU networking and its traffic crosses the real input hook.
 """
 
-import json
 from pathlib import Path
 import socket
 import struct
@@ -13,7 +12,7 @@ import threading
 import time
 
 from . import dispatch
-from .guest import run, wait_until
+from .guest import record, run, wait_until
 
 NAMESPACE = 'verify-peer'
 HOST_LINK = 'verify-host'
@@ -305,23 +304,20 @@ def check():
         run('ip', 'link', 'set', HOST_LINK, 'name', 'tailscale0')
         run('ip', 'link', 'set', 'tailscale0', 'up')
         wait_until('Inbound TCP on tailscale0', lambda: connect(HOST_V4, namespace=True) == 'open', timeout=20)
-        Path('/run/verify/network-policy.json').write_text(
-            json.dumps(
-                {
-                    'inbound_from_neighbour': inbound,
-                    'outbound_to_neighbour': dict.fromkeys((PEER_V4, PEER_V6), 'open'),
-                    'local_rule_opened': opened,
-                    'inbound_with_broken_include': broken,
-                    'inbound_while_stopped': stopped,
-                    'igmp_query_answered': igmp_answered,
-                    'mdns_admitted_from_neighbour': received,
-                    'neighbour_name_resolved_over_mdns': True,
-                    'own_hostname_published': published,
-                    'inbound_on_tailscale0': 'open',
-                },
-                indent=2,
-            )
-            + '\n'
+        record(
+            'network-policy',
+            {
+                'inbound_from_neighbour': inbound,
+                'outbound_to_neighbour': dict.fromkeys((PEER_V4, PEER_V6), 'open'),
+                'local_rule_opened': opened,
+                'inbound_with_broken_include': broken,
+                'inbound_while_stopped': stopped,
+                'igmp_query_answered': igmp_answered,
+                'mdns_admitted_from_neighbour': received,
+                'neighbour_name_resolved_over_mdns': True,
+                'own_hostname_published': published,
+                'inbound_on_tailscale0': 'open',
+            },
         )
     finally:
         for process in processes:

@@ -6,7 +6,7 @@ import shutil
 import subprocess
 import time
 from . import dispatch
-from .guest import run, user_command, wait_until
+from .guest import record, run, user_command, wait_until
 from tools.verification.images import png_dimensions
 from tools.verification.constants import LOCAL_PROBES
 
@@ -63,7 +63,7 @@ def prepare():
             return None
 
     settings = wait_until('Dux settings IPC ready', loaded_settings, timeout=60)
-    Path('/run/verify/suspend-settings.json').write_text(json.dumps(settings, indent=2) + '\n')
+    record('suspend-settings', settings)
     assert settings == expected, settings
     # virtio-9p does not recover after S3 in this VM. Keep probes and evidence
     # on the guest disk until a reboot restores the host share.
@@ -106,18 +106,17 @@ def evidence(stage, locked):
         assert events and 'unlocking session' not in events[-1], events
     else:
         assert not events or 'unlocking session' in events[-1], events
-    record = {'session': state, 'niri_lock_events': events}
+    report = {'session': state, 'niri_lock_events': events}
     if stage != 'before':
         initial = json.loads((LOCAL_PROBES / 'initial.json').read_text())
         boot_id = Path('/proc/sys/kernel/random/boot_id').read_text().strip()
         assert boot_id == initial['boot_id'], 'Resume changed the kernel boot ID'
         transitions = kernel_events()[len(initial['kernel_events']) :]
         assert len(transitions) == 2 and 'entry (deep)' in transitions[0] and 'exit' in transitions[1], transitions
-        record.update(boot_id=boot_id, kernel_events=transitions)
+        report.update(boot_id=boot_id, kernel_events=transitions)
     name = f'03-suspend-{stage}'
-    destination = Path('/run/verify', name + '.json')
-    destination.write_text(json.dumps(record, indent=2) + '\n')
-    print(json.dumps(record), flush=True)
+    record(name, report)
+    print(json.dumps(report), flush=True)
     if stage != 'before':
         return
     # Capture cannot qualify the lock: the VM's post-resume GL path can stall.
@@ -134,11 +133,11 @@ def evidence(stage, locked):
             name + '.png',
             timeout=10,
         )
-        record['screenshot_dimensions'] = png_dimensions(Path('/run/verify') / (name + '.png'))
+        report['screenshot_dimensions'] = png_dimensions(Path('/run/verify') / (name + '.png'))
     except Exception as error:
-        record['screenshot_error'] = f'{type(error).__name__}: {error}'
+        report['screenshot_error'] = f'{type(error).__name__}: {error}'
         print(f'Optional screenshot unavailable: {error}', flush=True)
-    destination.write_text(json.dumps(record, indent=2) + '\n')
+    record(name, report)
 
 
 def wake_display():
