@@ -207,7 +207,7 @@ class IsoChecksumsTests(unittest.TestCase):
             gh.write_text(f"#!/bin/sh\nprintf '%s' '{json.dumps(dict(tag_name=TAG, draft=False, prerelease=False))}'\n")
             gh.chmod(0o755)
             with (
-                patch.dict(os.environ, environment | {'PATH': bindir + os.environ['PATH']}),
+                patch.dict(os.environ, environment | {'PATH': bindir + os.pathsep + os.environ['PATH']}),
                 patch.object(sys, 'argv', arguments),
             ):
                 # The read-only GitHub lookup runs for real against a fake gh;
