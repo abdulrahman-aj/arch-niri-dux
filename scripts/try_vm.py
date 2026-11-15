@@ -197,12 +197,14 @@ def ask_disk_size(ram_gib):
     """
     auto_swap = ram_gib + storage.AUTO_SWAP_PAD_GIB
     minimum = storage.min_disk_gib(auto_swap)
+    # Big-RAM VMs need more than 48 GiB, and Enter must never pick a refused size.
+    default = max(DEFAULT_DISK_GIB, minimum)
     while True:
-        answer = gum_input(f'Disk (at least {minimum} GiB)', 'Positive whole number', DEFAULT_DISK_GIB)
+        answer = gum_input(f'Disk (at least {minimum} GiB)', 'Positive whole number', default)
         if answer is None:
             return None
         answer = answer.strip()
-        size = DEFAULT_DISK_GIB if not answer else (int(answer) if answer.isdigit() and int(answer) > 0 else None)
+        size = default if not answer else (int(answer) if answer.isdigit() and int(answer) > 0 else None)
         if size is None:
             print('Enter a positive whole number.')
             continue

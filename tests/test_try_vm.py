@@ -98,6 +98,9 @@ class TryVmTests(unittest.TestCase):
             self.assertEqual(try_vm.ask_disk_size(8), 39)
         with patch('try_vm.gum_input', side_effect=['']):
             self.assertEqual(try_vm.ask_disk_size(4), try_vm.DEFAULT_DISK_GIB)
+        with patch('try_vm.gum_input', side_effect=['']):
+            # 32 GiB RAM needs 34 GiB swap beside the reserve; the default grows to fit.
+            self.assertEqual(try_vm.ask_disk_size(32), 63)
         with patch('try_vm.gum_input', return_value=None):
             self.assertIsNone(try_vm.ask_disk_size(4))
         with patch('try_vm.gum_input', side_effect=['abc', '0', '48']):
