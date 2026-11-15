@@ -65,8 +65,11 @@ else
     integration_epoch=$(cat /state/integration-epoch)
     runuser -u nobody -- python /source/scripts/package_build.py /source \
         /build/integration-work /build/integration-packages --epoch "$integration_epoch"
+    # Persist on the builder disk, whose registered state is collected by GC.
+    # Unlike the host 9p share, ext4 supports the unprivileged builder owner.
+    install -d -o nobody -g nobody /build/dux-app-cache
     runuser -u nobody -- python /source/scripts/dux_apps.py /source \
-        /build/integration-work /build/integration-packages
+        /build/integration-work /build/integration-packages --cache /build/dux-app-cache
     # Development builds have no release secret. Use a fresh build-only identity;
     # only its public key enters the development ISO.
     rm -rf /build/development-signing
