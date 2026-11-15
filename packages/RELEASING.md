@@ -9,9 +9,10 @@ edits to files listed in the integration recipe's `backup` array through its
 ## Publish
 
 1. Change `pkgver`/`pkgrel` in `integration/PKGBUILD` and submit a reviewed PR.
-   Dux app updates arrive as PRs from the `dux-apps.yml` workflow. GitHub does
-   not run CI on PRs created by Actions; close and reopen one to run it. That
-   workflow needs "Allow GitHub Actions to create and approve pull requests".
+   Dux app updates arrive as PRs from the `dux-apps.yml` workflow, opened by a
+   private GitHub App (contents and pull requests: write, this repository only)
+   so CI runs on them; GITHUB_TOKEN-created PRs get none. The App's client ID is
+   the `DUX_APPS_CLIENT_ID` variable and its key the `DUX_APPS_PRIVATE_KEY` secret.
    A merged app update ships with the next integration version.
 2. Run `make lock` when refreshing inputs, then `make test`, `make iso-development`, and `make verify ARGS='--slow'`
    on the candidate (`--slow` includes the Dux updater stage, which releases must qualify). `make lock` moves the Arch archive date and the vendored Dux files forward together.
