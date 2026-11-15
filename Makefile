@@ -18,7 +18,7 @@ verify-release:
 verify-hibernate:
 	./scripts/in-dev-shell python3 scripts/verify_hibernate.py $(ARGS)
 build-test:
-	./scripts/in-dev-shell python3 -m unittest discover -s scripts -p 'build_test.py'
+	./scripts/in-dev-shell python3 -m unittest discover -s tests -p 'build_test.py'
 # One dev-shell entry per target; in-dev-shell passes through inside it.
 lint:
 	./scripts/in-dev-shell $(MAKE) --no-print-directory lint-in-dev
@@ -32,7 +32,7 @@ fmt:
 	./scripts/in-dev-shell ruff format . desktop/usr/bin/arch-niri-dux-keyring-recover
 	./scripts/in-dev-shell python3 scripts/lint_shell.py --format
 test: lint
-	./scripts/in-dev-shell bash -c 'python3 -m unittest discover -s tests && python3 -m unittest discover -s scripts -p build_test.py'
+	./scripts/in-dev-shell python3 -m unittest discover -s tests -p '*test*.py'
 verify-alongside:
 	./scripts/in-dev-shell python3 scripts/verify_alongside.py $(ARGS)
 provision-alongside:
