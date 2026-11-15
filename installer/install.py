@@ -3,7 +3,6 @@
 
 import argparse
 from dataclasses import dataclass
-import hashlib
 import json
 import os
 from pathlib import Path
@@ -12,23 +11,23 @@ import shutil
 import subprocess
 import sys
 import tempfile
-import textwrap
 import threading
 import time
 
 if __package__:
+    from . import payload
     from . import storage
+    from . import wizard
 else:
+    import payload
     import storage
+    import wizard
 
 run = storage.run
 
 
-SHARE = Path('/usr/local/share/arch-niri-dux')
-REPO = Path('/run/archiso/bootmnt/repo')
 TARGET = Path('/mnt/arch-niri-dux')
 MAPPER = 'dux-root'
-GIB = 1024**3
 SUBVOLUMES = {
     '@': '/',
     '@home': '/home',
@@ -36,51 +35,6 @@ SUBVOLUMES = {
     '@cache': '/var/cache/pacman/pkg',
     '@snapshots': '/.snapshots',
 }
-
-
-@dataclass(repr=False)
-class Settings:
-    disk: str
-    username: str
-    hostname: str
-    timezone: str
-    keymap: str
-    passphrase: str
-    password: str
-    swap_gib: int | None = None
-    mode: str = 'erase'
-    free_region: list[int] | None = None
-    existing_boot: str | None = None
-
-    def validate(self):
-        if not re.fullmatch(r'/dev/(?:sd[a-z]+|vd[a-z]+|nvme[0-9]+n[0-9]+|mmcblk[0-9]+)', self.disk):
-            raise ValueError('Select a whole physical disk, not a partition or loop device.')
-        if self.mode not in ('erase', 'alongside'):
-            raise ValueError('Unknown installation mode.')
-        if self.mode == 'alongside':
-            if (
-                not isinstance(self.free_region, list)
-                or len(self.free_region) != 2
-                or any(type(value) is not int or value < 1 for value in self.free_region)
-            ):
-                raise ValueError('Select an exact free region [first sector, last sector].')
-            if not isinstance(self.existing_boot, str) or not re.fullmatch(r'[0-9A-Fa-f]{4}', self.existing_boot):
-                raise ValueError('Select an existing firmware boot entry.')
-        elif self.free_region is not None or self.existing_boot is not None:
-            raise ValueError('Alongside settings cannot be used for disk erasure.')
-        validate_username(self.username)
-        validate_hostname(self.hostname)
-        zone = (Path('/usr/share/zoneinfo') / self.timezone).resolve()
-        if not zone.is_relative_to('/usr/share/zoneinfo') or not zone.is_file():
-            raise ValueError('Unknown timezone.')
-        if not re.fullmatch(r'[A-Za-z0-9_-]{1,64}', self.keymap):
-            raise ValueError('Invalid console keymap name.')
-        if self.keymap != 'us' and not any(Path('/usr/share/kbd/keymaps').rglob(self.keymap + '.map.gz')):
-            raise ValueError('Unknown console keymap.')
-        for name, value in [('Disk passphrase', self.passphrase), ('Login password', self.password)]:
-            validate_secret(value, name)
-        if self.swap_gib is not None and (type(self.swap_gib) is not int or self.swap_gib < 0):
-            raise ValueError('Swap size must be a nonnegative whole number of GiB, or null for Auto.')
 
 
 @dataclass
@@ -93,329 +47,8 @@ class InstallationState:
         self.installation_started = True
 
 
-class Cancelled(Exception):
-    pass
-
-
-def validate_username(value):
-    if not re.fullmatch(r'[a-z_][a-z0-9_-]{0,30}', value) or value in {'root', 'nobody', 'alpm'}:
-        raise ValueError('Use a non-system lowercase username (letters, digits, underscore, dash).')
-
-
-def validate_hostname(value):
-    if not re.fullmatch(r'[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?', value):
-        raise ValueError('Use a hostname of 1–63 lowercase letters, digits or dashes.')
-
-
-def validate_secret(value, name):
-    if len(value) < 8 or any(char in value for char in '\n\r\0'):
-        raise ValueError(f'{name} must have at least 8 characters and no line breaks.')
-
-
-def memory_gib():
-    total = next(line for line in Path('/proc/meminfo').read_text().splitlines() if line.startswith('MemTotal:'))
-    return (int(total.split()[1]) * 1024 + GIB - 1) // GIB
-
-
-def swap_size(swap_gib, disk_bytes):
-    size = memory_gib() + storage.AUTO_SWAP_PAD_GIB if swap_gib is None else swap_gib
-    # Leave room for the ESP, LUKS metadata and a usable desktop installation.
-    maximum = storage.max_swap_gib(disk_bytes // GIB)
-    if size and size > maximum:
-        raise ValueError(
-            f'{size} GiB swap will not fit while leaving 24 GiB for the system. '
-            f'Choose at most {max(0, maximum)} GiB, no swap, or a larger disk.'
-        )
-    return size
-
-
-# Interactive presentation. Only the wizard and the live progress below touch the
-# console; automated --config runs keep plain, parseable output.
-ACCENT = '6'
-WARNING = '1'
-DIM = '8'
-# Every element shares one left margin, so text and widgets line up.
-PAD = '0 0 0 2'
+# Interactive runs send every command's output here while LiveProgress owns the console.
 LOG = Path('/var/log/arch-niri-install.log')
-
-
-def gum(*args, stdin=None, show=False):
-    """Run a gum widget and return what it printed, or let it print to the console when show is set.
-    Esc or Ctrl-C cancels the installation."""
-    stdout = None if show else subprocess.PIPE
-    result = subprocess.run(['gum', *args], input=stdin, text=True, stdout=stdout, check=False)
-    if result.returncode != 0:
-        raise Cancelled()
-    return '' if show else result.stdout.removesuffix('\n')
-
-
-def say(text, color=None, bold=False):
-    args = ['style', '--padding', PAD]
-    if color:
-        args += ['--foreground', color]
-    if bold:
-        args.append('--bold')
-    gum(*args, text, show=True)
-
-
-def screen(title, intro=''):
-    """Clear the console and start a wizard screen under the installer banner."""
-    print('\x1b[H\x1b[2J\n', end='', flush=True)
-    say('Arch + Niri + Dux', ACCENT, bold=True)
-    say(title, bold=True)
-    if intro:
-        say(intro, DIM)
-    print()
-
-
-def choose(label, choices, default=None, search=False):
-    if not choices:
-        raise ValueError(f'No choices available for {label.lower()}.')
-    if default in choices:
-        choices = [default] + [choice for choice in choices if choice != default]
-    style = ['--header', label, '--header.foreground', ACCENT, '--padding', PAD]
-    if search:
-        # Word-start matching: "amm" finds Asia/Amman, "ber" Europe/Berlin; fuzzy ranks those poorly.
-        widget = ['filter', *style, '--placeholder', 'Type to search', '--height', '12', '--no-fuzzy']
-        widget += ['--indicator.foreground', ACCENT, '--match.foreground', ACCENT]
-    else:
-        widget = ['choose', *style, '--cursor.foreground', ACCENT, '--selected.foreground', ACCENT]
-    selected = gum(*widget, stdin='\n'.join(choices) + '\n')
-    if selected not in choices:
-        raise ValueError('The picker returned an invalid selection.')
-    return selected
-
-
-def show_error(error):
-    say(str(error), WARNING)
-
-
-def prompt(label, default='', validate=None, placeholder=''):
-    while True:
-        answer = gum(
-            'input',
-            '--header',
-            label,
-            '--header.foreground',
-            ACCENT,
-            '--padding',
-            PAD,
-            '--value',
-            default,
-            '--placeholder',
-            placeholder,
-        ).strip()
-        try:
-            if validate:
-                validate(answer)
-            return answer
-        except ValueError as error:
-            show_error(error)
-
-
-def secret(label):
-    while True:
-        first = gum('input', '--password', '--header', label, '--header.foreground', ACCENT, '--padding', PAD)
-        try:
-            validate_secret(first, label)
-            repeat = gum(
-                'input',
-                '--password',
-                '--header',
-                'Repeat ' + label.lower(),
-                '--header.foreground',
-                ACCENT,
-                '--padding',
-                PAD,
-            )
-            if first != repeat:
-                raise ValueError('Passwords did not match. Try again.')
-            return first
-        except ValueError as error:
-            show_error(error)
-
-
-def done(label, value):
-    say(f'{label}: {value}', DIM)
-
-
-def table(rows):
-    width = max(len(key) for key, _ in rows)
-    return '\n'.join(f'{key.ljust(width)}  {value}' for key, value in rows)
-
-
-def boot_name(snapshot, number):
-    return storage.entry_label(snapshot['entries'][number])
-
-
-def disk_label(disk):
-    return storage.disk_identity(disk)
-
-
-def wizard(state):
-    if not shutil.which('gum'):
-        raise ValueError('The live installer is missing gum, required for its menus.')
-    if not sys.stdin.isatty():
-        raise ValueError('The guided installer needs the console; automated runs use --config.')
-    rejections = storage.disk_rejections()
-    disks = [disk for disk, reason in rejections if reason is None]
-    if not disks:
-        detail = storage.describe_rejections(rejections)
-        raise ValueError(
-            f'No unused writable disk of at least {storage.MIN_DISK_BYTES // storage.GIB} GiB found. '
-            'TTY2 is available for recovery.' + (f'\n{detail}' if detail else '')
-        )
-    labels = {disk_label(disk): disk for disk in disks}
-    boot_map = storage.boot_entry_nodes(disks)
-    screen(
-        'Welcome',
-        'Installs the full desktop from this USB; no network needed. Secure Boot must be disabled.\n'
-        'Esc cancels at any point before the final confirmation. TTY2 has a root shell.',
-    )
-    for disk in disks:
-        say(disk_label(disk), bold=True)
-        say(textwrap.indent(storage.describe_contents(disk, boot_map), '  '))
-    print()
-    disk = labels[choose('Install on which disk?', list(labels))]
-    erase = f'Erase disk: replace everything on {disk["name"]}'
-    alongside = 'Alongside: use existing free space and keep every partition'
-    screen('Storage', disk_label(disk))
-    snapshot = None
-    region = None
-    boot_number = None
-    while choose('How should this disk be used?', [erase, alongside]) == alongside:
-        try:
-            snapshot = storage.alongside_snapshot(disk['name'])
-            break
-        except ValueError as error:
-            # The refusal names what this disk lacks; Erase disk is still on offer.
-            show_error(error)
-    if snapshot:
-        sector = snapshot['table']['sectorsize']
-        regions = {
-            f'{(last - first + 1) * sector / GIB:.1f} GiB free (sectors {first}–{last})': [first, last]
-            for first, last in snapshot['regions']
-        }
-        region = regions[choose('Install into which unallocated region?', list(regions))]
-        boots = {f'{boot_name(snapshot, number)} (Boot{number})': number for number in snapshot['boots']}
-        boot_number = boots[choose('Which existing OS should stay in the Limine boot menu?', list(boots))]
-        storage.validate_existing_loader(snapshot['boots'][boot_number])
-    screen('Keyboard and time zone')
-    keymaps = run('localectl', 'list-keymaps', capture=True).splitlines()
-    keymap = choose('Keyboard layout', keymaps, default='us', search=True)
-    run('loadkeys', keymap)
-    done('Keyboard layout', keymap)
-    timezones = run('timedatectl', 'list-timezones', capture=True).splitlines()
-    timezone = choose('Time zone', timezones, default='Asia/Amman', search=True)
-    done('Time zone', timezone)
-    screen('Your account')
-    username = prompt('Username', validate=validate_username, placeholder='lowercase letters, digits, - or _')
-    done('Username', username)
-    hostname = prompt('Computer name (hostname)', 'dux', validate=validate_hostname)
-    done('Computer name', hostname)
-    state.confirmed_layout = snapshot
-    available_bytes = (region[1] - region[0] + 1) * snapshot['table']['sectorsize'] if snapshot else int(disk['size'])
-    screen('Swap and hibernation', 'Swap lives in an encrypted file; hibernation needs at least as much swap as RAM.')
-    while True:
-        automatic = f'Auto: {memory_gib() + 2} GiB encrypted swap with hibernation'
-        choice = choose('Swap size', [automatic, 'Custom size', 'No swap and no hibernation'])
-        if choice == automatic:
-            swap_gib = None
-        elif choice == 'Custom size':
-
-            def validate_size(value):
-                if not value.isdecimal() or int(value) < 1:
-                    raise ValueError('Enter a whole number of GiB greater than zero.')
-
-            swap_gib = int(prompt('Swap size in GiB', str(memory_gib() + 2), validate_size))
-        else:
-            swap_gib = 0
-        try:
-            size = swap_size(swap_gib, available_bytes)
-            break
-        except ValueError as error:
-            show_error(error)
-    state.confirmed_device = storage.require_disk(disk['name'])
-    screen(
-        'Passwords',
-        'The disk passphrase unlocks the encrypted disk at every boot.\n'
-        'The login password is for your account and for sudo. Each needs at least 8 characters.',
-    )
-    passphrase = secret('Disk passphrase')
-    done('Disk passphrase', 'set')
-    password = secret('Login password')
-    settings = Settings(
-        disk['name'],
-        username,
-        hostname,
-        timezone,
-        keymap,
-        passphrase,
-        password,
-        swap_gib=swap_gib,
-        mode='alongside' if snapshot else 'erase',
-        free_region=region,
-        existing_boot=boot_number,
-    )
-    settings.validate()
-    if storage.require_disk(disk['name']) != state.confirmed_device:
-        raise ValueError('Disk identity changed while entering installation settings.')
-    swap = f'{size} GiB encrypted, hibernation on' if size else 'none, hibernation off'
-    rows = [
-        ('Disk', disk_label(disk)),
-        ('Account', f'{settings.username} on {settings.hostname}'),
-        ('Keyboard', settings.keymap),
-        ('Time zone', settings.timezone),
-        ('Swap', swap),
-    ]
-    if snapshot:
-        plan = storage.alongside_plan(settings, snapshot)
-        title = 'Alongside: every existing partition is kept'
-        rows.append(('Keep booting', boot_name(snapshot, boot_number)))
-        changes = 'New partitions (Limine becomes the firmware default):\n' + '\n'.join(
-            f'  {storage.partition_name(settings.disk, n)}  sectors {a}–{b}, '
-            f'{(b - a + 1) * snapshot["table"]["sectorsize"] / GIB:.2f} GiB, {label}'
-            for n, a, b, _kind, label in plan
-        )
-        border = ACCENT
-        action = 'Create partitions and install'
-    else:
-        title = f'ERASE ALL DATA on {settings.disk}'
-        rows.append(('Layout', f'{storage.ESP_GIB} GiB EFI + encrypted Btrfs with a separate /home'))
-        changes = 'Destroyed: everything currently on this disk\n' + textwrap.indent(
-            storage.describe_contents(disk, boot_map), '  '
-        )
-        border = WARNING
-        action = 'Erase and install'
-    if size and size < memory_gib():
-        changes += '\nWarning: swap is smaller than RAM; hibernation may fail under heavy memory use.'
-    screen('Review')
-    say(title, border, bold=True)
-    gum(
-        'style',
-        '--border',
-        'normal',
-        '--border-foreground',
-        border,
-        '--padding',
-        '0 1',
-        '--margin',
-        PAD,
-        table(rows) + '\n\n' + changes,
-        show=True,
-    )
-    print()
-    confirmed = subprocess.run(
-        ['gum', 'confirm', '--padding', PAD, '--default=false', '--affirmative', action, '--negative', 'Cancel']
-        + ['--selected.background', border, '--prompt.foreground', border, 'Start the installation?'],
-        check=False,
-    )
-    if confirmed.returncode != 0:
-        raise Cancelled()
-    settings.swap_gib = size
-    return settings
-
-
 STEPS = 6
 
 
@@ -468,11 +101,6 @@ class PacmanProgress:
         if self.total:
             return f'{self.installed} of {self.total} packages'
         return 'preparing'
-
-
-def clock(seconds):
-    minutes, seconds = divmod(int(seconds), 60)
-    return f'{minutes}:{seconds:02d}'
 
 
 def visible(line):
@@ -537,7 +165,7 @@ class LiveProgress:
     def frame(self, tick, failed=False):
         now = time.monotonic()
         width = max(40, os.get_terminal_size(self.tty.fileno()).columns - 1)
-        lines = ['', f'  \x1b[1;36mInstalling Arch + Niri + Dux\x1b[0m  {clock(now - self.started)}', '']
+        lines = ['', f'  \x1b[1;36mInstalling Arch + Niri + Dux\x1b[0m  {wizard.clock(now - self.started)}', '']
         for index, (number, label, began) in enumerate(self.steps):
             current = index == len(self.steps) - 1
             ended = now if current else self.steps[index + 1][2]
@@ -547,7 +175,7 @@ class LiveProgress:
                 mark = '\x1b[31mx\x1b[0m'
             else:
                 mark = '\x1b[36m' + self.SPINNER[tick % len(self.SPINNER)] + '\x1b[0m'
-            lines.append(f'  {mark} {number}/{STEPS}  {label.ljust(46)} {clock(ended - began)}')
+            lines.append(f'  {mark} {number}/{STEPS}  {label.ljust(46)} {wizard.clock(ended - began)}')
             if current and self.pacman:
                 fraction = self.pacman.fraction()
                 bar = 36
@@ -600,7 +228,7 @@ class LiveProgress:
             pass
         self.log.close()
         self.reader.close()
-        if kind is not None and kind is not Cancelled:
+        if kind is not None and kind is not wizard.Cancelled:
             tail = [visible(line) for line in self.log_path.read_text(errors='replace').splitlines()]
             tail = [line for line in tail if line.strip()][-15:]
             print('\nLast lines of the log:')
@@ -609,58 +237,54 @@ class LiveProgress:
         return False
 
 
-def finish(settings, packages, seconds):
-    """Say what was installed, then reboot when the user is ready."""
-    screen('Installation complete', f'Installed {packages} packages in {clock(seconds)}.')
-    swap = f'{settings.swap_gib} GiB encrypted, hibernation on' if settings.swap_gib else 'none'
-    rows = [
-        ('Desktop', 'Niri with Dux, from this USB'),
-        ('Disk', f'{settings.disk}, encrypted Btrfs'),
-        ('Account', f'{settings.username} on {settings.hostname}'),
-        ('Swap', swap),
-        ('Recovery', 'snapshot "Fresh installation" in the Limine boot menu'),
-    ]
-    gum(
-        'style',
-        '--border',
-        'normal',
-        '--border-foreground',
-        ACCENT,
-        '--padding',
-        '0 1',
-        '--margin',
-        PAD,
-        table(rows),
-        show=True,
-    )
-    say(
-        'At boot, type the disk passphrase, then log in as '
-        f'{settings.username}.\nWi-Fi and updates are set up from the desktop.'
-    )
-    print()
-    reboot = subprocess.run(
-        ['gum', 'confirm', '--padding', PAD, '--affirmative', 'Reboot', '--negative', 'Stay in the live system']
-        + [
-            '--selected.background',
-            ACCENT,
-            '--prompt.foreground',
-            ACCENT,
-            'Remove the USB, then press Enter to reboot.',
-        ],
-        check=False,
-    )
-    if reboot.returncode == 0:
-        run('systemctl', 'reboot')
-    else:
-        print('Type reboot when you are ready.')
-
-
 def interactive(state):
-    settings = wizard(state)
+    settings = wizard.ask(state)
     started = time.monotonic()
     with LiveProgress() as progress:
         packages = install(settings, state, progress)
-    finish(settings, packages, time.monotonic() - started)
+    wizard.finish(settings, packages, time.monotonic() - started)
+
+
+def x11_keyboard_layout(keymap, map_path=Path('/usr/share/systemd/kbd-model-map')):
+    """Map a console keymap to (layout, model, variant, options) for the login stack.
+
+    Niri leaves its xkb section empty so it inherits systemd's X11 keyboard
+    setting; without this mapping a non-US console keymap would still type US
+    at the login screen. The conversion table is the same kbd-model-map that
+    localectl set-keymap consults.
+    """
+    try:
+        text = Path(map_path).read_text()
+    except OSError:
+        return None
+    for line in text.splitlines():
+        stripped = line.strip()
+        if not stripped or stripped.startswith('#'):
+            continue
+        fields = stripped.split()
+        if len(fields) < 5 or fields[0] != keymap:
+            continue
+        layout, model, variant, options = fields[1], fields[2], fields[3], fields[4]
+        return (layout, model, None if variant == '-' else variant, None if options == '-' else options)
+    return None
+
+
+def xorg_keyboard_conf(keymap, layout, model, variant=None, options=None):
+    """Render the localectl-equivalent X11 keyboard file for the target."""
+    lines = [
+        f'# Generated by arch-niri-install from console keymap {keymap}.',
+        'Section "InputClass"',
+        '        Identifier "system-keyboard"',
+        '        MatchIsKeyboard "on"',
+        f'        Option "XkbLayout" "{layout}"',
+        f'        Option "XkbModel" "{model}"',
+    ]
+    if variant:
+        lines.append(f'        Option "XkbVariant" "{variant}"')
+    if options:
+        lines.append(f'        Option "XkbOptions" "{options}"')
+    lines.append('EndSection')
+    return '\n'.join(lines) + '\n'
 
 
 def write(relative, contents, mode=0o644):
@@ -677,13 +301,13 @@ def write_keyboard_layout(keymap):
     setting. The console KEYMAP alone leaves that setting at US, so a non-US
     password typed at the login screen would use the wrong layout.
     """
-    mapping = storage.x11_keyboard_layout(keymap)
+    mapping = x11_keyboard_layout(keymap)
     if mapping is None:
         print(f"Warning: no X11 layout mapping for console keymap '{keymap}'; the login screen will use US.")
         layout, model, variant, options = 'us', 'pc105', None, None
     else:
         layout, model, variant, options = mapping
-    write('/etc/X11/xorg.conf.d/00-keyboard.conf', storage.xorg_keyboard_conf(keymap, layout, model, variant, options))
+    write('/etc/X11/xorg.conf.d/00-keyboard.conf', xorg_keyboard_conf(keymap, layout, model, variant, options))
 
 
 def register_alongside_boot(settings, snapshot, plan):
@@ -727,87 +351,6 @@ def recovery_fstab(text):
     return '\n'.join(lines) + '\n'
 
 
-def check_installation_clock():
-    """Refuse when the system clock predates the ISO build; stale clocks mimic expired keys."""
-    try:
-        build_date = int((SHARE / 'iso-build-date').read_text().strip())
-    except (OSError, ValueError):
-        raise ValueError('The ISO build date is missing or invalid; refusing to install from this medium.')
-    now = time.time()
-    if now < build_date:
-        iso = time.strftime('%Y-%m-%d %H:%M:%S UTC', time.gmtime(build_date))
-        clock = time.strftime('%Y-%m-%d %H:%M:%S UTC', time.gmtime(now))
-        raise ValueError(
-            f'System clock ({clock}) is earlier than the ISO build date ({iso}). Fix the system clock and retry.'
-        )
-
-
-def verify_payload_signatures(config, database, repository, filenames):
-    """Verify every resolved package file against the install keyring before the disk is touched.
-
-    pacman --print resolves names only, so without this the first pacstrap is
-    the first real signature check, after partitioning. Checking the files in
-    place exercises the same keyring and expiry enforcement the pacstrap will
-    use, which plain gpg verification would still accept. Nothing is copied,
-    and the medium is never written.
-    """
-    try:
-        run(
-            'pacman',
-            '--config',
-            str(config),
-            '--dbpath',
-            str(database),
-            '--upgrade',
-            '--print',
-            '--print-format',
-            '%f',
-            *(str(repository / name) for name in filenames),
-        )
-    except subprocess.CalledProcessError as error:
-        raise ValueError(
-            'Package signature preflight failed; the install keyring cannot verify the offline payload. '
-            'A signing key may have expired or is missing; check the system clock and use a newer ISO.'
-        ) from error
-
-
-def verify_repository(repository):
-    manifest = repository / 'SHA256SUMS'
-    if not manifest.is_file():
-        raise ValueError('Offline payload checksum manifest is missing.')
-    listed = set()
-    for line in manifest.read_text().splitlines():
-        if not line:
-            continue
-        checksum, filename = line.split(maxsplit=1)
-        filename = filename.lstrip('*')
-        path = repository / filename
-        if not re.fullmatch(r'[a-f0-9]{64}', checksum) or not path.resolve().is_relative_to(repository.resolve()):
-            raise ValueError('Invalid offline payload manifest.')
-        if not path.is_file():
-            raise ValueError(f'Offline payload file is missing: {filename}')
-        with path.open('rb') as stream:
-            actual_checksum = hashlib.file_digest(stream, 'sha256').hexdigest()
-        if actual_checksum != checksum:
-            raise ValueError(f'Offline payload checksum failed: {filename}')
-        listed.add(filename)
-    packages = {file.name for file in repository.glob('*.pkg.tar.*') if not file.name.endswith('.sig')}
-    databases = {file.name for file in repository.glob('*.db')}
-    if not packages or not databases or not (packages | databases).issubset(listed):
-        raise ValueError('Offline manifest does not cover every package and repository database.')
-
-
-def offline_pacman_config(repository, database):
-    # The database is assembled on the builder, without a release signing key.
-    # Require signatures on every package even when its metadata is rewritten.
-    return (
-        '[options]\nArchitecture = auto\nSigLevel = Required DatabaseNever TrustedOnly\n'
-        'LocalFileSigLevel = Required TrustedOnly\n'
-        f'GPGDir = {SHARE / "install-keyring"}\n'
-        f'[{database}]\nServer = file://{repository}\n'
-    )
-
-
 def install(settings, state=None, progress=None):
     """Install offline onto the confirmed disk and return how many packages were installed."""
     state = state if state is not None else InstallationState()
@@ -821,14 +364,14 @@ def install(settings, state=None, progress=None):
         raise ValueError(f'/dev/mapper/{MAPPER} is already in use.')
     if os.path.ismount(TARGET):
         raise ValueError('Installation mountpoint is already mounted.')
-    packages_file = SHARE / 'packages.target'
+    packages_file = payload.SHARE / 'packages.target'
     packages = [line.split('#', 1)[0].strip() for line in packages_file.read_text().splitlines()]
     packages = [package for package in packages if package]
     if not packages or any(not re.fullmatch(r'[a-zA-Z0-9@+_.-]+', package) for package in packages):
         raise ValueError('Invalid or missing target package list.')
     progress.step(1, 'Checking the offline package payload')
-    check_installation_clock()
-    verify_repository(REPO)
+    payload.check_installation_clock()
+    payload.verify_repository(payload.REPO)
     for name in (('sfdisk', 'efibootmgr') if settings.mode == 'alongside' else ()) + (
         'sgdisk',
         'wipefs',
@@ -854,7 +397,7 @@ def install(settings, state=None, progress=None):
         storage.validate_existing_loader(snapshot['boots'][settings.existing_boot.upper()])
         available_bytes = (settings.free_region[1] - settings.free_region[0] + 1) * snapshot['table']['sectorsize']
         print('Create partitions (inclusive logical sectors):', plan, flush=True)
-    size = swap_size(settings.swap_gib, available_bytes)
+    size = storage.swap_size(settings.swap_gib, available_bytes)
     subvolumes = dict(SUBVOLUMES)
     if size:
         subvolumes['@swap'] = '/swap'
@@ -866,8 +409,8 @@ def install(settings, state=None, progress=None):
     with tempfile.TemporaryDirectory(prefix='dux-install-', dir='/run') as staging:
         stage = Path(staging)
         offline_conf = stage / 'pacman.conf'
-        database = next(REPO.glob('*.db')).stem
-        offline_conf.write_text(offline_pacman_config(REPO, database))
+        database = next(payload.REPO.glob('*.db')).stem
+        offline_conf.write_text(payload.offline_pacman_config(payload.REPO, database))
         package_db = stage / 'db'
         package_db.mkdir()
         resolved = run(
@@ -888,10 +431,10 @@ def install(settings, state=None, progress=None):
             capture=True,
         )
         for filename in resolved.splitlines():
-            if '.pkg.tar.' in filename and not (REPO / filename).is_file():
+            if '.pkg.tar.' in filename and not (payload.REPO / filename).is_file():
                 raise ValueError(f'Offline dependency is missing: {filename}')
-        verify_payload_signatures(
-            offline_conf, package_db, REPO, [line for line in resolved.splitlines() if '.pkg.tar.' in line]
+        payload.verify_payload_signatures(
+            offline_conf, package_db, payload.REPO, [line for line in resolved.splitlines() if '.pkg.tar.' in line]
         )
         if storage.require_disk(settings.disk) != original_device:
             raise ValueError('Disk identity changed during package preflight; refusing to erase it.')
@@ -1023,13 +566,13 @@ def main():
         if args.config:
             if args.config.stat().st_mode & 0o077:
                 parser.error('The input JSON must be private (chmod 600).')
-            settings = Settings(**json.loads(args.config.read_text()))
+            settings = wizard.Settings(**json.loads(args.config.read_text()))
             if args.confirm_disk != settings.disk:
                 parser.error('--config requires --confirm-disk with the exact target disk path.')
             install(settings, state)
         else:
             interactive(state)
-    except (Cancelled, EOFError):
+    except (wizard.Cancelled, EOFError):
         print('\nInstallation cancelled. No disk was changed.')
         return 130
     except (ValueError, TypeError, OSError, subprocess.CalledProcessError, KeyboardInterrupt) as error:

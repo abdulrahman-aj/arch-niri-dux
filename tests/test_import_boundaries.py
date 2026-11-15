@@ -14,6 +14,11 @@ class ImportBoundaryTests(unittest.TestCase):
             ('tools/packages/example.py', 'from ..build import payload'),
             ('tools/build/example.py', 'from tools.release import key'),
             ('installer/example.py', 'import tools.digest'),
+            ('installer/wizard.py', 'import install'),
+            ('installer/wizard.py', 'from . import install'),
+            ('installer/storage.py', 'from . import wizard'),
+            ('installer/storage.py', 'import install'),
+            ('installer/payload.py', 'from .install import TARGET'),
             ('tools/verification/probes/boot.py', 'from ..login import installed_login'),
             ('tools/verification/probes/guest.py', 'from tools.vm.control import VM'),
             ('tools/verification/boot.py', 'from .probes import boot'),
@@ -40,6 +45,10 @@ class ImportBoundaryTests(unittest.TestCase):
         self.assertEqual(list(violations(Path('tools/verification/probes/boot.py'), source)), [])
         source = 'from .state import registered_paths\nfrom .fixtures import accepted_fixtures'
         self.assertEqual(list(violations(Path('tools/workspace/gc.py'), source)), [])
+        source = 'from . import payload, storage, wizard\nimport payload\nimport storage\nimport wizard'
+        self.assertEqual(list(violations(Path('installer/install.py'), source)), [])
+        source = 'from . import storage\nimport storage'
+        self.assertEqual(list(violations(Path('installer/wizard.py'), source)), [])
 
 
 class ArtifactImportTests(unittest.TestCase):
