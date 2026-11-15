@@ -1,4 +1,3 @@
-import sys
 from pathlib import Path
 import subprocess
 import tempfile
@@ -7,8 +6,7 @@ from unittest.mock import patch
 
 
 ROOT = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'scripts'))
-import release_key as key
+from tools.release import key as key
 
 
 class RecoveryTests(unittest.TestCase):

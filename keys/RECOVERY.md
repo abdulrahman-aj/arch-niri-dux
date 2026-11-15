@@ -26,7 +26,7 @@ Use a trusted offline machine and a disposable GnuPG home. Never import backups
 into your personal keyring. Initial preparation is:
 
 ```sh
-python scripts/release_key.py --passphrase-file /secure/password \
+python -m tools.release.key --passphrase-file /secure/password \
   --backup /secure/release-backup.gpg
 ```
 
@@ -36,7 +36,7 @@ PR. Upload is a separate deliberate operation using `--upload`, after testing
 restoration and checking the selected fingerprint:
 
 ```sh
-python scripts/release_key.py --passphrase-file /secure/password \
+python -m tools.release.key --passphrase-file /secure/password \
   --restore /secure/release-backup.gpg --backup /secure/release-backup.gpg --upload
 ```
 

@@ -1,4 +1,3 @@
-import sys
 import os
 from pathlib import Path
 import tarfile
@@ -6,8 +5,7 @@ import tempfile
 import unittest
 
 ROOT = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'scripts'))
-import package_build as builder
+from tools.packages import integration as builder
 
 
 class IntegrationSourceTests(unittest.TestCase):

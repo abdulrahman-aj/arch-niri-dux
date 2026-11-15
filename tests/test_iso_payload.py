@@ -7,10 +7,8 @@ import tempfile
 import unittest
 
 from installer.install import verify_repository
-import sys
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'scripts'))
-import iso_payload
+from tools.build import payload as iso_payload
 
 
 class PayloadFinalizationTests(unittest.TestCase):

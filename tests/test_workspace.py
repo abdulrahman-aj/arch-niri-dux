@@ -10,8 +10,7 @@ import tempfile
 import unittest
 from unittest.mock import patch
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'scripts'))
-import workspace
+from tools.workspace import state as workspace
 
 
 class WorkspaceTests(unittest.TestCase):
@@ -33,7 +32,7 @@ class WorkspaceTests(unittest.TestCase):
                     state.mkdir()
                     (state / 'payload').write_bytes(b'preserve')
                 with patch.dict(os.environ, {'XDG_CACHE_HOME': temp, 'BUILD_STATE': str(state)}):
-                    with patch.object(sys, 'argv', ['workspace.py', 'state']):
+                    with patch.object(sys, 'argv', ['tools.workspace.state.py', 'state']):
                         with contextlib.redirect_stdout(io.StringIO()):
                             workspace.main()
                     self.assertTrue(state.is_dir())
@@ -173,7 +172,7 @@ class WorkspaceTests(unittest.TestCase):
             self.assertTrue(warning)
         with (
             patch.object(workspace, 'available_memory', return_value=3 * gib),
-            patch('verification.vm.wait_for_memory') as wait,
+            patch('tools.verification.vm.wait_for_memory') as wait,
         ):
             self.assertEqual(workspace.builder_memory({'CLAUDECODE': '1'}), (workspace.BUILDER_MIB, None))
             wait.assert_called_once()

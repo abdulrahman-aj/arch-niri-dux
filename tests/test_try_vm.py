@@ -1,14 +1,12 @@
 import os
 import subprocess
-import sys
 import tempfile
 import unittest
 from pathlib import Path
 from unittest.mock import patch
 
 ROOT = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(ROOT / 'scripts'))
-import try_vm
+from tools.dev import try_vm
 
 
 class TryVmTests(unittest.TestCase):
@@ -25,11 +23,11 @@ class TryVmTests(unittest.TestCase):
         # The host-side download runs before the VM boots; its end is a plain
         # host log line, not a traced guest command.
         self.assertEqual(try_vm.build_stage(stages, '', 'Starting the builder VM'), 1)
-        log = '+ python /source/scripts/package_lock.py fetch /source /build/payload/repo\nfetched 700 packages\n'
+        log = '+ python -m tools.packages.inputs fetch /source /build/payload/repo\nfetched 700 packages\n'
         self.assertEqual(try_vm.build_stage(stages, log, 'Starting the builder VM'), 2)
         # Untraced output that mentions a later stage does not advance it.
         self.assertEqual(try_vm.build_stage(stages, 'installing archiso and mkarchiso\n'), 0)
-        log += '+ runuser -u nobody -- python /source/scripts/package_build.py /source\n'
+        log += '+ runuser -u nobody -- python -m tools.packages.integration /source\n'
         self.assertEqual(try_vm.build_stage(stages, log, 'Starting the builder VM'), 3)
         # Stages never move backwards between incremental reads.
         self.assertEqual(try_vm.build_stage(stages, '+ echo done\n', current=4), 4)
@@ -58,9 +56,9 @@ class TryVmTests(unittest.TestCase):
             tail = try_vm.LogTail(log, since=2000)
             self.assertEqual(tail.read(), '')
             self.assertFalse(tail.active)
-            log.write_text('+ python /source/scripts/package_lock.py fetch\n  0  0  0  0\npartial')
-            self.assertIn('package_lock.py', tail.read())
-            self.assertEqual(tail.lines, ['+ python /source/scripts/package_lock.py fetch'])
+            log.write_text('+ python -m tools.packages.inputs fetch\n  0  0  0  0\npartial')
+            self.assertIn('tools.packages.inputs', tail.read())
+            self.assertEqual(tail.lines, ['+ python -m tools.packages.inputs fetch'])
             with log.open('a') as handle:
                 handle.write(' line done\n')
             self.assertEqual(tail.read(), 'partial line done\n')
@@ -71,9 +69,9 @@ class TryVmTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as state:
             with (
                 patch.object(try_vm, 'VM_SPACE', 2**60),
-                patch('try_vm.gum_style') as style,
-                patch('try_vm.gum_confirm', return_value=False),
-                patch('try_vm.gum_input') as text,
+                patch('tools.dev.try_vm.gum_style') as style,
+                patch('tools.dev.try_vm.gum_confirm', return_value=False),
+                patch('tools.dev.try_vm.gum_input') as text,
             ):
                 self.assertIsNone(try_vm.create_flow(base=state))
                 style.assert_called_once()
@@ -87,23 +85,23 @@ class TryVmTests(unittest.TestCase):
 
     def test_disk_size_refuses_below_what_the_installer_needs(self):
         # 4 GiB RAM needs 35 GiB (32 floor vs 4+2 swap + 29 reserve); 8 GiB RAM needs 39.
-        with patch('try_vm.gum_input', side_effect=['32', '35']):
+        with patch('tools.dev.try_vm.gum_input', side_effect=['32', '35']):
             with patch('builtins.print') as printed:
                 self.assertEqual(try_vm.ask_disk_size(4), 35)
             refusal = '\n'.join(call.args[0] for call in printed.call_args_list)
             self.assertIn('35 GiB', refusal)
             self.assertIn('automatic swap', refusal)
             self.assertIn('slack', refusal)
-        with patch('try_vm.gum_input', side_effect=['38', '39']):
+        with patch('tools.dev.try_vm.gum_input', side_effect=['38', '39']):
             self.assertEqual(try_vm.ask_disk_size(8), 39)
-        with patch('try_vm.gum_input', side_effect=['']):
+        with patch('tools.dev.try_vm.gum_input', side_effect=['']):
             self.assertEqual(try_vm.ask_disk_size(4), try_vm.DEFAULT_DISK_GIB)
-        with patch('try_vm.gum_input', side_effect=['']):
+        with patch('tools.dev.try_vm.gum_input', side_effect=['']):
             # 32 GiB RAM needs 34 GiB swap beside the reserve; the default grows to fit.
             self.assertEqual(try_vm.ask_disk_size(32), 63)
-        with patch('try_vm.gum_input', return_value=None):
+        with patch('tools.dev.try_vm.gum_input', return_value=None):
             self.assertIsNone(try_vm.ask_disk_size(4))
-        with patch('try_vm.gum_input', side_effect=['abc', '0', '48']):
+        with patch('tools.dev.try_vm.gum_input', side_effect=['abc', '0', '48']):
             self.assertEqual(try_vm.ask_disk_size(4), 48)
 
     def test_disk_minimum_comes_from_the_installer_constant(self):
@@ -112,17 +110,17 @@ class TryVmTests(unittest.TestCase):
         # A bigger installer floor raises the prompt's floor with it: no copied literal.
         with (
             patch.object(installer.storage, 'MIN_DISK_BYTES', 64 * installer.storage.GIB),
-            patch('try_vm.gum_input', side_effect=['48', '64']),
+            patch('tools.dev.try_vm.gum_input', side_effect=['48', '64']),
             patch('builtins.print'),
         ):
             self.assertEqual(try_vm.ask_disk_size(4), 64)
 
     def test_ask_name_rejects_bad_names(self):
-        with patch('try_vm.gum_input', side_effect=['my vm', 'ok-name']):
+        with patch('tools.dev.try_vm.gum_input', side_effect=['my vm', 'ok-name']):
             self.assertEqual(try_vm.ask_name(), 'ok-name')
-        with patch('try_vm.gum_input', side_effect=['']):
+        with patch('tools.dev.try_vm.gum_input', side_effect=['']):
             self.assertEqual(try_vm.ask_name(), try_vm.DEFAULT_NAME)
-        with patch('try_vm.gum_input', return_value=None):
+        with patch('tools.dev.try_vm.gum_input', return_value=None):
             self.assertIsNone(try_vm.ask_name())
 
     def test_list_vms_ignores_junk_directories(self):
@@ -134,17 +132,17 @@ class TryVmTests(unittest.TestCase):
             self.assertEqual([path.name for path in try_vm.list_vms(state)], ['demo'])
 
     def test_size_and_source_prompts(self):
-        with patch('try_vm.gum_input', side_effect=['0', '-3', 'abc', '16']):
+        with patch('tools.dev.try_vm.gum_input', side_effect=['0', '-3', 'abc', '16']):
             self.assertEqual(try_vm.ask_positive_int('RAM', 8), 16)
-        with patch('try_vm.gum_input', side_effect=['']):
+        with patch('tools.dev.try_vm.gum_input', side_effect=['']):
             self.assertEqual(try_vm.ask_positive_int('Disk', 48), 48)
-        with patch('try_vm.gum_input', return_value=None):
+        with patch('tools.dev.try_vm.gum_input', return_value=None):
             self.assertIsNone(try_vm.ask_positive_int('RAM', 8))
-        with patch('try_vm.gum_choose', return_value=try_vm.SOURCE_LABELS[try_vm.RELEASE]):
+        with patch('tools.dev.try_vm.gum_choose', return_value=try_vm.SOURCE_LABELS[try_vm.RELEASE]):
             self.assertEqual(try_vm.ask_source(), try_vm.RELEASE)
-        with patch('try_vm.gum_choose', return_value=try_vm.SOURCE_LABELS[try_vm.DEVELOPMENT]):
+        with patch('tools.dev.try_vm.gum_choose', return_value=try_vm.SOURCE_LABELS[try_vm.DEVELOPMENT]):
             self.assertEqual(try_vm.ask_source(), try_vm.DEVELOPMENT)
-        with patch('try_vm.gum_choose', return_value=None):
+        with patch('tools.dev.try_vm.gum_choose', return_value=None):
             self.assertIsNone(try_vm.ask_source())
 
     def test_require_gum(self):
@@ -173,17 +171,17 @@ class TryVmTests(unittest.TestCase):
 
     def test_gum_missing_returns_from_menu(self):
         with (
-            patch('try_vm.require_gum'),
-            patch('try_vm.gum_style'),
-            patch('try_vm.subprocess.run', side_effect=OSError('no such file')),
+            patch('tools.dev.try_vm.require_gum'),
+            patch('tools.dev.try_vm.gum_style'),
+            patch('tools.dev.try_vm.subprocess.run', side_effect=OSError('no such file')),
         ):
             with self.assertRaises(try_vm.GumMissingError):
                 try_vm.gum_choose('Pick:', ['a'])
         with tempfile.TemporaryDirectory() as state:
             with (
-                patch('try_vm.require_gum'),
-                patch('try_vm.gum_style'),
-                patch('try_vm.gum_choose', side_effect=try_vm.GumMissingError(try_vm.GUM_MISSING)),
+                patch('tools.dev.try_vm.require_gum'),
+                patch('tools.dev.try_vm.gum_style'),
+                patch('tools.dev.try_vm.gum_choose', side_effect=try_vm.GumMissingError(try_vm.GUM_MISSING)),
             ):
                 try_vm.interactive(base=state)
 
@@ -273,26 +271,28 @@ class TryVmTests(unittest.TestCase):
             with (
                 patch.dict(os.environ, {'TRY_OUT_DIR': temp}),
                 patch('shutil.which', return_value='/usr/bin/qemu-img'),
-                patch('try_vm.firmware', return_value=(Path(temp) / 'CODE', Path(temp) / 'OVMF_VARS.fd')),
+                patch('tools.dev.try_vm.firmware', return_value=(Path(temp) / 'CODE', Path(temp) / 'OVMF_VARS.fd')),
                 patch('os.access', return_value=True),
-                patch('try_vm.subprocess.run', side_effect=fake_run),
-                patch('try_vm.subprocess.Popen', side_effect=fake_popen),
-                patch('try_vm.check_new_vm_space', return_value=True),
-                patch('try_vm.require_gum'),
-                patch('try_vm.gum_style'),
-                patch('try_vm.gum_choose', side_effect=['New VM', try_vm.SOURCE_LABELS[try_vm.RELEASE], None]),
-                patch('try_vm.gum_input', side_effect=['demo', '16', '60']),
-                patch('try_vm.gum_confirm', return_value=True),
+                patch('tools.dev.try_vm.subprocess.run', side_effect=fake_run),
+                patch('tools.dev.try_vm.subprocess.Popen', side_effect=fake_popen),
+                patch('tools.dev.try_vm.check_new_vm_space', return_value=True),
+                patch('tools.dev.try_vm.require_gum'),
+                patch('tools.dev.try_vm.gum_style'),
+                patch(
+                    'tools.dev.try_vm.gum_choose', side_effect=['New VM', try_vm.SOURCE_LABELS[try_vm.RELEASE], None]
+                ),
+                patch('tools.dev.try_vm.gum_input', side_effect=['demo', '16', '60']),
+                patch('tools.dev.try_vm.gum_confirm', return_value=True),
             ):
                 try_vm.interactive(base=state)
                 choices = try_vm.read_choices(Path(state) / 'demo')
                 self.assertEqual(choices, {'ram_gib': 16, 'disk_gib': 60, 'source': try_vm.RELEASE})
                 self.assertTrue((Path(state) / 'demo' / 'disk.qcow2').is_file())
             with (
-                patch('try_vm.require_gum'),
-                patch('try_vm.gum_style'),
-                patch('try_vm.gum_choose', side_effect=['Delete a VM', 'demo', None]),
-                patch('try_vm.gum_confirm', return_value=True),
+                patch('tools.dev.try_vm.require_gum'),
+                patch('tools.dev.try_vm.gum_style'),
+                patch('tools.dev.try_vm.gum_choose', side_effect=['Delete a VM', 'demo', None]),
+                patch('tools.dev.try_vm.gum_confirm', return_value=True),
             ):
                 try_vm.interactive(base=state)
                 self.assertFalse((Path(state) / 'demo').exists())
@@ -300,11 +300,11 @@ class TryVmTests(unittest.TestCase):
     def test_interactive_quit_and_cancel(self):
         with tempfile.TemporaryDirectory() as state:
             with (
-                patch('try_vm.require_gum'),
-                patch('try_vm.gum_style'),
-                patch('try_vm.gum_choose', return_value=None) as choose,
-                patch('try_vm.gum_input') as text,
-                patch('try_vm.gum_confirm') as confirm,
+                patch('tools.dev.try_vm.require_gum'),
+                patch('tools.dev.try_vm.gum_style'),
+                patch('tools.dev.try_vm.gum_choose', return_value=None) as choose,
+                patch('tools.dev.try_vm.gum_input') as text,
+                patch('tools.dev.try_vm.gum_confirm') as confirm,
             ):
                 try_vm.interactive(base=state)
                 choose.assert_called_once()
@@ -317,7 +317,7 @@ class TryVmTests(unittest.TestCase):
             directory = Path(state) / 'demo'
             directory.mkdir()
             (directory / 'disk.qcow2').write_bytes(b'disk')
-            with patch('try_vm.gum_confirm', return_value=False):
+            with patch('tools.dev.try_vm.gum_confirm', return_value=False):
                 try_vm.delete_vm('demo', base=state)
             self.assertTrue(directory.is_dir())
 
@@ -327,10 +327,10 @@ class TryVmTests(unittest.TestCase):
             directory.mkdir()
             (directory / 'disk.qcow2').write_bytes(b'disk')
             with (
-                patch('try_vm.require_gum'),
-                patch('try_vm.gum_style'),
-                patch('try_vm.gum_choose', side_effect=['Delete a VM', None, None]),
-                patch('try_vm.gum_confirm') as confirm,
+                patch('tools.dev.try_vm.require_gum'),
+                patch('tools.dev.try_vm.gum_style'),
+                patch('tools.dev.try_vm.gum_choose', side_effect=['Delete a VM', None, None]),
+                patch('tools.dev.try_vm.gum_confirm') as confirm,
             ):
                 try_vm.interactive(base=state)
                 confirm.assert_not_called()

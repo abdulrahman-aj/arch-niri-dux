@@ -5,7 +5,7 @@ import unittest
 from unittest.mock import patch
 
 
-from scripts.verification import browser as guest
+from tools.verification import browser as guest
 
 
 class DesktopProbeTests(unittest.TestCase):

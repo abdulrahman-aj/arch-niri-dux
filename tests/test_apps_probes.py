@@ -6,7 +6,7 @@ import unittest
 import wave
 
 
-from scripts.verification import apps
+from tools.verification import apps
 
 
 class AudioEvidenceTests(unittest.TestCase):

@@ -1,0 +1,175 @@
+#!/usr/bin/env bash
+set -euxo pipefail
+trap 'echo "FAILED at line $LINENO"; echo failed > /state/result; poweroff -f' ERR
+# Refuse direct execution on the host before touching the virtual disk.
+mountpoint -q /source
+mountpoint -q /state
+cd /source
+bootstrap_label=$(cat /state/bootstrap-label)
+grep -qw "archisolabel=$bootstrap_label" /proc/cmdline
+# Only the explicitly supplied disposable virtual disk is formatted.
+if ! blkid /dev/vda; then
+    mkfs.ext4 -F /dev/vda
+else
+    e2fsck -p /dev/vda || [[ $? == 1 ]]
+fi
+mkdir -p /build
+mount /dev/vda /build
+# Failed runs can leave a full unpacked live filesystem. Reclaim it before
+# preparing packages, so retries do not exceed temporary-storage quotas.
+rm -rf /build/work /build/output
+fstrim /build || true
+mkdir -p /build/cache
+# Builder tools come only from the archive date: pacman syncs these databases
+# itself here, so a rolling mirror first would unpin them.
+archive_date=$(cat /source/packages/archive-date)
+cat >/etc/pacman.conf <<CONF
+[options]
+Architecture = auto
+SigLevel = Required DatabaseOptional
+ParallelDownloads = 5
+CacheDir = /build/cache
+[core]
+Server = https://archive.archlinux.org/repos/$archive_date/core/os/x86_64
+[extra]
+Server = https://archive.archlinux.org/repos/$archive_date/extra/os/x86_64
+CONF
+# Serialize keyring preparation with archiso's background initializer.
+# Concurrent trustdb writers can corrupt the live VM keyring.
+systemctl start pacman-init.service
+pacman-key --init
+pacman-key --populate archlinux
+# Import the existing host trust anchors only in the isolated build VM.
+gpg --homedir /etc/pacman.d/gnupg --import /state/trusted-packagers.gpg
+python -m tools.packages.inputs fetch /source /build/payload/repo \
+    --keyring /state/trusted-packagers.gpg --downloads /downloads --host-cache /cache --cache-dir /build/cache
+cat >/build/pacman-pinned.conf <<'CONF'
+[options]
+Architecture = auto
+SigLevel = Never
+CacheDir = /build/cache
+[offline]
+Server = file:///build/payload/repo
+CONF
+repo-add /build/payload/repo/offline.db.tar.gz /build/payload/repo/*.pkg.tar.zst
+# Rebuilds install the build tools from the same verified closure as the ISO.
+pacman -Sy --config /build/pacman-pinned.conf --noconfirm --needed archiso python base-devel git
+rm -rf /build/integration-work /build/integration-packages
+mkdir -p /build/integration-work /build/integration-packages
+chown nobody:nobody /build/integration-work /build/integration-packages
+# A separate assignment lets errexit stop on a failed read instead of
+# silently selecting the development branch.
+integration_mode=$(cat /state/integration-mode)
+if [[ $integration_mode == release ]]; then
+    python -m tools.packages.artifacts fetch /source /build/integration-packages
+else
+    integration_epoch=$(cat /state/integration-epoch)
+    runuser -u nobody -- python -m tools.packages.integration /source \
+        /build/integration-work /build/integration-packages --epoch "$integration_epoch"
+    # Persist on the builder disk, whose registered state is collected by GC.
+    # Unlike the host 9p share, ext4 supports the unprivileged builder owner.
+    install -d -o nobody -g nobody /build/dux-app-cache
+    runuser -u nobody -- python -m tools.packages.dux_apps /source \
+        /build/integration-work /build/integration-packages --cache /build/dux-app-cache
+    # Development builds have no release secret. Use a fresh build-only identity;
+    # only its public key enters the development ISO.
+    rm -rf /build/development-signing
+    install -d -m 0700 /build/development-signing
+    gpg --homedir /build/development-signing --batch --passphrase '' \
+        --quick-generate-key 'Dux development ISO' ed25519 sign 0
+    for package in /build/integration-packages/*.pkg.tar.zst; do
+        gpg --homedir /build/development-signing --batch --detach-sign "$package"
+    done
+fi
+cp /build/integration-packages/*.pkg.tar.zst /build/payload/repo/
+cp /build/integration-packages/integration.manifest.json /build/payload/repo/
+if compgen -G '/build/integration-packages/*.pkg.tar.zst.sig' >/dev/null; then
+    cp /build/integration-packages/*.pkg.tar.zst.sig /build/payload/repo/
+fi
+rm -rf /source/out/integration
+cp -r /build/integration-packages /source/out/integration
+# The verified payload is authoritative; the builder's download cache is redundant.
+rm -f /build/cache/*.pkg.tar.*
+fstrim /build || true
+python -m tools.build.payload /source /build/payload/repo
+cp /state/trusted-packagers.gpg /source/out/trusted-packagers.gpg
+cp -a /usr/share/archiso/configs/releng /build/profile-new
+rm -rf /build/profile
+mv /build/profile-new /build/profile
+profile=/build/profile
+cp /source/archiso/packages.live "$profile/packages.x86_64"
+cp /source/archiso/pacman.conf "$profile/pacman.conf"
+cp -a /source/archiso/airootfs/. "$profile/airootfs/"
+# Offline, the clock never syncs, so systemd-time-wait-sync kept boot unfinished
+# and the Type=idle tty1 getty waited its full 5 seconds before the installer.
+time_wait_sync=$(readlink "$profile/airootfs/etc/systemd/system/systemd-time-wait-sync.service")
+[[ $time_wait_sync == /dev/null ]]
+# Installation trusts only the pinned package signers, plus our release identity
+# (or this development build's public identity). No signing secrets are shipped.
+install_keyring="$profile/airootfs/usr/local/share/arch-niri-dux/install-keyring"
+install -d -m 0700 "$install_keyring"
+gpg --homedir "$install_keyring" --batch --import /state/trusted-packagers.gpg /source/keys/integration-signing.gpg
+if [[ $integration_mode == development ]]; then
+    gpg --homedir /build/development-signing --export >/build/development-public.gpg
+    gpg --homedir "$install_keyring" --batch --import /build/development-public.gpg
+fi
+gpg --homedir "$install_keyring" --batch --with-colons --list-keys |
+    awk -F: '$1 == "pub" { primary = 1; next } primary && $1 == "fpr" { print $10 ":6:"; primary = 0 }' >/build/install-ownertrust
+gpg --homedir "$install_keyring" --batch --import-ownertrust /build/install-ownertrust
+gpg --homedir "$install_keyring" --batch --check-trustdb
+gpgconf --homedir "$install_keyring" --kill all
+if [[ $integration_mode == development ]]; then
+    # Rehearsals serve the ISO payload with the same offline-trusted identity.
+    cp /build/payload/repo/offline.db.tar.gz /source/out/integration/arch-niri-dux.db
+    gpg --homedir /build/development-signing --batch --detach-sign /source/out/integration/arch-niri-dux.db
+    gpgconf --homedir /build/development-signing --kill all
+    rm -rf /build/development-signing /build/development-public.gpg
+fi
+# Installer runtime is deliberately text-only. Standard releng supplies UEFI
+# boot, serial recovery and archiso's tested initramfs setup.
+mkdir -p "$profile/airootfs/usr/local/lib/arch-niri-dux" "$profile/airootfs/usr/local/share/arch-niri-dux"
+cp -a /source/installer "$profile/airootfs/usr/local/lib/arch-niri-dux/installer"
+find "$profile/airootfs/usr/local/lib/arch-niri-dux/installer" -type d -name __pycache__ -exec rm -rf {} +
+cp /source/packages/packages.target "$profile/airootfs/usr/local/share/arch-niri-dux/packages.target"
+# The installer refuses when the system clock predates the medium (stale clocks mimic expired keys).
+date -u +%s >"$profile/airootfs/usr/local/share/arch-niri-dux/iso-build-date"
+# Both interactive gettys remain available after cancellation or errors.
+rm -f "$profile/airootfs/root/.zlogin"
+# Releng waits 15 seconds in the boot menu. One second keeps the menu visible
+# (speech, memtest; any key stops the countdown) without delaying the installer.
+sed -i 's/^timeout .*/timeout 1/' "$profile/efiboot/loader/loader.conf"
+grep -qx 'timeout 1' "$profile/efiboot/loader/loader.conf"
+# Keep the USB mounted: archiso's automatic RAM copy contains only airootfs,
+# while our offline repository lives beside it on the installation medium.
+sed -i '/^options /s/$/ copytoram=n console=tty0 console=ttyS0,115200/' "$profile"/efiboot/loader/entries/*.conf
+for entry in "$profile"/efiboot/loader/entries/*.conf; do
+    if grep -q '^options ' "$entry"; then
+        grep -q 'copytoram=n' "$entry"
+    fi
+done
+# Releng logs root into zsh; use bash so tty1's wizard hook is explicit.
+sed -i 's#root:x:0:0:root:/root:/usr/bin/zsh#root:x:0:0:root:/root:/bin/bash#' "$profile/airootfs/etc/passwd"
+grep -q '^root:x:0:0:root:/root:/bin/bash$' "$profile/airootfs/etc/passwd"
+# The local repository is staged beside arch/ on the boot media.
+cat /source/archiso/profiledef.append >>"$profile/profiledef.sh"
+# A separate bind mount places payload beside arch/ in the staging tree.
+fstrim /build || true
+mkdir -p /build/work/iso/repo
+cp -al /build/payload/repo/. /build/work/iso/repo/
+cp /source/out/packages.manifest.json /build/work/iso/packages.manifest.json
+mkarchiso -v -w /build/work -o /build/output "$profile"
+lsinitcpio /build/work/iso/arch/boot/x86_64/initramfs-linux.img | grep -qx 'hooks/archiso'
+# Development ISOs carry a -development suffix so release (`make iso`) and
+# checkout (`make iso-development`) installers coexist in out/; release ISOs
+# keep mkarchiso's name for the canonical rename in packages/RELEASING.md.
+if [[ $integration_mode == development ]]; then
+    for iso in /build/output/*.iso; do
+        output="/source/out/$(basename "$iso" .iso)-development.iso"
+        cp "$iso" "$output"
+        cp /state/iso-source "$output.source"
+    done
+else
+    cp /build/output/*.iso /source/out/
+fi
+rm -rf /build/work /build/output
+fstrim /build || true

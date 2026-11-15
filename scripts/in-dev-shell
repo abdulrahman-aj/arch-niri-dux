@@ -7,7 +7,7 @@ if [[ -n ${IN_NIX_SHELL:-} ]]; then
 fi
 # Copy only the flake inputs: a path flake over the whole checkout would copy
 # multi-gigabyte ISO outputs into /nix/store while files are still untracked.
-dev=$(python3 scripts/workspace.py state)/dev-shell
+dev=$(python3 -m tools.workspace.state state)/dev-shell
 mkdir -p "$dev"
 cp flake.nix flake.lock "$dev/"
 # Resolve separately so errexit fails on a bad state dir instead of asking

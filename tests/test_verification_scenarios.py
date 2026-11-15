@@ -7,7 +7,7 @@ import tempfile
 import unittest
 from unittest.mock import Mock, patch
 
-from scripts.verification import dispatch, guest
+from tools.verification import dispatch, guest
 
 
 class ProbeDispatchTests(unittest.TestCase):
@@ -52,7 +52,7 @@ class ScreenshotReadinessTests(unittest.TestCase):
 
 class CameraFocusTests(unittest.TestCase):
     def test_focus_waits_for_a_snapshot_window_that_appears_late(self):
-        from scripts.verification import camera
+        from tools.verification import camera
 
         unfocused = {'id': 7, 'app_id': 'org.gnome.Snapshot', 'is_focused': False}
         focused = dict(unfocused, is_focused=True)
