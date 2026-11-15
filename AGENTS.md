@@ -27,7 +27,8 @@ with `python3 -m tools.vm.console`. Previews never qualify a change; the table a
 
 `make lint` and `make test` are light: run them before every PR, on any
 machine, including one with `AGENT_HEAVY_JOBS=deny` (heavy targets refuse
-there).
+there). `make qualify` runs the table's tier for the current branch and writes
+`out/qualify/<head>/EVIDENCE.md` to paste into the PR.
 
 Pass verification arguments through `ARGS='...'`. Evidence defaults to
 `out/verify/`; see [VERIFICATION.md](VERIFICATION.md) for fixture requirements.

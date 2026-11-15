@@ -1,4 +1,4 @@
-.PHONY: lock iso iso-development iso-checksums try verify verify-fast verify-release verify-hibernate lint lint-in-dev fmt test build-test verify-alongside provision-alongside fetch-alongside help
+.PHONY: lock iso iso-development iso-checksums try verify verify-fast verify-release verify-hibernate lint lint-in-dev fmt test build-test verify-alongside provision-alongside fetch-alongside qualify help
 lock:
 	./scripts/in-dev-shell python3 -m tools.packages.inputs resolve . $(ARGS)
 iso:
@@ -40,6 +40,8 @@ provision-alongside:
 	./scripts/in-dev-shell python3 -m tools.fixtures.provision $(ARGS)
 fetch-alongside:
 	./scripts/in-dev-shell python3 -m tools.fixtures.fetch $(ARGS)
+qualify:
+	./scripts/in-dev-shell python3 -m tools.dev.qualify $(ARGS)
 help:
 	@printf '%s\n' 'lock, iso, iso-development, iso-checksums, verify, verify-fast, verify-release,' \
 		'verify-hibernate, verify-alongside, provision-alongside, fetch-alongside, installer-preview, gc' \
