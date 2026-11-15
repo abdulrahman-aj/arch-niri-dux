@@ -375,7 +375,7 @@ def install(settings, state=None, progress=None):
     ):
         if not shutil.which(name):
             raise ValueError(f'Required installer tool missing: {name}')
-    # Recheck immediately before the first destructive operation.
+    # Recheck after tool availability, before payload preflight.
     if storage.require_disk(settings.disk) != original_device:
         raise ValueError('Disk identity changed; refusing to erase it.')
     snapshot = None
