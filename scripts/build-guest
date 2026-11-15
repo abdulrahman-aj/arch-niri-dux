@@ -162,6 +162,5 @@ if [[ $integration_mode == development ]]; then
 else
     cp /build/output/*.iso /source/out/
 fi
-(cd /source/out && sha256sum ./*.iso >SHA256SUMS)
 rm -rf /build/work /build/output
 fstrim /build || true

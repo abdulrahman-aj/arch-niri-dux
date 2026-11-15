@@ -125,4 +125,7 @@ build_result=$(cat "$state/result" 2>/dev/null || true)
     echo "Build failed; see $state/guest-build.log and serial.log" >&2
     exit 1
 }
-sha256sum out/*.iso
+# Hash the completed host files once, after the guest has reported success.
+# Keep the manifest paths relative to out/ for sha256sum --check there.
+(cd out && sha256sum ./*.iso >SHA256SUMS.tmp && mv SHA256SUMS.tmp SHA256SUMS)
+cat out/SHA256SUMS
