@@ -57,6 +57,7 @@ def run_fixture(args, parser):
     source.mkdir()
     epoch = int(subprocess.check_output(['git', 'log', '-1', '--format=%ct'], cwd=ROOT, text=True))
     builder.prepare_source(ROOT, source, epoch)
+    # The legacy verify.py key pins the CLI, not the extracted lifecycle modules.
     evidence.inputs(
         {
             'kernel_sha256': digest(directory / 'kernel.pkg.tar.zst') if args.kernel_package else None,

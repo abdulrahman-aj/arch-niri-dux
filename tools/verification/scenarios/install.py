@@ -82,6 +82,8 @@ def run_alongside_install(vm, passed, evidence, directory, device, os_name):
     vm.expect(r'root@archiso[^\n]*#', timeout=180)
     mount_probes(vm)
     evidence.verify_installer(vm, ROOT / 'installer')
+    # Plan through the ISO's own read-only inventory. The fixture must have
+    # exactly one eligible region and one registered Debian bootloader.
     probe(vm, 'alongside', 'plan', device, os_name)
     vm.command('chmod 600 /run/verify/install.json')
     parts = json.loads((directory / 'old-partitions.json').read_text())

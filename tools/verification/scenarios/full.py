@@ -30,6 +30,8 @@ def run_full(args, parser):
         parser.error('--swap-gib must be zero or a positive number of GiB.')
     if not re.fullmatch(r'[A-Za-z0-9_-]{1,64}', args.keymap):
         parser.error('--keymap must be a plain console keymap name.')
+    # The ISO just built is the newest file. Name order would pick a release ISO
+    # over a newer development ISO of the same date ('.iso' sorts after '-development').
     images = sorted((ROOT / 'out').glob('*.iso'), key=lambda path: path.stat().st_mtime)
     iso = args.iso or (images[-1] if images else None)
     if iso is None or not iso.is_file():
@@ -71,6 +73,7 @@ def run_full(args, parser):
     iso_digest = digest(iso)
     package_digest = digest(ROOT / 'out/packages.manifest.json')
     probe_hashes = stage_probes(directory)
+    # The legacy verify.py key pins the CLI, not the extracted lifecycle modules.
     probe_hashes['verify.py'] = digest(ROOT / 'tools/verification/session.py')
     stages = full_stages(args)
     evidence.inputs(

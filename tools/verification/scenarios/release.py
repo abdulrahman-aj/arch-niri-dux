@@ -53,6 +53,8 @@ def run_release(args, parser):
     own(directory)
     iso_digest = digest(iso)
     canonical = ROOT / 'out' / canonical_name
+    # SHA256SUMS hashes the canonical file while the dispatch command carries
+    # iso_digest; refuse a stale staged ISO before the long VM run.
     if not args.repository_url and canonical.exists() and digest(canonical) != iso_digest:
         parser.error(f'A different ISO is already staged as {canonical}; remove it first.')
     evidence.inputs(
