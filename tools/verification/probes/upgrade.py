@@ -19,6 +19,12 @@ def output(*args, **kwargs):
         raise
 
 
+def assert_personal_preserved(personal, before):
+    """Reject changed user files after package transactions."""
+    for path in personal:
+        assert digest(path) == before[str(path)], path
+
+
 def verify_upgrade():
     evidence = Path('/run/verify')
     if not (evidence / 'install.json').is_file():
@@ -184,8 +190,7 @@ def verify_upgrade():
         output('pacman', '-Q', 'arch-niri-dux', fake_name)
         output('pacman', '-R', '--noconfirm', fake_name)
         output('pacman', '--config', str(configuration), '-S', '--noconfirm', 'arch-niri-dux-baseline')
-        for path in personal:
-            assert digest(path) == before[str(path)], path
+        assert_personal_preserved(personal, before)
         output(*prefix, 'niri', 'validate', '--config', str(personal[0]))
         output('pacman', '-Dk')
         omarchy_section = Path('/etc/pacman.d/arch-niri-dux.conf').read_text().split('[omarchy]')[1]
@@ -274,8 +279,7 @@ def published_repository():
             payload = cache / package['filename']
             hashes[package['name']] = digest(payload)
             assert hashes[package['name']] == package['sha256'], package['name']
-    for path in personal:
-        assert digest(path) == before[str(path)], path
+    assert_personal_preserved(personal, before)
     run('pacman', '-Dk')
     (evidence / 'published-repository.json').write_text(
         json.dumps(

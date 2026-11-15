@@ -29,6 +29,26 @@ noted in [BUILDING.md](BUILDING.md). The runner waits for 10 GiB available host 
 starting an 8 GiB guest. VM tests require KVM and a GPU render node with
 virtio 3D acceleration; `QEMU_RENDER_NODE` defaults to `/dev/dri/renderD128`.
 
+## Journey map
+
+Negative controls deliberately supply bad input or state and require rejection;
+partial controls below prove only the named part of a journey. The alongside
+control exercises coreutils directly, so it does not detect changes to the
+scenario's invocation of that command.
+
+| Journey | Scenario, stage or probe | Target or qualification tier | Negative control |
+| --- | --- | --- | --- |
+| Fresh install, erase | [install scenario](tools/verification/scenarios/install.py) `run_install`, [full scenario](tools/verification/scenarios/full.py) | `make verify`; installer tier | No deliberate failed-install control |
+| Install alongside Linux | [alongside scenario](tools/verification/scenarios/alongside.py), [install scenario](tools/verification/scenarios/install.py) `run_alongside_install` | `make verify-alongside ARGS='--os linux ...'`; alongside changes add this to installer tier | Command-level [control](tests/test_preservation.py) changes a byte in regular-file proxies; `make test` |
+| Install alongside Windows | [alongside scenario](tools/verification/scenarios/alongside.py), [install scenario](tools/verification/scenarios/install.py) `run_alongside_install` | `make verify-alongside ARGS='--os windows ...'`; alongside changes add this after Linux | Same command-level control using regular-file proxies; `make test` |
+| First boot to desktop | [boot stage](tools/verification/boot.py) `verify_boot`, [desktop stage](tools/verification/desktop.py), [login](tools/verification/login.py) | `make verify`; probe/installer tiers | Partial, graphical unlock retries a wrong passphrase |
+| Apps open | [desktop stage](tools/verification/desktop.py), [apps stage](tools/verification/apps.py), [apps probe](tools/verification/probes/apps.py), [browser stage](tools/verification/browser.py), [PDF stage](tools/verification/pdf.py), [camera stage](tools/verification/camera.py) | `make verify`; probe/installer tiers | Partial, [apps probe tests](tests/test_apps_probes.py) reject silent/wrong-tone audio and invalid thumbnails; `make test` |
+| Upgrade keeps personal config | [recovery probe](tools/verification/probes/recovery.py) `snapshots` calls [upgrade probe](tools/verification/probes/upgrade.py) `verify_upgrade`; checks three personal config files | `make verify`, recovery stage; probe/installer tiers | Yes, [preservation tests](tests/test_preservation.py) overwrite each checked config; `make test` |
+| Dux updater | [updater stage](tools/verification/dux_update.py), [updater probe](tools/verification/probes/dux_update.py) | `make verify ARGS=--slow`; ordinary qualification skips it | No deliberate broken-updater control |
+| Suspend/hibernate resume | [suspend stage](tools/verification/suspend.py), [suspend probe](tools/verification/probes/suspend.py); [hibernate scenario](tools/verification/scenarios/hibernate.py) | Suspend: `make verify`; hibernate: separate `make verify-hibernate` on accepted workspace | No deliberate failed-resume control; password unlock after S3 and device-specific resume remain gaps |
+| Recovery/fallback boot | [recovery stage](tools/verification/recovery.py), [recovery probe](tools/verification/probes/recovery.py); [boot stage](tools/verification/boot.py) `verify_fallback` | `make verify`; probe/installer tiers | Yes, recovery masks normal-root greetd before snapshot boot; fallback disables Plymouth |
+| Release delivery | [release scenario](tools/verification/scenarios/release.py), [upgrade probe](tools/verification/probes/upgrade.py) `published_repository` | Separate `make verify-release` | Partial, `verify_upgrade` rejects a tampered signed database in `make verify`; release delivery itself has no tamper control |
+
 ## `make verify`
 
 Full acceptance qualifies a fresh offline encrypted UEFI install on a
