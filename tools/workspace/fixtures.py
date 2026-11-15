@@ -1,11 +1,14 @@
 """Accepted verification fixture discovery and relocation."""
 
 import hashlib
+import json
 import os
 from pathlib import Path
 import shutil
+import subprocess
+import sys
 
-from tools.workspace.state import MARKER, cache_root, registered_paths
+from tools.workspace.state import ROOT, MARKER, cache_root, registered_paths
 
 
 def accepted_fixtures(registry=None):
@@ -21,10 +24,39 @@ def accepted_fixtures(registry=None):
     return [directory for _, directory in sorted(entries, reverse=True)]
 
 
-def newest_accepted_fixture(registry=None):
-    """Newest accepted disk.qcow2, or None when no full run has passed."""
-    fixtures = accepted_fixtures(registry)
-    return fixtures[0] / 'disk.qcow2' if fixtures else None
+def newest_accepted_fixture(registry=None, checkout=ROOT):
+    """Newest accepted disk from a recorded clean commit on origin/main."""
+    selected = None
+    for directory in accepted_fixtures(registry):
+        try:
+            inputs = json.loads((directory / 'inputs.json').read_text())
+        except FileNotFoundError:
+            inputs = {}
+        recorded = inputs.get('checkout', {})
+        commit = recorded.get('commit')
+        if not commit:
+            reason = 'no recorded checkout commit'
+        elif recorded.get('dirty') is not False:
+            reason = 'checkout is dirty or its clean state is unrecorded'
+        else:
+            result = subprocess.run(
+                ['git', 'merge-base', '--is-ancestor', commit, 'origin/main'],
+                cwd=checkout,
+                check=False,
+                capture_output=True,
+            )
+            if result.returncode == 0:
+                # Newest first: stop here so older fixtures are not listed as skipped.
+                selected = directory / 'disk.qcow2'
+                print(f'Using fixture {directory} at commit {commit}.', file=sys.stderr)
+                break
+            reason = (
+                f'{commit} is not an ancestor of origin/main'
+                if result.returncode == 1
+                else f'cannot check {commit} against origin/main'
+            )
+        print(f'Skipping fixture {directory}: {reason}.', file=sys.stderr)
+    return selected
 
 
 def move_fixture(src, dst, new_owner):

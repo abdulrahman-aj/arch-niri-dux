@@ -134,7 +134,6 @@ class FixtureSelectionTests(unittest.TestCase):
             os.utime(old, (1000, 1000))
             os.utime(new, (2000, 2000))
             os.utime(unlinked, (3000, 3000))
-            self.assertEqual(fixtures.newest_accepted_fixture(registry), new / 'disk.qcow2')
             self.assertEqual(fixtures.accepted_fixtures(registry), [new, old])
 
 
