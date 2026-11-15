@@ -6,7 +6,8 @@
 discovers Python sources, shell files by extension or shebang, and our
 PKGBUILDs, including untracked scripts. Generated output and vendored Dux app
 recipes are excluded. `make test` adds source and build tests. CI runs these
-checks without graphical VM acceptance.
+checks without graphical VM acceptance. `make qualify` runs the tier matching
+the branch's changed files and writes `out/qualify/<head>/EVIDENCE.md`.
 
 Guest probes live under `tools/verification/probes/` and execute from the staged
 `/run/verify` tree. `tools/verification/payload.py` stages the complete probe
