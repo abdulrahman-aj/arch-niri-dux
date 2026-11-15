@@ -1,6 +1,7 @@
-"""Disk inspection, layout planning (swap size, free regions, GPT preservation) and the partition and
-firmware writes for the installer."""
+"""Disk inspection, layout planning (swap size, free regions, GPT preservation) and every disk and firmware
+write for the installer: partitioning, formatting, encryption, the target mounts and their cleanup."""
 
+import contextlib
 import hashlib
 import json
 import os
@@ -23,6 +24,14 @@ DISK_SLACK_GIB = 1
 AUTO_SWAP_PAD_GIB = 2
 ESP_TYPE = 'c12a7328-f81f-11d2-ba4b-00a0c93ec93b'
 LUKS_TYPE = 'ca7d7ccb-63ed-4c53-861c-1742536059cc'
+MAPPER = 'dux-root'
+SUBVOLUMES = {
+    '@': '/',
+    '@home': '/home',
+    '@log': '/var/log',
+    '@cache': '/var/cache/pacman/pkg',
+    '@snapshots': '/.snapshots',
+}
 
 
 def run(*args, data=None, capture=False):
@@ -659,3 +668,70 @@ def create_partitions(settings, snapshot, identity, on_start):
         ]
         verify_partition_nodes(settings, plan, table['sectorsize'])
     return esp, encrypted
+
+
+@contextlib.contextmanager
+def prepared_target(settings, snapshot, identity, on_start, target, swap_gib):
+    """Partition, encrypt, format and mount the selected layout at target, and release it on exit.
+
+    Yields (encrypted partition, mapped root device, swap resume offset or ''). The mounts and the
+    LUKS mapping are released however the caller's block ends, after success or any failure.
+    """
+    subvolumes = dict(SUBVOLUMES)
+    if swap_gib:
+        subvolumes['@swap'] = '/swap'
+    mapped = '/dev/mapper/' + MAPPER
+    mounted = False
+    opened = False
+    try:
+        esp, encrypted = create_partitions(settings, snapshot, identity, on_start)
+        run('mkfs.fat', '-F', '32', '-n', 'DUX_EFI', esp)
+        # LUKS2 uses cryptsetup's default argon2id (benchmarked memory, ~1 GiB here);
+        # no pinned limit is set.
+        run(
+            'cryptsetup',
+            'luksFormat',
+            '--batch-mode',
+            '--type',
+            'luks2',
+            '--key-file',
+            '-',
+            encrypted,
+            data=settings.passphrase,
+        )
+        run('cryptsetup', 'open', '--key-file', '-', encrypted, MAPPER, data=settings.passphrase)
+        opened = True
+        run('mkfs.btrfs', '--force', '--label', 'DUX_ROOT', mapped)
+        run('mount', mapped, str(target))
+        mounted = True
+        for volume in subvolumes:
+            run('btrfs', 'subvolume', 'create', str(target / volume))
+        run('umount', str(target))
+        mounted = False
+        run('mount', '-o', 'subvol=@,compress=zstd:1,noatime', mapped, str(target))
+        mounted = True
+        for volume, location in subvolumes.items():
+            if location == '/':
+                continue
+            mountpoint = target / location.lstrip('/')
+            mountpoint.mkdir(parents=True, exist_ok=True)
+            run('mount', '-o', f'subvol={volume},compress=zstd:1,noatime', mapped, str(mountpoint))
+        (target / 'boot').mkdir(exist_ok=True)
+        run('mount', '-o', 'umask=0077', esp, str(target / 'boot'))
+        resume_offset = ''
+        if swap_gib:
+            # mkswapfile sets NODATACOW and disables compression for this file.
+            # A separate subvolume keeps it outside every root snapshot.
+            (target / 'swap').chmod(0o700)
+            run('btrfs', 'filesystem', 'mkswapfile', '--size', f'{swap_gib}G', str(target / 'swap/swapfile'))
+            resume_offset = run(
+                'btrfs', 'inspect-internal', 'map-swapfile', '-r', str(target / 'swap/swapfile'), capture=True
+            )
+            if not re.fullmatch(r'[0-9]+', resume_offset):
+                raise ValueError('Btrfs returned an invalid swap resume offset.')
+        yield encrypted, mapped, resume_offset
+    finally:
+        if mounted:
+            subprocess.run(['umount', '--recursive', str(target)], check=False)
+        if opened:
+            subprocess.run(['cryptsetup', 'close', MAPPER], check=False)
