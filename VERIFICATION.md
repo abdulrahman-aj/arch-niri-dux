@@ -32,15 +32,13 @@ virtio 3D acceleration; `QEMU_RENDER_NODE` defaults to `/dev/dri/renderD128`.
 ## Journey map
 
 Negative controls deliberately supply bad input or state and require rejection;
-partial controls below prove only the named part of a journey. The alongside
-control exercises coreutils directly, so it does not detect changes to the
-scenario's invocation of that command.
+partial controls below prove only the named part of a journey.
 
 | Journey | Scenario, stage or probe | Target or qualification tier | Negative control |
 | --- | --- | --- | --- |
 | Fresh install, erase | [install scenario](tools/verification/scenarios/install.py) `run_install`, [full scenario](tools/verification/scenarios/full.py) | `make verify`; installer tier | No deliberate failed-install control |
-| Install alongside Linux | [alongside scenario](tools/verification/scenarios/alongside.py), [install scenario](tools/verification/scenarios/install.py) `run_alongside_install` | `make verify-alongside ARGS='--os linux ...'`; alongside changes add this to installer tier | Command-level [control](tests/test_preservation.py) changes a byte in regular-file proxies; `make test` |
-| Install alongside Windows | [alongside scenario](tools/verification/scenarios/alongside.py), [install scenario](tools/verification/scenarios/install.py) `run_alongside_install` | `make verify-alongside ARGS='--os windows ...'`; alongside changes add this after Linux | Same command-level control using regular-file proxies; `make test` |
+| Install alongside Linux | [alongside scenario](tools/verification/scenarios/alongside.py), [install scenario](tools/verification/scenarios/install.py) `run_alongside_install` | `make verify-alongside ARGS='--os linux ...'`; alongside changes add this to installer tier | No control. A cheap control would only test `sha256sum`; the real check is `sha256sum -c` over the old partitions in `run_alongside_install`, which fails the run through `vm.command` on any mismatch |
+| Install alongside Windows | [alongside scenario](tools/verification/scenarios/alongside.py), [install scenario](tools/verification/scenarios/install.py) `run_alongside_install` | `make verify-alongside ARGS='--os windows ...'`; alongside changes add this after Linux | No control, same check as Linux |
 | First boot to desktop | [boot stage](tools/verification/boot.py) `verify_boot`, [desktop stage](tools/verification/desktop.py), [login](tools/verification/login.py) | `make verify`; probe/installer tiers | Partial, graphical unlock retries a wrong passphrase |
 | Apps open | [desktop stage](tools/verification/desktop.py), [apps stage](tools/verification/apps.py), [apps probe](tools/verification/probes/apps.py), [browser stage](tools/verification/browser.py), [PDF stage](tools/verification/pdf.py), [camera stage](tools/verification/camera.py) | `make verify`; probe/installer tiers | Partial, [apps probe tests](tests/test_apps_probes.py) reject silent/wrong-tone audio and invalid thumbnails; `make test` |
 | Upgrade keeps personal config | [recovery probe](tools/verification/probes/recovery.py) `snapshots` calls [upgrade probe](tools/verification/probes/upgrade.py) `verify_upgrade`; checks three personal config files | `make verify`, recovery stage; probe/installer tiers | Yes, [preservation tests](tests/test_preservation.py) overwrite each checked config; `make test` |
