@@ -23,6 +23,7 @@ build-test:
 lint:
 	./scripts/in-dev-shell $(MAKE) --no-print-directory lint-in-dev
 lint-in-dev:
+	python3 -m tools.dev.lint_imports
 	actionlint
 	ruff check . desktop/usr/bin/arch-niri-dux-keyring-recover
 	ruff format --check . desktop/usr/bin/arch-niri-dux-keyring-recover
@@ -57,3 +58,7 @@ iso-checksums:
 .PHONY: installer-preview
 installer-preview: | heavy-guard
 	./scripts/in-dev-shell python3 -m tools.dev.installer_preview $(ARGS)
+
+.PHONY: rehearse-release
+rehearse-release: | heavy-guard
+	./scripts/in-dev-shell bash tools/release/rehearse.sh $(ARGS)
