@@ -9,13 +9,12 @@ recipes are excluded. `make test` adds source and build tests. CI runs these
 checks without graphical VM acceptance. `make qualify` runs the tier matching
 the branch's changed files and writes `out/qualify/<head>/EVIDENCE.md`.
 
-Each scenario's `inputs.json` retains the staged guest hashes in
-`verification_scripts`. `host_verifier` adds a sorted `sources` map of SHA-256
-hashes for the host verifier, VM transport, their transitive local Python
-imports and the error-gate allowlist. Imports inside functions are included
-without executing them. `checkout` records the commit and whether tracked or
-untracked changes were present. Ignored build output does not mark it dirty.
-The legacy `verify.py` hash remains in full and fixture evidence.
+Every scenario records a `checkout` object in `inputs.json` with the commit
+and dirty state. Dirty runs also record `diff_sha256`, the SHA-256 of
+`git diff HEAD --binary`, matching the ISO's `.iso.source` identity. Dirty
+state includes untracked files, but the diff hash covers tracked changes only.
+Ignored build output does not mark the checkout dirty. Existing script hashes
+are unchanged.
 
 Guest probes live under `tools/verification/probes/` and execute from the staged
 `/run/verify` tree. `tools/verification/payload.py` stages the complete probe

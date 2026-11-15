@@ -40,7 +40,6 @@ def run_alongside(args, parser):
     inputs = {}
     for name, path in [('iso', args.iso), ('fixture', args.fixture), ('firmware', args.firmware)]:
         inputs[name] = dict(path=str(path.resolve()), sha256=digest(path))
-    inputs['verification_scripts'] = stage_probes(directory)
     evidence.inputs(inputs)
     reports = None
     if args.os == 'windows':
@@ -53,6 +52,7 @@ def run_alongside(args, parser):
     vm.min_free_bytes = 9 * 1024**3
     device = '/dev/sda' if reports else '/dev/vda'
     evidence.key(PASSWORD)
+    stage_probes(directory)
     passed = evidence.passed
     try:
         vm.start(cdrom=False, network=bool(reports))
