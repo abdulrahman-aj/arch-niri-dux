@@ -39,10 +39,18 @@ class PublisherCheckoutTests(unittest.TestCase):
             gh.write_text(f'#!{shutil.which("sh")}\nexit 17\n')
             gh.chmod(0o755)
             mark(gh, root / 'reached-release-api')
+            # Only these host utilities stay reachable: real git must prove
+            # the dubious-ownership failure, and the rest is what publish.sh
+            # needs. A missing gh fake fails closed instead of reaching a
+            # real gh that could touch GitHub releases.
+            for name in ('bash', 'chown', 'fakeroot', 'git', 'jq', 'mkdir', 'mktemp', 'rm'):
+                target = commands / name
+                if not target.exists():
+                    target.symlink_to(shutil.which(name))
             environment = sanitized_env(
                 os.environ
                 | {
-                    'PATH': str(commands) + ':' + os.environ['PATH'],
+                    'PATH': str(commands),
                     'GIT_CONFIG_GLOBAL': '/dev/null',
                     'GIT_CONFIG_NOSYSTEM': '1',
                     'GITHUB_REF_NAME': 'v0.1.0-2',
@@ -112,10 +120,17 @@ esac
                     path.write_text(f'#!{shutil.which("bash")}\nset -eu\n' + body)
                     path.chmod(0o755)
                     mark(path, root / 'stub-ran')
+                # Only these host utilities stay reachable; the stubs cover
+                # git, gh and python, so a missing stub fails closed instead
+                # of reaching a real gh or a real fetch.
+                for name in ('bash', 'jq', 'mkdir', 'mktemp', 'rm', 'touch'):
+                    target = commands / name
+                    if not target.exists():
+                        target.symlink_to(shutil.which(name))
                 environment = sanitized_env(
                     os.environ
                     | {
-                        'PATH': str(commands) + ':' + os.environ['PATH'],
+                        'PATH': str(commands),
                         'TMPDIR': str(scratch),
                         'GITHUB_REF_NAME': 'v0.1.0-2',
                         'GITHUB_SHA': 'a' * 40,

@@ -2,6 +2,7 @@
 
 import os
 from pathlib import Path
+import shutil
 import subprocess
 import tempfile
 import unittest
@@ -41,12 +42,19 @@ class ApplicationThemeTests(unittest.TestCase):
         )
         for path in binary.iterdir():
             path.chmod(0o755)
+        # Only these host utilities stay reachable; every other name on PATH
+        # is a fake, so a missing gsettings or dms fake fails closed instead
+        # of reading or writing the host's desktop settings.
+        for name in ('bash', 'cat', 'mkdir', 'sleep', 'touch'):
+            target = binary / name
+            if not target.exists():
+                target.symlink_to(shutil.which(name))
         self.environment = os.environ | {
             'HOME': str(self.home),
             'XDG_CONFIG_HOME': str(self.config),
             'XDG_STATE_HOME': str(self.state),
             'XDG_RUNTIME_DIR': str(runtime),
-            'PATH': str(binary) + ':' + os.environ['PATH'],
+            'PATH': str(binary),
             'CALL_LOG': str(self.log),
             'DMS_MODE': 'dark',
             'GTK_THEME': 'Adwaita',

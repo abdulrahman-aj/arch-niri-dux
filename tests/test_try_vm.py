@@ -1,4 +1,5 @@
 import os
+import shutil
 import subprocess
 import tempfile
 import unittest
@@ -53,11 +54,18 @@ def make_bin(directory, replies=(), extra=()):
     for name, body in extra:
         (bindir / name).write_text(body)
         (bindir / name).chmod(0o755)
+    # Only the fake gum's coreutils come from the host; every other name on
+    # PATH is a fake, so a missing fake fails closed instead of running a
+    # host tool like qemu-img or make.
+    for name in ('head', 'tail', 'mv'):
+        target = bindir / name
+        if not target.exists():
+            target.symlink_to(shutil.which(name))
     return bindir, replies_path
 
 
 def gum_env(bindir, replies_path):
-    return {'PATH': str(bindir) + os.pathsep + os.environ['PATH'], 'GUM_REPLIES': str(replies_path)}
+    return {'PATH': str(bindir), 'GUM_REPLIES': str(replies_path)}
 
 
 class TryVmTests(unittest.TestCase):
