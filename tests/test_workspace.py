@@ -12,6 +12,8 @@ from unittest.mock import patch
 
 from tools.workspace import state as workspace
 from tools.workspace import __main__, fixtures, gc, resources
+from tests.git_isolation import run_git as isolated_run_git
+from tests.fake_commands import mark
 
 
 class WorkspaceTests(unittest.TestCase):
@@ -218,7 +220,7 @@ class WorkspaceTests(unittest.TestCase):
 
 
 def git_run(*args, cwd, **kwargs):
-    return subprocess.run(['git', *args], cwd=str(cwd), capture_output=True, text=True, check=True, **kwargs)
+    return isolated_run_git(*args, cwd=cwd, capture_output=True, text=True, check=True, **kwargs)
 
 
 def init_repo(root):
@@ -288,19 +290,24 @@ class WorktreeGCTests(unittest.TestCase):
                 f"#!/bin/sh\nprintf '%s' '{json.dumps([{'number': 7, 'title': 'Old PR', 'headRefOid': old_head}])}'\n"
             )
             gh.chmod(0o755)
+            marker = mark(gh, Path(bindir) / 'gh-ran')
             with patch.dict(os.environ, {'PATH': bindir + os.pathsep + os.environ['PATH']}):
                 self.assertTrue(gc.merge_info('topic', root)[0])
                 git_run('checkout', 'topic', cwd=root)
                 (root / 'tracked.txt').write_text('new work')
                 git_run('commit', '-am', 'unmerged work', cwd=root)
                 self.assertFalse(gc.merge_info('topic', root)[0])
+            self.assertTrue(marker.is_file())
             failing = Path(bindir) / 'gh'
             failing.write_text('#!/bin/sh\nexit 1\n')
             failing.chmod(0o755)
+            marker.unlink()
+            mark(failing, marker)
             with patch.dict(os.environ, {'PATH': bindir + os.pathsep + os.environ['PATH']}):
                 self.assertFalse(gc.merge_info('topic', root)[0])
                 git_run('update-ref', 'refs/remotes/origin/main', 'HEAD', cwd=root)
                 self.assertTrue(gc.merge_info('topic', root)[0])
+            self.assertTrue(marker.is_file())
 
     def test_merge_unknowns_never_authorize_removal(self):
         import shutil
@@ -321,6 +328,7 @@ class WorktreeGCTests(unittest.TestCase):
                     else:
                         gh.write_text('#!/bin/sh\nexit 1\n')
                     gh.chmod(0o755)
+                    gh_marker = mark(gh, Path(bindir) / 'gh-ran')
                     git = Path(bindir) / 'git'
                     # Fake only merge-base; delegate everything else to the real git.
                     git.write_text(
@@ -330,8 +338,12 @@ class WorktreeGCTests(unittest.TestCase):
                         f'exec {real_git} "$@"\n'
                     )
                     git.chmod(0o755)
+                    git_marker = mark(git, Path(bindir) / 'git-ran')
                     with patch.dict(os.environ, {'PATH': bindir + os.pathsep + os.environ['PATH']}):
                         self.assertIs(gc.merge_info('topic')[0], expected)
+                    self.assertTrue(gh_marker.is_file())
+                    if any('headRefOid' in record for record in records):
+                        self.assertTrue(git_marker.is_file())
 
     def test_gc_keeps_parent_of_running_registered_evidence(self):
         with tempfile.TemporaryDirectory() as temp, patch.dict(os.environ, {'XDG_CACHE_HOME': temp}):
@@ -390,8 +402,10 @@ class WorktreeGCTests(unittest.TestCase):
                 'esac\n'
             )
             gh.chmod(0o755)
+            marker = mark(gh, Path(bindir) / 'gh-ran')
             with patch.dict(os.environ, {'PATH': bindir + os.pathsep + os.environ['PATH']}):
                 removals, skipped, move = gc.plan_worktree_gc(root)
+            self.assertTrue(marker.is_file())
             self.assertEqual([item['branch'] for item in removals], ['merged-clean'])
             reasons = {item['branch'] or 'detached': item['reason'] for item in skipped}
             self.assertIn('current checkout', reasons['main'])
@@ -464,6 +478,7 @@ class WorktreeGCTests(unittest.TestCase):
             gh = Path(bindir) / 'gh'
             gh.write_text('#!/bin/sh\nexit 1\n')
             gh.chmod(0o755)
+            marker = mark(gh, Path(bindir) / 'gh-ran')
             with patch.dict(os.environ, {'PATH': bindir + os.pathsep + os.environ['PATH']}):
                 with contextlib.redirect_stdout(io.StringIO()):
                     _removals, _skipped, move = gc.gc_worktrees(root, True)
@@ -473,6 +488,7 @@ class WorktreeGCTests(unittest.TestCase):
                 self.assertIsNotNone(move)
                 with contextlib.redirect_stdout(io.StringIO()):
                     gc.gc_worktrees(root, False)
+            self.assertTrue(marker.is_file())
             self.assertFalse(doomed.exists())
             picked = fixtures.accepted_fixtures()[0] / 'disk.qcow2'
             self.assertIsNotNone(picked)
@@ -516,6 +532,7 @@ class WorktreeGCTests(unittest.TestCase):
             gh = Path(bindir) / 'gh'
             gh.write_text('#!/bin/sh\nexit 1\n')
             gh.chmod(0o755)
+            marker = mark(gh, Path(bindir) / 'gh-ran')
             with patch.dict(os.environ, {'PATH': bindir + os.pathsep + os.environ['PATH']}):
                 removals, _skipped, move = gc.plan_worktree_gc(root)
                 # The worktree holding a real alongside dir is reported as a removal ...
@@ -540,6 +557,7 @@ class WorktreeGCTests(unittest.TestCase):
                 with contextlib.redirect_stdout(io.StringIO()):
                     gc.gc_worktrees(root, False)
             self.assertFalse(doomed.exists())
+            self.assertTrue(marker.is_file())
             self.assertTrue((shared / 'disk.qcow2').is_file())
             self.assertTrue((shared / 'READY').is_file())
 

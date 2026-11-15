@@ -11,6 +11,8 @@ from unittest.mock import patch
 ROOT = Path(__file__).resolve().parents[1]
 from tools.release import iso_checksums as iso
 from tools.release import key as key
+from tests.git_isolation import check_git_output
+from tests.fake_commands import mark
 
 TAG = 'v0.3.0-2'
 
@@ -126,7 +128,7 @@ class IsoChecksumsTests(unittest.TestCase):
 
     def checkout(self):
         def git(*args):
-            return subprocess.check_output(['git', '-C', str(self.root), *args], text=True).strip()
+            return check_git_output(*args, cwd=self.root, text=True).strip()
 
         git('init', '-q')
         git('config', 'user.name', 'Disposable')
@@ -206,6 +208,7 @@ class IsoChecksumsTests(unittest.TestCase):
             gh = Path(bindir) / 'gh'
             gh.write_text(f"#!/bin/sh\nprintf '%s' '{json.dumps(dict(tag_name=TAG, draft=False, prerelease=False))}'\n")
             gh.chmod(0o755)
+            marker = mark(gh, Path(bindir) / 'gh-ran')
             with (
                 patch.dict(os.environ, environment | {'PATH': bindir + os.pathsep + os.environ['PATH']}),
                 patch.object(sys, 'argv', arguments),
@@ -213,6 +216,7 @@ class IsoChecksumsTests(unittest.TestCase):
                 # The read-only GitHub lookup runs for real against a fake gh;
                 # git validation and signing are real.
                 iso.main()
+            self.assertTrue(marker.is_file())
             self.assertNotIn('PACKAGE_SIGNING_KEY', os.environ)
         (self.output / self.image.name).write_bytes(self.image.read_bytes())
         self.assertTrue(self.friend_verifies())

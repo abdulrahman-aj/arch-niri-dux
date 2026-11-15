@@ -2,11 +2,11 @@
 
 import hashlib
 from pathlib import Path
-import subprocess
 import tempfile
 import unittest
 
 from tools.workspace.source import checkout_state
+from tests.git_isolation import check_git_output
 
 
 class CheckoutEvidenceTests(unittest.TestCase):
@@ -15,7 +15,7 @@ class CheckoutEvidenceTests(unittest.TestCase):
             root = Path(temporary)
 
             def git(*args):
-                return subprocess.check_output(['git', '-C', str(root), *args])
+                return check_git_output(*args, cwd=root)
 
             git('init', '-q')
             (root / '.gitignore').write_text('out/\n')

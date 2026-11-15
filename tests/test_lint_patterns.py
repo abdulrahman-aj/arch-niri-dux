@@ -280,5 +280,62 @@ class PatchedRepoFunctionTests(unittest.TestCase):
                 self.assertEqual(flagged_tests(source), [])
 
 
+class AllowCommentTests(unittest.TestCase):
+    # The parser reads source lines, so fixtures splice the directive
+    # together: a whole directive on one source line would itself parse as
+    # an opt-out under test.
+    head = '# lint-patterns: allo'
+
+    def directive(self, rule, reason='outcome asserted below'):
+        return f'{self.head}w {rule} -- {reason}'
+
+    def test_allow_with_reason_silences_that_line(self):
+        source = f'mock.assert_called_once()  {self.directive("mock_interaction_assertion")}\n'
+        source += "self.assertEqual(calls, ['a'])\n"
+        self.assertEqual(flagged_tests(source), [])
+
+    def test_allow_for_another_rule_does_not_silence(self):
+        source = f'mock.assert_called_once()  {self.directive("patched_repo_function")}\n'
+        found = flagged_tests(source)
+        self.assertEqual(len(found), 1)
+        self.assertIn('mock interaction assertion', found[0])
+
+    def test_missing_reason_is_an_error_and_keeps_the_violation(self):
+        comments = (
+            f'{self.head}w mock_interaction_assertion',
+            f'{self.head}w mock_interaction_assertion --',
+            f'{self.head}w mock_interaction_assertion --   ',
+        )
+        for comment in comments:
+            with self.subTest(comment=comment):
+                found = flagged_tests(f'mock.assert_called_once()  {comment}\n')
+                self.assertEqual(len(found), 2)
+                self.assertTrue(any('mock interaction assertion' in item for item in found))
+                self.assertTrue(any('needs a reason' in item for item in found))
+
+    def test_unknown_rule_is_an_error_and_keeps_the_violation(self):
+        found = flagged_tests(f'mock.assert_called_once()  {self.directive("no_such_rule", "plausible")}\n')
+        self.assertEqual(len(found), 2)
+        self.assertTrue(any('mock interaction assertion' in item for item in found))
+        self.assertTrue(any("unknown lint-patterns rule 'no_such_rule'" in item for item in found))
+
+    def test_missing_rule_name_is_an_error(self):
+        found = flagged_tests(f'mock.assert_called_once()  {self.head}w\n')
+        self.assertEqual(len(found), 2)
+        self.assertTrue(any('needs a rule name' in item for item in found))
+
+    def test_tools_rule_opt_out_silences_that_line(self):
+        source = 'try:\n    work()\nexcept Exception:\n    pass\n'
+        self.assertEqual(len(flagged(source)), 1)
+        allowed = (
+            f'try:\n    work()\nexcept Exception:  {self.directive("swallowed_broad_except", "aborts")}\n    pass\n'
+        )
+        self.assertEqual(flagged(allowed), [])
+
+    def test_valid_opt_out_on_a_clean_line_is_quiet(self):
+        source = f"self.assertEqual(calls, ['a'])  {self.directive('mock_interaction_assertion', 'nothing')}\n"
+        self.assertEqual(flagged_tests(source), [])
+
+
 if __name__ == '__main__':
     unittest.main()

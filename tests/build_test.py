@@ -2,6 +2,7 @@
 
 import hashlib
 from pathlib import Path
+import shutil
 import tempfile
 import unittest
 from unittest.mock import patch
@@ -353,12 +354,19 @@ class BootstrapMirrorTests(unittest.TestCase):
             (fake_bin / 'curl').chmod(0o755)
             (fake_bin / 'gpgv').write_text('#!/bin/bash\ntest -f "$3"\n')
             (fake_bin / 'gpgv').chmod(0o755)
+            # Only these host utilities stay reachable; every other name on
+            # PATH is a fake, so a missing curl fake fails closed instead of
+            # downloading from the real network.
+            for name in ('bash', 'basename', 'dirname', 'mkdir', 'mktemp', 'mv', 'rm', 'sha256sum'):
+                target = fake_bin / name
+                if not target.exists():
+                    target.symlink_to(shutil.which(name))
             cache, partial = root / 'cache', root / 'partial'
             cache.mkdir()
             partial.mkdir()
             script = Path(__file__).resolve().parents[1] / 'tools/build/fetch_bootstrap.sh'
             environment = os.environ | {
-                'PATH': str(fake_bin) + ':' + os.environ['PATH'],
+                'PATH': str(fake_bin),
                 'REQUESTS_LOG': str(requests_log),
             }
             result = subprocess.run(

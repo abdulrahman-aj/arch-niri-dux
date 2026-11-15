@@ -2,9 +2,16 @@
 
 Each rule names the pattern it guards against; the definitions and the counts that justified them are in the
 pull request that added the rule.
+
+A single line can opt out with a trailing `# lint-patterns:` comment of the
+form `allow <rule> -- <reason>`, for example allowing
+`mock_interaction_assertion` because the outcome is asserted below.
+The comment must sit on the reported line, name a known rule, and give
+a reason after `--`; anything else is itself a violation.
 """
 
 import ast
+import re
 from pathlib import Path
 import subprocess
 
@@ -260,12 +267,46 @@ RULES = (
     patched_repo_function,
 )
 
+RULE_NAMES = {rule.__name__ for rule in RULES}
+ALLOW = re.compile(r'#\s*lint-patterns:\s*allow\b(?P<tail>.*)$')
+
+
+def parse_opt_outs(source):
+    """Split lint-patterns allow comments into suppressions and errors.
+
+    Returns ({line: {rule names}}, [(line, message)]). An unknown rule or
+    a missing reason is an error, and the invalid comment suppresses
+    nothing, so the original violation still reports.
+    """
+    allowed = {}
+    errors = []
+    for number, line in enumerate(source.splitlines(), 1):
+        match = ALLOW.search(line)
+        if match is None:
+            continue
+        head, separator, rest = match.group('tail').partition('--')
+        rule = head.strip()
+        reason = rest.strip() if separator else ''
+        if not rule:
+            errors.append((number, 'lint-patterns allow needs a rule name'))
+        elif rule not in RULE_NAMES:
+            errors.append((number, f"unknown lint-patterns rule '{rule}'"))
+        elif not reason:
+            errors.append((number, f"lint-patterns allow '{rule}' needs a reason after --"))
+        else:
+            allowed.setdefault(number, set()).add(rule)
+    return allowed, errors
+
 
 def violations(path, source):
     tree = ast.parse(source, filename=str(path))
+    allowed, opt_out_errors = parse_opt_outs(source)
     for rule in RULES:
         for line, message in rule(path, tree):
-            yield f'{path}:{line}: {message}'
+            if rule.__name__ not in allowed.get(line, ()):
+                yield f'{path}:{line}: {message}'
+    for line, message in opt_out_errors:
+        yield f'{path}:{line}: {message}'
 
 
 def sources():
