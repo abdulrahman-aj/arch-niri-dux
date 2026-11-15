@@ -50,6 +50,20 @@ class ImportBoundaryTests(unittest.TestCase):
         source = 'from . import storage\nimport storage'
         self.assertEqual(list(violations(Path('installer/wizard.py'), source)), [])
 
+    def test_only_storage_runs_disk_writing_commands(self):
+        for path, source in (
+            ('installer/install.py', "run('mkfs.btrfs', '--force', mapped)"),
+            ('installer/install.py', "run('cryptsetup', 'close', MAPPER)"),
+            ('installer/wizard.py', "subprocess.run(['umount', '--recursive', str(TARGET)], check=False)"),
+            ('installer/payload.py', "subprocess.run(('sgdisk', '--zap-all', disk))"),
+            ('installer/install.py', "subprocess.run('wipefs --all /dev/vda', shell=True)"),
+        ):
+            with self.subTest(path=path, source=source):
+                self.assertTrue(list(violations(Path(path), source)))
+                self.assertEqual(list(violations(Path('installer/storage.py'), source)), [])
+        harmless = "run('blkid', '-s', 'UUID', device)\nprint('mount the disk')\nshutil.which('sgdisk')"
+        self.assertEqual(list(violations(Path('installer/install.py'), harmless)), [])
+
 
 class ArtifactImportTests(unittest.TestCase):
     def test_artifact_consumer_does_not_load_publication_or_probes(self):

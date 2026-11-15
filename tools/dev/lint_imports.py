@@ -1,4 +1,5 @@
-"""Check the architectural import boundaries established by the tooling move."""
+"""Check the architectural import boundaries established by the tooling move, and that only the
+installer's storage module runs disk-writing commands."""
 
 import ast
 from pathlib import Path
@@ -11,11 +12,36 @@ INSTALLER_LAYERS = {
     'installer.payload': ['installer.install', 'installer.wizard'],
     'installer.wizard': ['installer.install', 'installer.payload'],
 }
+# Disk writes and target mounts belong in installer/storage.py, behind its revalidate-then-write checks.
+DISK_COMMANDS = ('cryptsetup', 'mount', 'umount', 'sfdisk', 'sgdisk', 'wipefs')
+RUNNERS = ('run', 'Popen', 'call', 'check_call', 'check_output', 'system')
+
+
+def disk_command_violations(path, tree):
+    if path.parts[0] != 'installer' or path.name == 'storage.py':
+        return
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.Call) or not node.args:
+            continue
+        runner = node.func.attr if isinstance(node.func, ast.Attribute) else getattr(node.func, 'id', '')
+        if runner not in RUNNERS:
+            continue
+        # The command is the first argument: run('mount', ...), subprocess.run(['umount', ...]) or a shell string.
+        command = node.args[0]
+        if isinstance(command, (ast.List, ast.Tuple)) and command.elts:
+            command = command.elts[0]
+        if not isinstance(command, ast.Constant) or not isinstance(command.value, str):
+            continue
+        name = (command.value.split() or [''])[0]
+        if name in DISK_COMMANDS or name.startswith('mkfs'):
+            yield f'{path}:{node.lineno}: {name} writes to disk; run it from installer/storage.py'
 
 
 def violations(path, source):
     module = '.'.join(path.with_suffix('').parts)
-    for node in ast.walk(ast.parse(source)):
+    tree = ast.parse(source)
+    yield from disk_command_violations(path, tree)
+    for node in ast.walk(tree):
         if isinstance(node, ast.Import):
             names = [alias.name for alias in node.names]
             if module.startswith(('tools.packages.', 'tools.build.')) and 'tools' in names:

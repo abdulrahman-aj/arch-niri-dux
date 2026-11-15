@@ -27,14 +27,6 @@ run = storage.run
 
 
 TARGET = Path('/mnt/arch-niri-dux')
-MAPPER = 'dux-root'
-SUBVOLUMES = {
-    '@': '/',
-    '@home': '/home',
-    '@log': '/var/log',
-    '@cache': '/var/cache/pacman/pkg',
-    '@snapshots': '/.snapshots',
-}
 
 
 @dataclass
@@ -360,8 +352,8 @@ def install(settings, state=None, progress=None):
     original_device = storage.require_disk(settings.disk)
     if state.confirmed_device is not None and original_device != state.confirmed_device:
         raise ValueError('The confirmed disk was replaced; refusing to erase it.')
-    if Path('/dev/mapper', MAPPER).exists():
-        raise ValueError(f'/dev/mapper/{MAPPER} is already in use.')
+    if Path('/dev/mapper', storage.MAPPER).exists():
+        raise ValueError(f'/dev/mapper/{storage.MAPPER} is already in use.')
     if os.path.ismount(TARGET):
         raise ValueError('Installation mountpoint is already mounted.')
     packages_file = payload.SHARE / 'packages.target'
@@ -398,13 +390,6 @@ def install(settings, state=None, progress=None):
         available_bytes = (settings.free_region[1] - settings.free_region[0] + 1) * snapshot['table']['sectorsize']
         print('Create partitions (inclusive logical sectors):', plan, flush=True)
     size = storage.swap_size(settings.swap_gib, available_bytes)
-    subvolumes = dict(SUBVOLUMES)
-    if size:
-        subvolumes['@swap'] = '/swap'
-
-    mapped = '/dev/mapper/' + MAPPER
-    mounted = False
-    opened = False
     TARGET.mkdir(parents=True, exist_ok=True)
     with tempfile.TemporaryDirectory(prefix='dux-install-', dir='/run') as staging:
         stage = Path(staging)
@@ -438,53 +423,12 @@ def install(settings, state=None, progress=None):
         )
         if storage.require_disk(settings.disk) != original_device:
             raise ValueError('Disk identity changed during package preflight; refusing to erase it.')
-        try:
-            progress.step(2, 'Partitioning and encrypting the selected disk')
-            esp, encrypted = storage.create_partitions(settings, snapshot, original_device, state.begin)
-            run('mkfs.fat', '-F', '32', '-n', 'DUX_EFI', esp)
-            # LUKS2 uses cryptsetup's default argon2id (benchmarked memory, ~1 GiB here);
-            # no pinned limit is set.
-            run(
-                'cryptsetup',
-                'luksFormat',
-                '--batch-mode',
-                '--type',
-                'luks2',
-                '--key-file',
-                '-',
-                encrypted,
-                data=settings.passphrase,
-            )
-            run('cryptsetup', 'open', '--key-file', '-', encrypted, MAPPER, data=settings.passphrase)
-            opened = True
-            run('mkfs.btrfs', '--force', '--label', 'DUX_ROOT', mapped)
-            run('mount', mapped, str(TARGET))
-            mounted = True
-            for volume in subvolumes:
-                run('btrfs', 'subvolume', 'create', str(TARGET / volume))
-            run('umount', str(TARGET))
-            mounted = False
-            run('mount', '-o', 'subvol=@,compress=zstd:1,noatime', mapped, str(TARGET))
-            mounted = True
-            for volume, location in subvolumes.items():
-                if location == '/':
-                    continue
-                mountpoint = TARGET / location.lstrip('/')
-                mountpoint.mkdir(parents=True, exist_ok=True)
-                run('mount', '-o', f'subvol={volume},compress=zstd:1,noatime', mapped, str(mountpoint))
-            (TARGET / 'boot').mkdir(exist_ok=True)
-            run('mount', '-o', 'umask=0077', esp, str(TARGET / 'boot'))
-            resume_offset = ''
-            if size:
-                # mkswapfile sets NODATACOW and disables compression for this file.
-                # A separate subvolume keeps it outside every root snapshot.
-                (TARGET / 'swap').chmod(0o700)
-                run('btrfs', 'filesystem', 'mkswapfile', '--size', f'{size}G', str(TARGET / 'swap/swapfile'))
-                resume_offset = run(
-                    'btrfs', 'inspect-internal', 'map-swapfile', '-r', str(TARGET / 'swap/swapfile'), capture=True
-                )
-                if not re.fullmatch(r'[0-9]+', resume_offset):
-                    raise ValueError('Btrfs returned an invalid swap resume offset.')
+        progress.step(2, 'Partitioning and encrypting the selected disk')
+        with storage.prepared_target(settings, snapshot, original_device, state.begin, TARGET, size) as (
+            encrypted,
+            mapped,
+            resume_offset,
+        ):
             progress.step(3, 'Installing packages from the USB', packages=True)
             # Delay snap-pac until Snapper and a bootable baseline exist.
             base_packages = [package for package in packages if package != 'snap-pac'] + ['arch-niri-dux']
@@ -535,11 +479,6 @@ def install(settings, state=None, progress=None):
                 register_alongside_boot(settings, snapshot, plan)
                 write_boot_config(luks_uuid, filesystem_uuid, resume_offset)
             run('sync')
-        finally:
-            if mounted:
-                subprocess.run(['umount', '--recursive', str(TARGET)], check=False)
-            if opened:
-                subprocess.run(['cryptsetup', 'close', MAPPER], check=False)
     elapsed = round(time.monotonic() - started_at)
     print(
         f'\nINSTALLATION COMPLETE — took {elapsed} seconds. Remove the USB and reboot.\n'
@@ -582,7 +521,7 @@ def main():
             detail = (
                 "\nBefore retrying, release this attempt's mounts and mappings:\n"
                 f'  umount -R {TARGET}\n'
-                f'  cryptsetup close {MAPPER}'
+                f'  cryptsetup close {storage.MAPPER}'
             )
         print(f'\nInstallation stopped: {error}\n{consequence}{detail}', file=sys.stderr)
         return 1
