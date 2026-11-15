@@ -20,6 +20,32 @@ def violations(path, source):
             names = [base, *(base + '.' + alias.name for alias in node.names)]
         else:
             continue
+        guest = module == 'tools.verification.probes' or module.startswith('tools.verification.probes.')
+        shared = module in ('tools.verification.constants', 'tools.verification.images')
+        dependencies = (
+            [(base + '.' + alias.name) for alias in node.names] if isinstance(node, ast.ImportFrom) else names
+        )
+        allowed = (
+            (
+                'tools.verification.probes',
+                'tools.verification.constants',
+                'tools.verification.images',
+                'tools.packages',
+                'tools.digest',
+            )
+            if guest
+            else ('tools.digest',)
+        )
+        if guest or shared:
+            for name in dependencies:
+                if (name == 'tools' or name.startswith('tools.')) and not any(
+                    name == prefix or name.startswith(prefix + '.') for prefix in allowed
+                ):
+                    yield f'{path}:{node.lineno}: forbidden import {name}'
+        elif any(
+            name == 'tools.verification.probes' or name.startswith('tools.verification.probes.') for name in names
+        ):
+            yield f'{path}:{node.lineno}: host code imports a guest-only probe'
         forbidden = []
         if module.startswith('tools.packages.'):
             forbidden = ['tools.build', 'tools.release', 'tools.verification']
@@ -27,6 +53,8 @@ def violations(path, source):
             forbidden = ['tools.release']
         elif module in ('tools.workspace.state', 'tools.workspace.resources', 'tools.workspace.fixtures'):
             forbidden = ['tools.workspace.gc', 'tools.workspace.__main__']
+        elif module == 'tools.vm.control':
+            forbidden = ['tools.verification']
         elif module.startswith('installer.'):
             forbidden = ['tools']
         for name in names:
@@ -34,7 +62,6 @@ def violations(path, source):
                 yield f'{path}:{node.lineno}: forbidden import {name}'
 
 
-# TODO phase 5: guest probes must not import host VM controls after their split.
 def main():
     errors = []
     for directory in ('tools', 'installer'):

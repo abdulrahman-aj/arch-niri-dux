@@ -11,7 +11,7 @@ class LifecycleTests(unittest.TestCase):
                 'fakeroot',
                 'python3',
                 '-c',
-                'from tools.verification.key_lifecycle import qualify; from pathlib import Path; '
+                'from tools.verification.probes.key_lifecycle import qualify; from pathlib import Path; '
                 f'qualify(Path({str(root / "desktop/usr/bin/arch-niri-dux-keyring-recover")!r}), fakeroot=False)',
             ],
             cwd=root,

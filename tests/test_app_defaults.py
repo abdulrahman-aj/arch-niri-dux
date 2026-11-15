@@ -7,7 +7,7 @@ from pathlib import Path
 import unittest
 
 
-from tools.verification.pdf import sample_pdf_bytes
+from tools.verification.probes.pdf import sample_pdf_bytes
 
 ROOT = Path(__file__).resolve().parents[1]
 FACTORY = ROOT / 'desktop/etc/xdg/mimeapps.list'

@@ -12,7 +12,7 @@ from pathlib import Path
 import re
 import sys
 
-from tools.verification.vm import VM
+from tools.vm.control import VM
 
 ANSI_RE = re.compile(r'\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)|\x1b\[[0-?]*[ -/]*[@-~]|\x1b[@-Z\\-_]')
 MARKER_RE = re.compile(r'__VERIFY_[0-9A-Fa-f]+__:[0-9]+')
@@ -69,7 +69,7 @@ def main():
         elif args.verb == 'probe':
             if len(args.args) < 2:
                 parser.error('probe needs a module and a function.')
-            print(clean_output(vm.probe(args.args[0], *args.args[1:])), end='')
+            print(clean_output(probe(vm, args.args[0], *args.args[1:])), end='')
         elif args.verb == 'preview-sync':
             if args.args or not (directory / 'installer-preview.json').is_file():
                 parser.error('preview-sync needs an installer preview and takes no arguments.')
@@ -86,7 +86,7 @@ def main():
                     raise RuntimeError('Preview has no readable screenshot surface.')
                 print(path)
             else:
-                vm.probe('guest', 'screenshot', name)
+                probe(vm, 'guest', 'screenshot', name)
                 print(directory / name)
         elif args.verb == 'click':
             if len(args.args) != 2:
@@ -124,3 +124,5 @@ def main():
 
 if __name__ == '__main__':
     main()
+
+from tools.verification.payload import probe

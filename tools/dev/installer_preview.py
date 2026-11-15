@@ -10,7 +10,7 @@ import subprocess
 
 from tools.workspace import state as workspace
 from tools.workspace import resources
-from tools.verification.vm import VM
+from tools.vm.control import VM
 
 ROOT = Path(__file__).resolve().parents[2]
 
@@ -62,7 +62,7 @@ def main():
     try:
         vm.start(software_display=True)
         vm.expect(r'root@archiso[^\n]*#', timeout=180)
-        vm.mount_probes()
+        mount_probes(vm)
         sync_installer(vm, directory)
         kept = True
         console = f'./scripts/in-dev-shell python3 -m tools.vm.console --directory {shlex.quote(str(directory))}'
@@ -78,3 +78,5 @@ def main():
 
 if __name__ == '__main__':
     main()
+
+from tools.verification.payload import mount_probes

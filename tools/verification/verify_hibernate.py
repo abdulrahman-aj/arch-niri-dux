@@ -7,13 +7,14 @@ from pathlib import Path
 import re
 import subprocess
 import sys
-
 from tools.workspace.resources import disk_guard
-
 from tools.digest import digest
 from tools.verification.evidence import Evidence
-
-from tools.verification.vm import VM, PASSWORD, installed_login, stage_probes
+from tools.vm.control import VM
+from tools.verification.constants import PASSWORD
+from tools.verification.login import installed_login
+from tools.verification.payload import stage_probes
+from tools.verification.payload import mount_probes
 
 
 def main():
@@ -40,8 +41,8 @@ def main():
     try:
         vm.start(cdrom=False)
         installed_login(vm)
-        vm.mount_probes()
-        vm.command('cd /run/verify && python -m tools.verification.boot prepare-hibernate')
+        mount_probes(vm)
+        vm.command('cd /run/verify && python -m tools.verification.probes.boot prepare-hibernate')
         expected = json.loads((directory / 'hibernate-expected.json').read_text())
         # The installation has no 9p share. Detach this test instrument before
         # sleep so a fresh QEMU server need not recover the old client's FIDs.

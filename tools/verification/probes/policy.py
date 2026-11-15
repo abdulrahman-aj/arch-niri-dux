@@ -4,9 +4,7 @@ import json
 from pathlib import Path
 import subprocess
 import pwd
-
 from tools.digest import digest
-
 from . import dispatch
 from .guest import run, user_command, wait_until
 
@@ -23,6 +21,8 @@ SYSTEM_UNITS = (
     'avahi-daemon.service',
     'greetd.service',
 )
+
+
 USER_UNITS = ('dms.service', 'dsearch.service', 'dcal.service', 'dfiles.service', 'dux-application-themes.service')
 
 

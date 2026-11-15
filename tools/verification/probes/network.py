@@ -11,19 +11,37 @@ import struct
 import subprocess
 import threading
 import time
-
 from . import dispatch
 from .guest import run, wait_until
 
+
 NAMESPACE = 'verify-peer'
+
+
 HOST_LINK = 'verify-host'
+
+
 HOST_V4, PEER_V4 = '192.0.2.1', '192.0.2.2'
+
+
 HOST_V6, PEER_V6 = 'fd00:d0c5::1', 'fd00:d0c5::2'
+
+
 PORT = 8765
+
+
 PEER_NAME = 'verify-peer.local'
+
+
 LOCAL_RULE = Path('/etc/arch-niri-dux/firewall.d/90-verify.nft')
+
+
 MDNS_GROUP = '224.0.0.251'
+
+
 IGMP_GROUP = '239.255.0.17'
+
+
 UNIT = 'arch-niri-dux-firewall.service'
 
 
@@ -120,7 +138,7 @@ def igmp_query_answered():
             socket.IP_ADD_MEMBERSHIP,
             socket.inet_aton(IGMP_GROUP) + socket.inet_aton(HOST_V4),
         )
-        query = ['ip', 'netns', 'exec', NAMESPACE, 'python', '-m', 'tools.verification.network', 'igmp-query']
+        query = ['ip', 'netns', 'exec', NAMESPACE, 'python', '-m', 'tools.verification.probes.network', 'igmp-query']
         return subprocess.run(query, cwd='/run/verify', check=False).returncode == 0
 
 
@@ -212,7 +230,7 @@ def mdns_admitted():
                 NAMESPACE,
                 'python',
                 '-m',
-                'tools.verification.network',
+                'tools.verification.probes.network',
                 'mdns-send',
                 cwd='/run/verify',
             )
@@ -256,7 +274,7 @@ def check():
     try:
         create_neighbour()
         assert connect('127.0.0.1') == 'open', 'Loopback must stay reachable.'
-        processes.append(peer('python', '-m', 'tools.verification.network', 'listener', cwd='/run/verify'))
+        processes.append(peer('python', '-m', 'tools.verification.probes.network', 'listener', cwd='/run/verify'))
         # IPv6 needs neighbour advertisements from the peer before any SYN leaves.
         # Outbound first also fills both neighbour caches, so a slow ARP or ND
         # exchange cannot pass for a dropped SYN below.
@@ -284,7 +302,7 @@ def check():
         received = mdns_admitted()
         assert received == ['response'], f'Only mDNS responses may reach the host, got {received}'
 
-        processes.append(peer('python', '-m', 'tools.verification.network', 'responder', cwd='/run/verify'))
+        processes.append(peer('python', '-m', 'tools.verification.probes.network', 'responder', cwd='/run/verify'))
         wait_until(
             f'mDNS resolution of {PEER_NAME}',
             lambda: (

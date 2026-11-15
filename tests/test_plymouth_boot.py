@@ -3,7 +3,7 @@ import tempfile
 import unittest
 
 ROOT = Path(__file__).resolve().parents[1]
-from tools.verification import boot as guest
+from tools.verification.probes import boot as guest
 
 
 class PlymouthFallbackTests(unittest.TestCase):

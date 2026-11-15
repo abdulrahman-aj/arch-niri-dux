@@ -10,7 +10,7 @@ import sys
 import tempfile
 import unittest
 
-from tools.verification import vm as verify
+from tools.vm import control as verify
 from tools.vm import console as vm_console
 from tools.workspace import fixtures, resources
 
@@ -153,7 +153,7 @@ class CleanOutputTests(unittest.TestCase):
 
 
 class StubVM:
-    """Stand-in for tools.verification.vm.VM: echoes each script back with a completion marker."""
+    """Stand-in for tools.vm.control.VM: echoes each script back with a completion marker."""
 
     def __init__(self):
         self.scripts = []

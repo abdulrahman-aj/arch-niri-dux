@@ -6,8 +6,8 @@ import unittest
 from unittest.mock import patch
 
 from installer import install as installer
-from tools.verification import boot
-from tools.verification.boot import configured_cmdline
+from tools.verification.probes import boot
+from tools.verification.probes.boot import configured_cmdline
 
 
 class MachineBootTests(unittest.TestCase):
