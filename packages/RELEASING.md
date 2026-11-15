@@ -129,7 +129,7 @@ the encrypted backup, inspection, access to each key, and restoring the GitHub
 signing secret. **Keep the full encrypted backup off-machine and its password
 separately.** GitHub stores only the working signing subkey.
 
-Initial provisioning uses `tools/release/key.py --passphrase-file PATH`.
+Initial provisioning uses `python3 -m tools.release.key --passphrase-file PATH`.
 Ordinary releases use the existing CI secret. Preparation and `--restore` are offline by default. Only explicit `--upload`
 replaces the live secret; restoration does not rotate or renew keys.
 

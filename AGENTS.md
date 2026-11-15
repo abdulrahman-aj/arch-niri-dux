@@ -23,7 +23,7 @@ Enter the Nix dev shell with `nix develop`. Make targets enter it automatically.
 
 While iterating on installer screens, use `make installer-preview` (edit to screen in about a second) instead of
 rebuilding the ISO; for desktop files, use the kept `verify-fast` VM. Don't write your own QEMU drivers: drive both
-with `tools/vm/console.py`. Previews never qualify a change; the table above still applies to the final head.
+with `python3 -m tools.vm.console`. Previews never qualify a change; the table above still applies to the final head.
 
 `make lint` and `make test` are light: run them before every PR, on any
 machine, including one with `AGENT_HEAVY_JOBS=deny` (heavy targets refuse

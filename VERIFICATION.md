@@ -61,7 +61,7 @@ button, its seeds, or Dux itself. Releases qualify delivery separately through
 serial/QMP sockets under `<evidence>/.sockets` and prints attach commands;
 the failed disk is still unlinked, so it can never become a fixture (QEMU
 holds the open file; the space frees at poweroff). Attach with
-`tools/vm/console.py --directory <evidence> sh '<command>'`, rerun one
+`python3 -m tools.vm.console --directory <evidence> sh '<command>'`, rerun one
 reboot-free stage (`... stage <apps|browser|camera|desktop|dux_update|pdf>`),
 then `... poweroff`. Suspend and recovery reboot the guest, so they are
 rejected. On success `--keep` changes nothing.
@@ -108,7 +108,7 @@ sockets under `out/debug/.sockets` and prints paste-ready attach commands
 (the same block prints if the run fails, when the live guest is most useful).
 Without `--keep`, behavior is unchanged.
 
-Drive the kept VM with `tools/vm/console.py` (one driver at a time):
+Drive the kept VM with `python3 -m tools.vm.console` (one driver at a time):
 
 ```
 ./scripts/in-dev-shell python3 -m tools.vm.console --directory out/debug sh '<command>'
@@ -124,7 +124,7 @@ evidence directory is mounted in the guest at `/run/verify`, so copy a changed
 file into `out/debug/` on the host, then e.g.
 `sh 'cp /run/verify/ReleaseWidget.qml /etc/xdg/quickshell/dms-plugins/archNiriDuxRelease/ReleaseWidget.qml'`.
 For multi-line guest work, pipe a script on stdin instead of nested quoting:
-`tools/vm/console.py --directory out/debug sh < fix.sh`. Commands needing
+`python3 -m tools.vm.console --directory out/debug sh < fix.sh`. Commands needing
 the tester user's environment are best run as probes (`probe <module>
 <function>`), which get the full environment from `guest.user_command`.
 `shot <name.png>` takes a real desktop screenshot via the guest.
