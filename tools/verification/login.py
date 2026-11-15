@@ -52,13 +52,13 @@ def installed_login(vm, keyboard_unlock=False, screenshot_tag=None):
     if keyboard_unlock:
         wait_for_password_screen(vm, screenshot_tag + '-prompt')
         vm.type_graphical('wrong-passphrase-retry')
-        vm.key('ret')
+        vm.chord('ret')
         # Let LUKS finish its intentionally expensive password check, then
         # require the password screen again before attempting the correct key.
         time.sleep(3)
         wait_for_password_screen(vm, screenshot_tag + '-retry')
         vm.type_graphical(PASSWORD)
-        vm.key('ret')
+        vm.chord('ret')
     else:
         vm.expect(r'(?i)(passphrase|password).*?:', timeout=180)
         if screenshot_tag is not None:
@@ -91,7 +91,7 @@ def graphical_login(vm):
     vm.click(0.5, 0.443)
     time.sleep(0.3)
     vm.type_graphical(PASSWORD)
-    vm.key('ret')
+    vm.chord('ret')
     vm.command(
         'for attempt in $(seq 1 60); do pgrep -u tester -x niri >/dev/null && exit 0; sleep 1; done; exit 1', timeout=90
     )

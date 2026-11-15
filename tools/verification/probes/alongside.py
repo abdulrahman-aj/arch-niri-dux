@@ -1,9 +1,8 @@
 """Guest-only planning for existing Linux and Windows fixtures."""
 
-import json
-from pathlib import Path
 import sys
 from . import dispatch
+from .guest import record
 
 
 def plan():
@@ -48,10 +47,9 @@ def plan():
             'existing_boot',
         )
     }
-    evidence = Path('/run/verify')
-    (evidence / 'install.json').write_text(json.dumps(configuration))
-    (evidence / 'old-partitions.json').write_text(json.dumps(snapshot['table']['partitions']))
-    (evidence / 'new-partitions.json').write_text(json.dumps(storage.alongside_plan(settings, snapshot)))
+    record('install', configuration)
+    record('old-partitions', snapshot['table']['partitions'])
+    record('new-partitions', storage.alongside_plan(settings, snapshot))
 
 
 if __name__ == '__main__':

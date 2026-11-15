@@ -2,6 +2,7 @@
 
 import json
 from pathlib import Path
+import shlex
 import shutil
 import subprocess
 import time
@@ -91,15 +92,14 @@ def run_fixture(args, parser):
         )
         vm.command(
             'cd /run/verify && runuser -u tester -- python -m tools.packages.integration '
-            f'/tmp/fast/source /tmp/fast/build /tmp/fast/packages --epoch {epoch}',
+            f'/tmp/fast/source /tmp/fast/build /tmp/fast/packages --epoch {shlex.quote(str(epoch))}',
             timeout=180,
         )
         probe(vm, 'policy', 'record-boot')
-        kernel = ' /run/verify/kernel.pkg.tar.zst' if args.kernel_package else ''
+        kernel = [shlex.quote('/run/verify/kernel.pkg.tar.zst')] if args.kernel_package else []
         vm.command(
-            'pacman -U --noconfirm /tmp/fast/packages/*.pkg.tar.zst'
-            + kernel
-            + ' >/run/verify/boot-policy-transaction.log 2>&1; '
+            f'pacman -U --noconfirm /tmp/fast/packages/*.pkg.tar.zst {shlex.join(kernel)}'
+            ' >/run/verify/boot-policy-transaction.log 2>&1; '
             'cp /tmp/fast/packages/integration.manifest.json /run/verify/fast-packages.json',
             timeout=300,
         )

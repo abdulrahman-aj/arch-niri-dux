@@ -5,10 +5,11 @@ import os
 from pathlib import Path
 import pwd
 import re
+import shlex
 import shutil
 import subprocess
 from . import dispatch
-from .guest import wait_until, run, user_command, ipc, windows, screenshot
+from .guest import record, wait_until, run, user_command, ipc, windows, screenshot
 from tools.verification.images import png_dimensions, png_ready
 from .browser import BROWSER_PAGE, browser_state
 
@@ -108,20 +109,17 @@ def niri_overrides():
             overrides.unlink(missing_ok=True)
         else:
             overrides.write_bytes(before_overrides)
-    Path('/run/verify/niri-overrides.json').write_text(
-        json.dumps(
-            {
-                'stock_inherited': True,
-                'override_effective': True,
-                'reset_restores_stock': True,
-                'overrides_mru_preserved': True,
-                'compat_binds_next_retired': True,
-                'alt_f4_inherited': True,
-                'tracked_override_link_preserved': True,
-            },
-            indent=2,
-        )
-        + '\n'
+    record(
+        'niri-overrides',
+        {
+            'stock_inherited': True,
+            'override_effective': True,
+            'reset_restores_stock': True,
+            'overrides_mru_preserved': True,
+            'compat_binds_next_retired': True,
+            'alt_f4_inherited': True,
+            'tracked_override_link_preserved': True,
+        },
     )
 
 
@@ -167,19 +165,16 @@ def desktop():
     assert 'SigLevel = Required TrustedOnly' in Path('/etc/pacman.d/arch-niri-dux.conf').read_text()
     omarchy_section = Path('/etc/pacman.d/arch-niri-dux.conf').read_text().split('[omarchy]')[1]
     assert 'Usage = Install Sync' in omarchy_section, omarchy_section
-    Path('/run/verify/integration-packages.json').write_text(
-        json.dumps(
-            {
-                'versions': versions.splitlines(),
-                'owned_paths': owned,
-                'no_packaged_home_files': True,
-                'release_key_fingerprint': fingerprint,
-                'release_key_trusted': True,
-                'signed_repository_enabled': True,
-            },
-            indent=2,
-        )
-        + '\n'
+    record(
+        'integration-packages',
+        {
+            'versions': versions.splitlines(),
+            'owned_paths': owned,
+            'no_packaged_home_files': True,
+            'release_key_fingerprint': fingerprint,
+            'release_key_trusted': True,
+            'signed_repository_enabled': True,
+        },
     )
     fonts()
     niri_overrides()
@@ -270,7 +265,7 @@ def dux_components():
     metrics = json.loads(user_command('dgop', 'memory', '--json', capture=True).stdout)
     assert metrics, 'GOP did not return memory metrics.'
     fixture = Path('/home/tester/dux-verification-document.txt')
-    user_command('sh', '-c', f'printf "offline file preview works\\n" > {fixture}')
+    user_command('sh', '-c', f'printf "offline file preview works\\n" > {shlex.quote(str(fixture))}')
     wait_until(
         'Dux Search indexing',
         lambda: any(
@@ -322,22 +317,19 @@ def dux_components():
         screenshot(f'02-{application}.png')
         ipc(application, 'ui.hide')
     ipc('dcal', 'accounts.delete', f'accountId={account["accountId"]}')
-    Path('/run/verify/dux-components.json').write_text(
-        json.dumps(
-            {
-                'gop_metrics': metrics,
-                'file_manager': file_manager,
-                'portal': portal,
-                'calendar_event_created_and_read': event['id'],
-                'indexed_file': str(fixture),
-                'versions': versions.splitlines(),
-                'gtk_theme': gtk_theme,
-                'mode': mode,
-                'search_http_listener_absent': True,
-            },
-            indent=2,
-        )
-        + '\n'
+    record(
+        'dux-components',
+        {
+            'gop_metrics': metrics,
+            'file_manager': file_manager,
+            'portal': portal,
+            'calendar_event_created_and_read': event['id'],
+            'indexed_file': str(fixture),
+            'versions': versions.splitlines(),
+            'gtk_theme': gtk_theme,
+            'mode': mode,
+            'search_http_listener_absent': True,
+        },
     )
 
 
@@ -440,12 +432,9 @@ def file_manager_activation():
     ]
     assert not bad, bad
     assert duplicates, expected
-    Path('/run/verify/file-manager-activation.json').write_text(
-        json.dumps(
-            {'activator': os.readlink(link), 'owner': 'dfiles', 'duplicate_lines': duplicates},
-            indent=2,
-        )
-        + '\n'
+    record(
+        'file-manager-activation',
+        {'activator': os.readlink(link), 'owner': 'dfiles', 'duplicate_lines': duplicates},
     )
 
 
@@ -497,7 +486,7 @@ def themes():
 
         evidence.append(wait_until(f'Dux {mode} mode reaching apps and portals', propagated))
         screenshot(f'02-theme-{len(evidence)}-{mode}.png')
-    Path('/run/verify/theme-evidence.json').write_text(json.dumps(evidence, indent=2) + '\n')
+    record('theme-evidence', evidence)
 
 
 def wallpaper():
@@ -511,25 +500,22 @@ def wallpaper():
     screenshot('02-wallpaper-bloom.png')
     evidence = Path('/run/verify/02-wallpaper-bloom.png')
     width, height = png_dimensions(evidence)
-    Path('/run/verify/wallpaper.json').write_text(
-        json.dumps(
-            {
-                'preset': preset,
-                'wallpaperPath': data.get('wallpaperPath', ''),
-                'width': width,
-                'height': height,
-                'note': 'Parent visually confirms bloom vs dank in 02-wallpaper-bloom.png; '
-                'settings plus a dimensioned render do not assert the visual match in code.',
-            },
-            indent=2,
-        )
-        + '\n'
+    record(
+        'wallpaper',
+        {
+            'preset': preset,
+            'wallpaperPath': data.get('wallpaperPath', ''),
+            'width': width,
+            'height': height,
+            'note': 'Parent visually confirms bloom vs dank in 02-wallpaper-bloom.png; '
+            'settings plus a dimensioned render do not assert the visual match in code.',
+        },
     )
 
 
 def account_seeded():
     user = 'dux-seed-check'
-    run('sh', '-c', f'userdel -r {user} 2>/dev/null || true')
+    run('sh', '-c', f'userdel -r {shlex.quote(user)} 2>/dev/null || true')
     run('useradd', '-m', '-s', '/bin/bash', user)
     try:
         home = Path(f'/home/{user}')
@@ -540,11 +526,9 @@ def account_seeded():
             assert (home / '.config/dms/config.d' / name).is_file(), name
         plugin = json.loads((home / '.config/dms/plugin_settings.json').read_text())
         assert plugin.get('archNiriDuxRelease', {}).get('enabled') is True, plugin
-        Path('/run/verify/account-seeded.json').write_text(
-            json.dumps({'user': user, 'fresh_account_initialized': True}, indent=2) + '\n'
-        )
+        record('account-seeded', {'user': user, 'fresh_account_initialized': True})
     finally:
-        run('sh', '-c', f'userdel -r {user} 2>/dev/null || true')
+        run('sh', '-c', f'userdel -r {shlex.quote(user)} 2>/dev/null || true')
 
 
 def session_path():
@@ -571,16 +555,13 @@ def session_path():
             lambda: marker.is_file() and marker.read_text() == 'probe-ok',
             timeout=30,
         )
-        Path('/run/verify/session-path.json').write_text(
-            json.dumps(
-                {
-                    'wrapper': str(probe),
-                    'systemd_user_path': service_path,
-                    'niri_spawn_marker': marker.read_text(),
-                },
-                indent=2,
-            )
-            + '\n'
+        record(
+            'session-path',
+            {
+                'wrapper': str(probe),
+                'systemd_user_path': service_path,
+                'niri_spawn_marker': marker.read_text(),
+            },
         )
     finally:
         probe.unlink(missing_ok=True)

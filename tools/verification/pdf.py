@@ -11,7 +11,7 @@ def verify(vm, passed):
     passed('Papers is the default PDF viewer and rendered a sample document')
     probe(vm, 'pdf', 'files-pdf-prepare', timeout=60)
     try:
-        vm.key('f4')
+        vm.chord('f4')
         time.sleep(1)
         vm.chord('shift', 'equal')
         for _attempt in range(15):
@@ -36,6 +36,6 @@ def verify(vm, passed):
             + '\n'
         )
     finally:
-        vm.key('esc')
+        vm.chord('esc')
         probe(vm, 'pdf', 'files-pdf-close')
     passed('Dux Files PDF preview rendered document content with its Qt PDF backend')

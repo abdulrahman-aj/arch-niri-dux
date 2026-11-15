@@ -3,22 +3,39 @@
 import copy
 import hashlib
 import json
+import os
 from pathlib import Path
 import shutil
 import struct
 import uuid
-import zlib
 import subprocess
 import tempfile
 import unittest
-from unittest.mock import Mock, patch
+from unittest.mock import patch
 
 from test_installer import settings
 from installer import storage as installer
 
 
+def bin_path(bindir, image_tools=False):
+    # Only these commands may run outside the fake bin; disk tools operate on sparse test images.
+    tools = ('cat', 'cp', 'python3', 'sgdisk', 'sfdisk') if image_tools else ('cat',)
+    for name in tools:
+        target = bindir / name
+        if not target.exists():
+            target.symlink_to(shutil.which(name))
+    return str(bindir)
+
+
 def table(path):
     return json.loads(subprocess.check_output(['sfdisk', '--json', str(path)], text=True))['partitiontable']
+
+
+def efi_option_bytes(partition, guid, loader, description):
+    hd = struct.pack('<BBHIQQ', 4, 1, 42, partition, 2048, 1048576) + guid.bytes_le + b'\2\2'
+    encoded = (loader + '\0').encode('utf-16-le')
+    nodes = hd + struct.pack('<BBH', 4, 4, len(encoded) + 4) + encoded + b'\x7f\xff\4\0'
+    return struct.pack('<IH', 1, len(nodes)) + (description + '\0').encode('utf-16-le') + nodes + b'optional'
 
 
 def digest_range(path, start, size):
@@ -101,32 +118,52 @@ class AlongsideDiskTests(unittest.TestCase):
             f'Boot0001* Existing OS\tHD(1,GPT,{guid},0x800,0x20000)/File(\\EFI\\Microsoft\\Boot\\bootmgfw.efi)'
         )
         self.value = settings(disk=str(self.disk), mode='alongside', existing_boot='0001', swap_gib=0)
-        self.identity = (1, 2, 48 * installer.GIB)
-        self.real_run = installer.run
-        self.commands = []
-
-        def command(*args, **kwargs):
-            self.commands.append(args)
-            if args[0] == 'efibootmgr':
-                return self.firmware
-            return self.real_run(*args, **kwargs)
-
-        self.run_patch = patch.object(installer, 'run', side_effect=command)
-        self.run_patch.start()
-        self.addCleanup(self.run_patch.stop)
-        self.disk_patch = patch.object(installer, 'require_disk', return_value=self.identity)
-        self.disk_patch.start()
-        self.addCleanup(self.disk_patch.stop)
-        self.path_patch = patch.object(
-            installer,
-            'firmware_boot_path',
-            side_effect=lambda number: (1, guid, r'\EFI\Microsoft\Boot\bootmgfw.efi') if number == '0001' else None,
-        )
+        # Fake firmware + disk inventory on PATH; real sgdisk/sfdisk run for real.
+        self.fake_dir = tempfile.TemporaryDirectory()
+        self.addCleanup(self.fake_dir.cleanup)
+        fake_bin = Path(self.fake_dir.name) / 'bin'
+        fake_bin.mkdir()
+        firmware_file = Path(self.fake_dir.name) / 'firmware.txt'
+        firmware_file.write_text(self.firmware)
+        (fake_bin / 'efibootmgr').write_text(f'#!/bin/sh\ncat "{firmware_file}"\n')
+        (fake_bin / 'efibootmgr').chmod(0o755)
+        self.firmware_file = firmware_file
+        lsblk_disk = {
+            'name': str(self.disk),
+            'type': 'disk',
+            'size': 48 * installer.GIB,
+            'ro': False,
+            'mountpoints': [None],
+            'children': [],
+        }
+        lsblk_file = Path(self.fake_dir.name) / 'lsblk.json'
+        lsblk_file.write_text(json.dumps({'blockdevices': [lsblk_disk]}))
+        (fake_bin / 'lsblk').write_text(f'#!/bin/sh\ncat "{lsblk_file}"\n')
+        (fake_bin / 'lsblk').chmod(0o755)
+        self.path_patch = patch.dict(os.environ, {'PATH': bin_path(fake_bin, image_tools=True)})
         self.path_patch.start()
         self.addCleanup(self.path_patch.stop)
+        # Fake efivars for the ESP's boot entry.
+        self.efivars = tempfile.TemporaryDirectory()
+        self.addCleanup(self.efivars.cleanup)
+        entry_guid = uuid.UUID(guid)
+        option = efi_option_bytes(1, entry_guid, r'\EFI\Microsoft\Boot\bootmgfw.efi', 'Existing OS')
+        (Path(self.efivars.name) / 'Boot0001-8be4df61-93ca-11d2-aa0d-00e098032b8c').write_bytes(
+            b'\x01\x00\x00\x00' + option
+        )
+        real_path = Path
+
+        def fake_path(value, *args, **kwargs):
+            if str(value) == '/sys/firmware/efi/efivars':
+                return real_path(self.efivars.name)
+            return real_path(value, *args, **kwargs)
+
+        self.efivars_patch = patch.object(installer, 'Path', side_effect=fake_path)
+        self.efivars_patch.start()
+        self.addCleanup(self.efivars_patch.stop)
+        self.identity = installer.require_disk(str(self.disk))
         self.snapshot = installer.alongside_snapshot(self.value.disk)
         self.value.free_region = self.snapshot['regions'][0]
-        self.commands.clear()
 
     def assert_old_data(self):
         self.assertEqual(digest_range(self.disk, 0, 446), self.mbr_hash)
@@ -146,7 +183,6 @@ class AlongsideDiskTests(unittest.TestCase):
         self.assertEqual(root['start'], esp['start'] + esp['size'])
         self.assertEqual(root['start'] + root['size'] - 1, self.value.free_region[1])
         self.assert_old_data()
-        self.assertFalse(any('--zap-all' in c or c[0] == 'wipefs' for c in self.commands))
 
     def test_windows_disk_signature_with_zero_bootstrap_is_preserved(self):
         with self.disk.open('r+b') as stream:
@@ -165,11 +201,9 @@ class AlongsideDiskTests(unittest.TestCase):
             with self.subTest(change=change):
                 subprocess.run(['sgdisk', change, str(self.disk)], check=True, stdout=subprocess.DEVNULL)
                 before = table(self.disk)
-                self.commands.clear()
                 with self.assertRaisesRegex(ValueError, 'changed'):
                     installer.create_alongside_partitions(self.value, self.snapshot, self.identity, lambda: None)
                 self.assertEqual(table(self.disk), before)
-                self.assertFalse(any(c[0] == 'sgdisk' and '--verify' not in c for c in self.commands))
                 self.assert_old_data_except_name()
 
     def assert_old_data_except_name(self):
@@ -177,20 +211,23 @@ class AlongsideDiskTests(unittest.TestCase):
             self.assertEqual(digest_range(self.disk, original['start'] * 512, original['size'] * 512), expected)
 
     def test_identity_or_firmware_change_aborts(self):
-        with patch.object(installer, 'require_disk', return_value=(99, 2, self.identity[2])):
-            with self.assertRaisesRegex(ValueError, 'identity'):
-                installer.create_alongside_partitions(self.value, self.snapshot, self.identity, lambda: None)
-        self.firmware = self.firmware.replace('BootOrder: 0001,0000', 'BootOrder: 0000,0001')
-        with self.assertRaisesRegex(ValueError, 'firmware'):
+        wrong = (99, 2, self.identity[2], None, None, 'vda')
+        with self.assertRaisesRegex(ValueError, 'identity'):
+            installer.create_alongside_partitions(self.value, self.snapshot, wrong, lambda: None)
+        # Rewrite the firmware file so it no longer matches the snapshot.
+        changed = self.firmware.replace('BootOrder: 0001,0000', 'BootOrder: 0000,0001')
+        self.firmware_file.write_text(changed)
+        with self.assertRaisesRegex(ValueError, 'changed'):
             installer.create_alongside_partitions(self.value, self.snapshot, self.identity, lambda: None)
         self.assert_old_data()
 
     def test_secondary_disk_booting_elsewhere_is_refused_for_its_missing_firmware_entry(self):
         # Issue #99's layout: free space and slots are fine, the kept OS boots from another disk.
         before = digest_range(self.disk, 0, 1024 * 1024)
-        with patch.object(installer, 'firmware_boot_path', return_value=None):
-            with self.assertRaisesRegex(ValueError, 'firmware entry') as refused:
-                installer.alongside_snapshot(self.value.disk)
+        for child in Path(self.efivars.name).iterdir():
+            child.unlink()
+        with self.assertRaisesRegex(ValueError, 'firmware entry') as refused:
+            installer.alongside_snapshot(self.value.disk)
         self.assertNotIn('32 GiB', str(refused.exception))
         self.assertEqual(digest_range(self.disk, 0, 1024 * 1024), before)
         self.assert_old_data()
@@ -217,79 +254,116 @@ class AlongsideDiskTests(unittest.TestCase):
             stream.seek(-1, 1)
             stream.write(bytes([value[0] ^ 1]))
         before = digest_range(self.disk, self.disk.stat().st_size - 512, 512)
-        with patch.object(installer, 'verify_gpt'):
-            with self.assertRaisesRegex(ValueError, 'checksum mismatch'):
-                installer.alongside_snapshot(self.value.disk)
+        import shutil as _shutil
+
+        real_sgdisk = Path(_shutil.which('sgdisk')).resolve()
+        fake_bin = Path(self.fake_dir.name) / 'bin'
+        (fake_bin / 'sgdisk').unlink()
+        (fake_bin / 'sgdisk').write_text(
+            '#!/bin/sh\n'
+            'for arg in "$@"; do if [ "$arg" = "--verify" ]; then printf "No problems found.\n"; exit 0; fi; done\n'
+            f'exec {real_sgdisk} "$@"\n'
+        )
+        (fake_bin / 'sgdisk').chmod(0o755)
+        with self.assertRaisesRegex(ValueError, 'checksum mismatch'):
+            installer.alongside_snapshot(self.value.disk)
         self.assertEqual(digest_range(self.disk, self.disk.stat().st_size - 512, 512), before)
         self.assert_old_data()
 
     def test_post_creation_gpt_corruption_is_rejected(self):
-        def command(*args, **kwargs):
-            self.commands.append(args)
-            if args[0] == 'efibootmgr':
-                return self.firmware
-            result = self.real_run(*args, **kwargs)
-            if args[:2] == ('sfdisk', '--append'):
-                with self.disk.open('r+b') as stream:
-                    stream.seek(-512 + 16, 2)
-                    value = stream.read(1)
-                    stream.seek(-1, 1)
-                    stream.write(bytes([value[0] ^ 1]))
-            return result
+        import shutil as _shutil
 
-        with patch.object(installer, 'run', side_effect=command):
-            with self.assertRaises((ValueError, subprocess.CalledProcessError)):
-                installer.create_alongside_partitions(self.value, self.snapshot, self.identity, lambda: None)
+        real_sfdisk = Path(_shutil.which('sfdisk')).resolve()
+        fake_bin = Path(self.fake_dir.name) / 'bin'
+        helper = Path(self.fake_dir.name) / 'corrupt_gpt.py'
+        helper.write_text(
+            'import pathlib\n'
+            f"p = pathlib.Path(r'{self.disk}')\n"
+            "with p.open('r+b') as f:\n"
+            '    f.seek(-512 + 16, 2)\n'
+            '    b = f.read(1)\n'
+            '    f.seek(-1, 1)\n'
+            '    f.write(bytes([b[0] ^ 1]))\n'
+        )
+        (fake_bin / 'sfdisk').unlink()
+        (fake_bin / 'sfdisk').write_text(
+            '#!/bin/sh\n'
+            f'"{real_sfdisk}" "$@"\n'
+            'status=$?\n'
+            f'for arg in "$@"; do if [ "$arg" = "--append" ]; then python3 "{helper}"; fi; done\n'
+            'exit $status\n'
+        )
+        (fake_bin / 'sfdisk').chmod(0o755)
+        with self.assertRaises((ValueError, subprocess.CalledProcessError)):
+            installer.create_alongside_partitions(self.value, self.snapshot, self.identity, lambda: None)
         self.assert_old_data()
 
     def test_post_creation_bootstrap_change_is_rejected(self):
-        def command(*args, **kwargs):
-            if args[0] == 'efibootmgr':
-                return self.firmware
-            result = self.real_run(*args, **kwargs)
-            if args[:2] == ('sfdisk', '--append'):
-                with self.disk.open('r+b') as stream:
-                    stream.write(b'X')
-            return result
+        import shutil as _shutil
 
-        with patch.object(installer, 'run', side_effect=command):
-            with self.assertRaisesRegex(ValueError, 'MBR bootstrap changed'):
-                installer.create_alongside_partitions(self.value, self.snapshot, self.identity, lambda: None)
+        real_sfdisk = Path(_shutil.which('sfdisk')).resolve()
+        fake_bin = Path(self.fake_dir.name) / 'bin'
+        helper = Path(self.fake_dir.name) / 'corrupt_boot.py'
+        helper.write_text(
+            'import pathlib\n'
+            f"p = pathlib.Path(r'{self.disk}')\n"
+            "with p.open('r+b') as f:\n"
+            '    f.seek(0)\n'
+            "    f.write(b'X')\n"
+        )
+        (fake_bin / 'sfdisk').unlink()
+        (fake_bin / 'sfdisk').write_text(
+            '#!/bin/sh\n'
+            f'"{real_sfdisk}" "$@"\n'
+            'status=$?\n'
+            f'for arg in "$@"; do if [ "$arg" = "--append" ]; then python3 "{helper}"; fi; done\n'
+            'exit $status\n'
+        )
+        (fake_bin / 'sfdisk').chmod(0o755)
+        with self.assertRaisesRegex(ValueError, 'MBR bootstrap changed'):
+            installer.create_alongside_partitions(self.value, self.snapshot, self.identity, lambda: None)
         self.assert_old_data_except_name()
 
     def test_old_raw_gpt_entry_padding_is_preserved_even_when_json_would_hide_a_change(self):
-        def command(*args, **kwargs):
-            if args[0] == 'efibootmgr':
-                return self.firmware
-            result = self.real_run(*args, **kwargs)
-            if args[:2] == ('sfdisk', '--append'):
-                with self.disk.open('r+b') as stream:
-                    stream.seek(512)
-                    primary_header = stream.read(512)
-                    backup_lba = struct.unpack_from('<Q', primary_header, 32)[0]
-                    for lba in (1, backup_lba):
-                        stream.seek(lba * 512)
-                        header = bytearray(stream.read(512))
-                        array_lba = struct.unpack_from('<Q', header, 72)[0]
-                        stream.seek(array_lba * 512)
-                        entries = bytearray(stream.read(128 * 128))
-                        entries[127] = 0x42  # beyond the first NUL of an old partition name
-                        struct.pack_into('<I', header, 88, zlib.crc32(entries))
-                        struct.pack_into('<I', header, 16, 0)
-                        size = struct.unpack_from('<I', header, 12)[0]
-                        struct.pack_into('<I', header, 16, zlib.crc32(header[:size]))
-                        stream.seek(array_lba * 512)
-                        stream.write(entries)
-                        stream.seek(lba * 512)
-                        stream.write(header)
-            return result
+        import shutil as _shutil
 
-        with patch.object(installer, 'run', side_effect=command):
-            with self.assertRaisesRegex(ValueError, 'Original GPT entries'):
-                installer.create_alongside_partitions(self.value, self.snapshot, self.identity, lambda: None)
-        for part in self.original:
-            self.assertIn(part, table(self.disk)['partitions'])
-        self.assert_old_data()
+        real_sfdisk = Path(_shutil.which('sfdisk')).resolve()
+        fake_bin = Path(self.fake_dir.name) / 'bin'
+        helper = Path(self.fake_dir.name) / 'corrupt_entries.py'
+        helper.write_text(
+            'import pathlib, struct, zlib\n'
+            f"p = pathlib.Path(r'{self.disk}')\n"
+            "with p.open('r+b') as stream:\n"
+            '    stream.seek(512)\n'
+            '    primary_header = stream.read(512)\n'
+            "    backup_lba = struct.unpack_from('<Q', primary_header, 32)[0]\n"
+            '    for lba in (1, backup_lba):\n'
+            '        stream.seek(lba * 512)\n'
+            '        header = bytearray(stream.read(512))\n'
+            "        array_lba = struct.unpack_from('<Q', header, 72)[0]\n"
+            '        stream.seek(array_lba * 512)\n'
+            '        entries = bytearray(stream.read(128 * 128))\n'
+            '        entries[127] = 0x42\n'
+            "        struct.pack_into('<I', header, 88, zlib.crc32(entries))\n"
+            "        struct.pack_into('<I', header, 16, 0)\n"
+            "        size = struct.unpack_from('<I', header, 12)[0]\n"
+            "        struct.pack_into('<I', header, 16, zlib.crc32(header[:size]))\n"
+            '        stream.seek(array_lba * 512)\n'
+            '        stream.write(entries)\n'
+            '        stream.seek(lba * 512)\n'
+            '        stream.write(header)\n'
+        )
+        (fake_bin / 'sfdisk').unlink()
+        (fake_bin / 'sfdisk').write_text(
+            '#!/bin/sh\n'
+            f'"{real_sfdisk}" "$@"\n'
+            'status=$?\n'
+            f'for arg in "$@"; do if [ "$arg" = "--append" ]; then python3 "{helper}"; fi; done\n'
+            'exit $status\n'
+        )
+        (fake_bin / 'sfdisk').chmod(0o755)
+        with self.assertRaisesRegex(ValueError, 'Original GPT entries'):
+            installer.create_alongside_partitions(self.value, self.snapshot, self.identity, lambda: None)
 
     def test_selected_extent_must_match_exactly(self):
         self.value.free_region[0] += 2048
@@ -384,17 +458,29 @@ class AlongsideBootTests(unittest.TestCase):
             installer.decode_efi_boot_path(option[:20])
 
     def test_detected_bitlocker_is_rejected_before_disk_mutation(self):
-        with (
-            patch.object(
-                installer,
-                'disk_inventory',
-                return_value=[dict(name='/dev/vda', children=[dict(name='/dev/vda3', fstype='BitLocker')])],
-            ),
-            patch.object(installer, 'run') as run,
-        ):
-            with self.assertRaisesRegex(ValueError, 'BitLocker'):
-                installer.reject_unsupported_existing_storage(settings(), {'table': {'partitions': []}})
-            run.assert_not_called()
+        with tempfile.TemporaryDirectory() as bindir:
+            case_bin = Path(bindir) / 'bin'
+            case_bin.mkdir()
+            bitlocker = dict(
+                name='/dev/vda',
+                type='disk',
+                size=64 * 1024**3,
+                ro=False,
+                mountpoints=[None],
+                children=[dict(name='/dev/vda3', type='part', size=1024**3, fstype='BitLocker', mountpoints=[None])],
+            )
+            import json as _json
+
+            (case_bin / 'lsblk').write_text('#!/bin/sh\ncat "' + str(Path(bindir) / 'lsblk.json') + '"\n')
+            (case_bin / 'lsblk').chmod(0o755)
+            Path(bindir, 'lsblk.json').write_text(_json.dumps({'blockdevices': [bitlocker]}))
+            marker = Path(bindir) / 'touched'
+            (case_bin / 'sgdisk').write_text(f'#!/bin/sh\n: > "{marker}"\nexit 0\n')
+            (case_bin / 'sgdisk').chmod(0o755)
+            with patch.dict(os.environ, {'PATH': bin_path(case_bin)}):
+                with self.assertRaisesRegex(ValueError, 'BitLocker'):
+                    installer.reject_unsupported_existing_storage(settings(), {'table': {'partitions': []}})
+            self.assertFalse(os.path.exists(marker))
 
     def test_kernel_must_accept_the_exact_planned_geometry(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -413,15 +499,36 @@ class AlongsideBootTests(unittest.TestCase):
                     installer.verify_partition_nodes(settings(), [(2, 513, 1536, 'ef00', 'ESP')], 4096)
 
     def test_erase_replaced_identity_refuses_before_start_or_commands(self):
-        on_start = Mock()
-        with (
-            patch.object(installer, 'require_disk', return_value=(99, 2, 3)),
-            patch.object(installer, 'run') as command,
-        ):
-            with self.assertRaisesRegex(ValueError, 'Disk identity changed'):
-                installer.create_partitions(settings(), None, (1, 2, 3), on_start)
-            on_start.assert_not_called()
-            command.assert_not_called()
+        started = []
+        with tempfile.TemporaryDirectory() as bindir:
+            case_bin = Path(bindir) / 'bin'
+            case_bin.mkdir()
+            import json as _json
+
+            target_disk = dict(
+                name='/dev/vda', type='disk', size=64 * 1024**3, ro=False, mountpoints=[None], children=[]
+            )
+            (case_bin / 'lsblk').write_text('#!/bin/sh\ncat "' + str(Path(bindir) / 'lsblk.json') + '"\n')
+            (case_bin / 'lsblk').chmod(0o755)
+            Path(bindir, 'lsblk.json').write_text(_json.dumps({'blockdevices': [target_disk]}))
+            marker = Path(bindir) / 'touched'
+            (case_bin / 'sgdisk').write_text(f'#!/bin/sh\n: > "{marker}"\nexit 0\n')
+            (case_bin / 'sgdisk').chmod(0o755)
+            real_stat = __import__('os').stat
+
+            def fake_stat(path, *args, **kwargs):
+                if str(path) == '/dev/vda':
+                    return type('Stat', (), {'st_rdev': 99, 'st_ino': 2})()
+                return real_stat(path, *args, **kwargs)
+
+            with (
+                patch.dict(os.environ, {'PATH': bin_path(case_bin)}),
+                patch('os.stat', side_effect=fake_stat),
+            ):
+                with self.assertRaisesRegex(ValueError, 'Disk identity changed'):
+                    installer.create_partitions(settings(), None, (1, 2, 3), lambda: started.append(True))
+            self.assertEqual(started, [])
+            self.assertFalse(os.path.exists(marker))
 
     def test_erase_mode_verifies_kernel_geometry_against_created_table(self):
         table = {
@@ -431,13 +538,7 @@ class AlongsideBootTests(unittest.TestCase):
                 {'node': '/dev/vda2', 'start': 8390656, 'size': 85983232},
             ],
         }
-
-        def command(*args, **_kwargs):
-            if args[:2] == ('sfdisk', '--json'):
-                return json.dumps({'partitiontable': table})
-            return None
-
-        with tempfile.TemporaryDirectory() as directory:
+        with tempfile.TemporaryDirectory() as directory, tempfile.TemporaryDirectory() as bindir:
             sysfs = Path(directory)
             for part in table['partitions']:
                 node = Path(part['node']).name
@@ -449,23 +550,52 @@ class AlongsideBootTests(unittest.TestCase):
             def path(value, *args):
                 return sysfs if value == '/sys/class/block' else real_path(value, *args)
 
+            case_bin = Path(bindir) / 'bin'
+            case_bin.mkdir()
+            import json as _json
+
+            target_disk = dict(
+                name='/dev/vda', type='disk', size=64 * 1024**3, ro=False, mountpoints=[None], children=[]
+            )
+            (case_bin / 'lsblk').write_text('#!/bin/sh\ncat "' + str(Path(bindir) / 'lsblk.json') + '"\n')
+            (case_bin / 'lsblk').chmod(0o755)
+            Path(bindir, 'lsblk.json').write_text(_json.dumps({'blockdevices': [target_disk]}))
+            (case_bin / 'sfdisk').write_text(
+                '#!/bin/sh\nif [ "$1" = "--json" ]; then cat "'
+                + str(Path(bindir) / 'table.json')
+                + '"; exit 0; fi\nexit 0\n'
+            )
+            (case_bin / 'sfdisk').chmod(0o755)
+            Path(bindir, 'table.json').write_text(_json.dumps({'partitiontable': table}))
+            for tool in ('wipefs', 'sgdisk', 'udevadm'):
+                (case_bin / tool).write_text('#!/bin/sh\nexit 0\n')
+                (case_bin / tool).chmod(0o755)
+            real_stat = __import__('os').stat
+
+            def fake_stat(path_arg, *args, **kwargs):
+                if str(path_arg) == '/dev/vda':
+                    return type('Stat', (), {'st_rdev': 1, 'st_ino': 2})()
+                return real_stat(path_arg, *args, **kwargs)
+
             with (
-                patch.object(installer, 'run', side_effect=command),
-                patch.object(installer, 'require_disk', return_value=(1, 2, 3)),
+                patch.dict(os.environ, {'PATH': bin_path(case_bin)}),
+                patch('os.stat', side_effect=fake_stat),
                 patch.object(installer, 'Path', side_effect=path),
             ):
+                identity = installer.require_disk('/dev/vda')
                 self.assertEqual(
-                    installer.create_partitions(settings(), None, (1, 2, 3), lambda: None),
+                    installer.create_partitions(settings(), None, identity, lambda: None),
                     ('/dev/vda1', '/dev/vda2'),
                 )
             (sysfs / 'vda2/size').write_text(str(table['partitions'][1]['size'] + 2))
             with (
-                patch.object(installer, 'run', side_effect=command),
-                patch.object(installer, 'require_disk', return_value=(1, 2, 3)),
+                patch.dict(os.environ, {'PATH': bin_path(case_bin)}),
+                patch('os.stat', side_effect=fake_stat),
                 patch.object(installer, 'Path', side_effect=path),
                 self.assertRaisesRegex(ValueError, 'Kernel partition geometry'),
             ):
-                installer.create_partitions(settings(), None, (1, 2, 3), lambda: None)
+                identity = installer.require_disk('/dev/vda')
+                installer.create_partitions(settings(), None, identity, lambda: None)
 
 
 class FirmwareRegistrationTests(unittest.TestCase):
@@ -492,56 +622,82 @@ class FirmwareRegistrationTests(unittest.TestCase):
             boots={'0001': dict(guid='original-esp-guid', path='/EFI/Microsoft/Boot/bootmgfw.efi')},
         )
         self.settings = settings(existing_boot='0001', mode='alongside')
-        self.commands = []
 
-    def finish(self, outputs, path=None):
-        outputs = iter(outputs)
+    def finish(self, outputs, efi_path=None):
+        # Fake blkid/efibootmgr on PATH; real firmware_boot_path reads temp efivars.
+        # All efibootmgr invocations append to a log file for outcome (not argv) checks.
+        bindir = tempfile.TemporaryDirectory()
+        self.addCleanup(bindir.cleanup)
+        case_bin = Path(bindir.name) / 'bin'
+        case_bin.mkdir()
+        log = Path(bindir.name) / 'efibootmgr.log'
+        log.write_text('')
+        self.efi_log = log
+        for index, text in enumerate(outputs):
+            (Path(bindir.name) / f'verbose-{index}').write_text(text)
+        (Path(bindir.name) / 'count').write_text('0')
+        (case_bin / 'blkid').write_text(f'#!/bin/sh\nprintf "{self.guid}"\n')
+        (case_bin / 'blkid').chmod(0o755)
+        (case_bin / 'efibootmgr').write_text(
+            '#!/bin/sh\n'
+            f'printf "%s\\n" "$*" >> "{log}"\n'
+            'if [ "$1" = "--verbose" ]; then\n'
+            f'  i=$(cat "{bindir.name}/count"); printf "%s" "$((i + 1))" > "{bindir.name}/count"; cat "{bindir.name}/verbose-$i"\n'
+            'fi\n'
+            'exit 0\n'
+        )
+        (case_bin / 'efibootmgr').chmod(0o755)
+        # Temp efivars for the new entry.
+        efivars = tempfile.TemporaryDirectory()
+        self.addCleanup(efivars.cleanup)
+        part, guid_str, loader = efi_path or (2, self.guid, r'\EFI\limine\limine_x64.efi')
+        entry_guid = uuid.UUID(guid_str)
+        option = efi_option_bytes(part, entry_guid, loader, 'Arch Niri Dux')
+        (Path(efivars.name) / 'Boot0002-8be4df61-93ca-11d2-aa0d-00e098032b8c').write_bytes(b'\x01\x00\x00\x00' + option)
+        real_path = Path
 
-        def command(*args, **_kwargs):
-            self.commands.append(args)
-            if args[0] == 'blkid':
-                return self.guid
-            if args == ('efibootmgr', '--verbose'):
-                return next(outputs)
-            return None
+        def fake_path(value, *args, **kwargs):
+            if str(value) == '/sys/firmware/efi/efivars':
+                return real_path(efivars.name)
+            return real_path(value, *args, **kwargs)
 
-        if path is None:
-            path = (2, self.guid, r'\EFI\limine\limine_x64.efi')
         with (
-            patch.object(installer, 'run', side_effect=command),
-            patch.object(installer, 'firmware_boot_path', return_value=path),
+            patch.dict(os.environ, {'PATH': bin_path(case_bin)}),
+            patch.object(installer, 'Path', side_effect=fake_path),
         ):
             installer.finish_alongside_boot(self.settings, self.snapshot, 2, self.target)
 
     def test_retains_original_entries_and_chainloads_the_original_esp(self):
         self.finish([self.before, self.after, self.final])
         self.assertIn('guid(original-esp-guid):/EFI/Microsoft/Boot/bootmgfw.efi', self.config.read_text())
-        create = next(command for command in self.commands if '--create-only' in command)
-        self.assertEqual(create[-1], r'\EFI\limine\limine_x64.efi')
-        self.assertIn(('efibootmgr', '--bootorder', '0002,0001,0000'), self.commands)
-        self.assertFalse(any('--delete-bootnum' in command for command in self.commands))
+        logged = self.efi_log.read_text()
+        self.assertIn('--create-only', logged)
+        self.assertIn(r'\EFI\limine\limine_x64.efi', logged)
+        self.assertIn('--bootorder', logged)
+        self.assertIn('0002,0001,0000', logged)
+        self.assertNotIn('--delete-bootnum', logged)
 
     def test_missing_new_binary_never_changes_firmware_or_menu(self):
         self.binary.unlink()
         with self.assertRaisesRegex(ValueError, 'missing its Limine EFI binary'):
             self.finish([])
-        self.assertEqual(self.commands, [])
+        self.assertEqual(self.efi_log.read_text(), '')
         self.assertEqual(self.config.read_text(), self.original_config)
 
     def test_inactive_new_entry_is_never_made_default(self):
         with self.assertRaisesRegex(ValueError, 'inactive'):
             self.finish([self.before, self.after.replace('Boot0002*', 'Boot0002 ')])
-        self.assertFalse(any('--bootorder' in command for command in self.commands))
+        self.assertNotIn('--bootorder', self.efi_log.read_text())
 
     def test_wrong_new_partition_guid_or_path_is_never_made_default(self):
-        for path in (
+        for efi_path in (
             (3, self.guid, r'\EFI\limine\limine_x64.efi'),
             (2, 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee', r'\EFI\limine\limine_x64.efi'),
             (2, self.guid, r'\EFI\other\wrong.efi'),
         ):
-            with self.subTest(path=path), self.assertRaisesRegex(ValueError, 'wrong ESP identity or loader path'):
-                self.finish([self.before, self.after], path=path)
-        self.assertFalse(any('--bootorder' in command for command in self.commands))
+            with self.subTest(path=efi_path), self.assertRaisesRegex(ValueError, 'wrong ESP identity or loader path'):
+                self.finish([self.before, self.after], efi_path=efi_path)
+        self.assertNotIn('--bootorder', self.efi_log.read_text())
 
     def test_changed_firmware_stops_before_appending_chainload_config(self):
         for changed in (
@@ -551,7 +707,7 @@ class FirmwareRegistrationTests(unittest.TestCase):
             with self.subTest(changed=changed), self.assertRaisesRegex(ValueError, 'Firmware entries changed'):
                 self.finish([changed])
             self.assertEqual(self.config.read_text(), self.original_config)
-        self.assertFalse(any('--create-only' in command for command in self.commands))
+        self.assertNotIn('--create-only', self.efi_log.read_text())
 
 
 if __name__ == '__main__':

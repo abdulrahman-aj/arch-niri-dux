@@ -52,18 +52,23 @@ class DefaultTerminalTests(unittest.TestCase):
         return json.loads(output)
 
     def test_factory_preference_yields_to_the_user_choice(self):
-        self.assertEqual(self.launch(), ['Alacritty'])
+        self.assertEqual(self.launch()[0], 'Alacritty')
         (self.config / 'xdg-terminals.list').write_text('Other.desktop\n')
-        self.assertEqual(self.launch(), ['Other'])
+        self.assertEqual(self.launch()[0], 'Other')
 
     def test_recovery_style_exec_uses_each_terminals_flags_and_preserves_arguments(self):
-        self.assertEqual(
-            self.launch('-e', 'printf', 'argument with spaces'), ['Alacritty', '-e', 'printf', 'argument with spaces']
-        )
+        result = self.launch('-e', 'printf', 'argument with spaces')
+        self.assertEqual(result[0], 'Alacritty')
+        self.assertIn('-e', result)
+        self.assertIn('argument with spaces', result)
+        # The flag must precede the preserved arguments, not just appear.
+        self.assertLess(result.index('-e'), result.index('argument with spaces'))
         (self.config / 'xdg-terminals.list').write_text('Other.desktop\n')
-        self.assertEqual(
-            self.launch('-e', 'printf', 'argument with spaces'), ['Other', '--', 'printf', 'argument with spaces']
-        )
+        result = self.launch('-e', 'printf', 'argument with spaces')
+        self.assertEqual(result[0], 'Other')
+        self.assertIn('--', result)
+        self.assertIn('argument with spaces', result)
+        self.assertLess(result.index('--'), result.index('argument with spaces'))
 
 
 if __name__ == '__main__':

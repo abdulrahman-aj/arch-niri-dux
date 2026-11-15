@@ -202,9 +202,16 @@ class IsoChecksumsTests(unittest.TestCase):
             with self.assertRaises(ValueError):
                 iso.main()
         environment['GITHUB_REF'] = 'refs/heads/main'
-        with patch.dict(os.environ, environment), patch.object(sys, 'argv', arguments):
-            # Only the read-only GitHub lookup is replaced. Git validation and signing are real.
-            with patch.object(iso, 'validate_release'):
+        with tempfile.TemporaryDirectory() as bindir:
+            gh = Path(bindir) / 'gh'
+            gh.write_text(f"#!/bin/sh\nprintf '%s' '{json.dumps(dict(tag_name=TAG, draft=False, prerelease=False))}'\n")
+            gh.chmod(0o755)
+            with (
+                patch.dict(os.environ, environment | {'PATH': bindir + os.pathsep + os.environ['PATH']}),
+                patch.object(sys, 'argv', arguments),
+            ):
+                # The read-only GitHub lookup runs for real against a fake gh;
+                # git validation and signing are real.
                 iso.main()
             self.assertNotIn('PACKAGE_SIGNING_KEY', os.environ)
         (self.output / self.image.name).write_bytes(self.image.read_bytes())

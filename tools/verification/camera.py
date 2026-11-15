@@ -25,11 +25,11 @@ def verify(vm, passed):
         # Use Snapshot 51's upstream shutter shortcut to exercise its own
         # capture path in both modes, rather than generating files separately.
         # https://github.com/GNOME/snapshot/blob/51.0/src/application.rs
-        vm.key('t')
+        vm.chord('t')
         probe(vm, 'camera', 'camera-photo', timeout=90)
-        vm.key('t')
+        vm.chord('t')
         time.sleep(3)
-        vm.key('t')
+        vm.chord('t')
         probe(vm, 'camera', 'camera-video', timeout=90)
     finally:
         probe(vm, 'camera', 'camera-cleanup')

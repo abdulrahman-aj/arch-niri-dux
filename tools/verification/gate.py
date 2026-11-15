@@ -6,6 +6,7 @@ the tampered-database signature rejection) never reach it.
 """
 
 import re
+import shlex
 from pathlib import Path
 
 ALLOWLIST = Path(__file__).with_name('gate-allowlist.txt')
@@ -52,12 +53,12 @@ def load_allowlist(path=ALLOWLIST):
 def collect(vm, directory):
     """Capture the final boot's warnings and failed units into the evidence dir."""
     directory = Path(directory)
-    vm.command(f'journalctl -b -p warning --no-pager > /run/verify/{JOURNAL_FILE}')
-    vm.command(f'systemctl --failed --no-legend > /run/verify/{FAILED_FILES[0]}')
+    vm.command(f'journalctl -b -p warning --no-pager > /run/verify/{shlex.quote(JOURNAL_FILE)}')
+    vm.command(f'systemctl --failed --no-legend > /run/verify/{shlex.quote(FAILED_FILES[0])}')
     vm.command(
         'uid=$(id -u tester); runuser -u tester -- env '
         'XDG_RUNTIME_DIR=/run/user/$uid DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/$uid/bus '
-        f'systemctl --user --failed --no-legend > /run/verify/{FAILED_FILES[1]}'
+        f'systemctl --user --failed --no-legend > /run/verify/{shlex.quote(FAILED_FILES[1])}'
     )
     return [directory / JOURNAL_FILE, *[directory / name for name in FAILED_FILES]]
 

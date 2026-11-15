@@ -7,13 +7,13 @@ from tools.verification.payload import probe
 
 def verify(vm, passed):
     probe(vm, 'browser', 'focus-browser')
-    vm.key('o')
+    vm.chord('o')
     probe(vm, 'browser', 'file-chooser', timeout=90)
-    vm.key('esc')
+    vm.chord('esc')
     probe(vm, 'browser', 'file-chooser-cancelled', timeout=90)
     passed('Chromium open-file request uses Dux Files and responds to cancellation')
     probe(vm, 'browser', 'focus-browser')
-    vm.key('c')
+    vm.chord('c')
     time.sleep(1)
     # Chromium first asks for the source type, then GNOME selects the
     # actual screen; Chromium finally confirms that selected source.

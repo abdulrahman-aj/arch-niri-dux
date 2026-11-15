@@ -22,7 +22,9 @@ def run_install(vm, passed, evidence, directory, package_digest, serial_preboot=
     mount_probes(vm)
     vm.command('fastfetch --logo none --structure OS:Kernel')
     vm.command('test "$(ls /sys/class/net | tr "\\n" " ")" = "lo "')
-    vm.command(f'test "$(sha256sum /run/archiso/bootmnt/packages.manifest.json | cut -d " " -f 1)" = {package_digest}')
+    vm.command(
+        f'test "$(sha256sum /run/archiso/bootmnt/packages.manifest.json | cut -d " " -f 1)" = {shlex.quote(package_digest)}'
+    )
     evidence.verify_installer(vm, ROOT / 'installer')
     installation_output = vm.command(
         'arch-niri-install --config /run/verify/install.json --confirm-disk /dev/vda', timeout=2400
@@ -41,8 +43,8 @@ def run_install(vm, passed, evidence, directory, package_digest, serial_preboot=
         keyring = '/usr/local/share/arch-niri-dux/install-keyring'
         target = '/mnt/verify/etc/pacman.d/gnupg'
         vm.command(
-            f'gpg --homedir {keyring} --export | gpg --homedir {target} --batch --import; '
-            f'gpg --homedir {keyring} --export-ownertrust | gpg --homedir {target} --import-ownertrust'
+            f'gpg --homedir {shlex.quote(keyring)} --export | gpg --homedir {shlex.quote(target)} --batch --import; '
+            f'gpg --homedir {shlex.quote(keyring)} --export-ownertrust | gpg --homedir {shlex.quote(target)} --import-ownertrust'
         )
     probe(vm, 'boot', 'prepare', '/mnt/verify', timeout=300)
     if serial_preboot:
@@ -87,10 +89,12 @@ def run_alongside_install(vm, passed, evidence, directory, device, os_name):
     probe(vm, 'alongside', 'plan', device, os_name)
     vm.command('chmod 600 /run/verify/install.json')
     parts = json.loads((directory / 'old-partitions.json').read_text())
-    devices = ' '.join(shlex.quote(part['node']) for part in parts)
-    vm.command(f'sha256sum {devices} > /run/verify/old-partitions.sha256', timeout=600)
+    devices = [part['node'] for part in parts]
+    vm.command(f'sha256sum {shlex.join(devices)} > /run/verify/old-partitions.sha256', timeout=600)
     vm.command('efibootmgr -v > /run/verify/firmware-before.txt')
-    vm.command(f'arch-niri-install --config /run/verify/install.json --confirm-disk {device}', timeout=2400)
+    vm.command(
+        f'arch-niri-install --config /run/verify/install.json --confirm-disk {shlex.quote(device)}', timeout=2400
+    )
     vm.command('sha256sum -c /run/verify/old-partitions.sha256', timeout=600)
     vm.command('efibootmgr -v > /run/verify/firmware-after.txt')
     passed('Every byte of every existing partition survives installation')
@@ -98,9 +102,9 @@ def run_alongside_install(vm, passed, evidence, directory, device, os_name):
     separator = 'p' if device[-1].isdigit() else ''
     esp, encrypted = [device + separator + str(part[0]) for part in plan]
     vm.command(
-        f'cryptsetup open --key-file /run/verify/key {encrypted} dux-root; '
+        f'cryptsetup open --key-file /run/verify/key {shlex.quote(encrypted)} dux-root; '
         'mkdir -p /mnt/verify; mount -o subvol=@ /dev/mapper/dux-root /mnt/verify; '
-        f'mount {esp} /mnt/verify/boot'
+        f'mount {shlex.quote(esp)} /mnt/verify/boot'
     )
     vm.command(
         'cd /run/verify && python -m tools.verification.probes.boot prepare /mnt/verify; '

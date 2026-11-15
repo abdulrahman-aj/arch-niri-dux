@@ -117,12 +117,16 @@ class CommandTests(unittest.TestCase):
             'linux fixture': Path('/fx/linux/disk.qcow2'),
             'linux firmware': Path('/fx/linux/OVMF_VARS.fd'),
         }
-        with patch.object(qualify, 'newest_iso', return_value=Path('/out/old.iso')):
-            plan = qualify.format_plan(
-                'abc', 'installer', 'reason', ['iso-development', 'alongside-linux'], evidence, [], fixtures
-            )
+        with tempfile.TemporaryDirectory() as root:
+            stale = Path(root) / 'out'
+            stale.mkdir(parents=True)
+            (stale / 'old.iso').write_bytes(b'stale')
+            with patch.object(qualify, 'ROOT', Path(root)):
+                plan = qualify.format_plan(
+                    'abc', 'installer', 'reason', ['iso-development', 'alongside-linux'], evidence, [], fixtures
+                )
         self.assertIn('<ISO built by iso-development above>', plan)
-        self.assertNotIn('/out/old.iso', plan)
+        self.assertNotIn('old.iso', plan)
 
     def test_git_failures_name_the_fix(self):
         with tempfile.TemporaryDirectory() as root, patch.object(qualify, 'ROOT', Path(root)):

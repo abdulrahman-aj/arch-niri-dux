@@ -200,10 +200,6 @@ def boot_name(snapshot, number):
     return storage.entry_label(snapshot['entries'][number])
 
 
-def disk_label(disk):
-    return storage.disk_identity(disk)
-
-
 def ask(state):
     if not shutil.which('gum'):
         raise ValueError('The live installer is missing gum, required for its menus.')
@@ -217,7 +213,7 @@ def ask(state):
             f'No unused writable disk of at least {storage.MIN_DISK_BYTES // storage.GIB} GiB found. '
             'TTY2 is available for recovery.' + (f'\n{detail}' if detail else '')
         )
-    labels = {disk_label(disk): disk for disk in disks}
+    labels = {storage.disk_identity(disk): disk for disk in disks}
     boot_map = storage.boot_entry_nodes(disks)
     screen(
         'Welcome',
@@ -225,13 +221,13 @@ def ask(state):
         'Esc cancels at any point before the final confirmation. TTY2 has a root shell.',
     )
     for disk in disks:
-        say(disk_label(disk), bold=True)
+        say(storage.disk_identity(disk), bold=True)
         say(textwrap.indent(storage.describe_contents(disk, boot_map), '  '))
     print()
     disk = labels[choose('Install on which disk?', list(labels))]
     erase = f'Erase disk: replace everything on {disk["name"]}'
     alongside = 'Alongside: use existing free space and keep every partition'
-    screen('Storage', disk_label(disk))
+    screen('Storage', storage.disk_identity(disk))
     snapshot = None
     region = None
     boot_number = None
@@ -314,7 +310,7 @@ def ask(state):
         raise ValueError('Disk identity changed while entering installation settings.')
     swap = f'{size} GiB encrypted, hibernation on' if size else 'none, hibernation off'
     rows = [
-        ('Disk', disk_label(disk)),
+        ('Disk', storage.disk_identity(disk)),
         ('Account', f'{settings.username} on {settings.hostname}'),
         ('Keyboard', settings.keymap),
         ('Time zone', settings.timezone),

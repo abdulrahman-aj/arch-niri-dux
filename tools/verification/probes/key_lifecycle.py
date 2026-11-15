@@ -1,12 +1,13 @@
 """Disposable GnuPG and real pacman transactions shared by fast and VM qualification."""
 
 import hashlib
-import json
 from pathlib import Path
 import runpy
 import shutil
 import subprocess
 import tempfile
+
+from .guest import record
 
 
 def qualify(helper, *, fakeroot=True):
@@ -211,7 +212,7 @@ def qualify(helper, *, fakeroot=True):
 def verify_installed():
     subprocess.run(['systemd-detect-virt', '--vm'], check=True)
     result = qualify(Path('/usr/bin/arch-niri-dux-keyring-recover'), fakeroot=False)
-    Path('/run/verify/key-lifecycle.json').write_text(json.dumps(result, indent=2) + '\n')
+    record('key-lifecycle', result)
 
 
 if __name__ == '__main__':

@@ -8,7 +8,7 @@ import pwd
 from tools.digest import digest
 
 from . import dispatch
-from .guest import run, user_command, wait_until
+from .guest import output, record, run, user_command, wait_until
 
 
 SYSTEM_UNITS = (
@@ -24,10 +24,6 @@ SYSTEM_UNITS = (
     'greetd.service',
 )
 USER_UNITS = ('dms.service', 'dsearch.service', 'dcal.service', 'dfiles.service', 'dux-application-themes.service')
-
-
-def output(*args):
-    return run(*args, stdout=subprocess.PIPE).stdout.strip()
 
 
 def check():
@@ -147,22 +143,19 @@ def check():
 
     wait_until('PAM-unlocked login keyring', unlocked)
     user_command('niri', 'validate')
-    Path('/run/verify/package-policy.json').write_text(
-        json.dumps(
-            {
-                'package_owned_policy': owned,
-                'system_units_enabled': SYSTEM_UNITS,
-                'user_units_enabled': USER_UNITS,
-                'new_and_existing_user_presets': True,
-                'snapper_timeline_disabled': True,
-                'greetd_after': after,
-                'recovery_conditions': conditions,
-                'repository_order': repositories,
-                'login_keyring_unlocked': True,
-            },
-            indent=2,
-        )
-        + '\n'
+    record(
+        'package-policy',
+        {
+            'package_owned_policy': owned,
+            'system_units_enabled': SYSTEM_UNITS,
+            'user_units_enabled': USER_UNITS,
+            'new_and_existing_user_presets': True,
+            'snapper_timeline_disabled': True,
+            'greetd_after': after,
+            'recovery_conditions': conditions,
+            'repository_order': repositories,
+            'login_keyring_unlocked': True,
+        },
     )
 
 
@@ -175,7 +168,7 @@ def boot_artifacts():
 
 def record_boot():
     run('systemd-detect-virt', '--vm')
-    Path('/run/verify/boot-policy-before.json').write_text(json.dumps(boot_artifacts(), indent=2) + '\n')
+    record('boot-policy-before', boot_artifacts())
 
 
 def upgraded_boot():
@@ -186,17 +179,14 @@ def upgraded_boot():
     after = boot_artifacts()
     for path, old in before.items():
         assert after[path]['mtime_ns'] > old['mtime_ns'], (path, old, after[path])
-    Path('/run/verify/boot-policy-upgrade.json').write_text(
-        json.dumps(
-            {
-                'before': before,
-                'after': after,
-                'installed_packages': output('pacman', '-Q', 'arch-niri-dux', 'arch-niri-dux-baseline', 'linux'),
-                'all_boot_artifacts_regenerated': True,
-            },
-            indent=2,
-        )
-        + '\n'
+    record(
+        'boot-policy-upgrade',
+        {
+            'before': before,
+            'after': after,
+            'installed_packages': output('pacman', '-Q', 'arch-niri-dux', 'arch-niri-dux-baseline', 'linux'),
+            'all_boot_artifacts_regenerated': True,
+        },
     )
 
 

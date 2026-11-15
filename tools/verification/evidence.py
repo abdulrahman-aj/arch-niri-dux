@@ -38,4 +38,6 @@ class Evidence:
         files = sorted(installer.glob('*.py')) + [installer / 'configure-target.sh']
         for source in files:
             guest = Path('/usr/local/lib/arch-niri-dux/installer') / source.name
-            vm.command(f'test "$(sha256sum {shlex.quote(str(guest))} | cut -d " " -f 1)" = {digest(source)}')
+            vm.command(
+                f'test "$(sha256sum {shlex.quote(str(guest))} | cut -d " " -f 1)" = {shlex.quote(digest(source))}'
+            )

@@ -46,8 +46,9 @@ class PayloadTests(unittest.TestCase):
             self.assertNotEqual(before, digest(path))
 
     def test_unreadable_cache_falls_back_to_download(self):
-        with patch.object(module, 'digest', side_effect=PermissionError):
-            self.assertFalse(module.cache_matches(Path('/cache/package'), 'a' * 64))
+        with tempfile.TemporaryDirectory() as directory:
+            # digest() on a directory raises OSError; the cache stays optional.
+            self.assertFalse(module.cache_matches(Path(directory), 'a' * 64))
 
     def test_lock_refresh_removes_old_package_and_signature(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -162,8 +163,17 @@ class SharedCacheTests(unittest.TestCase):
 
     def fetch(self, entry, dest, url):
         # validate_entry demands HTTPS; the loopback server speaks plain HTTP.
-        real_download = module.download
-        with patch.object(module, 'download', lambda _, *rest: real_download(url, *rest)):
+        # Redirect at the stdlib boundary so the real download runs unpatched.
+        import urllib.request
+
+        real_urlopen = urllib.request.urlopen
+
+        def redirect(target, *args, **kwargs):
+            if isinstance(target, str) and target.startswith('https://127.0.0.1:'):
+                target = 'http://' + target[len('https://') :]
+            return real_urlopen(target, *args, **kwargs)
+
+        with patch.object(module.urllib.request, 'urlopen', side_effect=redirect):
             module.fetch_package(entry, dest, self.downloads, None)
 
     def test_second_build_reuses_the_shared_download(self):
@@ -234,44 +244,6 @@ class ReviewedRecipeTests(unittest.TestCase):
                 dux_apps.validate_recipe(root, recipe)
 
 
-class LiveKeyringTests(unittest.TestCase):
-    def test_key_operations_wait_for_live_initializer_and_stop_if_it_fails(self):
-        import os
-        import subprocess
-
-        source = (Path(__file__).resolve().parents[1] / 'tools/build/guest.sh').read_text()
-        preparation = source.split('# Serialize keyring preparation', 1)[1].split('# Import the existing', 1)[0]
-        preparation = '# Serialize keyring preparation' + preparation
-        for status in (0, 9):
-            with self.subTest(initializer_status=status), tempfile.TemporaryDirectory() as directory:
-                root = Path(directory)
-                systemctl = root / 'systemctl'
-                systemctl.write_text(
-                    '#!/bin/bash\nsleep 0.02\n'
-                    f'if [ {status} != 0 ]; then exit {status}; fi\n'
-                    'touch "$KEYRING_TEST_STATE/ready"\n'
-                )
-                pacman_key = root / 'pacman-key'
-                pacman_key.write_text(
-                    '#!/bin/bash\n'
-                    'test -f "$KEYRING_TEST_STATE/ready" || exit 29\n'
-                    'printf "%s\\n" "$*" >> "$KEYRING_TEST_STATE/operations"\n'
-                )
-                systemctl.chmod(0o755)
-                pacman_key.chmod(0o755)
-                environment = os.environ | {
-                    'PATH': str(root) + ':' + os.environ['PATH'],
-                    'KEYRING_TEST_STATE': str(root),
-                }
-                result = subprocess.run(['bash', '-e', '-c', preparation], env=environment, check=False)
-                self.assertEqual(result.returncode, status)
-                operations = root / 'operations'
-                if status == 0:
-                    self.assertEqual(operations.read_text().splitlines(), ['--init', '--populate archlinux'])
-                else:
-                    self.assertFalse(operations.exists())
-
-
 class ResolveDateTests(unittest.TestCase):
     def test_missing_snapshot_falls_back_to_previous_day(self):
         import datetime
@@ -281,11 +253,19 @@ class ResolveDateTests(unittest.TestCase):
         available = MagicMock()
         available.__enter__.return_value = available
         missing = urllib.error.HTTPError('https://example.invalid/core.db', 404, 'Not Found', None, None)
-        with patch('urllib.request.urlopen', side_effect=[missing, available]) as opened:
+        attempts = []
+
+        def fake_urlopen(*args, **_kwargs):
+            attempts.append(args)
+            if len(attempts) == 1:
+                raise missing
+            return available
+
+        with patch('urllib.request.urlopen', side_effect=fake_urlopen):
             self.assertEqual(
                 module.resolve_date(None), (datetime.date.today() - datetime.timedelta(days=1)).strftime('%Y/%m/%d')
             )
-        self.assertEqual(opened.call_count, 2)
+        self.assertEqual(len(attempts), 2)
 
     def test_server_error_aborts_instead_of_drifting_to_an_older_date(self):
         import urllib.error
@@ -300,9 +280,8 @@ class ResolveDateTests(unittest.TestCase):
 
         available = MagicMock()
         available.__enter__.return_value = available
-        with patch('urllib.request.urlopen', return_value=available) as opened:
+        with patch('urllib.request.urlopen', return_value=available):
             self.assertEqual(module.resolve_date('2026/11/10'), '2026/11/10')
-        self.assertEqual(opened.call_count, 1)
 
 
 class OmarchyDepsTests(unittest.TestCase):

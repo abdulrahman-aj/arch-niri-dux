@@ -161,15 +161,56 @@ def write_choices(directory, ram_gib, disk_gib, source):
     (directory / 'config').write_text(f'ram_gib={ram_gib}\ndisk_gib={disk_gib}\nsource={source}\n')
 
 
+def parse_vm_name(text):
+    name = text.strip() or DEFAULT_NAME
+    if valid_name(name):
+        return name
+    raise ValueError('Use letters, digits, dot, dash or underscore.')
+
+
+def parse_positive_int(text, default):
+    stripped = text.strip()
+    if not stripped:
+        return default
+    if stripped.isdigit() and int(stripped) > 0:
+        return int(stripped)
+    raise ValueError('Enter a positive whole number.')
+
+
+def disk_size_floor(ram_gib):
+    # The installer floor grows with RAM; Enter must never pick a refused size.
+    auto_swap = ram_gib + storage.AUTO_SWAP_PAD_GIB
+    minimum = storage.min_disk_gib(auto_swap)
+    return minimum, max(DEFAULT_DISK_GIB, minimum), auto_swap
+
+
+def parse_disk_size(text, ram_gib):
+    minimum, default, auto_swap = disk_size_floor(ram_gib)
+    stripped = text.strip()
+    if not stripped:
+        return default
+    if stripped.isdigit() and int(stripped) > 0:
+        size = int(stripped)
+        if size >= minimum:
+            return size
+        raise ValueError(
+            f'Disks below {minimum} GiB cannot finish the default install: the installer needs at least '
+            f'{storage.MIN_DISK_BYTES // storage.GIB} GiB, and with {ram_gib} GiB RAM its automatic swap '
+            f'({auto_swap} GiB) needs room beside the {storage.ESP_GIB} GiB ESP, '
+            f'{storage.SYSTEM_RESERVE_GIB} GiB system reserve and {storage.DISK_SLACK_GIB} GiB slack.'
+        )
+    raise ValueError('Enter a positive whole number.')
+
+
 def ask_name():
     while True:
         name = gum_input('VM name', 'Letters, digits, dot, dash or underscore', DEFAULT_NAME)
         if name is None:
             return None
-        name = name.strip() or DEFAULT_NAME
-        if valid_name(name):
-            return name
-        print('Use letters, digits, dot, dash or underscore.')
+        try:
+            return parse_vm_name(name)
+        except ValueError as error:
+            print(error)
 
 
 def ask_positive_int(label, default):
@@ -177,12 +218,10 @@ def ask_positive_int(label, default):
         answer = gum_input(f'{label} in GiB', 'Positive whole number', default)
         if answer is None:
             return None
-        answer = answer.strip()
-        if not answer:
-            return default
-        if answer.isdigit() and int(answer) > 0:
-            return int(answer)
-        print('Enter a positive whole number.')
+        try:
+            return parse_positive_int(answer, default)
+        except ValueError as error:
+            print(error)
 
 
 def ask_disk_size(ram_gib):
@@ -193,27 +232,15 @@ def ask_disk_size(ram_gib):
     The installer rechecks against actual RAM at its swap screen, so a stale
     answer here still fails safe later.
     """
-    auto_swap = ram_gib + storage.AUTO_SWAP_PAD_GIB
-    minimum = storage.min_disk_gib(auto_swap)
-    # Big-RAM VMs need more than 48 GiB, and Enter must never pick a refused size.
-    default = max(DEFAULT_DISK_GIB, minimum)
+    minimum, default, _ = disk_size_floor(ram_gib)
     while True:
         answer = gum_input(f'Disk (at least {minimum} GiB)', 'Positive whole number', default)
         if answer is None:
             return None
-        answer = answer.strip()
-        size = default if not answer else (int(answer) if answer.isdigit() and int(answer) > 0 else None)
-        if size is None:
-            print('Enter a positive whole number.')
-            continue
-        if size >= minimum:
-            return size
-        print(
-            f'Disks below {minimum} GiB cannot finish the default install: the installer needs at least '
-            f'{storage.MIN_DISK_BYTES // storage.GIB} GiB, and with {ram_gib} GiB RAM its automatic swap '
-            f'({auto_swap} GiB) needs room beside the {storage.ESP_GIB} GiB ESP, '
-            f'{storage.SYSTEM_RESERVE_GIB} GiB system reserve and {storage.DISK_SLACK_GIB} GiB slack.'
-        )
+        try:
+            return parse_disk_size(answer, ram_gib)
+        except ValueError as error:
+            print(error)
 
 
 def ask_source():
@@ -222,10 +249,6 @@ def ask_source():
         if choice == label:
             return kind
     return None
-
-
-def ask_yes_no(prompt, default_yes):
-    return gum_confirm(prompt, default_yes)
 
 
 def iso_for_kind(kind):
@@ -271,7 +294,7 @@ def check_new_vm_space(base=None):
     if report is None:
         return True
     gum_style(report, warning=True)
-    return ask_yes_no('Continue anyway?', False)
+    return gum_confirm('Continue anyway?', False)
 
 
 # A plain build log goes to out/try-build.log; the screen shows these stages.
@@ -549,7 +572,7 @@ def ensure_iso(kind):
         return iso.resolve()
     minutes = round(sum(seconds for _, _, seconds in BUILD_STAGES[kind]) / 60)
     prompt = f'{reason} Build it now? That takes about {minutes} minutes.'
-    if ask_yes_no(prompt, default_yes):
+    if gum_confirm(prompt, default_yes):
         if not run_build(kind):
             raise SystemExit(f'The {kind} ISO was not built, so the VM did not start.')
         iso = iso_for_kind(kind) or iso
@@ -658,7 +681,7 @@ def open_vm(name, base=None):
 
 def delete_vm(name, base=None):
     directory = require_vm_dir(name, base)
-    if not ask_yes_no(f"Delete VM '{name}' and its disk?", False):
+    if not gum_confirm(f"Delete VM '{name}' and its disk?", False):
         print('Kept.')
         return
     shutil.rmtree(directory)
