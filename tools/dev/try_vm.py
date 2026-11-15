@@ -6,7 +6,6 @@ attaches the VM's stored install source (release or checkout ISO) with the
 disk first in boot order."""
 
 import argparse
-import hashlib
 import os
 import re
 import shutil
@@ -17,6 +16,7 @@ from pathlib import Path
 
 from tools.workspace import state as workspace
 from tools.workspace import resources
+from tools.workspace.source import source_identity as checkout_identity
 
 ROOT = Path(__file__).resolve().parents[2]
 # The installer's disk floor lives in one place: read it (and the ESP/swap
@@ -238,10 +238,7 @@ def iso_for_kind(kind):
 
 
 def source_identity():
-    """HEAD plus a hash of uncommitted tracked changes; must match tools/build/host.sh."""
-    head = subprocess.check_output(['git', '-C', str(ROOT), 'rev-parse', 'HEAD'], text=True).strip()
-    diff = subprocess.check_output(['git', '-C', str(ROOT), 'diff', 'HEAD', '--binary'])
-    return f'{head}\n{hashlib.sha256(diff).hexdigest()}'
+    return checkout_identity(ROOT)
 
 
 def checkout_changed_since(iso):
