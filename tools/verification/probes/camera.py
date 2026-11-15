@@ -2,6 +2,7 @@
 
 import json
 from pathlib import Path
+import shlex
 import shutil
 import subprocess
 from . import dispatch
@@ -65,7 +66,7 @@ def camera_cleanup():
     if pid_file.is_file():
         pid = int(pid_file.read_text())
         pid_file.unlink()
-        user_command('sh', '-c', f'kill {pid} 2>/dev/null || true')
+        user_command('sh', '-c', f'kill {shlex.quote(str(pid))} 2>/dev/null || true')
     user_command('sh', '-c', 'pkill -x snapshot || true')
 
 

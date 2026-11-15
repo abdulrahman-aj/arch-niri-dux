@@ -87,7 +87,67 @@ def probe_local_helpers(path, tree):
             yield node.lineno, 'write probe evidence with guest.record instead of write_text(json.dumps(...))'
 
 
-RULES = (swallowed_broad_except, pass_through_wrapper, probe_local_helpers)
+def unquoted_shell_interpolation(path, tree):
+    # A value spliced unquoted into a shell string breaks on spaces or becomes
+    # injection the first time an agent copies the line for a real path; quoting
+    # is a no-op on today's safe values, so every interpolation goes through shlex.
+    # Scope: the string passed straight to vm.command or after 'sh'/'bash' '-c';
+    # a command assembled in a variable first is not followed.
+    # Tests build shell code on purpose (sourcing fixtures), so this watches tools/.
+    if not str(path).startswith('tools/'):
+        return
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Call):
+            elements = node.args
+            is_command = isinstance(node.func, ast.Attribute) and node.func.attr == 'command' and node.args
+            commands = [node.args[0]] if is_command else []
+        elif isinstance(node, (ast.List, ast.Tuple)):
+            elements, commands = node.elts, []
+        else:
+            continue
+        commands += _dash_c_command(elements)
+        if any(_unquoted_interpolation(command) for command in commands):
+            yield node.lineno, 'shell command interpolates a value without shlex.quote/shlex.join'
+
+
+def _dash_c_command(elements):
+    words = [element.value if isinstance(element, ast.Constant) else None for element in elements]
+    if '-c' not in words:
+        return []
+    index = words.index('-c')
+    if index + 1 < len(elements) and {'sh', 'bash'} & set(words[:index]):
+        return [elements[index + 1]]
+    return []
+
+
+def _shlex_call(node):
+    return (
+        isinstance(node, ast.Call)
+        and isinstance(node.func, ast.Attribute)
+        and node.func.attr in ('quote', 'join')
+        and isinstance(node.func.value, ast.Name)
+        and node.func.value.id == 'shlex'
+    )
+
+
+def _unquoted_interpolation(command):
+    if isinstance(command, ast.JoinedStr):
+        return any(isinstance(value, ast.FormattedValue) and not _shlex_call(value.value) for value in command.values)
+    if isinstance(command, ast.BinOp) and isinstance(command.op, ast.Add):
+        return any(
+            not isinstance(side, ast.Constant)
+            and not _shlex_call(side)
+            and (not isinstance(side, (ast.JoinedStr, ast.BinOp)) or _unquoted_interpolation(side))
+            for side in (command.left, command.right)
+        )
+    # %-formatting and str.format can't route each value through shlex readably; use an f-string.
+    is_format = (
+        isinstance(command, ast.Call) and isinstance(command.func, ast.Attribute) and command.func.attr == 'format'
+    )
+    return is_format or (isinstance(command, ast.BinOp) and isinstance(command.op, ast.Mod))
+
+
+RULES = (swallowed_broad_except, pass_through_wrapper, probe_local_helpers, unquoted_shell_interpolation)
 
 
 def violations(path, source):

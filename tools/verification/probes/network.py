@@ -5,6 +5,7 @@ check needs no QEMU networking and its traffic crosses the real input hook.
 """
 
 from pathlib import Path
+import shlex
 import socket
 import struct
 import subprocess
@@ -32,7 +33,7 @@ def peer(*args, **kwargs):
 
 def connect(address, namespace=False):
     """Return 'open', 'refused' or 'dropped' for a TCP connection attempt."""
-    command = ['timeout', '3', 'bash', '-c', f'exec 3<>/dev/tcp/{address}/{PORT}']
+    command = ['timeout', '3', 'bash', '-c', f'exec 3<>/dev/tcp/{shlex.quote(address)}/{shlex.quote(str(PORT))}']
     if namespace:
         command = ['ip', 'netns', 'exec', NAMESPACE, *command]
     code = subprocess.run(command, stderr=subprocess.DEVNULL, check=False).returncode

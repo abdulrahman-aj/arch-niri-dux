@@ -1,6 +1,7 @@
 """Alongside verification lifecycle."""
 
 import json
+import shlex
 import shutil
 import subprocess
 from tools.workspace.state import own
@@ -87,11 +88,9 @@ def run_alongside(args, parser):
         passed('New encrypted installation boots after kernel package reinstall')
         # Explicit selection by entry path exercises the same chainloader as
         # manual menu selection without timing-dependent keyboard simulation.
-        vm.command(
-            'sed -i "1i default_entry: Existing OS (firmware '
-            + json.loads((directory / 'install.json').read_text())['existing_boot'].upper()
-            + ')\\ntimeout: 1\\nremember_last_entry: no" /boot/limine.conf'
-        )
+        boot = json.loads((directory / 'install.json').read_text())['existing_boot'].upper()
+        script = f'1i default_entry: Existing OS (firmware {boot})\\ntimeout: 1\\nremember_last_entry: no'
+        vm.command(f'sed -i {shlex.quote(script)} /boot/limine.conf')
         vm.poweroff()
         vm.start(cdrom=False, network=bool(reports))
         if reports:

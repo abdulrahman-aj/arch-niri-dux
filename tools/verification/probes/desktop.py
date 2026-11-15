@@ -5,6 +5,7 @@ import os
 from pathlib import Path
 import pwd
 import re
+import shlex
 import shutil
 import subprocess
 from . import dispatch
@@ -264,7 +265,7 @@ def dux_components():
     metrics = json.loads(user_command('dgop', 'memory', '--json', capture=True).stdout)
     assert metrics, 'GOP did not return memory metrics.'
     fixture = Path('/home/tester/dux-verification-document.txt')
-    user_command('sh', '-c', f'printf "offline file preview works\\n" > {fixture}')
+    user_command('sh', '-c', f'printf "offline file preview works\\n" > {shlex.quote(str(fixture))}')
     wait_until(
         'Dux Search indexing',
         lambda: any(
@@ -514,7 +515,7 @@ def wallpaper():
 
 def account_seeded():
     user = 'dux-seed-check'
-    run('sh', '-c', f'userdel -r {user} 2>/dev/null || true')
+    run('sh', '-c', f'userdel -r {shlex.quote(user)} 2>/dev/null || true')
     run('useradd', '-m', '-s', '/bin/bash', user)
     try:
         home = Path(f'/home/{user}')
@@ -527,7 +528,7 @@ def account_seeded():
         assert plugin.get('archNiriDuxRelease', {}).get('enabled') is True, plugin
         record('account-seeded', {'user': user, 'fresh_account_initialized': True})
     finally:
-        run('sh', '-c', f'userdel -r {user} 2>/dev/null || true')
+        run('sh', '-c', f'userdel -r {shlex.quote(user)} 2>/dev/null || true')
 
 
 def session_path():

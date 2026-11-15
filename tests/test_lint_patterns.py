@@ -17,6 +17,14 @@ def flagged_guest(source):
     return list(violations(Path('tools/verification/probes/guest.py'), textwrap.dedent(source)))
 
 
+def flagged_shell(source):
+    return list(violations(Path('tools/verification/probes/example.py'), textwrap.dedent(source)))
+
+
+def flagged_tests(source):
+    return list(violations(Path('tests/test_example.py'), textwrap.dedent(source)))
+
+
 class SwallowedBroadExceptTests(unittest.TestCase):
     def test_broad_handlers_that_drop_the_error_are_flagged(self):
         for handler in ('except Exception:', 'except BaseException:', 'except:', 'except Exception as error:'):
@@ -121,6 +129,52 @@ class ProbeLocalHelpersTests(unittest.TestCase):
         ):
             with self.subTest(source=source):
                 self.assertEqual(flagged_probe(source), [])
+
+
+class UnquotedShellInterpolationTests(unittest.TestCase):
+    def test_interpolated_values_without_quoting_are_flagged(self):
+        for source in (
+            "import shlex\nvm.command(f'arch-niri-install --confirm-disk {device}')",
+            "import shlex\nvm.command('sha256sum ' + device + ' > old.sha256')",
+            "import shlex\nvm.command('sha256sum %s > old.sha256' % device)",
+            "import shlex\nvm.command('sha256sum {} > old.sha256'.format(device))",
+            "run('sh', '-c', f'userdel -r {user} 2>/dev/null || true')",
+            "command = ['timeout', '3', 'bash', '-c', f'exec 3<>/dev/tcp/{address}/{PORT}']",
+            "import shlex\nvm.command(f'test x = {digest(source)}')",
+            "vm.command(f'systemctl --failed > /run/verify/{FAILED_FILES[0]}')",
+            "import shlex\nvm.command('xdg-open ' + ' '.join(parts) + ' >/dev/null 2>&1 &')",
+            "import shlex\nvm.command('sha256sum %s > old.sha256' % shlex.quote(device))",
+            "vm.command(f'systemctl --failed > /run/verify/{JOURNAL_FILE}')",
+        ):
+            with self.subTest(source=source):
+                self.assertEqual(len(flagged_shell(source)), 1)
+
+    def test_quoted_and_joined_interpolations_pass(self):
+        for source in (
+            "import shlex\nvm.command(f'arch-niri-install --confirm-disk {shlex.quote(device)}')",
+            "import shlex\nvm.command('cd /run/verify && ' + shlex.join(command))",
+            "import shlex\nvm.command(f'--epoch {shlex.quote(str(epoch))}')",
+            "command = ['timeout', '3', 'bash', '-c', f'exec 3<>/dev/tcp/{shlex.quote(address)}/{shlex.quote(str(PORT))}']",
+        ):
+            with self.subTest(source=source):
+                self.assertEqual(flagged_shell(source), [])
+
+    def test_non_shell_strings_pass(self):
+        for source in (
+            "vm.command('sync')",
+            'vm.command(script)',
+            "run('useradd', '-m', '-s', '/bin/bash', user)",
+            "subprocess.run(['qemu-img', 'snapshot', '-c', 'pristine', str(disk)], check=True)",
+            "run('bash', '-lc', 'command -v dux-path-probe')",
+            "user_command('niri', 'msg', 'action', 'spawn', '--', 'sh', '-c', 'test x')",
+        ):
+            with self.subTest(source=source):
+                self.assertEqual(flagged_shell(source), [])
+
+    def test_shell_code_built_by_tests_is_out_of_scope(self):
+        source = "output = subprocess.check_output(['bash', '-c', f'source \"$1\"; {expression}'], text=True)"
+        self.assertEqual(len(flagged_shell(source)), 1)
+        self.assertEqual(flagged_tests(source), [])
 
 
 if __name__ == '__main__':

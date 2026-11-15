@@ -1,5 +1,6 @@
 """Qualify logind suspend through compositor and logind; capture optional evidence."""
 
+import shlex
 import time
 from tools.verification.login import graphical_login, installed_login
 from tools.verification.constants import LOCAL_PROBES
@@ -31,7 +32,7 @@ def verify(vm, passed):
     # A completed PNG can briefly retain an open writer on the share.
     vm.command(
         f'for attempt in $(seq 1 10); do '
-        f'if umount /run/verify; then mount --bind {LOCAL_PROBES} /run/verify; exit $?; fi; '
+        f'if umount /run/verify; then mount --bind {shlex.quote(str(LOCAL_PROBES))} /run/verify; exit $?; fi; '
         'sleep 1; done; exit 1'
     )
     vm.send('systemctl suspend\n')
@@ -49,6 +50,6 @@ def verify(vm, passed):
     vm.start(cdrom=False)
     installed_login(vm)
     mount_probes(vm)
-    vm.command(f'cp {LOCAL_PROBES}/03-suspend-* /run/verify/; rm -r {LOCAL_PROBES}')
+    vm.command(f'cp {shlex.quote(str(LOCAL_PROBES))}/03-suspend-* /run/verify/; rm -r {shlex.quote(str(LOCAL_PROBES))}')
     graphical_login(vm)
     passed('Real S3 suspend resumes with logind and Niri reporting the session locked')

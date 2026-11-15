@@ -260,8 +260,8 @@ def open_file(filename, name):
         '-c',
         'xdg-open '
         + shlex.quote(str(path))
-        + ' >'
-        + str(guest.EVIDENCE / ('apps-' + name.lower() + '.log'))
+        + ' > '
+        + shlex.quote(str(guest.EVIDENCE / ('apps-' + name.lower() + '.log')))
         + ' 2>&1 &',
     )
     focus_app(name)
@@ -447,7 +447,7 @@ def backends():
         'console.log("DUX_MULTIMEDIA_OK"); Qt.quit(); } } }\n'
     )
     shutil.chown(qml, user='tester')
-    result = guest.user_command('bash', '-c', f'quickshell -p {qml} 2>&1', capture=True, timeout=30)
+    result = guest.user_command('bash', '-c', f'quickshell -p {shlex.quote(str(qml))} 2>&1', capture=True, timeout=30)
     assert 'DUX_MULTIMEDIA_OK' in result.stdout, result.stdout
     guest.user_command('cava', '-v', capture=True, timeout=10)
     # Exercise Qt's decoder, not Loupe's separate image stack or plugin filenames.
@@ -478,7 +478,9 @@ def backends():
             'if (image.status === Image.Ready) { console.log("DUX_IMAGE_OK"); Qt.quit(); }\n'
             'if (image.status === Image.Error) Qt.exit(1); } } }\n'
         )
-        result = guest.user_command('bash', '-c', f'quickshell -p {qml} 2>&1', capture=True, timeout=30)
+        result = guest.user_command(
+            'bash', '-c', f'quickshell -p {shlex.quote(str(qml))} 2>&1', capture=True, timeout=30
+        )
         assert 'DUX_IMAGE_OK' in result.stdout, (extension, result.stdout)
     fingerprint = json.loads(
         guest.run(
