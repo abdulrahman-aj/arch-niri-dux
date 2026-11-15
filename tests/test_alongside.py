@@ -51,13 +51,14 @@ class GPTMetadataTests(unittest.TestCase):
 
 
 class AlongsideDiskTests(unittest.TestCase):
-    def setUp(self):
+    @classmethod
+    def setUpClass(cls):
         if not shutil.which('sgdisk') or not shutil.which('sfdisk'):
-            self.fail('Run through the project Nix shell; GPT tools are required.')
-        self.directory = tempfile.TemporaryDirectory()
-        self.addCleanup(self.directory.cleanup)
-        self.disk = Path(self.directory.name) / 'disk.img'
-        with self.disk.open('wb') as stream:
+            raise RuntimeError('Run through the project Nix shell; GPT tools are required.')
+        cls.fixture_directory = tempfile.TemporaryDirectory()
+        cls.addClassCleanup(cls.fixture_directory.cleanup)
+        cls.fixture = Path(cls.fixture_directory.name) / 'pristine.img'
+        with cls.fixture.open('wb') as stream:
             stream.truncate(48 * installer.GIB)
         subprocess.run(
             [
@@ -69,11 +70,18 @@ class AlongsideDiskTests(unittest.TestCase):
                 '--typecode=4:0700',
                 '--attributes=1:set:63',
                 '--attributes=4:set:60',
-                str(self.disk),
+                str(cls.fixture),
             ],
             check=True,
             stdout=subprocess.DEVNULL,
         )
+
+    def setUp(self):
+        self.directory = tempfile.TemporaryDirectory()
+        self.addCleanup(self.directory.cleanup)
+        self.disk = Path(self.directory.name) / 'disk.img'
+        # Keep each real GPT mutation isolated without allocating a 48 GiB copy.
+        subprocess.run(['cp', '--reflink=auto', '--sparse=always', str(self.fixture), str(self.disk)], check=True)
         with self.disk.open('r+b') as stream:
             stream.write(b'preserve-protective-MBR-bootstrap-and-disk-signature'.ljust(446, b'!'))
         self.mbr_hash = digest_range(self.disk, 0, 446)
