@@ -54,10 +54,10 @@ def main():
     if hashlib.sha256(embedded.stdout).hexdigest() != package_digest:
         parser.error("ISO does not embed this checkout's package manifest.")
     directory = args.directory.resolve() if args.directory else ROOT / 'out' / f'verify-release-{args.tag[1:]}'
+    if directory.exists():
+        parser.error('Verification requires a fresh workspace; choose another --directory.')
     disk_guard(directory)
     disk = directory / 'disk.qcow2'
-    if disk.exists():
-        parser.error('Refusing to overwrite an existing VM disk.')
     evidence = Evidence(directory, parents=True)
     own(directory)
     iso_digest = digest(iso)

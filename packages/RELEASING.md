@@ -55,11 +55,11 @@ VM acceptance. Keep the candidate's local VM evidence with the PR.
 After `make iso-development`, set `iso` to that ISO and `tag` to its manifest version prefixed with `v`, then run:
 
 ```sh
-mkdir -p out/rehearsal-repo; ./scripts/in-dev-shell bsdtar -xf "$iso" -C out/rehearsal-repo repo; chmod u+w out/rehearsal-repo/repo; cmp out/integration/arch-niri-dux.db out/rehearsal-repo/repo/offline.db && cp out/integration/arch-niri-dux.db* out/rehearsal-repo/repo/
-rm -f out/rehearsal-port; python3 scripts/serve_build_state.py --directory out/rehearsal-repo/repo --port-file out/rehearsal-port >out/rehearsal-http.log 2>&1 & server=$!
-make verify-release ARGS="--tag $tag --iso $iso --repository-url http://10.0.2.2:$(cat out/rehearsal-port)"; result=$?; kill "$server"; test "$result" = 0
+(set -e; mkdir -p out/rehearsal-repo; ./scripts/in-dev-shell bsdtar -xf "$iso" -C out/rehearsal-repo repo; chmod u+w out/rehearsal-repo/repo; cmp out/integration/arch-niri-dux.db out/rehearsal-repo/repo/offline.db; cp out/integration/arch-niri-dux.db* out/rehearsal-repo/repo/
+rm -f out/rehearsal-port; python3 scripts/serve_build_state.py --directory out/rehearsal-repo/repo --port-file out/rehearsal-port >out/rehearsal-http.log 2>&1 & server=$!; trap 'kill "$server"' EXIT; for _ in $(seq 1 100); do test -s out/rehearsal-port && break; kill -0 "$server"; sleep 0.05; done
+grep -Eq '^[0-9]+$' out/rehearsal-port; make verify-release ARGS="--tag $tag --iso $iso --repository-url http://10.0.2.2:$(cat out/rehearsal-port) --directory out/rehearsal-$(date +%s)")
 ```
-Wait for a complete numeric line in `out/rehearsal-port` before the last command. Use the database from the same build as the ISO. The rehearsal provisions the ISO's offline trust into the disposable target before boot and uses its exact payload. It requires signed packages and database, and skips ISO authorization staging. Remove the disposable repository and stopped VM disk afterward.
+Use the database from the same build as the ISO. The rehearsal provisions the ISO's offline trust into the disposable target before boot and uses its exact payload. It requires signed packages and database, and skips ISO authorization staging. Remove the disposable repository and stopped VM disk afterward. Every run requires a fresh evidence directory, including retries.
 
 ## Authorize and distribute an ISO
 
