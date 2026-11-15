@@ -413,7 +413,7 @@ class SignedReleaseTests(unittest.TestCase):
             subprocess.run(['gpgconf', '--homedir', str(target / 'gnupg'), '--kill', 'all'], check=True)
 
     def test_installer_rejects_unsigned_and_tampered_packages_with_rewritten_database(self):
-        from installer import install as installer
+        from installer import payload
         from unittest.mock import patch
 
         repository = self.root / 'offline'
@@ -429,9 +429,9 @@ class SignedReleaseTests(unittest.TestCase):
             (target / name).mkdir(parents=True)
         # The same config used by both pacstrap transactions, with a disposable
         # trusted keyring substituted for the ISO's pinned public keys.
-        with patch.object(installer, 'SHARE', self.root):
+        with patch.object(payload, 'SHARE', self.root):
             conf = target / 'pacman.conf'
-            conf.write_text(installer.offline_pacman_config(repository, 'offline'))
+            conf.write_text(payload.offline_pacman_config(repository, 'offline'))
         keyring = self.root / 'install-keyring'
         keyring.mkdir(mode=0o700)
         for arguments, data in (
@@ -485,7 +485,7 @@ class SignedReleaseTests(unittest.TestCase):
                         f'{release.build.digest(path)}  {path.name}\n' for path in (archive, repository / 'offline.db')
                     )
                 )
-                installer.verify_repository(repository)
+                payload.verify_repository(repository)
                 for path in (target / 'cache').iterdir():
                     path.unlink()
                 result = subprocess.run(

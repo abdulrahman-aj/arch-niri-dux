@@ -4,6 +4,13 @@ import ast
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
+INSTALLER_MODULES = ('install', 'payload', 'storage', 'wizard')
+# install.py is the engine and launcher target; it alone composes the others.
+INSTALLER_LAYERS = {
+    'installer.storage': ['installer.install', 'installer.payload', 'installer.wizard'],
+    'installer.payload': ['installer.install', 'installer.wizard'],
+    'installer.wizard': ['installer.install', 'installer.payload'],
+}
 
 
 def violations(path, source):
@@ -63,7 +70,9 @@ def violations(path, source):
         elif module == 'tools.vm.control':
             forbidden = ['tools.verification']
         elif module.startswith('installer.'):
-            forbidden = ['tools']
+            forbidden = ['tools', *INSTALLER_LAYERS.get(module, [])]
+            # The launcher runs install.py as a script, so sibling modules also arrive as bare top-level names.
+            names = [f'installer.{name}' if name in INSTALLER_MODULES else name for name in names]
         for name in names:
             if any(name == prefix or name.startswith(prefix + '.') for prefix in forbidden):
                 yield f'{path}:{node.lineno}: forbidden import {name}'

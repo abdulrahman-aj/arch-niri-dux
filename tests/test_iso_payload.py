@@ -6,7 +6,7 @@ import tarfile
 import tempfile
 import unittest
 
-from installer.install import verify_repository
+from installer.payload import verify_repository
 
 from tools.build import payload as iso_payload
 

@@ -8,7 +8,9 @@ import unittest
 from unittest.mock import patch
 
 from installer import install as installer
+from installer import payload
 from installer import storage
+from installer import wizard
 
 
 def settings(**changes):
@@ -22,7 +24,7 @@ def settings(**changes):
         password='test-password',
     )
     values.update(changes)
-    return installer.Settings(**values)
+    return wizard.Settings(**values)
 
 
 def disk(**changes):
@@ -124,10 +126,10 @@ class InstallerSafetyTests(unittest.TestCase):
     def test_disk_labels_distinguish_identical_models(self):
         first = disk(model='Same model', serial='SERIAL-A')
         second = disk(model='Same model', serial='SERIAL-B')
-        self.assertNotEqual(installer.disk_label(first), installer.disk_label(second))
-        self.assertIn('SERIAL-A', installer.disk_label(first))
-        self.assertIn('WWN-A', installer.disk_label(disk(wwn='WWN-A')))
-        self.assertIn('usb', installer.disk_label(disk(tran='usb')))
+        self.assertNotEqual(wizard.disk_label(first), wizard.disk_label(second))
+        self.assertIn('SERIAL-A', wizard.disk_label(first))
+        self.assertIn('WWN-A', wizard.disk_label(disk(wwn='WWN-A')))
+        self.assertIn('usb', wizard.disk_label(disk(tran='usb')))
 
     def test_erase_description_lists_transport_partitions_and_boot_entries(self):
         boots = {'/dev/sda1': [('0001', 'Windows Boot Manager')]}
@@ -250,24 +252,25 @@ class InstallerSafetyTests(unittest.TestCase):
                 'ru\tru,us\tpc105\t-\tgrp:shifts_toggle,grp_led:scroll\n'
             )
             self.assertEqual(
-                storage.x11_keyboard_layout('de', mapping), ('de', 'pc105', None, 'terminate:ctrl_alt_bksp')
+                installer.x11_keyboard_layout('de', mapping), ('de', 'pc105', None, 'terminate:ctrl_alt_bksp')
             )
             self.assertEqual(
-                storage.x11_keyboard_layout('ru', mapping), ('ru,us', 'pc105', None, 'grp:shifts_toggle,grp_led:scroll')
+                installer.x11_keyboard_layout('ru', mapping),
+                ('ru,us', 'pc105', None, 'grp:shifts_toggle,grp_led:scroll'),
             )
-            self.assertIsNone(storage.x11_keyboard_layout('xx', mapping))
-            self.assertIsNone(storage.x11_keyboard_layout('de', Path(directory) / 'missing'))
-        self.assertEqual(storage.x11_keyboard_layout('de')[0], 'de')
-        self.assertEqual(storage.x11_keyboard_layout('us')[0], 'us')
+            self.assertIsNone(installer.x11_keyboard_layout('xx', mapping))
+            self.assertIsNone(installer.x11_keyboard_layout('de', Path(directory) / 'missing'))
+        self.assertEqual(installer.x11_keyboard_layout('de')[0], 'de')
+        self.assertEqual(installer.x11_keyboard_layout('us')[0], 'us')
 
     def test_x11_keyboard_file_matches_localectl_format(self):
-        text = storage.xorg_keyboard_conf('de', 'de', 'pc105', None, 'terminate:ctrl_alt_bksp')
+        text = installer.xorg_keyboard_conf('de', 'de', 'pc105', None, 'terminate:ctrl_alt_bksp')
         for fact in ('Section "InputClass"', 'Identifier "system-keyboard"', 'MatchIsKeyboard "on"'):
             self.assertIn(fact, text)
         self.assertIn('Option "XkbLayout" "de"', text)
         self.assertIn('Option "XkbOptions" "terminate:ctrl_alt_bksp"', text)
         self.assertNotIn('XkbVariant', text)
-        variant = storage.xorg_keyboard_conf('us-acentos', 'us', 'pc105', 'intl', 'terminate:ctrl_alt_bksp')
+        variant = installer.xorg_keyboard_conf('us-acentos', 'us', 'pc105', 'intl', 'terminate:ctrl_alt_bksp')
         self.assertIn('Option "XkbVariant" "intl"', variant)
 
     def test_install_writes_matching_x11_layout_for_non_us_keymap(self):
@@ -357,22 +360,22 @@ class InstallerSafetyTests(unittest.TestCase):
     def test_wizard_without_usable_disks_names_each_rejection(self):
         rejected = [(disk(name='/dev/vda', type='disk', size=32 * 1024**3), 'has an active device mapping')]
         with (
-            patch.object(installer.shutil, 'which', return_value='/usr/bin/gum'),
+            patch.object(wizard.shutil, 'which', return_value='/usr/bin/gum'),
             patch.object(sys.stdin, 'isatty', return_value=True),
             patch.object(storage, 'disk_rejections', return_value=rejected),
         ):
             with self.assertRaisesRegex(ValueError, 'No unused writable disk') as stopped:
-                installer.wizard(installer.InstallationState())
+                wizard.ask(installer.InstallationState())
         self.assertIn(f'at least {storage.MIN_DISK_BYTES // storage.GIB} GiB', str(stopped.exception))
         self.assertIn('/dev/vda', str(stopped.exception))
         self.assertIn('has an active device mapping', str(stopped.exception))
 
     def test_swap_fit_is_the_inverse_of_the_disk_minimum(self):
-        with patch.object(installer, 'memory_gib', return_value=4):
-            self.assertEqual(installer.swap_size(None, 35 * installer.GIB), 6)
+        with patch.object(storage, 'memory_gib', return_value=4):
+            self.assertEqual(storage.swap_size(None, 35 * storage.GIB), 6)
             with self.assertRaisesRegex(ValueError, 'will not fit'):
-                installer.swap_size(None, 34 * installer.GIB)
-            self.assertEqual(storage.min_disk_gib(installer.swap_size(None, 35 * installer.GIB)), 35)
+                storage.swap_size(None, 34 * storage.GIB)
+            self.assertEqual(storage.min_disk_gib(storage.swap_size(None, 35 * storage.GIB)), 35)
 
     def test_input_validation_blocks_unsafe_identity_values(self):
         for change in (
@@ -418,8 +421,8 @@ class InstallerSafetyTests(unittest.TestCase):
             (root / 'packages.target').write_text('base\n')
             (root / 'iso-build-date').write_text('9999999999\n')
             with (
-                patch.object(installer, 'SHARE', root),
-                patch.object(installer, 'REPO', root),
+                patch.object(payload, 'SHARE', root),
+                patch.object(payload, 'REPO', root),
                 patch.object(installer, 'TARGET', root / 'target'),
                 patch.object(storage, 'require_disk', return_value=1),
                 patch.object(installer, 'run') as run,
@@ -433,8 +436,8 @@ class InstallerSafetyTests(unittest.TestCase):
             root = Path(directory)
             (root / 'packages.target').write_text('base\n')
             with (
-                patch.object(installer, 'SHARE', root),
-                patch.object(installer, 'REPO', root),
+                patch.object(payload, 'SHARE', root),
+                patch.object(payload, 'REPO', root),
                 patch.object(installer, 'TARGET', root / 'target'),
                 patch.object(storage, 'require_disk', return_value=1),
                 patch.object(installer, 'run') as run,
@@ -463,13 +466,14 @@ class InstallerSafetyTests(unittest.TestCase):
             state = installer.InstallationState()
             real_staging = tempfile.TemporaryDirectory
             with (
-                patch.object(installer, 'SHARE', root),
-                patch.object(installer, 'REPO', root),
+                patch.object(payload, 'SHARE', root),
+                patch.object(payload, 'REPO', root),
                 patch.object(installer, 'TARGET', root / 'target'),
                 patch.object(storage, 'require_disk', return_value=(1, 2, 64 * 1024**3, None, None, 'vda')),
-                patch.object(installer, 'verify_repository'),
+                patch.object(payload, 'verify_repository'),
                 patch.object(installer.shutil, 'which', return_value='/usr/bin/tool'),
                 patch.object(installer, 'run', side_effect=fake_run),
+                patch.object(payload, 'run', side_effect=fake_run),
                 patch.object(installer.tempfile, 'TemporaryDirectory', lambda *a, **k: real_staging(dir=root)),
                 patch.object(storage, 'create_partitions') as partitions,
             ):
@@ -499,13 +503,14 @@ class InstallerSafetyTests(unittest.TestCase):
             state = installer.InstallationState()
             real_staging = tempfile.TemporaryDirectory
             with (
-                patch.object(installer, 'SHARE', root),
-                patch.object(installer, 'REPO', root),
+                patch.object(payload, 'SHARE', root),
+                patch.object(payload, 'REPO', root),
                 patch.object(installer, 'TARGET', root / 'target'),
                 patch.object(storage, 'require_disk', return_value=(1, 2, 64 * 1024**3, None, None, 'vda')),
-                patch.object(installer, 'verify_repository'),
+                patch.object(payload, 'verify_repository'),
                 patch.object(installer.shutil, 'which', return_value='/usr/bin/tool'),
                 patch.object(installer, 'run', side_effect=fake_run),
+                patch.object(payload, 'run', side_effect=fake_run),
                 patch.object(installer.tempfile, 'TemporaryDirectory', lambda *a, **k: real_staging(dir=root)),
                 patch.object(storage, 'create_partitions', side_effect=ValueError('sentinel partitioning reached')),
             ):
@@ -524,11 +529,11 @@ class InstallerSafetyTests(unittest.TestCase):
             (root / 'offline.db').touch()
             (root / 'iso-build-date').write_text('1\n')
             with (
-                patch.object(installer, 'SHARE', root),
-                patch.object(installer, 'REPO', root),
+                patch.object(payload, 'SHARE', root),
+                patch.object(payload, 'REPO', root),
                 patch.object(installer, 'TARGET', root / 'target'),
                 patch.object(storage, 'require_disk', side_effect=[1, 2]),
-                patch.object(installer, 'verify_repository'),
+                patch.object(payload, 'verify_repository'),
                 patch.object(installer.shutil, 'which', return_value='/usr/bin/tool'),
                 patch.object(installer, 'run') as run,
             ):
@@ -541,7 +546,7 @@ class InstallerSafetyTests(unittest.TestCase):
             root = Path(directory)
             (root / 'packages.target').write_text('base\n--root=/\n')
             with (
-                patch.object(installer, 'SHARE', root),
+                patch.object(payload, 'SHARE', root),
                 patch.object(storage, 'require_disk', return_value=1),
                 patch.object(installer, 'run') as run,
             ):
@@ -559,8 +564,8 @@ class InstallerSafetyTests(unittest.TestCase):
             (root / 'SHA256SUMS').write_text(f'{checksum}  {package.name}\n')
             (root / 'iso-build-date').write_text('1\n')
             with (
-                patch.object(installer, 'SHARE', root),
-                patch.object(installer, 'REPO', root),
+                patch.object(payload, 'SHARE', root),
+                patch.object(payload, 'REPO', root),
                 patch.object(installer, 'TARGET', root / 'target'),
                 patch.object(storage, 'require_disk', return_value=1),
                 patch.object(installer, 'run') as run,
@@ -584,10 +589,10 @@ class InstallerSafetyTests(unittest.TestCase):
             run.assert_not_called()
 
     def test_picker_puts_the_default_first_and_escape_cancels(self):
-        result = installer.subprocess.CompletedProcess([], 130, stdout='')
-        with patch.object(installer.subprocess, 'run', return_value=result) as run:
-            with self.assertRaises(installer.Cancelled):
-                installer.choose('Keyboard layout', ['de', 'us'], default='us', search=True)
+        result = wizard.subprocess.CompletedProcess([], 130, stdout='')
+        with patch.object(wizard.subprocess, 'run', return_value=result) as run:
+            with self.assertRaises(wizard.Cancelled):
+                wizard.choose('Keyboard layout', ['de', 'us'], default='us', search=True)
             self.assertEqual(run.call_args.kwargs['input'], 'us\nde\n')
 
     def test_errors_distinguish_preflight_from_a_started_installation(self):
@@ -612,11 +617,11 @@ class InstallerSafetyTests(unittest.TestCase):
             self.assertEqual('may be incomplete' in output.getvalue(), started)
 
     def test_invalid_username_and_passwords_retry_inline(self):
-        with patch.object(installer, 'say'), patch.object(installer, 'gum', side_effect=['root', 'tester']):
-            self.assertEqual(installer.prompt('Username', validate=installer.validate_username), 'tester')
+        with patch.object(wizard, 'say'), patch.object(wizard, 'gum', side_effect=['root', 'tester']):
+            self.assertEqual(wizard.prompt('Username', validate=wizard.validate_username), 'tester')
         answers = ['short', 'long-password', 'different-password', 'long-password', 'long-password']
-        with patch.object(installer, 'say'), patch.object(installer, 'gum', side_effect=answers):
-            self.assertEqual(installer.secret('Login password'), 'long-password')
+        with patch.object(wizard, 'say'), patch.object(wizard, 'gum', side_effect=answers):
+            self.assertEqual(wizard.secret('Login password'), 'long-password')
 
     def test_pacman_progress_counts_packages_then_hooks(self):
         progress = installer.PacmanProgress()
@@ -641,12 +646,12 @@ class InstallerSafetyTests(unittest.TestCase):
         self.assertIn('10 of 10', progress.counts())
 
     def test_swap_auto_custom_disabled_and_capacity(self):
-        with patch.object(installer, 'memory_gib', return_value=16):
-            self.assertEqual(installer.swap_size(None, 64 * installer.GIB), 18)
-            self.assertEqual(installer.swap_size(8, 64 * installer.GIB), 8)
-            self.assertEqual(installer.swap_size(0, 32 * installer.GIB), 0)
+        with patch.object(storage, 'memory_gib', return_value=16):
+            self.assertEqual(storage.swap_size(None, 64 * storage.GIB), 18)
+            self.assertEqual(storage.swap_size(8, 64 * storage.GIB), 8)
+            self.assertEqual(storage.swap_size(0, 32 * storage.GIB), 0)
             with self.assertRaisesRegex(ValueError, 'will not fit'):
-                installer.swap_size(None, 32 * installer.GIB)
+                storage.swap_size(None, 32 * storage.GIB)
         for value in (-1, 1.5, True, '18'):
             with self.subTest(value=value), self.assertRaises(ValueError):
                 settings(swap_gib=value).validate()
@@ -660,10 +665,10 @@ class InstallerSafetyTests(unittest.TestCase):
             checksum = hashlib.sha256(package.read_bytes()).hexdigest()
             database_hash = hashlib.sha256((root / 'offline.db').read_bytes()).hexdigest()
             (root / 'SHA256SUMS').write_text(f'{checksum}  {package.name}\n{database_hash}  offline.db\n')
-            installer.verify_repository(root)
+            payload.verify_repository(root)
             package.write_bytes(b'corrupted package')
             with self.assertRaisesRegex(ValueError, 'checksum failed'):
-                installer.verify_repository(root)
+                payload.verify_repository(root)
 
     def test_offline_manifest_must_cover_every_package(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -672,7 +677,7 @@ class InstallerSafetyTests(unittest.TestCase):
             (root / 'offline.db').touch()
             (root / 'SHA256SUMS').write_text('')
             with self.assertRaisesRegex(ValueError, 'every package'):
-                installer.verify_repository(root)
+                payload.verify_repository(root)
 
 
 if __name__ == '__main__':
