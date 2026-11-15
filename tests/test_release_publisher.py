@@ -6,6 +6,7 @@ import tempfile
 import unittest
 
 from tests.git_isolation import check_git_output, run_git, sanitized_env
+from tests.fake_commands import mark
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -35,8 +36,9 @@ class PublisherCheckoutTests(unittest.TestCase):
             commands = root / 'bin'
             commands.mkdir()
             gh = commands / 'gh'
-            gh.write_text(f'#!{shutil.which("sh")}\ntouch "$PUBLISHER_MARKER"\nexit 17\n')
+            gh.write_text(f'#!{shutil.which("sh")}\nexit 17\n')
             gh.chmod(0o755)
+            mark(gh, root / 'reached-release-api')
             environment = sanitized_env(
                 os.environ
                 | {
@@ -47,7 +49,6 @@ class PublisherCheckoutTests(unittest.TestCase):
                     'LC_ALL': 'C',
                     'GITHUB_SHA': commit,
                     'GITHUB_REPOSITORY': 'abdulrahman-aj/arch-niri-dux',
-                    'PUBLISHER_MARKER': str(root / 'reached-release-api'),
                 }
             )
             environment.pop('SUDO_UID', None)
@@ -110,6 +111,7 @@ esac
                     path = commands / name
                     path.write_text(f'#!{shutil.which("bash")}\nset -eu\n' + body)
                     path.chmod(0o755)
+                    mark(path, root / 'stub-ran')
                 environment = sanitized_env(
                     os.environ
                     | {
@@ -136,6 +138,7 @@ esac
                     check=False,
                 )
                 self.assertEqual(result.returncode, expected, result.stderr)
+                self.assertTrue((root / 'stub-ran').is_file())
                 self.assertEqual(list(scratch.iterdir()), [])
                 self.assertEqual((packages / 'keep').read_text(), 'original input')
 
