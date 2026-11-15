@@ -1,4 +1,4 @@
-"""Fixture discovery follows branch history; explicit paths bypass discovery."""
+"""Fixture discovery uses clean main commits; explicit paths bypass discovery."""
 
 import argparse
 import contextlib
@@ -27,42 +27,59 @@ class FixtureSelectionTests(unittest.TestCase):
         git_run('checkout', '-b', 'other', cwd=self.repo)
         git_run('commit', '--allow-empty', '-m', 'other branch', cwd=self.repo)
         self.other = git_run('rev-parse', 'HEAD', cwd=self.repo).stdout.strip()
-        git_run('checkout', 'main', cwd=self.repo)
+        git_run('update-ref', 'refs/remotes/origin/main', self.ancestor, cwd=self.repo)
         self.cache = patch.dict(os.environ, {'XDG_CACHE_HOME': str(self.root)})
         self.cache.start()
         self.addCleanup(self.cache.stop)
 
-    def fixture(self, name, commit, mtime):
+    def fixture(self, name, commit, mtime, dirty=False):
         directory = self.root / name
         directory.mkdir()
         state.own(directory, self.repo)
         (directory / 'ACCEPTANCE-PASSED').touch()
         (directory / 'disk.qcow2').touch()
-        inputs = {} if commit is None else {'checkout': {'commit': commit}}
+        inputs = {} if commit is None else {'checkout': {'commit': commit, 'dirty': dirty}}
         (directory / 'inputs.json').write_text(json.dumps(inputs))
         os.utime(directory, (mtime, mtime))
         return directory / 'disk.qcow2'
 
-    def test_ancestor_beats_newer_non_ancestor_and_unrecorded(self):
-        ancestor = self.fixture('ancestor', self.ancestor, 100)
+    def test_main_beats_newer_pr_and_unrecorded(self):
+        main = self.fixture('main', self.ancestor, 100)
         other = self.fixture('other', self.other, 300)
-        self.fixture('legacy', None, 200)
-        with contextlib.redirect_stderr(io.StringIO()) as output:
-            selected = fixtures.newest_accepted_fixture(checkout=self.repo)
-        self.assertEqual(selected, ancestor)
-        self.assertIn(str(other.parent), output.getvalue())
-        self.assertIn('ancestor', output.getvalue().lower())
-
-    def test_newest_unrecorded_is_last_resort_with_warning(self):
-        self.fixture('old-legacy', None, 100)
         legacy = self.fixture('legacy', None, 200)
-        self.fixture('other', self.other, 300)
         with contextlib.redirect_stderr(io.StringIO()) as output:
             selected = fixtures.newest_accepted_fixture(checkout=self.repo)
-        self.assertEqual(selected, legacy)
-        warnings = [line for line in output.getvalue().splitlines() if 'warning' in line.lower()]
-        self.assertEqual(len(warnings), 1)
-        self.assertIn(str(legacy.parent), warnings[0])
+        self.assertEqual(selected, main)
+        for path in (main, other, legacy):
+            self.assertIn(str(path.parent), output.getvalue())
+        self.assertIn(self.ancestor, output.getvalue())
+
+    def test_dirty_main_is_skipped(self):
+        clean = self.fixture('clean', self.ancestor, 100)
+        dirty = self.fixture('dirty', self.ancestor, 200, dirty=True)
+        with contextlib.redirect_stderr(io.StringIO()) as output:
+            self.assertEqual(fixtures.newest_accepted_fixture(checkout=self.repo), clean)
+        self.assertIn(str(dirty.parent), output.getvalue())
+
+    def test_no_main_fixture_stops_before_overlay(self):
+        self.fixture('legacy', None, 100)
+        self.fixture('other', self.other, 200)
+        self.fixture('dirty', self.ancestor, 300, dirty=True)
+        destination = self.root / 'overlay'
+        args = argparse.Namespace(fixture='auto', directory=destination)
+        # Bind discovery to the temporary repo without replacing its behavior.
+        with (
+            patch(
+                'tools.verification.scenarios.fixture.newest_accepted_fixture',
+                lambda: fixtures.newest_accepted_fixture(checkout=self.repo),
+            ),
+            contextlib.redirect_stderr(io.StringIO()) as output,
+        ):
+            with self.assertRaises(SystemExit) as error:
+                run_fixture(args, argparse.ArgumentParser())
+        self.assertNotEqual(error.exception.code, 0)
+        self.assertFalse(destination.exists())
+        self.assertIn('--fixture', output.getvalue())
 
     def test_explicit_non_ancestor_bypasses_discovery(self):
         self.fixture('ancestor', self.ancestor, 300)

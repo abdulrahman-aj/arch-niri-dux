@@ -390,13 +390,13 @@ class WorktreeGCTests(unittest.TestCase):
             old = self.make_fixture(cache, 'old-fixture', b'old', 1000, kept_owner)
             new = self.make_fixture(doomed_home, 'dux-verify-new', b'new-bytes', 2000, doomed_home)
             self.assertTrue(old.exists())
-            self.assertEqual(fixtures.newest_accepted_fixture(), new / 'disk.qcow2')
+            self.assertEqual((fixtures.accepted_fixtures()[0] / 'disk.qcow2'), new / 'disk.qcow2')
             target = kept_owner / 'out' / 'verify' / new.name
             moved = fixtures.move_fixture(new, target, kept_owner)
             self.assertFalse(new.exists())
             self.assertEqual((moved / 'disk.qcow2').read_bytes(), b'new-bytes')
             self.assertTrue((moved / 'ACCEPTANCE-PASSED').is_file())
-            picked = fixtures.newest_accepted_fixture()
+            picked = fixtures.accepted_fixtures()[0] / 'disk.qcow2'
             self.assertEqual(picked, moved / 'disk.qcow2')
             self.assertEqual(picked.read_bytes(), b'new-bytes')
 
@@ -417,7 +417,7 @@ class WorktreeGCTests(unittest.TestCase):
             (fixture / 'install.json').write_text('{}\n')
             (fixture / 'inputs.json').write_text('{}\n')
             (fixture / 'OVMF_VARS.fd').write_bytes(b'vars')
-            before = fixtures.newest_accepted_fixture()
+            before = fixtures.accepted_fixtures()[0] / 'disk.qcow2'
             self.assertEqual(before, fixture / 'disk.qcow2')
 
             def fake_merge(branch, _checkout=workspace.ROOT):
@@ -431,12 +431,12 @@ class WorktreeGCTests(unittest.TestCase):
                     _removals, _skipped, move = gc.gc_worktrees(root, True)
                 self.assertTrue(doomed.exists())
                 self.assertTrue(fixture.exists())
-                self.assertEqual(fixtures.newest_accepted_fixture(), before)
+                self.assertEqual((fixtures.accepted_fixtures()[0] / 'disk.qcow2'), before)
                 self.assertIsNotNone(move)
                 with contextlib.redirect_stdout(io.StringIO()):
                     gc.gc_worktrees(root, False)
             self.assertFalse(doomed.exists())
-            picked = fixtures.newest_accepted_fixture()
+            picked = fixtures.accepted_fixtures()[0] / 'disk.qcow2'
             self.assertIsNotNone(picked)
             self.assertTrue(picked.is_file())
             self.assertEqual(picked.read_bytes(), b'fixture-bytes')

@@ -25,32 +25,38 @@ def accepted_fixtures(registry=None):
 
 
 def newest_accepted_fixture(registry=None, checkout=ROOT):
-    """Newest accepted ancestor of HEAD, falling back to an unrecorded fixture."""
-    fallback = None
+    """Newest accepted disk from a recorded clean commit on origin/main."""
+    selected = None
     for directory in accepted_fixtures(registry):
         try:
             inputs = json.loads((directory / 'inputs.json').read_text())
         except FileNotFoundError:
             inputs = {}
-        commit = inputs.get('checkout', {}).get('commit')
+        recorded = inputs.get('checkout', {})
+        commit = recorded.get('commit')
         if not commit:
-            if fallback is None:
-                fallback = directory
-            continue
-        result = subprocess.run(
-            ['git', 'merge-base', '--is-ancestor', commit, 'HEAD'],
-            cwd=checkout,
-            check=False,
-            capture_output=True,
-        )
-        if result.returncode == 0:
-            return directory / 'disk.qcow2'
-        reason = 'not an ancestor of HEAD' if result.returncode == 1 else 'commit unavailable for ancestry check'
-        print(f'Skipping fixture {directory}: {commit} is {reason}.', file=sys.stderr)
-    if fallback is not None:
-        print(f'Warning: using fixture {fallback} without a recorded checkout commit.', file=sys.stderr)
-        return fallback / 'disk.qcow2'
-    return None
+            reason = 'no recorded checkout commit'
+        elif recorded.get('dirty') is not False:
+            reason = 'checkout is dirty or its clean state is unrecorded'
+        else:
+            result = subprocess.run(
+                ['git', 'merge-base', '--is-ancestor', commit, 'origin/main'],
+                cwd=checkout,
+                check=False,
+                capture_output=True,
+            )
+            if result.returncode == 0:
+                if selected is None:
+                    selected = directory / 'disk.qcow2'
+                    print(f'Using fixture {directory} at commit {commit}.', file=sys.stderr)
+                continue
+            reason = (
+                f'{commit} is not an ancestor of origin/main'
+                if result.returncode == 1
+                else f'cannot check {commit} against origin/main'
+            )
+        print(f'Skipping fixture {directory}: {reason}.', file=sys.stderr)
+    return selected
 
 
 def move_fixture(src, dst, new_owner):

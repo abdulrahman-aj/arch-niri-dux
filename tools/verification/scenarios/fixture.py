@@ -26,7 +26,7 @@ def run_fixture(args, parser):
     raw = args.fixture
     fixture = newest_accepted_fixture() if raw is None or str(raw) == 'auto' else Path(raw).resolve()
     if fixture is None:
-        parser.error('No accepted fixture found; run make verify first or pass --fixture PATH.')
+        parser.error('No clean main fixture found; run make verify on a clean main checkout or pass --fixture PATH.')
     accepted = fixture.parent
     if not fixture.is_file() or not (accepted / 'ACCEPTANCE-PASSED').is_file():
         parser.error('Fixture must be a disk from a completed full acceptance run.')

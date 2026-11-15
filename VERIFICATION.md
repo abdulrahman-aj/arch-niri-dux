@@ -108,10 +108,12 @@ Suspend qualification requires logind `LockedHint=yes`, Niri's lock event, an un
 integration packages inside a disposable overlay of an accepted
 `make verify` image. `--fixture` defaults to the newest registered 0.3+
 workspace holding `ACCEPTANCE-PASSED` and `disk.qcow2` whose recorded
-`checkout.commit` is an ancestor of HEAD. Non-ancestor commits are skipped
-with a reason. If none qualify, the newest fixture without a recorded commit
-is used with a warning. An explicit `--fixture PATH` overrides discovery,
-and `--directory` defaults to a fresh `out/fast-<timestamp>`; pass explicit
+`checkout.commit` is an ancestor of `origin/main` and whose `checkout.dirty`
+is false. Discovery uses the local `origin/main` ref without fetching, reports
+skipped fixtures with a reason, and prints the chosen fixture and commit.
+Without a qualifying fixture it stops; run `make verify` on a clean main checkout
+or pass `--fixture PATH` to override discovery. There is no fallback.
+`--directory` defaults to a fresh `out/fast-<timestamp>`; pass explicit
 paths to override either default. Keep `ACCEPTANCE-PASSED`,
 `install.json`, `inputs.json` and `OVMF_VARS.fd` next to the fixture disk. It checks ALPM
 regeneration of the active Limine initramfs and boot menu without a manual
