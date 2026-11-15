@@ -38,7 +38,7 @@ def clean_output(output):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--directory', required=True, type=Path, help='Evidence directory of a kept (--keep) VM')
-    parser.add_argument('verb', choices=('sh', 'probe', 'shot', 'click', 'key', 'poweroff', 'stage'))
+    parser.add_argument('verb', choices=('sh', 'probe', 'shot', 'click', 'key', 'poweroff', 'stage', 'preview-sync'))
     parser.add_argument('args', nargs='*', help='Verb arguments')
     args = parser.parse_args()
     directory = args.directory.resolve()
@@ -68,12 +68,21 @@ def main():
             if len(args.args) < 2:
                 parser.error('probe needs a module and a function.')
             print(clean_output(vm.probe(args.args[0], *args.args[1:])), end='')
+        elif args.verb == 'preview-sync':
+            if args.args or not (directory / 'installer-preview.json').is_file():
+                parser.error('preview-sync needs an installer preview and takes no arguments.')
+            from installer_preview import sync_installer
+
+            sync_installer(vm, directory)
         elif args.verb == 'shot':
             if len(args.args) != 1:
                 parser.error('shot needs a screenshot name.')
             name = args.args[0]
-            vm.probe('guest', 'screenshot', name)
-            print(directory / name)
+            if (directory / 'installer-preview.json').is_file():
+                print(vm.screenshot(str(Path(name).with_suffix(''))))
+            else:
+                vm.probe('guest', 'screenshot', name)
+                print(directory / name)
         elif args.verb == 'click':
             if len(args.args) != 2:
                 parser.error('click needs fractional x y coordinates.')

@@ -53,3 +53,7 @@ gc:
 
 iso-checksums:
 	./scripts/in-dev-shell python3 scripts/iso_checksums.py prepare $(ARGS)
+
+.PHONY: installer-preview
+installer-preview: | heavy-guard
+	./scripts/in-dev-shell python3 scripts/installer_preview.py $(ARGS)
