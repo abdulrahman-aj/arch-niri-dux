@@ -60,7 +60,7 @@ def find_violations(base, base_version, current, current_version):
     """Recipe changes without a version change, the release-time pkgrel rule.
 
     Source-level proxy for the publisher's byte-level rule
-    (tools.packages.artifacts refuses a changed rebuild under a published
+    (tools.release.repository refuses a changed rebuild under a published
     filename): recipe file or epoch changes alter built bytes, so they need
     a new pkgver-pkgrel even when the edit looks cosmetic.
     """

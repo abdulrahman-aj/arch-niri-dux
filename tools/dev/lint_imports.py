@@ -11,6 +11,8 @@ def violations(path, source):
     for node in ast.walk(ast.parse(source)):
         if isinstance(node, ast.Import):
             names = [alias.name for alias in node.names]
+            if module.startswith(('tools.packages.', 'tools.build.')) and 'tools' in names:
+                yield f'{path}:{node.lineno}: import a specific tools module to expose its boundary'
         elif isinstance(node, ast.ImportFrom):
             base = node.module or ''
             if node.level:
@@ -30,8 +32,6 @@ def violations(path, source):
                 yield f'{path}:{node.lineno}: forbidden import {name}'
 
 
-# TODO phase 3: separate package artifact consumption from publication. The
-# import boundary holds now, but artifacts still contains publication behavior.
 # TODO phase 4: state/fixtures must not import gc after workspace is split.
 # TODO phase 5: guest probes must not import host VM controls after their split.
 def main():
