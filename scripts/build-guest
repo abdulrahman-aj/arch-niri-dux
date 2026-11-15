@@ -65,8 +65,11 @@ else
     integration_epoch=$(cat /state/integration-epoch)
     runuser -u nobody -- python /source/scripts/package_build.py /source \
         /build/integration-work /build/integration-packages --epoch "$integration_epoch"
+    # This cache is inside the registered, checkout-owned build state. GC
+    # removes it with the builder disk when the checkout is gone.
+    install -d -o nobody -g nobody /state/dux-app-cache
     runuser -u nobody -- python /source/scripts/dux_apps.py /source \
-        /build/integration-work /build/integration-packages
+        /build/integration-work /build/integration-packages --cache /state/dux-app-cache
     # Development builds have no release secret. Use a fresh build-only identity;
     # only its public key enters the development ISO.
     rm -rf /build/development-signing
