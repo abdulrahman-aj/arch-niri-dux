@@ -111,14 +111,19 @@ gpg --homedir "$install_keyring" --batch --import /state/trusted-packagers.gpg /
 if [[ $integration_mode == development ]]; then
     gpg --homedir /build/development-signing --export >/build/development-public.gpg
     gpg --homedir "$install_keyring" --batch --import /build/development-public.gpg
-    gpgconf --homedir /build/development-signing --kill all
-    rm -rf /build/development-signing /build/development-public.gpg
 fi
 gpg --homedir "$install_keyring" --batch --with-colons --list-keys |
     awk -F: '$1 == "pub" { primary = 1; next } primary && $1 == "fpr" { print $10 ":6:"; primary = 0 }' >/build/install-ownertrust
 gpg --homedir "$install_keyring" --batch --import-ownertrust /build/install-ownertrust
 gpg --homedir "$install_keyring" --batch --check-trustdb
 gpgconf --homedir "$install_keyring" --kill all
+if [[ $integration_mode == development ]]; then
+    # Rehearsals serve the ISO payload with the same offline-trusted identity.
+    cp /build/payload/repo/offline.db.tar.gz /source/out/integration/arch-niri-dux.db
+    gpg --homedir /build/development-signing --batch --detach-sign /source/out/integration/arch-niri-dux.db
+    gpgconf --homedir /build/development-signing --kill all
+    rm -rf /build/development-signing /build/development-public.gpg
+fi
 # Installer runtime is deliberately text-only. Standard releng supplies UEFI
 # boot, serial recovery and archiso's tested initramfs setup.
 mkdir -p "$profile/airootfs/usr/local/lib/arch-niri-dux" "$profile/airootfs/usr/local/share/arch-niri-dux"

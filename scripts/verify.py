@@ -204,7 +204,7 @@ def run_fixture(args, parser):
             vm.stop()
 
 
-def run_install(vm, passed, evidence, directory, package_digest, serial_preboot=False):
+def run_install(vm, passed, evidence, directory, package_digest, serial_preboot=False, rehearsal=False):
     """Install the ISO offline and prepare the target. Reused by full and release runs."""
     print(f'VM evidence: {directory}', flush=True)
     vm.start()
@@ -230,6 +230,15 @@ def run_install(vm, passed, evidence, directory, package_digest, serial_preboot=
     vm.command(
         'cryptsetup open --key-file /run/verify/key /dev/vda2 dux-root; mkdir -p /mnt/verify; mount -o subvol=@ /dev/mapper/dux-root /mnt/verify; mount /dev/vda1 /mnt/verify/boot'
     )
+    if rehearsal:
+        # Development package signers live only in the ISO's offline keyring.
+        # Provision that same trust before boot, without trusting the HTTP server.
+        keyring = '/usr/local/share/arch-niri-dux/install-keyring'
+        target = '/mnt/verify/etc/pacman.d/gnupg'
+        vm.command(
+            f'gpg --homedir {keyring} --export | gpg --homedir {target} --batch --import; '
+            f'gpg --homedir {keyring} --export-ownertrust | gpg --homedir {target} --import-ownertrust'
+        )
     vm.probe('boot', 'prepare', '/mnt/verify', timeout=300)
     if serial_preboot:
         # The release check boots once, over serial, with no graphical unlock
