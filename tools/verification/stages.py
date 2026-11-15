@@ -21,7 +21,8 @@ def guest_alive(vm, timeout=30):
             return False
         vm.command('true', timeout=timeout)
         return True
-    except Exception:
+    # What vm.command raises when the guest is gone; anything else is a bug that must surface.
+    except (RuntimeError, TimeoutError, OSError):
         return False
 
 

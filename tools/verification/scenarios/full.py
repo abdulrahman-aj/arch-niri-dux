@@ -133,8 +133,9 @@ def run_full(args, parser):
         try:
             if vm.process and vm.process.poll() is None and vm.screenshot('failure') is None:
                 probe(vm, 'desktop', 'failure-screenshot', timeout=15)
-        except Exception:
-            pass
+        except Exception as screenshot_error:
+            # Print rather than write: a full or unwritable evidence disk must not mask the original failure.
+            print(f'Failure screenshot unavailable: {screenshot_error}', file=sys.stderr)
         (directory / 'FAILURE.txt').write_text(str(error) + '\n')
         print(f'Verification failed: {error}\nEvidence: {directory}', file=sys.stderr)
         return 1

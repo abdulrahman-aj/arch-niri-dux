@@ -24,6 +24,7 @@ lint:
 	./scripts/in-dev-shell $(MAKE) --no-print-directory lint-in-dev
 lint-in-dev:
 	python3 -m tools.dev.lint_imports
+	python3 -m tools.dev.lint_patterns
 	python3 -m tools.dev.lint_references
 	actionlint
 	ruff check . desktop/usr/bin/arch-niri-dux-keyring-recover
