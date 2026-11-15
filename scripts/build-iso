@@ -26,7 +26,12 @@ mode=${1:-release}
 printf '%s\n' "$mode" >"$state/integration-mode"
 printf '%s\n' "$bootstrap_label" >"$state/bootstrap-label"
 # Linked worktrees point outside the guest's source mount. Resolve Git here.
-git rev-parse HEAD >"$state/iso-commit"
+# Source identity for make try's staleness check: the commit plus any
+# uncommitted tracked changes (untracked files are ignored).
+{
+    git rev-parse HEAD
+    git diff HEAD --binary | sha256sum | cut -d' ' -f1
+} >"$state/iso-source"
 git log -1 --format=%ct >"$state/integration-epoch"
 [[ -s keys/integration-signing.gpg && -s keys/integration-signing.fingerprint ]] || {
     echo 'Provision the integration public signing identity before building an ISO.' >&2

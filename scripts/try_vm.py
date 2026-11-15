@@ -5,6 +5,7 @@ Disks persist under ~/.local/share/arch-niri-dux/try/<name>/; every open
 attaches the VM's stored install source (release or checkout ISO) with the
 disk first in boot order."""
 
+import hashlib
 import os
 import re
 import shutil
@@ -235,11 +236,16 @@ def iso_for_kind(kind):
     return candidates[-1] if candidates else None
 
 
+def source_identity():
+    """HEAD plus a hash of uncommitted tracked changes; must match scripts/build-iso."""
+    head = subprocess.check_output(['git', '-C', str(ROOT), 'rev-parse', 'HEAD'], text=True).strip()
+    diff = subprocess.check_output(['git', '-C', str(ROOT), 'diff', 'HEAD', '--binary'])
+    return f'{head}\n{hashlib.sha256(diff).hexdigest()}'
+
+
 def checkout_changed_since(iso):
     try:
-        head = subprocess.check_output(['git', '-C', str(ROOT), 'rev-parse', 'HEAD'], text=True).strip()
-        dirty = subprocess.check_output(['git', '-C', str(ROOT), 'status', '--porcelain'], text=True).strip()
-        return bool(dirty) or iso.with_suffix('.iso.commit').read_text().strip() != head
+        return iso.with_suffix('.iso.source').read_text().strip() != source_identity()
     except (subprocess.CalledProcessError, OSError):
         return True
 

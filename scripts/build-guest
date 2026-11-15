@@ -157,7 +157,7 @@ if [[ $integration_mode == development ]]; then
     for iso in /build/output/*.iso; do
         output="/source/out/$(basename "$iso" .iso)-development.iso"
         cp "$iso" "$output"
-        cp /state/iso-commit "$output.commit"
+        cp /state/iso-source "$output.source"
     done
 else
     cp /build/output/*.iso /source/out/
