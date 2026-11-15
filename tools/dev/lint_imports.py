@@ -53,6 +53,13 @@ def violations(path, source):
             forbidden = ['tools.release']
         elif module in ('tools.workspace.state', 'tools.workspace.resources', 'tools.workspace.fixtures'):
             forbidden = ['tools.workspace.gc', 'tools.workspace.__main__']
+        elif module.startswith('tools.verification.scenarios.') or module == 'tools.verification.stages':
+            forbidden = [
+                'tools.verification.session',
+                'tools.verification.verify_alongside',
+                'tools.verification.verify_release',
+                'tools.verification.verify_hibernate',
+            ]
         elif module == 'tools.vm.control':
             forbidden = ['tools.verification']
         elif module.startswith('installer.'):
