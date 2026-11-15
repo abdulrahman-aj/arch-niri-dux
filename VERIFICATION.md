@@ -8,6 +8,13 @@ PKGBUILDs, including untracked scripts. Generated output and vendored Dux app
 recipes are excluded. `make test` adds source and build tests. CI runs these
 checks without graphical VM acceptance.
 
+Guest probes live under `tools/verification/probes/` and execute from the staged
+`/run/verify` tree. `tools/verification/payload.py` stages the complete probe
+package, shared constants/image helpers, and the package builder plus its inputs
+reader. The isolated staging test imports every guest module with the checkout
+removed from Python's path. Host drivers, login and VM transport stay on the host;
+import lint checks the boundary in both directions.
+
 `make iso-development` builds candidate integration packages and the ISO. Run
 VMs on your build machine. Builds and VM disk creation need the free space
 noted in [BUILDING.md](BUILDING.md). The runner waits for 10 GiB available host RAM before

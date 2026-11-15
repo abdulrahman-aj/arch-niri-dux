@@ -7,15 +7,16 @@ from pathlib import Path
 import shlex
 import shutil
 import subprocess
-
 from tools.workspace.state import own
 from tools.workspace.resources import disk_guard
-
 from tools.digest import digest
 from tools.verification.evidence import Evidence
-
-from tools.verification.vm import VM, PASSWORD, installed_login, stage_probes
+from tools.vm.control import VM
+from tools.verification.constants import PASSWORD
+from tools.verification.login import installed_login
+from tools.verification.payload import stage_probes, probe, mount_probes
 from tools.fixtures.windows import WindowsVM, BootReports
+
 
 ROOT = Path(__file__).resolve().parents[2]
 
@@ -79,11 +80,11 @@ def main():
         passed(f'Real existing {args.os} boots before installation and sentinel is intact')
         vm.start()
         vm.expect(r'root@archiso[^\n]*#', timeout=180)
-        vm.mount_probes()
+        mount_probes(vm)
         evidence.verify_installer(vm, ROOT / 'installer')
         # Plan through the ISO's own read-only inventory. The fixture must have
         # exactly one eligible region and one registered Debian bootloader.
-        vm.probe('alongside', 'plan', device, args.os)
+        probe(vm, 'alongside', 'plan', device, args.os)
         vm.command('chmod 600 /run/verify/install.json')
         parts = json.loads((directory / 'old-partitions.json').read_text())
         devices = ' '.join(shlex.quote(part['node']) for part in parts)
@@ -102,8 +103,8 @@ def main():
             f'mount {esp} /mnt/verify/boot'
         )
         vm.command(
-            'cd /run/verify && python -m tools.verification.boot prepare /mnt/verify; '
-            'cd /run/verify && python -m tools.verification.boot serial-console-enable /mnt/verify; '
+            'cd /run/verify && python -m tools.verification.probes.boot prepare /mnt/verify; '
+            'cd /run/verify && python -m tools.verification.probes.boot serial-console-enable /mnt/verify; '
             'arch-chroot /mnt/verify limine-mkinitcpio',
             timeout=300,
         )
@@ -118,8 +119,8 @@ def main():
         passed('Default firmware path boots the new encrypted installation')
         # Reinstall the pinned kernel: exercise actual package hooks and
         # snapshot generation rather than only editing the menu in place.
-        vm.mount_probes()
-        vm.probe('boot', 'luks-pbkdf')
+        mount_probes(vm)
+        probe(vm, 'boot', 'luks-pbkdf')
         passed('LUKS2 argon2id uses cryptsetup defaults, not the old 256 MiB pin')
         vm.command('pacman -U --noconfirm /run/verify/linux-[0-9]*.pkg.tar.zst', timeout=600)
         vm.command(

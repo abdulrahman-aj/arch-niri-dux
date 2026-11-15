@@ -21,7 +21,7 @@ from tools.fixtures.windows import (
     SETUP_VERIFY,
 )
 
-from tools.verification.vm import VM
+from tools.vm.control import VM
 
 
 def linux(args):

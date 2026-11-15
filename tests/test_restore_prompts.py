@@ -6,7 +6,7 @@ import sys
 import tempfile
 import unittest
 
-from tools.verification import guest as guest
+from tools.verification.probes import guest as guest
 
 
 class RestorePromptTests(unittest.TestCase):

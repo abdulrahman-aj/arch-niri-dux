@@ -3,7 +3,6 @@
 import json
 from pathlib import Path
 import sys
-
 from . import dispatch
 
 

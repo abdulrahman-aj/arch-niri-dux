@@ -6,7 +6,8 @@ import subprocess
 import tempfile
 import unittest
 
-from tools.verification import vm as verify
+from tools.vm import control as verify
+from tools.verification import login, payload
 
 
 class VMCommandTests(unittest.TestCase):
@@ -58,7 +59,7 @@ class VMCommandTests(unittest.TestCase):
                 self.ready = False
 
         terminal = LoginTerminal()
-        verify.installed_login(terminal)
+        login.installed_login(terminal)
         self.assertTrue(terminal.root_ready)
 
     def run_command(self, command):
@@ -137,20 +138,35 @@ class ProbeStagingTests(unittest.TestCase):
     def test_staged_guest_package_imports_without_the_checkout(self):
         import subprocess
         import sys
+        import json
+        from textwrap import dedent
         import tempfile
 
         with tempfile.TemporaryDirectory() as directory:
-            verify.stage_probes(Path(directory))
+            payload.stage_probes(Path(directory))
+            source = Path(__file__).resolve().parents[1] / 'tools/verification/probes'
+            modules = [
+                'tools.verification.probes'
+                + ('.' + '.'.join(path.relative_to(source).with_suffix('').parts) if path.name != '__init__.py' else '')
+                for path in sorted(source.rglob('*.py'))
+            ]
+            program = dedent("""\
+                import importlib
+                import json
+                from pathlib import Path
+                import sys
+
+                sys.path.insert(0, sys.argv[1])
+                checkout = Path(sys.argv[2]).resolve()
+                for entry in sys.path:
+                    path = Path(entry).resolve()
+                    assert path != checkout and checkout not in path.parents
+                for name in json.loads(sys.argv[3]):
+                    importlib.import_module(name)
+                import tools.packages.integration
+                """)
             subprocess.run(
-                [
-                    sys.executable,
-                    '-I',
-                    '-c',
-                    'import sys; sys.path.insert(0, sys.argv[1]); '
-                    'import tools.verification.suspend; import tools.verification.upgrade; '
-                    'import tools.packages.integration',
-                    directory,
-                ],
+                [sys.executable, '-I', '-c', program, directory, str(source.parents[2]), json.dumps(modules)],
                 cwd=directory,
                 check=True,
             )

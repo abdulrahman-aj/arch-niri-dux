@@ -11,27 +11,28 @@ import subprocess
 import sys
 import tempfile
 import time
-
 from tools.workspace.state import own
 from tools.workspace.resources import disk_guard, kept_running, socket_guard
 from tools.workspace.fixtures import newest_accepted_fixture
-
 from tools.digest import digest
 from tools.verification.evidence import Evidence
-
 from tools.verification import apps, boot, browser, camera, desktop, dux_update, gate, pdf, recovery, suspend
-from tools.verification.vm import VM, PASSWORD, graphical_login, installed_login, stage_probes
+from tools.vm.control import VM
+from tools.verification.constants import PASSWORD
+from tools.verification.login import graphical_login, installed_login
+from tools.verification.payload import stage_probes, probe, mount_probes
+
 
 ROOT = Path(__file__).resolve().parents[2]
 
 
 def _policy(vm, passed):
-    vm.probe('policy', 'check', timeout=180)
+    probe(vm, 'policy', 'check', timeout=180)
     passed('Package presets, systemd policy and PAM-unlocked keyring')
 
 
 def _network(vm, passed):
-    vm.probe('network', 'check', timeout=240)
+    probe(vm, 'network', 'check', timeout=240)
     passed('Inbound firewall and resolve-only mDNS')
 
 
@@ -131,7 +132,7 @@ def run_fixture(args, parser):
         vm.start(cdrom=False)
         started = True
         installed_login(vm)
-        vm.mount_probes()
+        mount_probes(vm)
         # Pre-0.3 installer-owned files need manual repair. This tier deliberately
         # refuses those fixtures instead of introducing a migration path.
         vm.command('pacman -Qo /etc/snapper/configs/root /usr/share/arch-niri-dux/niri/tail.kdl')
@@ -146,7 +147,7 @@ def run_fixture(args, parser):
             f'/tmp/fast/source /tmp/fast/build /tmp/fast/packages --epoch {epoch}',
             timeout=180,
         )
-        vm.probe('policy', 'record-boot')
+        probe(vm, 'policy', 'record-boot')
         kernel = ' /run/verify/kernel.pkg.tar.zst' if args.kernel_package else ''
         vm.command(
             'pacman -U --noconfirm /tmp/fast/packages/*.pkg.tar.zst'
@@ -155,17 +156,17 @@ def run_fixture(args, parser):
             'cp /tmp/fast/packages/integration.manifest.json /run/verify/fast-packages.json',
             timeout=300,
         )
-        vm.probe('policy', 'upgraded-boot')
+        probe(vm, 'policy', 'upgraded-boot')
         vm.poweroff()
         vm.stop()
         vm.start(cdrom=False)
         installed_login(vm)
-        vm.mount_probes()
+        mount_probes(vm)
         graphical_login(vm)
-        vm.probe('boot', 'plymouth-config')
-        vm.probe('policy', 'check', timeout=180)
-        vm.probe('desktop', 'niri-overrides', timeout=180)
-        vm.probe('desktop', 'account-seeded', timeout=180)
+        probe(vm, 'boot', 'plymouth-config')
+        probe(vm, 'policy', 'check', timeout=180)
+        probe(vm, 'desktop', 'niri-overrides', timeout=180)
+        probe(vm, 'desktop', 'account-seeded', timeout=180)
         # Error gate on the final clean boot, before FAST-PASSED is written.
         # Deliberate-failure probes ran in earlier boots only.
         gate.collect(vm, directory)
@@ -216,7 +217,7 @@ def run_install(vm, passed, evidence, directory, package_digest, serial_preboot=
     vm.command(
         'grep -qw copytoram=n /proc/cmdline; mountpoint -q /run/archiso/bootmnt; test ! -e /run/archiso/copytoram/airootfs.sfs'
     )
-    vm.mount_probes()
+    mount_probes(vm)
     vm.command('fastfetch --logo none --structure OS:Kernel')
     vm.command('test "$(ls /sys/class/net | tr "\\n" " ")" = "lo "')
     vm.command(f'test "$(sha256sum /run/archiso/bootmnt/packages.manifest.json | cut -d " " -f 1)" = {package_digest}')
@@ -241,13 +242,13 @@ def run_install(vm, passed, evidence, directory, package_digest, serial_preboot=
             f'gpg --homedir {keyring} --export | gpg --homedir {target} --batch --import; '
             f'gpg --homedir {keyring} --export-ownertrust | gpg --homedir {target} --import-ownertrust'
         )
-    vm.probe('boot', 'prepare', '/mnt/verify', timeout=300)
+    probe(vm, 'boot', 'prepare', '/mnt/verify', timeout=300)
     if serial_preboot:
         # The release check boots once, over serial, with no graphical unlock
         # to qualify. Enable the serial kernel console on the target now;
         # full acceptance does this after its first graphical boot instead.
         vm.command(
-            'cd /run/verify && python3 -m tools.verification.boot serial-console-enable /mnt/verify; '
+            'cd /run/verify && python3 -m tools.verification.probes.boot serial-console-enable /mnt/verify; '
             'arch-chroot /mnt/verify limine-mkinitcpio',
             timeout=300,
         )
@@ -421,7 +422,7 @@ def main():
         if not guest_alive(vm):
             vm.start(cdrom=False)
             installed_login(vm)
-            vm.mount_probes()
+            mount_probes(vm)
         graphical_login(vm)
         gate.collect(vm, directory)
         gate.check(directory)
@@ -434,7 +435,7 @@ def main():
     except Exception as error:
         try:
             if vm.process and vm.process.poll() is None and vm.screenshot('failure') is None:
-                vm.probe('desktop', 'failure-screenshot', timeout=15)
+                probe(vm, 'desktop', 'failure-screenshot', timeout=15)
         except Exception:
             pass
         (directory / 'FAILURE.txt').write_text(str(error) + '\n')

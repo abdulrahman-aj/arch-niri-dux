@@ -117,7 +117,7 @@ def builder_memory(env=None):
     streams on the shared build machine release; humans start at once with a
     VM that fits what is available."""
     if agent_markers(env):
-        from tools.verification.vm import wait_for_memory
+        from tools.vm.control import wait_for_memory
 
         wait_for_memory()
         return BUILDER_MIB, None

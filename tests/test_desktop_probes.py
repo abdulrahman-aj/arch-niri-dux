@@ -5,7 +5,8 @@ import unittest
 from unittest.mock import patch
 
 
-from tools.verification import browser as guest
+from tools.verification.probes import browser as guest
+from tools.verification.probes import guest as probe_runtime
 
 
 class DesktopProbeTests(unittest.TestCase):
@@ -46,7 +47,7 @@ class DesktopProbeTests(unittest.TestCase):
             patch.object(guest, 'browser_state', side_effect=[None, {'file': 'pending'}]),
             patch.object(guest, 'windows', return_value=[{'app_id': 'dev.duxlabs.files', 'title': 'Open file'}]),
             patch.object(guest, 'screenshot'),
-            patch.object(guest.time, 'sleep'),
+            patch.object(probe_runtime.time, 'sleep'),
         ):
             guest.file_chooser()
 
@@ -64,7 +65,10 @@ class DesktopProbeTests(unittest.TestCase):
                 )
             ),
         ]
-        with patch.object(guest.urllib.request, 'urlopen', side_effect=responses), patch.object(guest.time, 'sleep'):
+        with (
+            patch.object(guest.urllib.request, 'urlopen', side_effect=responses),
+            patch.object(probe_runtime.time, 'sleep'),
+        ):
             guest.file_chooser_cancelled()
 
 

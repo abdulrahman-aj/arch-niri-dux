@@ -10,14 +10,14 @@ import shutil
 import subprocess
 import sys
 import urllib.parse
-
 from tools.verification.session import ROOT, prepare_integration_inputs, run_install
-
 from tools.workspace.state import own
 from tools.workspace.resources import disk_guard
 from tools.digest import digest
 from tools.verification.evidence import Evidence
-from tools.verification.vm import VM, PASSWORD, stage_probes
+from tools.vm.control import VM
+from tools.verification.constants import PASSWORD
+from tools.verification.payload import stage_probes
 
 
 def main():

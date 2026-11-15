@@ -173,7 +173,7 @@ class WorkspaceTests(unittest.TestCase):
             self.assertTrue(warning)
         with (
             patch.object(resources, 'available_memory', return_value=3 * gib),
-            patch('tools.verification.vm.wait_for_memory') as wait,
+            patch('tools.vm.control.wait_for_memory') as wait,
         ):
             self.assertEqual(resources.builder_memory({'CLAUDECODE': '1'}), (resources.BUILDER_MIB, None))
             wait.assert_called_once()

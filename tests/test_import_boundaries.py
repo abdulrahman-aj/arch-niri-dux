@@ -14,6 +14,11 @@ class ImportBoundaryTests(unittest.TestCase):
             ('tools/packages/example.py', 'from ..build import payload'),
             ('tools/build/example.py', 'from tools.release import key'),
             ('installer/example.py', 'import tools.digest'),
+            ('tools/verification/probes/boot.py', 'from ..login import installed_login'),
+            ('tools/verification/probes/guest.py', 'from tools.vm.control import VM'),
+            ('tools/verification/boot.py', 'from .probes import boot'),
+            ('tools/verification/images.py', 'from .login import installed_login'),
+            ('tools/vm/control.py', 'from tools.verification.payload import probe'),
             ('tools/workspace/state.py', 'from . import gc'),
             ('tools/workspace/fixtures.py', 'from tools.workspace.gc import collect'),
             ('tools/workspace/resources.py', 'from . import __main__'),
@@ -28,6 +33,8 @@ class ImportBoundaryTests(unittest.TestCase):
     def test_shared_digest_and_local_imports_are_allowed(self):
         source = 'from tools.digest import digest\nfrom . import inputs\nimport pathlib'
         self.assertEqual(list(violations(Path('tools/packages/example.py'), source)), [])
+        source = 'from .guest import run\nfrom ..images import png_dimensions'
+        self.assertEqual(list(violations(Path('tools/verification/probes/boot.py'), source)), [])
         source = 'from .state import registered_paths\nfrom .fixtures import accepted_fixtures'
         self.assertEqual(list(violations(Path('tools/workspace/gc.py'), source)), [])
 
