@@ -20,8 +20,7 @@ from tools.verification import apps, boot, browser, camera, desktop, dux_update,
 from tools.vm.control import VM
 from tools.verification.constants import PASSWORD
 from tools.verification.login import graphical_login, installed_login
-from tools.verification.payload import stage_probes
-from tools.verification.payload import probe, mount_probes
+from tools.verification.payload import stage_probes, probe, mount_probes
 
 
 ROOT = Path(__file__).resolve().parents[2]

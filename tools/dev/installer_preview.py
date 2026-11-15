@@ -11,6 +11,7 @@ import subprocess
 from tools.workspace import state as workspace
 from tools.workspace import resources
 from tools.vm.control import VM
+from tools.verification.payload import mount_probes
 
 ROOT = Path(__file__).resolve().parents[2]
 
@@ -78,5 +79,3 @@ def main():
 
 if __name__ == '__main__':
     main()
-
-from tools.verification.payload import mount_probes

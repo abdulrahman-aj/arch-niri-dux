@@ -13,6 +13,7 @@ import re
 import sys
 
 from tools.vm.control import VM
+from tools.verification.payload import probe
 
 ANSI_RE = re.compile(r'\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)|\x1b\[[0-?]*[ -/]*[@-~]|\x1b[@-Z\\-_]')
 MARKER_RE = re.compile(r'__VERIFY_[0-9A-Fa-f]+__:[0-9]+')
@@ -124,5 +125,3 @@ def main():
 
 if __name__ == '__main__':
     main()
-
-from tools.verification.payload import probe

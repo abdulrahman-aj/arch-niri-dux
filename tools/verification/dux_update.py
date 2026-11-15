@@ -18,8 +18,7 @@ through its pacman backend because no AUR helper is installed.
 import subprocess
 import time
 from tools.verification.images import png_dimensions, png_top_rows
-from tools.verification.constants import PASSWORD
-from tools.verification.constants import AVAILABLE, BAR_ABOVE_PILLS, BAR_MIDDLE, NONE, PANEL, PROMPT
+from tools.verification.constants import PASSWORD, AVAILABLE, BAR_ABOVE_PILLS, BAR_MIDDLE, NONE, PANEL, PROMPT
 from tools.verification.payload import probe
 
 

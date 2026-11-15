@@ -14,6 +14,7 @@ import time
 import wave
 import zlib
 from . import guest
+from tools.verification.images import png_dimensions
 from .pdf import sample_pdf_bytes
 
 
@@ -245,7 +246,7 @@ def prepare():
         '160',
         timeout=30,
     )
-    guest.png_dimensions(FILES / 'thumbnail.png')
+    png_dimensions(FILES / 'thumbnail.png')
     guest.user_command('pactl', 'load-module', 'module-null-sink', 'sink_name=dux_verify_audio', capture=True)
     guest.user_command('pactl', 'set-default-sink', 'dux_verify_audio')
     guest.user_command('pactl', 'set-sink-volume', 'dux_verify_audio', '100%')

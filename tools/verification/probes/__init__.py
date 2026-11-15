@@ -1,4 +1,4 @@
-"""Behavior-owned acceptance scenarios and disposable VM controls."""
+"""Guest probe action dispatch."""
 
 import sys
 

@@ -11,37 +11,19 @@ import struct
 import subprocess
 import threading
 import time
+
 from . import dispatch
 from .guest import run, wait_until
 
-
 NAMESPACE = 'verify-peer'
-
-
 HOST_LINK = 'verify-host'
-
-
 HOST_V4, PEER_V4 = '192.0.2.1', '192.0.2.2'
-
-
 HOST_V6, PEER_V6 = 'fd00:d0c5::1', 'fd00:d0c5::2'
-
-
 PORT = 8765
-
-
 PEER_NAME = 'verify-peer.local'
-
-
 LOCAL_RULE = Path('/etc/arch-niri-dux/firewall.d/90-verify.nft')
-
-
 MDNS_GROUP = '224.0.0.251'
-
-
 IGMP_GROUP = '239.255.0.17'
-
-
 UNIT = 'arch-niri-dux-firewall.service'
 
 

@@ -3,10 +3,9 @@
 from pathlib import Path
 import re
 import subprocess
-from . import dispatch
+from . import dispatch, upgrade
 from .guest import run, run_interactive
 from .boot import storage
-from . import upgrade
 
 
 def boot_entry_path(text, snapshot=None):

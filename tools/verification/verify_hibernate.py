@@ -13,8 +13,7 @@ from tools.verification.evidence import Evidence
 from tools.vm.control import VM
 from tools.verification.constants import PASSWORD
 from tools.verification.login import installed_login
-from tools.verification.payload import stage_probes
-from tools.verification.payload import mount_probes
+from tools.verification.payload import stage_probes, mount_probes
 
 
 def main():
