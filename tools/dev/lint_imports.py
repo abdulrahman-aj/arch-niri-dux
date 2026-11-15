@@ -13,7 +13,7 @@ INSTALLER_LAYERS = {
     'installer.wizard': ['installer.install', 'installer.payload'],
 }
 # Disk writes and target mounts belong in installer/storage.py, behind its revalidate-then-write checks.
-DISK_COMMANDS = ('cryptsetup', 'mount', 'umount', 'sfdisk', 'sgdisk', 'wipefs')
+DISK_COMMANDS = ('btrfs', 'cryptsetup', 'mount', 'umount', 'sfdisk', 'sgdisk', 'wipefs')
 RUNNERS = ('run', 'Popen', 'call', 'check_call', 'check_output', 'system')
 
 

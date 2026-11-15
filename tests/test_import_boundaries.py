@@ -54,6 +54,7 @@ class ImportBoundaryTests(unittest.TestCase):
         for path, source in (
             ('installer/install.py', "run('mkfs.btrfs', '--force', mapped)"),
             ('installer/install.py', "run('cryptsetup', 'close', MAPPER)"),
+            ('installer/install.py', "run('btrfs', 'subvolume', 'create', str(target / volume))"),
             ('installer/wizard.py', "subprocess.run(['umount', '--recursive', str(TARGET)], check=False)"),
             ('installer/payload.py', "subprocess.run(('sgdisk', '--zap-all', disk))"),
             ('installer/install.py', "subprocess.run('wipefs --all /dev/vda', shell=True)"),
