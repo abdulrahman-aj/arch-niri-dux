@@ -217,7 +217,7 @@ class TryVmTests(unittest.TestCase):
             source = iso.with_suffix('.iso.source')
             with patch.object(try_vm, 'ROOT', root):
                 self.assertTrue(try_vm.checkout_changed_since(iso))
-                source.write_text(try_vm.source_identity())
+                source.write_text(try_vm.source_identity(try_vm.ROOT))
                 self.assertFalse(try_vm.checkout_changed_since(iso))
                 # Untracked files (notes, scratch) never make the ISO stale.
                 (root / 'untracked').touch()
@@ -225,7 +225,7 @@ class TryVmTests(unittest.TestCase):
                 tracked.write_text('dirty')
                 self.assertTrue(try_vm.checkout_changed_since(iso))
                 # An ISO built from the dirty tree is current until the tree changes again.
-                source.write_text(try_vm.source_identity())
+                source.write_text(try_vm.source_identity(try_vm.ROOT))
                 self.assertFalse(try_vm.checkout_changed_since(iso))
                 tracked.write_text('dirtier')
                 self.assertTrue(try_vm.checkout_changed_since(iso))

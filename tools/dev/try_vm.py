@@ -16,7 +16,7 @@ from pathlib import Path
 
 from tools.workspace import state as workspace
 from tools.workspace import resources
-from tools.workspace.source import source_identity as checkout_identity
+from tools.workspace.source import source_identity
 
 ROOT = Path(__file__).resolve().parents[2]
 # The installer's disk floor lives in one place: read it (and the ESP/swap
@@ -237,13 +237,9 @@ def iso_for_kind(kind):
     return candidates[-1] if candidates else None
 
 
-def source_identity():
-    return checkout_identity(ROOT)
-
-
 def checkout_changed_since(iso):
     try:
-        return iso.with_suffix('.iso.source').read_text().strip() != source_identity()
+        return iso.with_suffix('.iso.source').read_text().strip() != source_identity(ROOT)
     except (subprocess.CalledProcessError, OSError):
         return True
 
