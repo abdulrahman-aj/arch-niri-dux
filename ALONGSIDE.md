@@ -52,6 +52,16 @@ original OS untouched. No rollback deletes partitions automatically.
 
 ## Automated provisioning and acceptance
 
+Keep alongside fixtures outside every checkout in the shared home
+`~/arch-niri-dux-fixtures/alongside/` (`media/`, `linux-fixture/`,
+`windows/`). `make gc` removes
+merged worktrees whole and only moves the newest `make verify` fixture;
+alongside fixtures use `READY`, not `ACCEPTANCE-PASSED`, so gc offers them no
+move, and a fixture under `out/` goes away with its worktree. The shared home
+survives because gc only plans worktree roots and never follows symlinks out
+of a worktree. Keep per-run test evidence under `out/` (disposable,
+checkout-owned).
+
 All commands operate only on disposable QEMU disks. Run scenarios sequentially.
 The normal Nix dev shell provides QEMU, OVMF, xorriso and swtpm. `fetch-alongside`
 checks host headroom, uses official sources and records resolved URLs and SHA256.
@@ -62,12 +72,12 @@ Its local SHA256 is recorded. No product key or personal credentials are needed.
 ```
 make test
 make iso-development
-make fetch-alongside ARGS="--os linux --directory out/alongside/media"
-make fetch-alongside ARGS="--os windows --directory out/alongside/media"
-make provision-alongside ARGS="--os linux --media out/alongside/media/debian.qcow2 --iso out/CANDIDATE.iso --directory out/alongside/linux-fixture"
-make verify-alongside ARGS="--os linux --iso out/CANDIDATE.iso --fixture out/alongside/linux-fixture/disk.qcow2 --firmware out/alongside/linux-fixture/OVMF_VARS.fd --directory out/alongside/linux-test"
-make provision-alongside ARGS="--os windows --media out/alongside/media/windows11-ltsc-eval.iso --iso out/CANDIDATE.iso --directory out/alongside/windows"
-make verify-alongside ARGS="--os windows --iso out/CANDIDATE.iso --fixture out/alongside/windows/disk.qcow2 --firmware out/alongside/windows/OVMF_VARS.fd --windows-token out/alongside/windows/report-token --directory out/alongside/windows-test"
+make fetch-alongside ARGS="--os linux --directory ~/arch-niri-dux-fixtures/alongside/media"
+make fetch-alongside ARGS="--os windows --directory ~/arch-niri-dux-fixtures/alongside/media"
+make provision-alongside ARGS="--os linux --media ~/arch-niri-dux-fixtures/alongside/media/debian.qcow2 --iso out/CANDIDATE.iso --directory ~/arch-niri-dux-fixtures/alongside/linux-fixture"
+make verify-alongside ARGS="--os linux --iso out/CANDIDATE.iso --fixture ~/arch-niri-dux-fixtures/alongside/linux-fixture/disk.qcow2 --firmware ~/arch-niri-dux-fixtures/alongside/linux-fixture/OVMF_VARS.fd --directory out/alongside/linux-test"
+make provision-alongside ARGS="--os windows --media ~/arch-niri-dux-fixtures/alongside/media/windows11-ltsc-eval.iso --iso out/CANDIDATE.iso --directory ~/arch-niri-dux-fixtures/alongside/windows"
+make verify-alongside ARGS="--os windows --iso out/CANDIDATE.iso --fixture ~/arch-niri-dux-fixtures/alongside/windows/disk.qcow2 --firmware ~/arch-niri-dux-fixtures/alongside/windows/OVMF_VARS.fd --windows-token ~/arch-niri-dux-fixtures/alongside/windows/report-token --directory out/alongside/windows-test"
 ```
 
 Use the actual generated ISO filename and fresh evidence directories. Media
@@ -117,7 +127,7 @@ Windows ISO when no longer needed. Retain input hashes, logs and reports. Do not
 run broad Nix GC or delete unrelated user/cache files.
 
 Interrupted Windows provisioning can resume without recreating its disk. Run
-`make provision-alongside ARGS="--os windows --finish-windows --iso /absolute/new.iso --directory /absolute/windows-fixture"`.
+`make provision-alongside ARGS="--os windows --finish-windows --iso out/CANDIDATE.iso --directory ~/arch-niri-dux-fixtures/alongside/windows"`.
 This requires the saved successful Windows OS report and verifies the qcow2
 before firmware registration. The TPM emulator restarts for each QEMU run with
 its original state preserved.
