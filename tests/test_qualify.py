@@ -2,13 +2,13 @@
 
 import re
 import shlex
-import subprocess
 import tempfile
 import unittest
 from pathlib import Path
 from unittest.mock import patch
 
 from tools.dev import qualify
+from tests.git_isolation import run_git
 
 
 class TierSelectionTests(unittest.TestCase):
@@ -154,17 +154,17 @@ class DirtyTreeTests(unittest.TestCase):
     def test_changed_files_come_from_one_commit(self):
         with tempfile.TemporaryDirectory() as root:
             directory = Path(root)
-            subprocess.run(['git', 'init', '-b', 'main'], check=True, capture_output=True, cwd=directory)
-            subprocess.run(['git', 'config', 'user.email', 't@t'], check=True, capture_output=True, cwd=directory)
-            subprocess.run(['git', 'config', 'user.name', 't'], check=True, capture_output=True, cwd=directory)
+            run_git('init', '-b', 'main', cwd=directory, check=True, capture_output=True)
+            run_git('config', 'user.email', 't@t', cwd=directory, check=True, capture_output=True)
+            run_git('config', 'user.name', 't', cwd=directory, check=True, capture_output=True)
             (directory / 'base.txt').write_text('base\n')
-            subprocess.run(['git', 'add', '.'], check=True, capture_output=True, cwd=directory)
-            subprocess.run(['git', 'commit', '-m', 'base'], check=True, capture_output=True, cwd=directory)
-            subprocess.run(['git', 'checkout', '-b', 'feature'], check=True, capture_output=True, cwd=directory)
+            run_git('add', '.', cwd=directory, check=True, capture_output=True)
+            run_git('commit', '-m', 'base', cwd=directory, check=True, capture_output=True)
+            run_git('checkout', '-b', 'feature', cwd=directory, check=True, capture_output=True)
             (directory / 'tools').mkdir()
             (directory / 'tools' / 'new.py').write_text('new\n')
-            subprocess.run(['git', 'add', '.'], check=True, capture_output=True, cwd=directory)
-            subprocess.run(['git', 'commit', '-m', 'feature'], check=True, capture_output=True, cwd=directory)
+            run_git('add', '.', cwd=directory, check=True, capture_output=True)
+            run_git('commit', '-m', 'feature', cwd=directory, check=True, capture_output=True)
             with patch.object(qualify, 'ROOT', directory):
                 self.assertEqual(qualify.changed_files('main'), ['tools/new.py'])
                 qualify.check_clean(qualify.git('status', '--porcelain'))

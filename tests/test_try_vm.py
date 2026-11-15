@@ -7,6 +7,7 @@ from unittest.mock import patch
 
 ROOT = Path(__file__).resolve().parents[1]
 from tools.dev import try_vm
+from tests.git_isolation import check_git_output
 
 
 GUM_SCRIPT = """#!/bin/sh
@@ -309,7 +310,7 @@ class TryVmTests(unittest.TestCase):
             root = Path(temp)
 
             def git(*args, **kwargs):
-                return subprocess.check_output(['git', '-C', str(root), *args], text=True, **kwargs).strip()
+                return check_git_output(*args, cwd=root, text=True, **kwargs).strip()
 
             git('init', '-b', 'main')
             git('config', 'user.name', 'Test')

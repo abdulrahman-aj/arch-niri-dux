@@ -8,19 +8,19 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 from tools.packages import dux_apps as apps
+from tests.git_isolation import check_git_output, run_git
 
 RELEASE_TAG = re.compile(r'v[0-9]+(?:\.[0-9]+)*-[0-9]+(?:\.[0-9]+)*$')
 
 
 def latest_release_tag(root):
     """Newest v* tag that is an ancestor of HEAD, ordered with vercmp like the publisher."""
-    tags = subprocess.check_output(['git', '-C', str(root), 'tag', '--list', 'v*'], text=True).split()
+    tags = check_git_output('tag', '--list', 'v*', cwd=root, text=True).split()
     candidates = [tag for tag in tags if RELEASE_TAG.fullmatch(tag)]
     merged = [
         tag
         for tag in candidates
-        if subprocess.run(['git', '-C', str(root), 'merge-base', '--is-ancestor', tag, 'HEAD'], check=False).returncode
-        == 0
+        if run_git('merge-base', '--is-ancestor', tag, 'HEAD', cwd=root, check=False).returncode == 0
     ]
     if not merged:
         raise ValueError('No published release tag in history.')
@@ -34,9 +34,7 @@ def latest_release_tag(root):
 def show_tag(root, tag, *paths):
     for path in paths:
         try:
-            return subprocess.check_output(
-                ['git', '-C', str(root), 'show', f'{tag}:{path}'], text=True, stderr=subprocess.DEVNULL
-            )
+            return check_git_output('show', f'{tag}:{path}', cwd=root, text=True, stderr=subprocess.DEVNULL)
         except subprocess.CalledProcessError:
             continue
     raise ValueError(f'None of {paths} exists in {tag}.')

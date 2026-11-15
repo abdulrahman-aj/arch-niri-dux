@@ -11,6 +11,7 @@ from unittest.mock import patch
 ROOT = Path(__file__).resolve().parents[1]
 from tools.release import iso_checksums as iso
 from tools.release import key as key
+from tests.git_isolation import check_git_output
 
 TAG = 'v0.3.0-2'
 
@@ -126,7 +127,7 @@ class IsoChecksumsTests(unittest.TestCase):
 
     def checkout(self):
         def git(*args):
-            return subprocess.check_output(['git', '-C', str(self.root), *args], text=True).strip()
+            return check_git_output(*args, cwd=self.root, text=True).strip()
 
         git('init', '-q')
         git('config', 'user.name', 'Disposable')

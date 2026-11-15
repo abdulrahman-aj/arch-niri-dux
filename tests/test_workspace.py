@@ -12,6 +12,7 @@ from unittest.mock import patch
 
 from tools.workspace import state as workspace
 from tools.workspace import __main__, fixtures, gc, resources
+from tests.git_isolation import run_git as isolated_run_git
 
 
 class WorkspaceTests(unittest.TestCase):
@@ -218,7 +219,7 @@ class WorkspaceTests(unittest.TestCase):
 
 
 def git_run(*args, cwd, **kwargs):
-    return subprocess.run(['git', *args], cwd=str(cwd), capture_output=True, text=True, check=True, **kwargs)
+    return isolated_run_git(*args, cwd=cwd, capture_output=True, text=True, check=True, **kwargs)
 
 
 def init_repo(root):
