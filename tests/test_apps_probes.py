@@ -6,7 +6,7 @@ import unittest
 import wave
 
 
-from scripts.verification import apps
+from tools.verification.probes import apps
 
 
 class AudioEvidenceTests(unittest.TestCase):
@@ -29,3 +29,16 @@ class AudioEvidenceTests(unittest.TestCase):
         self.assertLess(self.amplitude(440), 1)
         self.assertGreater(self.amplitude(660), 3900)
         self.assertGreater(self.amplitude(440, target=440), 3900)
+
+
+class ThumbnailEvidenceTests(unittest.TestCase):
+    def test_app_preparation_has_a_working_thumbnail_decoder(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / 'thumbnail.png'
+            path.write_bytes(apps.png_sample())
+            width, height = apps.png_dimensions(path)
+            self.assertGreater(width, 0)
+            self.assertGreater(height, 0)
+            path.write_bytes(b'invalid image')
+            with self.assertRaises(AssertionError):
+                apps.png_dimensions(path)

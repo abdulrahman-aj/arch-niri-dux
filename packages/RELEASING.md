@@ -51,6 +51,15 @@ repository metadata are regenerated. Signatures do not prevent a server replayin
 older signed repository. Release CI runs unit tests and makepkg, not graphical
 VM acceptance. Keep the candidate's local VM evidence with the PR.
 
+## Disposable rehearsal
+
+After `make iso-development`, set `iso` to that ISO and `tag` to its manifest version prefixed with `v`, then run:
+
+```sh
+make rehearse-release ARGS="$iso $tag"
+```
+Use the database from the same build as the ISO. The rehearsal provisions the ISO's offline trust into the disposable target before boot and uses its exact payload. It requires signed packages and database, and skips ISO authorization staging. Remove the disposable repository and stopped VM disk afterward. Every run requires a fresh evidence directory, including retries.
+
 ## Authorize and distribute an ISO
 
 Before each release, update the README verification section to name its intended
@@ -121,7 +130,7 @@ the encrypted backup, inspection, access to each key, and restoring the GitHub
 signing secret. **Keep the full encrypted backup off-machine and its password
 separately.** GitHub stores only the working signing subkey.
 
-Initial provisioning uses `scripts/release_key.py --passphrase-file PATH`.
+Initial provisioning uses `python3 -m tools.release.key --passphrase-file PATH`.
 Ordinary releases use the existing CI secret. Preparation and `--restore` are offline by default. Only explicit `--upload`
 replaces the live secret; restoration does not rotate or renew keys.
 

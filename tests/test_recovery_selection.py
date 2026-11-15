@@ -1,6 +1,6 @@
 import unittest
 
-from scripts.verification import recovery as guest
+from tools.verification.probes import recovery as guest
 
 MENU = """timeout: 5
 default_entry: 2

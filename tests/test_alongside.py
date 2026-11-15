@@ -11,7 +11,7 @@ import zlib
 import subprocess
 import tempfile
 import unittest
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 from test_installer import settings
 from installer import storage as installer
@@ -51,13 +51,14 @@ class GPTMetadataTests(unittest.TestCase):
 
 
 class AlongsideDiskTests(unittest.TestCase):
-    def setUp(self):
+    @classmethod
+    def setUpClass(cls):
         if not shutil.which('sgdisk') or not shutil.which('sfdisk'):
-            self.fail('Run through the project Nix shell; GPT tools are required.')
-        self.directory = tempfile.TemporaryDirectory()
-        self.addCleanup(self.directory.cleanup)
-        self.disk = Path(self.directory.name) / 'disk.img'
-        with self.disk.open('wb') as stream:
+            raise RuntimeError('Run through the project Nix shell; GPT tools are required.')
+        cls.fixture_directory = tempfile.TemporaryDirectory()
+        cls.addClassCleanup(cls.fixture_directory.cleanup)
+        cls.fixture = Path(cls.fixture_directory.name) / 'pristine.img'
+        with cls.fixture.open('wb') as stream:
             stream.truncate(48 * installer.GIB)
         subprocess.run(
             [
@@ -69,11 +70,18 @@ class AlongsideDiskTests(unittest.TestCase):
                 '--typecode=4:0700',
                 '--attributes=1:set:63',
                 '--attributes=4:set:60',
-                str(self.disk),
+                str(cls.fixture),
             ],
             check=True,
             stdout=subprocess.DEVNULL,
         )
+
+    def setUp(self):
+        self.directory = tempfile.TemporaryDirectory()
+        self.addCleanup(self.directory.cleanup)
+        self.disk = Path(self.directory.name) / 'disk.img'
+        # Keep each real GPT mutation isolated without allocating a 48 GiB copy.
+        subprocess.run(['cp', '--reflink=auto', '--sparse=always', str(self.fixture), str(self.disk)], check=True)
         with self.disk.open('r+b') as stream:
             stream.write(b'preserve-protective-MBR-bootstrap-and-disk-signature'.ljust(446, b'!'))
         self.mbr_hash = digest_range(self.disk, 0, 446)
@@ -404,6 +412,17 @@ class AlongsideBootTests(unittest.TestCase):
                 with self.assertRaisesRegex(ValueError, 'Kernel partition geometry'):
                     installer.verify_partition_nodes(settings(), [(2, 513, 1536, 'ef00', 'ESP')], 4096)
 
+    def test_erase_replaced_identity_refuses_before_start_or_commands(self):
+        on_start = Mock()
+        with (
+            patch.object(installer, 'require_disk', return_value=(99, 2, 3)),
+            patch.object(installer, 'run') as command,
+        ):
+            with self.assertRaisesRegex(ValueError, 'Disk identity changed'):
+                installer.create_partitions(settings(), None, (1, 2, 3), on_start)
+            on_start.assert_not_called()
+            command.assert_not_called()
+
     def test_erase_mode_verifies_kernel_geometry_against_created_table(self):
         table = {
             'sectorsize': 512,
@@ -432,6 +451,7 @@ class AlongsideBootTests(unittest.TestCase):
 
             with (
                 patch.object(installer, 'run', side_effect=command),
+                patch.object(installer, 'require_disk', return_value=(1, 2, 3)),
                 patch.object(installer, 'Path', side_effect=path),
             ):
                 self.assertEqual(
@@ -441,6 +461,7 @@ class AlongsideBootTests(unittest.TestCase):
             (sysfs / 'vda2/size').write_text(str(table['partitions'][1]['size'] + 2))
             with (
                 patch.object(installer, 'run', side_effect=command),
+                patch.object(installer, 'require_disk', return_value=(1, 2, 3)),
                 patch.object(installer, 'Path', side_effect=path),
                 self.assertRaisesRegex(ValueError, 'Kernel partition geometry'),
             ):

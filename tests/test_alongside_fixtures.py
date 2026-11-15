@@ -2,7 +2,6 @@
 
 import json
 from pathlib import Path
-import sys
 import tempfile
 import unittest
 import urllib.error
@@ -10,8 +9,7 @@ import urllib.request
 from unittest.mock import patch
 import xml.etree.ElementTree as ET
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'scripts'))
-import alongside_windows as windows
+from tools.fixtures import windows as windows
 
 
 class WindowsFixtureTests(unittest.TestCase):

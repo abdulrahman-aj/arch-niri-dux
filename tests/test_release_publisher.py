@@ -63,7 +63,7 @@ class PublisherCheckoutTests(unittest.TestCase):
                     'exec bash "$2" "$1" "$1/packages" "$1/history" "$1/output"',
                     'bash',
                     str(checkout),
-                    str(ROOT / 'scripts/publish-integration'),
+                    str(ROOT / 'tools/release/publish.sh'),
                 ],
                 env=environment,
                 text=True,
@@ -90,7 +90,7 @@ class PublisherScratchTests(unittest.TestCase):
                     'gh': """[[ $1 == api ]] || exit 81
 printf '%s\\n' '[[{"tag_name":"v0.1.0-2","draft":false}]]'
 """,
-                    'python': """case "$2" in
+                    'python': """shift\ncase "$2" in
     history-tags) ;;
     fetch)
         mkdir -p "$4"
@@ -120,7 +120,7 @@ esac
                 result = subprocess.run(
                     [
                         'bash',
-                        str(ROOT / 'scripts/publish-integration'),
+                        str(ROOT / 'tools/release/publish.sh'),
                         str(root),
                         str(packages),
                         str(root / 'history'),

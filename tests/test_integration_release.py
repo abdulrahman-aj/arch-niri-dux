@@ -1,4 +1,3 @@
-import sys
 import base64
 import gzip
 import json
@@ -13,8 +12,8 @@ import unittest
 
 
 ROOT = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'scripts'))
-import integration_release as release
+from tools.packages import artifacts
+from tools.release import repository as release
 
 
 class SignedReleaseTests(unittest.TestCase):
@@ -175,15 +174,16 @@ class SignedReleaseTests(unittest.TestCase):
         release.publish(self.root, packages, history, output, 'v' + release.build.version(self.root), commit)
 
     def test_split_signing_entrypoint_uses_disposable_secret_and_cleans_home(self):
-        import release_key
+        from tools.release import key as release_key
 
         packages = self.packages(self.root / 'built')
-        scripts = self.root / 'scripts'
-        scripts.mkdir()
+        scripts = self.root / 'tools/release'
+        scripts.mkdir(parents=True)
         # Replace only network publication; run the real import, validation and signing path.
-        (scripts / 'publish-integration').write_text(
-            'set -euo pipefail\npython '
-            + str(ROOT / 'scripts/integration_release.py')
+        (scripts / 'publish.sh').write_text(
+            'set -euo pipefail\ncd '
+            + str(ROOT)
+            + '\npython -m tools.release.repository'
             + ' publish "$1" "$2" "$3" "$4" --tag v0.1.0-1 --commit '
             + 'a' * 40
             + '\n'
@@ -193,7 +193,7 @@ class SignedReleaseTests(unittest.TestCase):
         subprocess.run(
             [
                 'bash',
-                str(ROOT / 'scripts/sign-integration'),
+                str(ROOT / 'tools/release/sign.sh'),
                 str(self.root),
                 str(packages),
                 str(self.root / 'history'),
@@ -203,7 +203,7 @@ class SignedReleaseTests(unittest.TestCase):
             env=os.environ | {'GNUPGHOME': str(signing_home), 'PACKAGE_SIGNING_KEY': ci.decode()},
         )
         self.assertFalse(signing_home.exists())
-        release.verify(self.root, self.root / 'signed/integration.manifest.json', current_signer=True)
+        artifacts.verify(self.root, self.root / 'signed/integration.manifest.json', current_signer=True)
 
     def test_history_boundary_rejects_direct_preincident_packages(self):
         old = self.root / 'old'
@@ -219,19 +219,19 @@ class SignedReleaseTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             self.publish(built, old, self.root / 'rejected')
         self.publish(built, self.root / 'empty', self.root / 'replacement')
-        release.verify(self.root, self.root / 'replacement/integration.manifest.json', current_signer=True)
+        artifacts.verify(self.root, self.root / 'replacement/integration.manifest.json', current_signer=True)
 
     def test_signed_release_roundtrip_tampering_and_identity(self):
         packages = self.packages(self.root / 'packages-built')
         signed = self.root / 'releases/v0.1.0-1'
         self.publish(packages, self.root / 'history', signed)
-        release.fetch(self.root, self.root / 'fetched', (self.root / 'releases').as_uri())
+        artifacts.fetch(self.root, self.root / 'fetched', (self.root / 'releases').as_uri())
         manifest = json.loads((signed / 'integration.manifest.json').read_text())
         for entry in manifest['packages'] + manifest['apps'] + manifest['omarchy']:
             path = signed / entry['filename']
             self.assertEqual(path.read_bytes(), (self.root / 'fetched' / path.name).read_bytes())
         with self.assertRaisesRegex(ValueError, 'must be empty'):
-            release.fetch(self.root, self.root / 'fetched', (self.root / 'releases').as_uri())
+            artifacts.fetch(self.root, self.root / 'fetched', (self.root / 'releases').as_uri())
         for name in (
             'integration.manifest.json',
             'arch-niri-dux-0.1.0-1-any.pkg.tar.zst',
@@ -243,11 +243,11 @@ class SignedReleaseTests(unittest.TestCase):
             original = path.read_bytes()
             path.write_bytes(original + b'tampered')
             with self.subTest(asset=name), self.assertRaises((ValueError, subprocess.CalledProcessError)):
-                release.fetch(self.root, self.root / ('fetched-' + name), (self.root / 'releases').as_uri())
+                artifacts.fetch(self.root, self.root / ('fetched-' + name), (self.root / 'releases').as_uri())
             path.write_bytes(original)
         (self.root / 'keys/integration-signing.fingerprint').write_text('B' * 40)
         with self.assertRaisesRegex(ValueError, 'pinned identity'):
-            release.verify(self.root, signed / 'integration.manifest.json')
+            artifacts.verify(self.root, signed / 'integration.manifest.json')
 
     def test_history_is_retained_but_database_only_selects_latest_and_pages_has_no_links(self):
         old = self.root / 'old'
@@ -272,7 +272,7 @@ class SignedReleaseTests(unittest.TestCase):
         for suffix in ('db', 'files'):
             alias = current / f'arch-niri-dux.{suffix}'
             self.assertEqual(alias.read_bytes(), (current / (alias.name + '.tar.gz')).read_bytes())
-            release.verify(self.root, alias)
+            artifacts.verify(self.root, alias)
         with self.assertRaisesRegex(ValueError, 'newer'):
             self.publish(self.root / 'second', current, self.root / 'replay')
 
@@ -288,10 +288,10 @@ class SignedReleaseTests(unittest.TestCase):
         second = self.root / 'second'
         self.publish(rebuilt, first, second)
         self.assertEqual((second / app).read_bytes(), (first / app).read_bytes())
-        release.verify(self.root, second / app)
+        artifacts.verify(self.root, second / app)
         manifest = json.loads((second / 'integration.manifest.json').read_text())
         self.assertEqual(manifest['apps'][0]['sha256'], release.build.digest(first / app))
-        release.validate_manifest(self.root, second)
+        artifacts.validate_manifest(self.root, second)
 
         recipe.write_text('pkgver=0.1.0\npkgrel=3\n')
         self.app_recipe('2.1.0-1', description='Changed recipe')
@@ -307,7 +307,7 @@ class SignedReleaseTests(unittest.TestCase):
         with tarfile.open(third / 'arch-niri-dux.db') as database:
             self.assertIn('dux-example-bin-2.1.1-1', {name.split('/')[0] for name in database.getnames()})
         self.assertFalse((third / app).exists())
-        release.verify(self.root, third / 'dux-example-bin-2.1.1-1-x86_64.pkg.tar.zst')
+        artifacts.verify(self.root, third / 'dux-example-bin-2.1.1-1-x86_64.pkg.tar.zst')
 
     def test_changed_sources_and_commit_cannot_reuse_a_release(self):
         packages = self.packages(self.root / 'built')
@@ -317,7 +317,7 @@ class SignedReleaseTests(unittest.TestCase):
             self.publish(signed, self.root / 'empty', self.root / 'retry', commit='b' * 40)
         (self.root / 'desktop/usr/share/example').write_text('Unreleased edit')
         with self.assertRaisesRegex(ValueError, 'differs from the release'):
-            release.validate_manifest(self.root, packages)
+            artifacts.validate_manifest(self.root, packages)
 
     def test_pacman_installs_and_upgrades_from_signed_repo_and_rejects_tampered_database(self):
         first = self.root / 'first'
@@ -413,7 +413,7 @@ class SignedReleaseTests(unittest.TestCase):
             subprocess.run(['gpgconf', '--homedir', str(target / 'gnupg'), '--kill', 'all'], check=True)
 
     def test_installer_rejects_unsigned_and_tampered_packages_with_rewritten_database(self):
-        from installer import install as installer
+        from installer import payload
         from unittest.mock import patch
 
         repository = self.root / 'offline'
@@ -429,9 +429,9 @@ class SignedReleaseTests(unittest.TestCase):
             (target / name).mkdir(parents=True)
         # The same config used by both pacstrap transactions, with a disposable
         # trusted keyring substituted for the ISO's pinned public keys.
-        with patch.object(installer, 'SHARE', self.root):
+        with patch.object(payload, 'SHARE', self.root):
             conf = target / 'pacman.conf'
-            conf.write_text(installer.offline_pacman_config(repository, 'offline'))
+            conf.write_text(payload.offline_pacman_config(repository, 'offline'))
         keyring = self.root / 'install-keyring'
         keyring.mkdir(mode=0o700)
         for arguments, data in (
@@ -485,7 +485,7 @@ class SignedReleaseTests(unittest.TestCase):
                         f'{release.build.digest(path)}  {path.name}\n' for path in (archive, repository / 'offline.db')
                     )
                 )
-                installer.verify_repository(repository)
+                payload.verify_repository(repository)
                 for path in (target / 'cache').iterdir():
                     path.unlink()
                 result = subprocess.run(
@@ -519,8 +519,8 @@ class SignedReleaseTests(unittest.TestCase):
             (self.root / 'keys/integration-signing.fingerprint').write_text(primary)
             (self.root / 'keys/integration-signing.gpg').write_bytes(run('--export', primary))
             with self.assertRaisesRegex(ValueError, 'expired'):
-                release.verify(self.root, payload)
-            release.verify(self.root, payload, historical=True)
+                artifacts.verify(self.root, payload)
+            artifacts.verify(self.root, payload, historical=True)
             run('--quick-add-key', primary, 'ed25519', 'sign', '1d')
             (self.root / 'keys/integration-signing.gpg').write_bytes(run('--export', primary))
             (self.root / 'keys/integration-signing.subkey').write_text(
@@ -530,11 +530,11 @@ class SignedReleaseTests(unittest.TestCase):
                     if line.startswith('fpr:')
                 ][-1]
             )
-            release.verify(self.root, payload, historical=True)
+            artifacts.verify(self.root, payload, historical=True)
             new = self.root / 'new-package'
             new.write_text('New package')
             run('--local-user', primary, '--detach-sign', str(new))
-            release.verify(self.root, new)
+            artifacts.verify(self.root, new)
 
             # An unchanged app keeps its published bytes but must not keep the
             # expired signature, or the new release could not be fetched.
@@ -549,7 +549,7 @@ class SignedReleaseTests(unittest.TestCase):
                 self.publish(built, history, self.root / 'signed')
             finally:
                 os.environ['GNUPGHOME'] = str(self.home)
-            release.verify(self.root, self.root / 'signed' / app)
+            artifacts.verify(self.root, self.root / 'signed' / app)
         finally:
             subprocess.run(['gpgconf', '--homedir', str(home), '--kill', 'all'], check=True)
 

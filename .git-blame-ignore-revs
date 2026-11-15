@@ -1,2 +1,4 @@
 # Bulk reformat produced purely by `make fmt` (ruff format + shfmt); skip for blame.
 dea9b2eee9ce45b275ec8375b2185345017d6a3a
+# Mechanical tools move; update to the landed hash after a squash merge.
+7638d430f7d26d9337fe01484926217086809259

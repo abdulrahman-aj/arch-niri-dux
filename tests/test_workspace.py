@@ -10,8 +10,8 @@ import tempfile
 import unittest
 from unittest.mock import patch
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'scripts'))
-import workspace
+from tools.workspace import state as workspace
+from tools.workspace import __main__, fixtures, gc, resources
 
 
 class WorkspaceTests(unittest.TestCase):
@@ -33,16 +33,16 @@ class WorkspaceTests(unittest.TestCase):
                     state.mkdir()
                     (state / 'payload').write_bytes(b'preserve')
                 with patch.dict(os.environ, {'XDG_CACHE_HOME': temp, 'BUILD_STATE': str(state)}):
-                    with patch.object(sys, 'argv', ['workspace.py', 'state']):
+                    with patch.object(sys, 'argv', ['tools.workspace.state.py', 'state']):
                         with contextlib.redirect_stdout(io.StringIO()):
-                            workspace.main()
+                            __main__.main()
                     self.assertTrue(state.is_dir())
                     self.assertFalse((state / workspace.MARKER).exists())
                     self.assertFalse((cache / 'arch-niri-dux-states').exists())
                     # GC must also keep it when BUILD_STATE is no longer set.
                     with patch.dict(os.environ, {'BUILD_STATE': ''}):
                         with contextlib.redirect_stdout(io.StringIO()):
-                            self.assertEqual(workspace.collect(cache, cache / 'gone'), [])
+                            self.assertEqual(gc.collect(cache, cache / 'gone'), [])
                     self.assertTrue(state.is_dir())
                     if populated:
                         self.assertEqual((state / 'payload').read_bytes(), b'preserve')
@@ -55,7 +55,7 @@ class WorkspaceTests(unittest.TestCase):
             workspace.own(state, cache / 'gone')
             with patch.dict(os.environ, {'BUILD_STATE': str(state)}):
                 with contextlib.redirect_stdout(io.StringIO()):
-                    self.assertEqual(workspace.collect(cache, cache / 'checkout'), [])
+                    self.assertEqual(gc.collect(cache, cache / 'checkout'), [])
             self.assertTrue(state.is_dir())
 
     def test_gc_only_deletes_owned_orphans_and_dry_run_preserves_them(self):
@@ -79,9 +79,9 @@ class WorkspaceTests(unittest.TestCase):
                 (path / 'payload').write_bytes(b'keep me')
             linked.symlink_to(orphan, target_is_directory=True)
             with contextlib.redirect_stdout(io.StringIO()):
-                self.assertEqual(workspace.collect(cache, checkout, True), [orphan])
+                self.assertEqual(gc.collect(cache, checkout, True), [orphan])
                 self.assertTrue(orphan.exists())
-                self.assertEqual(workspace.collect(cache, checkout), [orphan])
+                self.assertEqual(gc.collect(cache, checkout), [orphan])
             self.assertFalse(orphan.exists())
             for path in (live, unowned, fixture, downloads):
                 self.assertEqual((path / 'payload').read_bytes(), b'keep me')
@@ -113,7 +113,7 @@ class WorkspaceTests(unittest.TestCase):
         }
         for harness, env in harnesses.items():
             with self.subTest(harness=harness):
-                self.assertTrue(workspace.agent_markers(env))
+                self.assertTrue(resources.agent_markers(env))
         humans = {
             'plain shell': {'HOME': '/home/u', 'PATH': '/usr/bin'},
             # Regression: T3's integrated terminal is a human, not an agent.
@@ -123,21 +123,21 @@ class WorkspaceTests(unittest.TestCase):
         }
         for who, env in humans.items():
             with self.subTest(human=who):
-                self.assertEqual(workspace.agent_markers(env), [])
+                self.assertEqual(resources.agent_markers(env), [])
 
     def test_heavy_guard_denies_only_agents(self):
         with self.assertRaises(SystemExit):
-            workspace.heavy_guard({'AGENT_HEAVY_JOBS': 'deny', 'T3CODE_THREAD_ID': 'thread-1'})
-        workspace.heavy_guard({'AGENT_HEAVY_JOBS': 'deny', 'T3CODE_PROJECT_ROOT': '/w'})
-        workspace.heavy_guard({'T3CODE_THREAD_ID': 'thread-1'})
+            resources.heavy_guard({'AGENT_HEAVY_JOBS': 'deny', 'T3CODE_THREAD_ID': 'thread-1'})
+        resources.heavy_guard({'AGENT_HEAVY_JOBS': 'deny', 'T3CODE_PROJECT_ROOT': '/w'})
+        resources.heavy_guard({'T3CODE_THREAD_ID': 'thread-1'})
 
     def test_space_needs_add_up_per_filesystem(self):
         with tempfile.TemporaryDirectory() as temp:
-            free = workspace.shutil.disk_usage(temp).free
+            free = resources.shutil.disk_usage(temp).free
             # Each need fits alone; together on one filesystem they do not.
             share = int(free * 0.6)
-            self.assertEqual(workspace.space_shortfalls([(Path(temp) / 'a', share, 'a')]), [])
-            shortfalls = workspace.space_shortfalls(
+            self.assertEqual(resources.space_shortfalls([(Path(temp) / 'a', share, 'a')]), [])
+            shortfalls = resources.space_shortfalls(
                 [(Path(temp) / 'a', share, 'a'), (Path(temp) / 'b/not-created', share, 'b')]
             )
             self.assertEqual(len(shortfalls), 1)
@@ -148,53 +148,53 @@ class WorkspaceTests(unittest.TestCase):
     def test_earlier_builds_reduce_space_needed(self):
         with tempfile.TemporaryDirectory() as temp, patch.dict(os.environ, {'XDG_CACHE_HOME': temp}):
             state = Path(temp) / 'state'
-            fresh = workspace.build_space_needed(state)
+            fresh = resources.build_space_needed(state)
             state.mkdir()
             (state / 'builder.qcow2').write_bytes(os.urandom(4 * 1024**2))
             downloads = workspace.downloads_root()
             downloads.mkdir()
             (downloads / 'pkg.tar.zst').write_bytes(os.urandom(4 * 1024**2))
-            self.assertLessEqual(workspace.build_space_needed(state), fresh - 8 * 1024**2)
-            with patch.object(workspace, 'BUILD_SPACE', 1024), patch.object(workspace, 'DOWNLOADS_SPACE', 1024):
-                self.assertEqual(workspace.build_space_needed(state), 0)
+            self.assertLessEqual(resources.build_space_needed(state), fresh - 8 * 1024**2)
+            with patch.object(resources, 'BUILD_SPACE', 1024), patch.object(resources, 'DOWNLOADS_SPACE', 1024):
+                self.assertEqual(resources.build_space_needed(state), 0)
 
     def test_builder_memory_fits_humans_and_waits_for_agents(self):
         gib = 1024**3
-        with patch.object(workspace, 'available_memory', return_value=24 * gib):
-            self.assertEqual(workspace.builder_memory({}), (workspace.BUILDER_MIB, None))
-        with patch.object(workspace, 'available_memory', return_value=6 * gib):
-            mib, warning = workspace.builder_memory({})
-            self.assertLess(mib, workspace.BUILDER_MIB)
-            self.assertLessEqual(mib + workspace.MEMORY_HEADROOM_MIB, 6 * 1024)
+        with patch.object(resources, 'available_memory', return_value=24 * gib):
+            self.assertEqual(resources.builder_memory({}), (resources.BUILDER_MIB, None))
+        with patch.object(resources, 'available_memory', return_value=6 * gib):
+            mib, warning = resources.builder_memory({})
+            self.assertLess(mib, resources.BUILDER_MIB)
+            self.assertLessEqual(mib + resources.MEMORY_HEADROOM_MIB, 6 * 1024)
             self.assertTrue(warning)
-        with patch.object(workspace, 'available_memory', return_value=3 * gib):
-            mib, warning = workspace.builder_memory({})
-            self.assertEqual(mib, workspace.BUILDER_MIN_MIB)
+        with patch.object(resources, 'available_memory', return_value=3 * gib):
+            mib, warning = resources.builder_memory({})
+            self.assertEqual(mib, resources.BUILDER_MIN_MIB)
             self.assertTrue(warning)
         with (
-            patch.object(workspace, 'available_memory', return_value=3 * gib),
-            patch('verification.vm.wait_for_memory') as wait,
+            patch.object(resources, 'available_memory', return_value=3 * gib),
+            patch('tools.vm.control.wait_for_memory') as wait,
         ):
-            self.assertEqual(workspace.builder_memory({'CLAUDECODE': '1'}), (workspace.BUILDER_MIB, None))
+            self.assertEqual(resources.builder_memory({'CLAUDECODE': '1'}), (resources.BUILDER_MIB, None))
             wait.assert_called_once()
 
     def test_builder_memory_command_prints_only_the_size(self):
         # build-iso captures stdout as QEMU's -m value; warnings must go to stderr.
-        env = {key: value for key, value in os.environ.items() if key not in workspace.AGENT_MARKERS}
+        env = {key: value for key, value in os.environ.items() if key not in resources.AGENT_MARKERS}
         result = subprocess.run(
-            [sys.executable, str(Path(workspace.__file__)), 'builder-memory'],
+            [sys.executable, '-m', 'tools.workspace', 'builder-memory'],
             env=env,
             capture_output=True,
             text=True,
             check=True,
         )
-        self.assertGreaterEqual(int(result.stdout), workspace.BUILDER_MIN_MIB)
+        self.assertGreaterEqual(int(result.stdout), resources.BUILDER_MIN_MIB)
 
     def test_guards(self):
         # Exercise the real filesystem without filling it or mocking commands.
-        workspace.disk_guard(Path.cwd(), minimum=0)
+        resources.disk_guard(Path.cwd(), minimum=0)
         with self.assertRaises(SystemExit):
-            workspace.disk_guard(Path.cwd() / 'not-created', minimum=2**100)
+            resources.disk_guard(Path.cwd() / 'not-created', minimum=2**100)
 
 
 def git_run(*args, cwd, **kwargs):
@@ -214,13 +214,13 @@ def init_repo(root):
 
 class WorktreeGCTests(unittest.TestCase):
     def test_status_filter_ignores_out(self):
-        self.assertFalse(workspace._status_entry_outside_out(' M out/report.txt'))
-        self.assertFalse(workspace._status_entry_outside_out('?? out/new-dir/file'))
-        self.assertFalse(workspace._status_entry_outside_out('R  out/a -> out/b'))
-        self.assertTrue(workspace._status_entry_outside_out(' M src/foo.py'))
-        self.assertTrue(workspace._status_entry_outside_out('?? notes.txt'))
-        self.assertTrue(workspace._status_entry_outside_out('R  old.txt -> out/moved.txt'))
-        self.assertTrue(workspace._status_entry_outside_out('R  out/a -> src/b'))
+        self.assertFalse(gc._status_entry_outside_out(' M out/report.txt'))
+        self.assertFalse(gc._status_entry_outside_out('?? out/new-dir/file'))
+        self.assertFalse(gc._status_entry_outside_out('R  out/a -> out/b'))
+        self.assertTrue(gc._status_entry_outside_out(' M src/foo.py'))
+        self.assertTrue(gc._status_entry_outside_out('?? notes.txt'))
+        self.assertTrue(gc._status_entry_outside_out('R  old.txt -> out/moved.txt'))
+        self.assertTrue(gc._status_entry_outside_out('R  out/a -> src/b'))
 
     def test_status_outside_out_with_real_repo(self):
         with tempfile.TemporaryDirectory() as temp:
@@ -229,12 +229,12 @@ class WorktreeGCTests(unittest.TestCase):
             init_repo(root)
             (root / 'out').mkdir()
             (root / 'out' / 'ignored.txt').write_text('x')
-            self.assertEqual(workspace.worktree_status_outside_out(root), [])
+            self.assertEqual(gc.worktree_status_outside_out(root), [])
             (root / 'tracked.txt').write_text('dirty\n')
-            self.assertEqual(workspace.worktree_status_outside_out(root), [' M tracked.txt'])
+            self.assertEqual(gc.worktree_status_outside_out(root), [' M tracked.txt'])
             git_run('checkout', '--', 'tracked.txt', cwd=root)
             (root / 'new.txt').write_text('untracked\n')
-            self.assertEqual(workspace.worktree_status_outside_out(root), ['?? new.txt'])
+            self.assertEqual(gc.worktree_status_outside_out(root), ['?? new.txt'])
 
     def test_registered_custom_evidence_protects_busy_checkout_and_orphan(self):
         with tempfile.TemporaryDirectory() as temp, patch.dict(os.environ, {'XDG_CACHE_HOME': temp, 'BUILD_STATE': ''}):
@@ -250,12 +250,12 @@ class WorktreeGCTests(unittest.TestCase):
                 server.bind(str(sockets / 'qmp.sock'))
                 server.listen()
                 with self.subTest(check='busy checkout'):
-                    self.assertTrue(workspace.worktree_busy(owner)[0])
+                    self.assertTrue(resources.worktree_busy(owner)[0])
                 owner.rmdir()
                 with self.subTest(check='orphan evidence'):
-                    self.assertEqual(workspace.collect(cache, cache / 'runner'), [])
+                    self.assertEqual(gc.collect(cache, cache / 'runner'), [])
                     self.assertTrue(evidence.exists())
-            self.assertEqual(workspace.collect(cache, cache / 'runner'), [evidence])
+            self.assertEqual(gc.collect(cache, cache / 'runner'), [evidence])
 
     def test_merge_proof_must_cover_current_tip(self):
         with tempfile.TemporaryDirectory() as temp:
@@ -272,22 +272,22 @@ class WorktreeGCTests(unittest.TestCase):
                     )
                 return real_run(cmd, **kwargs)
 
-            with patch.object(workspace.subprocess, 'run', side_effect=run):
-                self.assertTrue(workspace.merge_info('topic', root)[0])
+            with patch.object(gc.subprocess, 'run', side_effect=run):
+                self.assertTrue(gc.merge_info('topic', root)[0])
                 git_run('checkout', 'topic', cwd=root)
                 (root / 'tracked.txt').write_text('new work')
                 git_run('commit', '-am', 'unmerged work', cwd=root)
-                self.assertFalse(workspace.merge_info('topic', root)[0])
+                self.assertFalse(gc.merge_info('topic', root)[0])
             with patch.object(
-                workspace.subprocess,
+                gc.subprocess,
                 'run',
                 side_effect=lambda cmd, **kw: (
                     subprocess.CompletedProcess(cmd, 1, '', '') if cmd[0] == 'gh' else real_run(cmd, **kw)
                 ),
             ):
-                self.assertFalse(workspace.merge_info('topic', root)[0])
+                self.assertFalse(gc.merge_info('topic', root)[0])
                 git_run('update-ref', 'refs/remotes/origin/main', 'HEAD', cwd=root)
-                self.assertTrue(workspace.merge_info('topic', root)[0])
+                self.assertTrue(gc.merge_info('topic', root)[0])
 
     def test_merge_unknowns_never_authorize_removal(self):
         cases = [
@@ -307,8 +307,8 @@ class WorktreeGCTests(unittest.TestCase):
                         '',
                     )
 
-                with patch.object(workspace.subprocess, 'run', side_effect=run):
-                    self.assertIs(workspace.merge_info('topic')[0], expected)
+                with patch.object(gc.subprocess, 'run', side_effect=run):
+                    self.assertIs(gc.merge_info('topic')[0], expected)
 
     def test_gc_keeps_parent_of_running_registered_evidence(self):
         with tempfile.TemporaryDirectory() as temp, patch.dict(os.environ, {'XDG_CACHE_HOME': temp}):
@@ -323,7 +323,7 @@ class WorktreeGCTests(unittest.TestCase):
             with socket.socket(socket.AF_UNIX) as server:
                 server.bind(str(evidence / '.sockets/qmp.sock'))
                 server.listen()
-                self.assertEqual(workspace.collect(cache, cache / 'runner'), [])
+                self.assertEqual(gc.collect(cache, cache / 'runner'), [])
                 self.assertTrue(evidence.exists())
 
     def test_plan_splits_removals_and_skips(self):
@@ -353,10 +353,10 @@ class WorktreeGCTests(unittest.TestCase):
                 return False, None, '', 'none'
 
             with (
-                patch.object(workspace, 'merge_info', side_effect=fake_merge),
-                patch.object(workspace, 'worktree_busy', return_value=(False, '')),
+                patch.object(gc, 'merge_info', side_effect=fake_merge),
+                patch.object(gc, 'worktree_busy', return_value=(False, '')),
             ):
-                removals, skipped, move = workspace.plan_worktree_gc(root)
+                removals, skipped, move = gc.plan_worktree_gc(root)
             self.assertEqual([item['branch'] for item in removals], ['merged-clean'])
             reasons = {item['branch'] or 'detached': item['reason'] for item in skipped}
             self.assertIn('current checkout', reasons['main'])
@@ -390,13 +390,13 @@ class WorktreeGCTests(unittest.TestCase):
             old = self.make_fixture(cache, 'old-fixture', b'old', 1000, kept_owner)
             new = self.make_fixture(doomed_home, 'dux-verify-new', b'new-bytes', 2000, doomed_home)
             self.assertTrue(old.exists())
-            self.assertEqual(workspace.newest_accepted_fixture(), new / 'disk.qcow2')
+            self.assertEqual(fixtures.newest_accepted_fixture(), new / 'disk.qcow2')
             target = kept_owner / 'out' / 'verify' / new.name
-            moved = workspace.move_fixture(new, target, kept_owner)
+            moved = fixtures.move_fixture(new, target, kept_owner)
             self.assertFalse(new.exists())
             self.assertEqual((moved / 'disk.qcow2').read_bytes(), b'new-bytes')
             self.assertTrue((moved / 'ACCEPTANCE-PASSED').is_file())
-            picked = workspace.newest_accepted_fixture()
+            picked = fixtures.newest_accepted_fixture()
             self.assertEqual(picked, moved / 'disk.qcow2')
             self.assertEqual(picked.read_bytes(), b'new-bytes')
 
@@ -417,30 +417,90 @@ class WorktreeGCTests(unittest.TestCase):
             (fixture / 'install.json').write_text('{}\n')
             (fixture / 'inputs.json').write_text('{}\n')
             (fixture / 'OVMF_VARS.fd').write_bytes(b'vars')
-            before = workspace.newest_accepted_fixture()
+            before = fixtures.newest_accepted_fixture()
             self.assertEqual(before, fixture / 'disk.qcow2')
 
             def fake_merge(branch, _checkout=workspace.ROOT):
                 return (True, 11, 'Merged work', 'gh') if branch == 'merged-clean' else (False, None, '', 'none')
 
             with (
-                patch.object(workspace, 'merge_info', side_effect=fake_merge),
-                patch.object(workspace, 'worktree_busy', return_value=(False, '')),
+                patch.object(gc, 'merge_info', side_effect=fake_merge),
+                patch.object(gc, 'worktree_busy', return_value=(False, '')),
             ):
                 with contextlib.redirect_stdout(io.StringIO()):
-                    _removals, _skipped, move = workspace.gc_worktrees(root, True)
+                    _removals, _skipped, move = gc.gc_worktrees(root, True)
                 self.assertTrue(doomed.exists())
                 self.assertTrue(fixture.exists())
-                self.assertEqual(workspace.newest_accepted_fixture(), before)
+                self.assertEqual(fixtures.newest_accepted_fixture(), before)
                 self.assertIsNotNone(move)
                 with contextlib.redirect_stdout(io.StringIO()):
-                    workspace.gc_worktrees(root, False)
+                    gc.gc_worktrees(root, False)
             self.assertFalse(doomed.exists())
-            picked = workspace.newest_accepted_fixture()
+            picked = fixtures.newest_accepted_fixture()
             self.assertIsNotNone(picked)
             self.assertTrue(picked.is_file())
             self.assertEqual(picked.read_bytes(), b'fixture-bytes')
             self.assertTrue((picked.parent / 'ACCEPTANCE-PASSED').is_file())
+
+    def test_shared_alongside_home_survives_merged_worktree_gc(self):
+        with tempfile.TemporaryDirectory() as temp, patch.dict(os.environ, {'XDG_CACHE_HOME': temp}):
+            cache = Path(temp)
+            root = cache / 'repo'
+            root.mkdir()
+            init_repo(root)
+            git_run('branch', 'merged-clean', cwd=root)
+            doomed = cache / 'wt-doomed'
+            git_run('worktree', 'add', str(doomed), 'merged-clean', cwd=root)
+            # Shared alongside home outside every worktree (the documented default).
+            shared = Path(temp) / 'shared' / 'alongside' / 'linux-fixture'
+            shared.mkdir(parents=True)
+            (shared / 'disk.qcow2').write_bytes(b'shared-fixture-bytes')
+            (shared / 'READY').write_text('Official Debian 13 GPT/UEFI fixture\n')
+            # The merged worktree references it by symlink and by path in evidence.
+            link_parent = doomed / 'out' / 'alongside'
+            link_parent.mkdir(parents=True)
+            (link_parent / 'linux-fixture').symlink_to(shared, target_is_directory=True)
+            evidence = link_parent / 'linux-test'
+            evidence.mkdir()
+            (evidence / 'inputs.json').write_text(json.dumps({'fixture': str(shared / 'disk.qcow2')}))
+            # A real alongside fixture dir inside the worktree has no verify-fixture protection.
+            inner = link_parent / 'windows'
+            inner.mkdir()
+            (inner / 'disk.qcow2').write_bytes(b'inner-fixture-bytes')
+            (inner / 'READY').write_text('Real Windows 11 Enterprise LTSC evaluation\n')
+
+            def fake_merge(branch, _checkout=workspace.ROOT):
+                return (True, 11, 'Merged work', 'gh') if branch == 'merged-clean' else (False, None, '', 'none')
+
+            with (
+                patch.object(gc, 'merge_info', side_effect=fake_merge),
+                patch.object(gc, 'worktree_busy', return_value=(False, '')),
+            ):
+                removals, _skipped, move = gc.plan_worktree_gc(root)
+                # The worktree holding a real alongside dir is reported as a removal ...
+                self.assertEqual([item['branch'] for item in removals], ['merged-clean'])
+                # ... and gc offers it no verify-fixture move (alongside uses READY).
+                self.assertIsNone(move)
+                # The shared home outside every worktree is never in the plan.
+                resolved_shared = shared.resolve()
+                for item in removals:
+                    self.assertNotEqual(item['resolved'], resolved_shared)
+                    self.assertNotIn(item['resolved'], resolved_shared.parents)
+                if move is not None:
+                    self.assertNotEqual(move['src'], resolved_shared)
+                    self.assertNotEqual(move['dst'], resolved_shared)
+                with contextlib.redirect_stdout(io.StringIO()) as stream:
+                    gc.gc_worktrees(root, True)
+                    output = stream.getvalue()
+                self.assertIn(str(doomed), output)
+                self.assertNotIn(str(resolved_shared), output)
+                self.assertTrue(doomed.exists())
+                self.assertTrue(shared.exists())
+                with contextlib.redirect_stdout(io.StringIO()):
+                    gc.gc_worktrees(root, False)
+            self.assertFalse(doomed.exists())
+            self.assertTrue((shared / 'disk.qcow2').is_file())
+            self.assertTrue((shared / 'READY').is_file())
 
 
 if __name__ == '__main__':

@@ -6,7 +6,22 @@
 discovers Python sources, shell files by extension or shebang, and our
 PKGBUILDs, including untracked scripts. Generated output and vendored Dux app
 recipes are excluded. `make test` adds source and build tests. CI runs these
-checks without graphical VM acceptance.
+checks without graphical VM acceptance. `make qualify` runs the tier matching
+the branch's changed files and writes `out/qualify/<head>/EVIDENCE.md`.
+
+Every scenario records a `checkout` object in `inputs.json` with the commit
+and dirty state. Dirty runs also record `diff_sha256`, the SHA-256 of
+`git diff HEAD --binary`, matching the ISO's `.iso.source` identity. Dirty
+state includes untracked files, but the diff hash covers tracked changes only.
+Ignored build output does not mark the checkout dirty. Existing script hashes
+are unchanged.
+
+Guest probes live under `tools/verification/probes/` and execute from the staged
+`/run/verify` tree. `tools/verification/payload.py` stages the complete probe
+package, shared constants/image helpers, and the package builder plus its inputs
+reader. The isolated staging test imports every guest module with the checkout
+removed from Python's path. Host drivers, login and VM transport stay on the host;
+import lint checks the boundary in both directions.
 
 `make iso-development` builds candidate integration packages and the ISO. Run
 VMs on your build machine. Builds and VM disk creation need the free space
@@ -61,7 +76,7 @@ button, its seeds, or Dux itself. Releases qualify delivery separately through
 serial/QMP sockets under `<evidence>/.sockets` and prints attach commands;
 the failed disk is still unlinked, so it can never become a fixture (QEMU
 holds the open file; the space frees at poweroff). Attach with
-`scripts/vm_console.py --directory <evidence> sh '<command>'`, rerun one
+`python3 -m tools.vm.console --directory <evidence> sh '<command>'`, rerun one
 reboot-free stage (`... stage <apps|browser|camera|desktop|dux_update|pdf>`),
 then `... poweroff`. Suspend and recovery reboot the guest, so they are
 rejected. On success `--keep` changes nothing.
@@ -91,7 +106,7 @@ hooks.
 `make verify` and `make verify-fast` end with an error gate: a final clean
 boot collects `journalctl -b -p warning` and `systemctl --failed` (system and
 the tester's user manager) into the evidence dir, and any line without a
-reviewed entry in `scripts/verification/gate-allowlist.txt` fails the run
+reviewed entry in `tools/verification/gate-allowlist.txt` fails the run
 before `ACCEPTANCE-PASSED` / `FAST-PASSED` is written. Each allowlist line is
 one regex on the normalized text with a `# <reason>` naming its judgement
 rows. Deliberate-failure probes (firewall containment, signature rejection)
@@ -108,15 +123,15 @@ sockets under `out/debug/.sockets` and prints paste-ready attach commands
 (the same block prints if the run fails, when the live guest is most useful).
 Without `--keep`, behavior is unchanged.
 
-Drive the kept VM with `scripts/vm_console.py` (one driver at a time):
+Drive the kept VM with `python3 -m tools.vm.console` (one driver at a time):
 
 ```
-./scripts/in-dev-shell python3 scripts/vm_console.py --directory out/debug sh '<command>'
-./scripts/in-dev-shell python3 scripts/vm_console.py --directory out/debug shot <name.png>
-./scripts/in-dev-shell python3 scripts/vm_console.py --directory out/debug click <x_frac> <y_frac>
-./scripts/in-dev-shell python3 scripts/vm_console.py --directory out/debug key <qcode>
-./scripts/in-dev-shell python3 scripts/vm_console.py --directory out/debug probe <module> <function>
-./scripts/in-dev-shell python3 scripts/vm_console.py --directory out/debug poweroff
+./scripts/in-dev-shell python3 -m tools.vm.console --directory out/debug sh '<command>'
+./scripts/in-dev-shell python3 -m tools.vm.console --directory out/debug shot <name.png>
+./scripts/in-dev-shell python3 -m tools.vm.console --directory out/debug click <x_frac> <y_frac>
+./scripts/in-dev-shell python3 -m tools.vm.console --directory out/debug key <qcode>
+./scripts/in-dev-shell python3 -m tools.vm.console --directory out/debug probe <module> <function>
+./scripts/in-dev-shell python3 -m tools.vm.console --directory out/debug poweroff
 ```
 
 Per iteration there is no ISO rebuild, reinstall or scheduler wait. The
@@ -124,7 +139,7 @@ evidence directory is mounted in the guest at `/run/verify`, so copy a changed
 file into `out/debug/` on the host, then e.g.
 `sh 'cp /run/verify/ReleaseWidget.qml /etc/xdg/quickshell/dms-plugins/archNiriDuxRelease/ReleaseWidget.qml'`.
 For multi-line guest work, pipe a script on stdin instead of nested quoting:
-`scripts/vm_console.py --directory out/debug sh < fix.sh`. Commands needing
+`python3 -m tools.vm.console --directory out/debug sh < fix.sh`. Commands needing
 the tester user's environment are best run as probes (`probe <module>
 <function>`), which get the full environment from `guest.user_command`.
 `shot <name.png>` takes a real desktop screenshot via the guest.
@@ -148,7 +163,10 @@ pass writes `HIBERNATE-RESUME-PASSED`.
 
 `make verify-alongside` qualifies installation into existing unallocated GPT
 space against real Debian 13 and Windows 11 LTSC fixtures provisioned per
-[ALONGSIDE.md](ALONGSIDE.md#automated-provisioning-and-acceptance). It boots
+[ALONGSIDE.md](ALONGSIDE.md#automated-provisioning-and-acceptance). Fixtures
+live in the shared home `~/.local/share/arch-niri-dux/alongside/` (outside every
+checkout, so `make gc` cannot remove them with a worktree); per-run evidence
+stays under `out/`. It boots
 the existing OS first and hashes every byte of every original partition while
 offline, installs into the selected region, then confirms the old hashes
 still verify, the new encrypted Arch installation boots by default, a pinned
@@ -173,3 +191,37 @@ full run writes `SUCCESS`. Run Debian first, then Windows, sequentially.
   does not qualify every device.
 - Synthetic audio, camera, network and printer checks qualify software paths.
   Package and ISO verification do not change physical machines.
+
+## Installer UI preview
+
+`make installer-preview ARGS='--disk-gib 32 --ram-gib 4'` boots the newest
+checkout development ISO in `out/` with a disposable disk, ISO-first boot
+order and a root serial console. Build it once with `make iso-development`.
+Use `--iso PATH` to select a development ISO from another checkout and
+`--directory out/preview-2` for a fresh preview workspace. It stages this
+checkout's `installer/` over the evidence share, copies it into the live
+system and restarts the tty1 installer. No network is enabled.
+
+After editing installer files, drive the running preview with:
+
+```
+./scripts/in-dev-shell python3 -m tools.vm.console --directory out/preview preview-sync
+./scripts/in-dev-shell python3 -m tools.vm.console --directory out/preview shot installer.png
+./scripts/in-dev-shell python3 -m tools.vm.console --directory out/preview key ret
+./scripts/in-dev-shell python3 -m tools.vm.console --directory out/preview poweroff
+```
+
+Screenshots use QMP's PNG screendump, including the live text console.
+`sh '<command>'` provides the same serial shell used by kept desktop VMs.
+Power off before removing the preview directory or starting another VM.
+`make try` remains human-only; this disposable preview uses the regular
+agent machine, memory and disk guards.
+
+Previews never qualify a change. Final installer work still requires an
+unmodified ISO built with `make iso-development` and full `make verify`.
+Runtime copies bypass packaging and payload verification.
+
+For desktop QML, use the [kept verify-fast loop](#debugging-loop-kept-verify-fast-vm).
+For example, copy a widget into `out/debug/`, use `vm_console sh` to copy
+`/run/verify/Widget.qml` to its installed path, then use `shot widget.png`.
+Run package qualification after the final edit and stop with `poweroff`.

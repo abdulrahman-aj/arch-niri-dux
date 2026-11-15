@@ -28,7 +28,7 @@ ignore = [
 
 [lint.per-file-ignores]
 # These callbacks run synchronously before the next iteration; no late binding escapes.
-"scripts/verification/desktop.py" = ["B023"]
+"tools/verification/probes/desktop.py" = ["B023"]
 "tests/test_installer.py" = ["B023"]
 
 [format]

@@ -1,12 +1,9 @@
 """Unit tests for verify.py continue-past-failures."""
 
-import sys
 import unittest
-from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'scripts'))
 
-from verify import run_stages
+from tools.verification.stages import run_stages
 
 
 class FakeProcess:

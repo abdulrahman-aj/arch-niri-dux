@@ -7,7 +7,7 @@ import unittest
 import zlib
 from pathlib import Path
 
-from scripts.verification import dux_update
+from tools.verification import dux_update
 
 
 BAR_BACKGROUND = (19, 17, 23)
