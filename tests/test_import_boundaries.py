@@ -14,6 +14,9 @@ class ImportBoundaryTests(unittest.TestCase):
             ('tools/packages/example.py', 'from ..build import payload'),
             ('tools/build/example.py', 'from tools.release import key'),
             ('installer/example.py', 'import tools.digest'),
+            ('tools/workspace/state.py', 'from . import gc'),
+            ('tools/workspace/fixtures.py', 'from tools.workspace.gc import collect'),
+            ('tools/workspace/resources.py', 'from . import __main__'),
             ('tools/packages/example.py', 'import tools'),
             ('tools/build/example.py', 'import tools'),
             ('tools/packages/example.py', 'from ..verification import guest'),
@@ -25,6 +28,8 @@ class ImportBoundaryTests(unittest.TestCase):
     def test_shared_digest_and_local_imports_are_allowed(self):
         source = 'from tools.digest import digest\nfrom . import inputs\nimport pathlib'
         self.assertEqual(list(violations(Path('tools/packages/example.py'), source)), [])
+        source = 'from .state import registered_paths\nfrom .fixtures import accepted_fixtures'
+        self.assertEqual(list(violations(Path('tools/workspace/gc.py'), source)), [])
 
 
 class ArtifactImportTests(unittest.TestCase):

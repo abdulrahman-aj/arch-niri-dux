@@ -8,7 +8,7 @@ from pathlib import Path
 import subprocess
 import secrets
 
-from tools.workspace.state import disk_guard
+from tools.workspace.resources import disk_guard
 
 from tools.fixtures.windows import (
     WindowsVM,

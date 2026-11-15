@@ -8,7 +8,8 @@ import shlex
 import shutil
 import subprocess
 
-from tools.workspace.state import disk_guard, own
+from tools.workspace.state import own
+from tools.workspace.resources import disk_guard
 
 from tools.digest import digest
 from tools.verification.evidence import Evidence
