@@ -155,7 +155,10 @@ pass writes `HIBERNATE-RESUME-PASSED`.
 
 `make verify-alongside` qualifies installation into existing unallocated GPT
 space against real Debian 13 and Windows 11 LTSC fixtures provisioned per
-[ALONGSIDE.md](ALONGSIDE.md#automated-provisioning-and-acceptance). It boots
+[ALONGSIDE.md](ALONGSIDE.md#automated-provisioning-and-acceptance). Fixtures
+live in the shared home `~/.local/share/arch-niri-dux/alongside/` (outside every
+checkout, so `make gc` cannot remove them with a worktree); per-run evidence
+stays under `out/`. It boots
 the existing OS first and hashes every byte of every original partition while
 offline, installs into the selected region, then confirms the old hashes
 still verify, the new encrypted Arch installation boots by default, a pinned

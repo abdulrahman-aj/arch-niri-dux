@@ -442,6 +442,66 @@ class WorktreeGCTests(unittest.TestCase):
             self.assertEqual(picked.read_bytes(), b'fixture-bytes')
             self.assertTrue((picked.parent / 'ACCEPTANCE-PASSED').is_file())
 
+    def test_shared_alongside_home_survives_merged_worktree_gc(self):
+        with tempfile.TemporaryDirectory() as temp, patch.dict(os.environ, {'XDG_CACHE_HOME': temp}):
+            cache = Path(temp)
+            root = cache / 'repo'
+            root.mkdir()
+            init_repo(root)
+            git_run('branch', 'merged-clean', cwd=root)
+            doomed = cache / 'wt-doomed'
+            git_run('worktree', 'add', str(doomed), 'merged-clean', cwd=root)
+            # Shared alongside home outside every worktree (the documented default).
+            shared = Path(temp) / 'shared' / 'alongside' / 'linux-fixture'
+            shared.mkdir(parents=True)
+            (shared / 'disk.qcow2').write_bytes(b'shared-fixture-bytes')
+            (shared / 'READY').write_text('Official Debian 13 GPT/UEFI fixture\n')
+            # The merged worktree references it by symlink and by path in evidence.
+            link_parent = doomed / 'out' / 'alongside'
+            link_parent.mkdir(parents=True)
+            (link_parent / 'linux-fixture').symlink_to(shared, target_is_directory=True)
+            evidence = link_parent / 'linux-test'
+            evidence.mkdir()
+            (evidence / 'inputs.json').write_text(json.dumps({'fixture': str(shared / 'disk.qcow2')}))
+            # A real alongside fixture dir inside the worktree has no verify-fixture protection.
+            inner = link_parent / 'windows'
+            inner.mkdir()
+            (inner / 'disk.qcow2').write_bytes(b'inner-fixture-bytes')
+            (inner / 'READY').write_text('Real Windows 11 Enterprise LTSC evaluation\n')
+
+            def fake_merge(branch, _checkout=workspace.ROOT):
+                return (True, 11, 'Merged work', 'gh') if branch == 'merged-clean' else (False, None, '', 'none')
+
+            with (
+                patch.object(gc, 'merge_info', side_effect=fake_merge),
+                patch.object(gc, 'worktree_busy', return_value=(False, '')),
+            ):
+                removals, _skipped, move = gc.plan_worktree_gc(root)
+                # The worktree holding a real alongside dir is reported as a removal ...
+                self.assertEqual([item['branch'] for item in removals], ['merged-clean'])
+                # ... and gc offers it no verify-fixture move (alongside uses READY).
+                self.assertIsNone(move)
+                # The shared home outside every worktree is never in the plan.
+                resolved_shared = shared.resolve()
+                for item in removals:
+                    self.assertNotEqual(item['resolved'], resolved_shared)
+                    self.assertNotIn(item['resolved'], resolved_shared.parents)
+                if move is not None:
+                    self.assertNotEqual(move['src'], resolved_shared)
+                    self.assertNotEqual(move['dst'], resolved_shared)
+                with contextlib.redirect_stdout(io.StringIO()) as stream:
+                    gc.gc_worktrees(root, True)
+                    output = stream.getvalue()
+                self.assertIn(str(doomed), output)
+                self.assertNotIn(str(resolved_shared), output)
+                self.assertTrue(doomed.exists())
+                self.assertTrue(shared.exists())
+                with contextlib.redirect_stdout(io.StringIO()):
+                    gc.gc_worktrees(root, False)
+            self.assertFalse(doomed.exists())
+            self.assertTrue((shared / 'disk.qcow2').is_file())
+            self.assertTrue((shared / 'READY').is_file())
+
 
 if __name__ == '__main__':
     unittest.main()
