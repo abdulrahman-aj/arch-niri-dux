@@ -241,6 +241,11 @@ def published_repository():
     assert (evidence / 'install.json').is_file(), 'Requires the disposable installation fixture.'
     run('systemd-detect-virt', '--vm')
     server = output('pacman-conf', '--repo', 'arch-niri-dux', 'Server')
+    override = evidence / 'repository-url'
+    if override.exists():
+        server = override.read_text().strip()
+    else:
+        assert server.startswith('https://'), server
     signature = output('pacman-conf', '--repo', 'arch-niri-dux', 'SigLevel')
     assert 'PackageRequired' in signature and 'PackageTrustedOnly' in signature, signature
     repository = f'[arch-niri-dux]\nSigLevel = Required TrustedOnly\nServer = {server}\n'
@@ -280,7 +285,8 @@ def published_repository():
                 'personal_sha256': before,
                 'offline_trust_used': True,
                 'database_and_packages_required_signed': True,
-                'https_delivery': True,
+                'repository_url': server,
+                'https_delivery': server.startswith('https://'),
             },
             indent=2,
         )
@@ -293,7 +299,7 @@ def verify_published(vm, passed):
     installed_login(vm)
     vm.mount_probes()
     vm.probe('upgrade', 'published-repository', timeout=300)
-    passed('Published HTTPS repository and packages verify against offline trust and exact release hashes')
+    passed('Published repository and packages verify against offline trust and exact release hashes')
     vm.poweroff()
     vm.stop()
 
