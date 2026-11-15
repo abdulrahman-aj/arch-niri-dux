@@ -131,3 +131,26 @@ class VMDiskBudgetTests(unittest.TestCase):
                         vm.expect('never', timeout=1)
             finally:
                 vm.log.close()
+
+
+class ProbeStagingTests(unittest.TestCase):
+    def test_staged_guest_package_imports_without_the_checkout(self):
+        import subprocess
+        import sys
+        import tempfile
+
+        with tempfile.TemporaryDirectory() as directory:
+            verify.stage_probes(Path(directory))
+            subprocess.run(
+                [
+                    sys.executable,
+                    '-I',
+                    '-c',
+                    'import sys; sys.path.insert(0, sys.argv[1]); '
+                    'import tools.verification.suspend; import tools.verification.upgrade; '
+                    'import tools.packages.integration',
+                    directory,
+                ],
+                cwd=directory,
+                check=True,
+            )

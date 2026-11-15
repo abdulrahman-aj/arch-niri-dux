@@ -69,7 +69,7 @@ def prepare():
     # on the guest disk until a reboot restores the host share.
     LOCAL_PROBES.mkdir(parents=True, exist_ok=True)
     shutil.chown(LOCAL_PROBES, user='tester', group='tester')
-    shutil.copytree('/run/verify/verification', LOCAL_PROBES / 'verification', dirs_exist_ok=True)
+    shutil.copytree('/run/verify/tools', LOCAL_PROBES / 'tools', dirs_exist_ok=True)
     (LOCAL_PROBES / 'initial.json').write_text(
         json.dumps(
             {
