@@ -65,7 +65,7 @@ class AllowlistTests(unittest.TestCase):
         for raw in samples:
             normalized = gate.normalize(raw)
             self.assertTrue(
-                any(pattern.search(normalized) for pattern, _ in entries), f'no allowlist entry for {normalized!r}'
+                any(entry.pattern.search(normalized) for entry in entries), f'no allowlist entry for {normalized!r}'
             )
 
     def test_retired_probe_lines_are_not_allowlisted(self):
@@ -76,7 +76,7 @@ class AllowlistTests(unittest.TestCase):
             'Nov 10 21:10:40 dux-verify arch-niri-dux-migrate[1513]:'
             ' 99999999_03_verification.sh failed (exit 1); retry with arch-niri-dux-migrate run'
         )
-        self.assertFalse(any(pattern.search(normalized) for pattern, _ in entries))
+        self.assertFalse(any(entry.pattern.search(normalized) for entry in entries))
 
     def test_malformed_line_fails_closed(self):
         with tempfile.TemporaryDirectory() as root:
@@ -90,6 +90,7 @@ class CheckTests(unittest.TestCase):
     def write_evidence(self, root, journal=(), failed=(), failed_user=()):
         directory = Path(root) / 'evidence'
         directory.mkdir()
+        (directory / gate.PACKAGES_FILE).write_text('xdg-desktop-portal 1.22.1-2\n')
         (directory / gate.JOURNAL_FILE).write_text('\n'.join(journal) + '\n')
         (directory / gate.FAILED_FILES[0]).write_text('\n'.join(failed) + '\n')
         (directory / gate.FAILED_FILES[1]).write_text('\n'.join(failed_user) + '\n')
@@ -107,7 +108,7 @@ class CheckTests(unittest.TestCase):
             self.assertEqual(gate.check(directory), [])
 
     def test_missing_evidence_fails(self):
-        for source in (gate.JOURNAL_FILE, *gate.FAILED_FILES):
+        for source in (gate.PACKAGES_FILE, gate.JOURNAL_FILE, *gate.FAILED_FILES):
             with self.subTest(source=source), tempfile.TemporaryDirectory() as root:
                 directory = self.write_evidence(root)
                 (directory / source).unlink()
@@ -147,3 +148,37 @@ class CheckTests(unittest.TestCase):
             self.assertIn('guest-journal-warning.log', message)
             report = (directory / gate.UNMATCHED_FILE).read_text()
             self.assertIn('planted[1234]: planted gate test', report)
+
+
+class VersionExpiryTests(unittest.TestCase):
+    write_evidence = CheckTests.write_evidence
+    warning = (
+        '/usr/lib/xdg-desktop-portal[1118]: Realtime error: Could not get pidns for pid 1234: '
+        'PIDFD_GET_PID_NAMESPACE ioctl failed: Inappropriate ioctl for device'
+    )
+
+    def test_known_broken_version_allows_only_exact_warning(self):
+        for suffix in ('', ' extra error'):
+            with self.subTest(suffix=suffix), tempfile.TemporaryDirectory() as root:
+                directory = self.write_evidence(root, journal=[self.warning + suffix])
+                if suffix:
+                    with self.assertRaises(gate.GateFailure):
+                        gate.check(directory)
+                else:
+                    self.assertEqual(gate.check(directory), [])
+
+    def test_version_change_expires_even_without_warning(self):
+        for version in ('1.22.1-3', '1.23.0-1', '1.22.0-1', None):
+            for journal in ([self.warning], []):
+                with self.subTest(version=version, journal=journal), tempfile.TemporaryDirectory() as root:
+                    directory = self.write_evidence(root, journal=journal)
+                    packages = f'xdg-desktop-portal {version}\n' if version else ''
+                    (directory / gate.PACKAGES_FILE).write_text(packages)
+                    with self.assertRaises(gate.GateFailure) as failure:
+                        gate.check(directory)
+                    message = str(failure.exception)
+                    self.assertIn('xdg-desktop-portal', message)
+                    self.assertIn(str(gate.ALLOWLIST), message)
+                    self.assertIn('#2074', message)
+                    if version:
+                        self.assertIn(version, message)

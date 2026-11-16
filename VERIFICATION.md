@@ -138,7 +138,11 @@ the tester's user manager) into the evidence dir, and any line without a
 reviewed entry in `tools/verification/gate-allowlist.txt` fails the run
 before `ACCEPTANCE-PASSED` / `FAST-PASSED` is written. Each allowlist line is
 one regex on the normalized text with a `# <reason>` naming its judgement
-rows. Deliberate-failure probes (firewall containment, signature rejection)
+rows. An optional trailing `[until PACKAGE VERSION]` in the reason permits an
+entry only for that exact installed version. The gate saves guest `pacman -Q`
+output as `guest-packages.txt` and fails on any version mismatch or missing
+package, even when the warning is absent. Remove the expired entry and verify
+that the upstream fix has shipped. Deliberate-failure probes (firewall containment, signature rejection)
 run in earlier boots only, so the final-boot scan never sees them.
 
 ## Debugging loop (kept verify-fast VM)

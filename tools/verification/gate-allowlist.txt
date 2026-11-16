@@ -29,3 +29,6 @@ systemd-sysusers\[<PID>\]: /usr/lib/sysusers\.d/greetd\.conf:1: Conflict with ea
 # Source: https://github.com/systemd/systemd/tree/v262.2/src/login
 \(sd-pam\)\[[0-9]+\]: pam_systemd\(systemd-user:session\): Varlink call io\.systemd\.Login\.ReleaseSession failed: io\.systemd\.Login\.NoSuchSession$ # systemd 262.2 manager-session GC can precede PAM close; confirmed UID 1001 user@1001.service teardown
 kernel: BTRFS warning \(device dm-[0-9]+\): block groups with swapfile extents will not be scrubbed or balanced$ # Linux 0d99b3b1cfa8 (btrfs, 2026-08) warns on every swapfile activation; the installer makes /swap/swapfile with mkswapfile on a fresh filesystem, so pinned block groups hold the swapfile itself
+# Borrowed XdpAppInfo freed during concurrent registry replacement; fixed upstream:
+# https://github.com/flatpak/xdg-desktop-portal/pull/2074
+/usr/lib/xdg-desktop-portal\[<PID>\]: Realtime error: Could not get pidns for pid <PID>: PIDFD_GET_PID_NAMESPACE ioctl failed: Inappropriate ioctl for device$ # xdg-desktop-portal XdpAppInfo lifetime bug, upstream #2074 [until xdg-desktop-portal 1.22.1-2]
