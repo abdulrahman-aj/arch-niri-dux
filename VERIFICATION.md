@@ -76,9 +76,10 @@ required for installer changes and releases.
 
 The runner continues past stage failures while the guest still answers:
 apps, PDF, camera and browser depend only on the desktop session, not on each
-other, so one of them failing still runs the rest. If boot or desktop fails,
-the run stops there, since later stages cannot mean anything without them. Any
-other failure still runs the rest, and the run exits non-zero listing every
+other, so one of them failing still runs the rest. If boot, desktop or suspend fails,
+the run stops there. Later stages require the desktop and host evidence share;
+suspend always attempts to reboot, remount the share and copy guest-local evidence
+before returning its failure. Any other failure still runs the rest, and the run exits non-zero listing every
 failure and skip in `FAILURE.txt`. Only a passing full run writes
 `ACCEPTANCE-PASSED` and can become a fixture, so a partial disk never feeds
 fixture auto-discovery.
