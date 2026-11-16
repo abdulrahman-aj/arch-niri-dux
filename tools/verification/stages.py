@@ -29,8 +29,8 @@ def guest_alive(vm, timeout=30):
 def run_stages(vm, passed, stages):
     """Run (name, func) stages in order, continuing past failures.
 
-    Continues while the guest answers. Boot or desktop failing stops the run,
-    since later stages cannot mean anything without them.
+    Continues while the guest answers. Boot, desktop or suspend failing stops
+    the run: later stages need a desktop and a working host evidence share.
     Returns (failures, skipped).
     """
     failures = {}
@@ -42,7 +42,7 @@ def run_stages(vm, passed, stages):
         except Exception as error:
             failures[name] = error
             print(f'FAIL: {name} after {time.monotonic() - start:.0f}s: {error}', flush=True)
-            if name in ('boot', 'desktop') or not guest_alive(vm):
+            if name in ('boot', 'desktop', 'suspend') or not guest_alive(vm):
                 skipped.extend(n for n, _ in stages[index + 1 :])
                 break
             continue

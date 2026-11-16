@@ -62,6 +62,17 @@ class RunStagesTests(unittest.TestCase):
         self.assertEqual(skipped, ['apps'])
         self.assertEqual(ran, ['boot'])
 
+    def test_suspend_failure_skips_recovery_even_when_serial_answers(self):
+        def fail(_vm, _passed):
+            raise TimeoutError('monitor wake timed out')
+
+        ran = []
+        stages = [('suspend', fail), ('recovery', lambda _vm, _p: ran.append('recovery'))]
+        failures, skipped = run_stages(StubVM(), lambda m: None, stages)
+        self.assertIsInstance(failures['suspend'], TimeoutError)
+        self.assertEqual(skipped, ['recovery'])
+        self.assertEqual(ran, [])
+
 
 if __name__ == '__main__':
     unittest.main()
