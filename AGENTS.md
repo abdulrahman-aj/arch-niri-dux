@@ -42,7 +42,9 @@ Keep job logs and scratch evidence under `out/` in your worktree.
 
 Run `make gc ARGS=--dry-run` before `make gc`. GC uses ownership markers
 and a cache registry, including custom verification paths. It keeps storage owned by live
-checkouts, unmarked fixtures and shared downloads. Alongside provisioning
+checkouts, unmarked fixtures and shared downloads. Superseded clean-main accepted
+fixture disks are collected even in live checkouts; GC keeps the fixture discovery
+selects and backing disks referenced by registered overlays, plus text evidence. Alongside provisioning
 creates reusable fixtures, not checkout-owned states; remove those explicitly.
 
 Open PRs for changes. Never push to main, tag or publish. Never touch physical

@@ -118,11 +118,16 @@ class FixtureGcTests(FixtureSelectionTests):
         referenced = self.fixture('referenced', self.ancestor, 100)
         running = self.fixture('running', self.ancestor, 200)
         selected = self.fixture('selected', self.ancestor, 300)
+        alongside = self.fixture('alongside-backing', self.ancestor, 150)
         overlay = self.root / 'overlay'
         overlay.mkdir()
         state.own(overlay, self.repo)
         (overlay / 'disk.qcow2').touch()
         (overlay / 'inputs.json').write_text(json.dumps({'fixture': str(referenced)}))
+        preparing = self.root / 'preparing-alongside'
+        preparing.mkdir()
+        state.own(preparing, self.repo)
+        (preparing / 'inputs.json').write_text(json.dumps({'fixture': {'path': str(alongside)}}))
         (running.parent / '.sockets').mkdir()
         os.utime(running.parent, (200, 200))
         with socket.socket(socket.AF_UNIX) as server:
@@ -130,7 +135,7 @@ class FixtureGcTests(FixtureSelectionTests):
             server.listen()
             with contextlib.redirect_stdout(io.StringIO()):
                 self.assertEqual(gc.collect(self.root, self.repo), [])
-        for disk in (referenced, running, selected):
+        for disk in (referenced, alongside, running, selected):
             self.assertTrue(disk.exists())
 
     def test_orphaned_build_state_freed_live_owner_stays(self):

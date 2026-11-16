@@ -6,9 +6,9 @@ from pathlib import Path
 import shutil
 import subprocess
 
-from tools.workspace.state import ROOT, MARKER, build_state, registered_paths
+from tools.workspace.state import ROOT, MARKER, build_state, cache_root, registered_paths
 from tools.workspace.resources import kept_running, tree_size, worktree_busy
-from tools.workspace.fixtures import accepted_fixtures, main_fixtures, move_fixture
+from tools.workspace.fixtures import accepted_fixtures, main_fixtures, move_fixture, newest_accepted_fixture
 
 PROTECTED_BRANCHES = ('main', 'master')
 
@@ -119,6 +119,22 @@ def merge_info(branch, checkout=ROOT):
     return None, None, '', 'none'
 
 
+def referenced_fixtures(registry):
+    """Backing disks recorded by registered overlays, including stopped VMs."""
+    referenced = set()
+    for directory in registered_paths(registry):
+        try:
+            inputs = json.loads((directory / 'inputs.json').read_text())
+        except (OSError, ValueError):
+            continue
+        fixture = inputs.get('fixture') if isinstance(inputs, dict) else None
+        if isinstance(fixture, dict):
+            fixture = fixture.get('path')
+        if isinstance(fixture, str) and Path(fixture).is_absolute():
+            referenced.add(Path(fixture).resolve())
+    return referenced
+
+
 def plan_worktree_gc(checkout=ROOT):
     """Removals, skips, and a fixture move for linked worktrees.
 
@@ -129,6 +145,7 @@ def plan_worktree_gc(checkout=ROOT):
     runner = Path(checkout).resolve()
     removals = []
     skipped = []
+    references = referenced_fixtures(cache_root() / 'arch-niri-dux-states')
     for entry in linked_worktrees(checkout):
         path = entry['path']
         try:
@@ -139,6 +156,8 @@ def plan_worktree_gc(checkout=ROOT):
         branch = entry['branch']
         if resolved == runner:
             reason = 'current checkout (running gc)'
+        elif any(resolved == disk.parent or resolved in disk.parents for disk in references):
+            reason = 'contains a referenced fixture backing disk'
         elif entry['is_main']:
             reason = 'main worktree'
         elif branch is None:
@@ -186,7 +205,8 @@ def plan_worktree_gc(checkout=ROOT):
     fixture_move = None
     fixtures = accepted_fixtures()
     if fixtures:
-        newest = fixtures[0].resolve()
+        selected = newest_accepted_fixture(checkout=checkout)
+        newest = selected.parent.resolve() if selected is not None else fixtures[0].resolve()
         if any(newest == item['resolved'] or item['resolved'] in newest.parents for item in removals):
             target_dir = runner / 'out' / 'verify'
             target = target_dir / newest.name
@@ -277,18 +297,7 @@ def collect(cache, checkout, dry_run=False):
     registered = registered_paths(cache / 'arch-niri-dux-states')
     running = [path.resolve() for path in registered if kept_running(path)]
     fixtures = list(main_fixtures(cache / 'arch-niri-dux-states', checkout))
-    # Kept overlays need their backing disk even when their VM is stopped.
-    referenced = set()
-    for directory in registered:
-        if not (directory / 'disk.qcow2').exists():
-            continue
-        try:
-            inputs = json.loads((directory / 'inputs.json').read_text())
-        except (OSError, ValueError):
-            continue
-        fixture = inputs.get('fixture') if isinstance(inputs, dict) else None
-        if isinstance(fixture, str) and Path(fixture).is_absolute():
-            referenced.add(Path(fixture).resolve())
+    referenced = referenced_fixtures(cache / 'arch-niri-dux-states')
     if fixtures:
         protected.append(fixtures[0].parent)
     protected.extend(disk.parent for disk in referenced)
