@@ -87,16 +87,15 @@ def unmatched(directory, entries=None):
     directory = Path(directory)
     entries = entries if entries is not None else load_allowlist()
     # Check every tagged entry before scanning: a quiet boot must still expire it.
-    if any(entry.package for entry in entries):
-        versions = dict(line.split() for line in (directory / PACKAGES_FILE).read_text().splitlines() if line.strip())
-        for entry in entries:
-            if entry.package and versions.get(entry.package) != entry.version:
-                installed = versions.get(entry.package, 'not installed')
-                raise GateFailure(
-                    f'Error gate: expired allowlist entry {entry.location}: {entry.reason}; '
-                    f'{entry.package} installed: {installed}, allowed: {entry.version}. '
-                    'Remove this entry and verify the upstream fix has shipped.'
-                )
+    versions = dict(line.split() for line in (directory / PACKAGES_FILE).read_text().splitlines() if line.strip())
+    for entry in entries:
+        if entry.package and versions.get(entry.package) != entry.version:
+            installed = versions.get(entry.package, 'not installed')
+            raise GateFailure(
+                f'Error gate: expired allowlist entry {entry.location}: {entry.reason}; '
+                f'{entry.package} installed: {installed}, allowed: {entry.version}. '
+                'Remove this entry and verify the upstream fix has shipped.'
+            )
     found = []
     sources = [JOURNAL_FILE, *FAILED_FILES]
     for source in sources:

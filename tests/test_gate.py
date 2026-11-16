@@ -90,7 +90,9 @@ class CheckTests(unittest.TestCase):
     def write_evidence(self, root, journal=(), failed=(), failed_user=()):
         directory = Path(root) / 'evidence'
         directory.mkdir()
-        (directory / gate.PACKAGES_FILE).write_text('xdg-desktop-portal 1.22.1-2\n')
+        # Satisfy the real allowlist's version tags, whatever they currently are.
+        pinned = [f'{e.package} {e.version}' for e in gate.load_allowlist() if e.package]
+        (directory / gate.PACKAGES_FILE).write_text('\n'.join(['demo-tool 1.0-1', *pinned]) + '\n')
         (directory / gate.JOURNAL_FILE).write_text('\n'.join(journal) + '\n')
         (directory / gate.FAILED_FILES[0]).write_text('\n'.join(failed) + '\n')
         (directory / gate.FAILED_FILES[1]).write_text('\n'.join(failed_user) + '\n')
@@ -151,34 +153,27 @@ class CheckTests(unittest.TestCase):
 
 
 class VersionExpiryTests(unittest.TestCase):
+    # A synthetic tagged entry, so removing a real one never breaks these tests.
     write_evidence = CheckTests.write_evidence
-    warning = (
-        '/usr/lib/xdg-desktop-portal[1118]: Realtime error: Could not get pidns for pid 1234: '
-        'PIDFD_GET_PID_NAMESPACE ioctl failed: Inappropriate ioctl for device'
-    )
+    warning = 'Nov 12 20:43:17 dux-verify demo-tool[1118]: known upstream race'
 
-    def test_known_broken_version_allows_only_exact_warning(self):
-        for suffix in ('', ' extra error'):
-            with self.subTest(suffix=suffix), tempfile.TemporaryDirectory() as root:
-                directory = self.write_evidence(root, journal=[self.warning + suffix])
-                if suffix:
-                    with self.assertRaises(gate.GateFailure):
-                        gate.check(directory)
-                else:
-                    self.assertEqual(gate.check(directory), [])
+    def entries(self, root):
+        allowlist = Path(root) / 'allowlist.txt'
+        allowlist.write_text('demo-tool\\[<PID>\\]: known upstream race$ # upstream bug [until demo-tool 1.0-1]\n')
+        return gate.load_allowlist(allowlist)
 
-    def test_version_change_expires_even_without_warning(self):
-        for version in ('1.22.1-3', '1.23.0-1', '1.22.0-1', None):
+    def test_pinned_version_allows_only_the_exact_warning(self):
+        with tempfile.TemporaryDirectory() as root:
+            directory = self.write_evidence(root, journal=[self.warning, self.warning + ' and more'])
+            found = gate.unmatched(directory, self.entries(root))
+        self.assertEqual([raw for _, raw, _ in found], [self.warning + ' and more'])
+
+    def test_version_change_expires_even_without_the_warning(self):
+        for version in ('1.0-2', '1.1-1', '0.9-1', None):
             for journal in ([self.warning], []):
                 with self.subTest(version=version, journal=journal), tempfile.TemporaryDirectory() as root:
                     directory = self.write_evidence(root, journal=journal)
-                    packages = f'xdg-desktop-portal {version}\n' if version else ''
+                    packages = f'demo-tool {version}\n' if version else 'other 1-1\n'
                     (directory / gate.PACKAGES_FILE).write_text(packages)
-                    with self.assertRaises(gate.GateFailure) as failure:
-                        gate.check(directory)
-                    message = str(failure.exception)
-                    self.assertIn('xdg-desktop-portal', message)
-                    self.assertIn(str(gate.ALLOWLIST), message)
-                    self.assertIn('#2074', message)
-                    if version:
-                        self.assertIn(version, message)
+                    with self.assertRaises(gate.GateFailure):
+                        gate.unmatched(directory, self.entries(root))
