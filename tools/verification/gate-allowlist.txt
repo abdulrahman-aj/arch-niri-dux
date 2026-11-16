@@ -20,3 +20,11 @@ mod\.rt: RTKit does not give us (MaxRealtimePriority|MinNiceLevel|RTTimeUSecMax)
 spa\.bluez5: BlueZ system service is not available # G-063, G-065: no bluetooth adapter in the VM; services report and continue
 greetd\[<PID>\]: gkr-pam: (couldn't unlock the login keyring|unable to locate daemon control file)\.? # G-216: the greeter account has no keyring password to unlock; harmless on fresh installs after #125
 systemd-sysusers\[<PID>\]: /usr/lib/sysusers\.d/greetd\.conf:1: Conflict with earlier configuration for user 'greeter' in /usr/lib/sysusers\.d/dms-greeter\.conf:3, ignoring line\. # by design (#125): dux-greeter's fragment sorts first and gives the greeter its home; logged when sysusers reruns after a package update
+# systemd 262.2: manager sessions have no scope (src/login/logind-session.h,
+# SESSION_CLASS_WANTS_SCOPE). session_may_gc() in logind-session.c permits GC
+# after the manager leader exits, before sd-pam's pam_sm_close_session() calls
+# ReleaseSession (src/login/pam_systemd.c). Reproduced for preset-check: session
+# 530 removed at 214.763358s, then sd-pam NoSuchSession at 214.763694s. The
+# already-removed session needs no release; other PAM services/errors still fail.
+# Source: https://github.com/systemd/systemd/tree/v262.2/src/login
+\(sd-pam\)\[[0-9]+\]: pam_systemd\(systemd-user:session\): Varlink call io\.systemd\.Login\.ReleaseSession failed: io\.systemd\.Login\.NoSuchSession$ # systemd 262.2 manager-session GC can precede PAM close; confirmed UID 1001 user@1001.service teardown

@@ -84,10 +84,8 @@ def check():
             ), unit
     finally:
         run('loginctl', 'disable-linger', 'preset-check')
-        # Let sd-pam release the manager session before logind removes it.
-        # terminate-user first races that ReleaseSession call with session GC.
-        run('systemctl', 'stop', f'user@{uid}.service')
         run('loginctl', 'terminate-user', 'preset-check')
+        run('systemctl', 'stop', f'user@{uid}.service')
         wait_until(
             'Temporary user processes stopped',
             lambda: subprocess.run(['pgrep', '-u', str(uid)], stdout=subprocess.DEVNULL, check=False).returncode == 1,
