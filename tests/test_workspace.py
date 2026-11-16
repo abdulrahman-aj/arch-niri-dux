@@ -383,6 +383,7 @@ class WorktreeGCTests(unittest.TestCase):
             root = Path(temp) / 'repo'
             root.mkdir()
             init_repo(root)
+            git_run('update-ref', 'refs/remotes/origin/main', 'HEAD', cwd=root)
             topic = Path(temp) / 'topic'
             git_run('worktree', 'add', '-b', 'topic', str(topic), cwd=root)
             fixture = topic / 'out/fixture'
