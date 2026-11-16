@@ -6,9 +6,9 @@ from pathlib import Path
 import shutil
 import subprocess
 
-from tools.workspace.state import ROOT, MARKER, build_state, registered_paths
+from tools.workspace.state import ROOT, MARKER, build_state, cache_root, registered_paths
 from tools.workspace.resources import kept_running, tree_size, worktree_busy
-from tools.workspace.fixtures import accepted_fixtures, move_fixture
+from tools.workspace.fixtures import accepted_fixtures, main_fixtures, move_fixture, newest_accepted_fixture
 
 PROTECTED_BRANCHES = ('main', 'master')
 
@@ -119,6 +119,22 @@ def merge_info(branch, checkout=ROOT):
     return None, None, '', 'none'
 
 
+def referenced_fixtures(registry):
+    """Backing disks recorded by registered overlays, including stopped VMs."""
+    referenced = set()
+    for directory in registered_paths(registry):
+        try:
+            inputs = json.loads((directory / 'inputs.json').read_text())
+        except (OSError, ValueError):
+            continue
+        fixture = inputs.get('fixture') if isinstance(inputs, dict) else None
+        if isinstance(fixture, dict):
+            fixture = fixture.get('path')
+        if isinstance(fixture, str) and Path(fixture).is_absolute():
+            referenced.add(Path(fixture).resolve())
+    return referenced
+
+
 def plan_worktree_gc(checkout=ROOT):
     """Removals, skips, and a fixture move for linked worktrees.
 
@@ -129,6 +145,7 @@ def plan_worktree_gc(checkout=ROOT):
     runner = Path(checkout).resolve()
     removals = []
     skipped = []
+    references = referenced_fixtures(cache_root() / 'arch-niri-dux-states')
     for entry in linked_worktrees(checkout):
         path = entry['path']
         try:
@@ -139,6 +156,8 @@ def plan_worktree_gc(checkout=ROOT):
         branch = entry['branch']
         if resolved == runner:
             reason = 'current checkout (running gc)'
+        elif any(resolved == disk.parent or resolved in disk.parents for disk in references):
+            reason = 'contains a referenced fixture backing disk'
         elif entry['is_main']:
             reason = 'main worktree'
         elif branch is None:
@@ -186,7 +205,8 @@ def plan_worktree_gc(checkout=ROOT):
     fixture_move = None
     fixtures = accepted_fixtures()
     if fixtures:
-        newest = fixtures[0].resolve()
+        selected = newest_accepted_fixture(checkout=checkout)
+        newest = selected.parent.resolve() if selected is not None else fixtures[0].resolve()
         if any(newest == item['resolved'] or item['resolved'] in newest.parents for item in removals):
             target_dir = runner / 'out' / 'verify'
             target = target_dir / newest.name
@@ -274,7 +294,14 @@ def collect(cache, checkout, dry_run=False):
     protected = [cache / 'arch-niri-dux-downloads', cache / 'arch-niri-dux-states']
     if os.environ.get('BUILD_STATE'):
         protected.append(build_state())
-    running = [path.resolve() for path in registered_paths(cache / 'arch-niri-dux-states') if kept_running(path)]
+    registered = registered_paths(cache / 'arch-niri-dux-states')
+    running = [path.resolve() for path in registered if kept_running(path)]
+    fixtures = list(main_fixtures(cache / 'arch-niri-dux-states', checkout))
+    referenced = referenced_fixtures(cache / 'arch-niri-dux-states')
+    if fixtures:
+        protected.append(fixtures[0].parent)
+    protected.extend(disk.parent for disk in referenced)
+    superseded = {disk.parent.resolve() for disk in fixtures[1:]}
     for path in candidates(cache, checkout):
         if not path.exists():
             continue
@@ -283,6 +310,28 @@ def collect(cache, checkout, dry_run=False):
             print(f'Unowned, left alone: {path}')
             continue
         resolved = path.resolve()
+        marker = path / MARKER
+        disk = path / 'disk.qcow2'
+        if (
+            resolved in superseded
+            and disk.resolve() not in referenced
+            and not disk.is_symlink()
+            and marker.is_file()
+            and not marker.is_symlink()
+            and Path(marker.read_text().strip()).is_absolute()
+            and not any(resolved == p.resolve() or p.resolve() in resolved.parents for p in protected)
+            and not kept_running(path)
+            and not any(resolved == vm or resolved in vm.parents for vm in running)
+        ):
+            size = disk.stat().st_blocks * 512
+            print(
+                f'{"Would delete" if dry_run else "Deleting"}: {disk} ({size / 1024**3:.2f} GiB; superseded accepted fixture)'
+            )
+            if not dry_run:
+                disk.unlink()
+            removed.append(disk)
+            freed += size
+            continue
         if any(
             resolved == p.resolve() or resolved in p.resolve().parents or p.resolve() in resolved.parents
             for p in [*protected, checkout]
@@ -304,7 +353,9 @@ def collect(cache, checkout, dry_run=False):
             print(f'Kept, VM still answers: {path}')
             continue
         size = sum(item.lstat().st_blocks * 512 for item in path.rglob('*') if not item.is_symlink())
-        print(f'{"Would delete" if dry_run else "Deleting"}: {path} ({size / 1024**3:.2f} GiB)')
+        print(
+            f'{"Would delete" if dry_run else "Deleting"}: {path} ({size / 1024**3:.2f} GiB; owner checkout no longer exists: {owner})'
+        )
         if not dry_run:
             shutil.rmtree(path)
         removed.append(path)

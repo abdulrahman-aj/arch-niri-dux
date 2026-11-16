@@ -378,6 +378,29 @@ class WorktreeGCTests(unittest.TestCase):
                 self.assertEqual(gc.collect(cache, cache / 'runner'), [])
                 self.assertTrue(evidence.exists())
 
+    def test_worktree_with_referenced_backing_disk_stays(self):
+        with tempfile.TemporaryDirectory() as temp, patch.dict(os.environ, {'XDG_CACHE_HOME': temp}):
+            root = Path(temp) / 'repo'
+            root.mkdir()
+            init_repo(root)
+            git_run('update-ref', 'refs/remotes/origin/main', 'HEAD', cwd=root)
+            topic = Path(temp) / 'topic'
+            git_run('worktree', 'add', '-b', 'topic', str(topic), cwd=root)
+            fixture = topic / 'out/fixture'
+            fixture.mkdir(parents=True)
+            workspace.own(fixture, topic)
+            (fixture / 'disk.qcow2').touch()
+            overlay = root / 'out/overlay'
+            overlay.mkdir(parents=True)
+            workspace.own(overlay, root)
+            (overlay / 'disk.qcow2').touch()
+            (overlay / 'inputs.json').write_text(json.dumps({'fixture': {'path': str(fixture / 'disk.qcow2')}}))
+            removals, skipped, move = gc.plan_worktree_gc(root)
+            self.assertEqual(removals, [])
+            self.assertTrue(any(item['path'] == topic for item in skipped))
+            self.assertIsNone(move)
+            self.assertTrue((fixture / 'disk.qcow2').exists())
+
     def test_plan_splits_removals_and_skips(self):
         with (
             tempfile.TemporaryDirectory() as temp,

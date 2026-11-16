@@ -5,6 +5,7 @@ import contextlib
 import io
 import json
 import os
+import socket
 from pathlib import Path
 import tempfile
 import unittest
@@ -12,7 +13,7 @@ from unittest.mock import patch
 
 from tests.test_workspace import git_run, init_repo
 from tools.verification.scenarios.fixture import run_fixture
-from tools.workspace import fixtures, resources, state
+from tools.workspace import fixtures, gc, resources, state
 
 
 class FixtureSelectionTests(unittest.TestCase):
@@ -90,3 +91,63 @@ class FixtureSelectionTests(unittest.TestCase):
             with self.assertRaises(FileNotFoundError):
                 run_fixture(args, argparse.ArgumentParser())
         self.assertEqual((destination / 'OVMF_VARS.fd').read_bytes(), b'explicit firmware')
+
+
+class FixtureGcTests(FixtureSelectionTests):
+    def test_superseded_disk_freed_selected_and_evidence_stay(self):
+        older = self.fixture('older', self.ancestor, 100)
+        selected = self.fixture('selected', self.ancestor, 200)
+        other = self.fixture('unmerged', self.other, 300)
+        dirty = self.fixture('dirty-main', self.ancestor, 400, dirty=True)
+        # Reproduce qualify output inside the checkout that runs GC.
+        destination = self.repo / 'out/qualify/old/verify'
+        fixtures.move_fixture(older.parent, destination, self.repo)
+        older = destination / 'disk.qcow2'
+        os.utime(destination, (100, 100))
+        with contextlib.redirect_stdout(io.StringIO()):
+            self.assertEqual(gc.collect(self.root, self.repo, True), [older])
+            self.assertTrue(older.exists())
+            self.assertEqual(gc.collect(self.root, self.repo), [older])
+        self.assertFalse(older.exists())
+        self.assertTrue((destination / 'inputs.json').exists())
+        for disk in (selected, other, dirty):
+            self.assertTrue(disk.exists())
+        self.assertEqual(fixtures.newest_accepted_fixture(checkout=self.repo), selected)
+
+    def test_referenced_fixture_and_running_fixture_stay(self):
+        referenced = self.fixture('referenced', self.ancestor, 100)
+        running = self.fixture('running', self.ancestor, 200)
+        selected = self.fixture('selected', self.ancestor, 300)
+        alongside = self.fixture('alongside-backing', self.ancestor, 150)
+        overlay = self.root / 'overlay'
+        overlay.mkdir()
+        state.own(overlay, self.repo)
+        (overlay / 'disk.qcow2').touch()
+        (overlay / 'inputs.json').write_text(json.dumps({'fixture': str(referenced)}))
+        preparing = self.root / 'preparing-alongside'
+        preparing.mkdir()
+        state.own(preparing, self.repo)
+        (preparing / 'inputs.json').write_text(json.dumps({'fixture': {'path': str(alongside)}}))
+        (running.parent / '.sockets').mkdir()
+        os.utime(running.parent, (200, 200))
+        with socket.socket(socket.AF_UNIX) as server:
+            server.bind(str(running.parent / '.sockets/qmp.sock'))
+            server.listen()
+            with contextlib.redirect_stdout(io.StringIO()):
+                self.assertEqual(gc.collect(self.root, self.repo), [])
+        for disk in (referenced, alongside, running, selected):
+            self.assertTrue(disk.exists())
+
+    def test_orphaned_build_state_freed_live_owner_stays(self):
+        orphan = self.root / 'arch-niri-dux-build-orphan'
+        live = self.root / 'arch-niri-dux-build-live'
+        for directory, owner in ((orphan, self.root / 'removed-checkout'), (live, self.repo)):
+            directory.mkdir()
+            state.own(directory, owner)
+            (directory / 'builder.qcow2').write_bytes(b'build state')
+        with contextlib.redirect_stdout(io.StringIO()):
+            self.assertEqual(gc.collect(self.root, self.repo, True), [orphan])
+            self.assertTrue(orphan.exists())
+            self.assertEqual(gc.collect(self.root, self.repo), [orphan])
+        self.assertFalse(orphan.exists())
+        self.assertTrue((live / 'builder.qcow2').exists())

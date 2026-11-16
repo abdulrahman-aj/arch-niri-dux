@@ -24,15 +24,16 @@ def accepted_fixtures(registry=None):
     return [directory for _, directory in sorted(entries, reverse=True)]
 
 
-def newest_accepted_fixture(registry=None, checkout=ROOT):
-    """Newest accepted disk from a recorded clean commit on origin/main."""
-    selected = None
+def main_fixtures(registry=None, checkout=ROOT):
+    """Accepted fixtures from clean commits on origin/main, newest first."""
     for directory in accepted_fixtures(registry):
         try:
             inputs = json.loads((directory / 'inputs.json').read_text())
-        except FileNotFoundError:
+        except (OSError, ValueError):
             inputs = {}
-        recorded = inputs.get('checkout', {})
+        recorded = inputs.get('checkout', {}) if isinstance(inputs, dict) else {}
+        if not isinstance(recorded, dict):
+            recorded = {}
         commit = recorded.get('commit')
         if not commit:
             reason = 'no recorded checkout commit'
@@ -46,17 +47,20 @@ def newest_accepted_fixture(registry=None, checkout=ROOT):
                 capture_output=True,
             )
             if result.returncode == 0:
-                # Newest first: stop here so older fixtures are not listed as skipped.
-                selected = directory / 'disk.qcow2'
                 print(f'Using fixture {directory} at commit {commit}.', file=sys.stderr)
-                break
+                yield directory / 'disk.qcow2'
+                continue
             reason = (
                 f'{commit} is not an ancestor of origin/main'
                 if result.returncode == 1
                 else f'cannot check {commit} against origin/main'
             )
         print(f'Skipping fixture {directory}: {reason}.', file=sys.stderr)
-    return selected
+
+
+def newest_accepted_fixture(registry=None, checkout=ROOT):
+    """Newest accepted disk from a recorded clean commit on origin/main."""
+    return next(main_fixtures(registry, checkout), None)
 
 
 def move_fixture(src, dst, new_owner):
