@@ -99,5 +99,6 @@ deferral.
 
 The [Dux defaults](#dux-defaults-and-updates) seeder writes lock choices into
 `~/.config/dms/config.d/00-arch-niri-dux-lock.json`: lock before suspend and
-on idle after 600 seconds on AC or battery. Existing sessions pick them up on
+on idle after 600 seconds on AC or battery, and outputs power off 60 seconds
+after locking on AC or battery. Existing sessions pick them up on
 the next DMS start.

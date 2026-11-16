@@ -1,5 +1,7 @@
 {
   "lockBeforeSuspend": true,
   "acLockTimeout": 600,
-  "batteryLockTimeout": 600
+  "batteryLockTimeout": 600,
+  "acPostLockMonitorTimeout": 60,
+  "batteryPostLockMonitorTimeout": 60
 }
