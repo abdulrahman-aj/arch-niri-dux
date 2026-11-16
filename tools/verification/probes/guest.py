@@ -94,14 +94,38 @@ def run_interactive(command, replies, timeout=180):
         process.stdout.close()
 
 
-def user_command(*args, capture=False, timeout=None):
+def _run_with_timeout_evidence(command, capture, timeout, on_timeout):
+    # subprocess.run kills the parent before raising TimeoutExpired. Keep it
+    # alive while the callback records which part of session/IPC setup stalled.
+    with subprocess.Popen(command, text=True, stdout=subprocess.PIPE if capture else None) as process:
+        try:
+            stdout, _ = process.communicate(timeout=timeout)
+        except subprocess.TimeoutExpired:
+            try:
+                on_timeout(process.pid)
+            except Exception as error:
+                print(f'Timeout evidence collection failed: {type(error).__name__}: {error}', flush=True)
+            finally:
+                process.kill()
+                process.wait()
+            raise
+        except BaseException:
+            process.kill()
+            process.wait()
+            raise
+    result = subprocess.CompletedProcess(command, process.returncode, stdout)
+    result.check_returncode()
+    return result
+
+
+def user_command(*args, capture=False, timeout=None, on_timeout=None):
     user = pwd.getpwnam('tester')
     runtime = Path(f'/run/user/{user.pw_uid}')
     wayland = next((path for path in runtime.glob('wayland-*') if stat.S_ISSOCK(path.stat().st_mode)), None)
     if wayland is None:
         raise RuntimeError('No Wayland socket found for the graphical test user.')
     niri = next(runtime.glob('niri.*.sock'))
-    return run(
+    command = [
         'runuser',
         '-u',
         'tester',
@@ -119,9 +143,10 @@ def user_command(*args, capture=False, timeout=None):
         f'DBUS_SESSION_BUS_ADDRESS=unix:path={runtime}/bus',
         f'WAYLAND_DISPLAY={wayland.name}',
         *args,
-        stdout=subprocess.PIPE if capture else None,
-        timeout=timeout,
-    )
+    ]
+    if on_timeout is not None:
+        return _run_with_timeout_evidence(command, capture, timeout, on_timeout)
+    return run(*command, stdout=subprocess.PIPE if capture else None, timeout=timeout)
 
 
 def ipc(application, method, *parameters):
