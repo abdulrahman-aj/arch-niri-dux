@@ -8,7 +8,7 @@ import subprocess
 
 from tools.workspace.state import ROOT, MARKER, build_state, registered_paths
 from tools.workspace.resources import kept_running, tree_size, worktree_busy
-from tools.workspace.fixtures import accepted_fixtures, move_fixture
+from tools.workspace.fixtures import accepted_fixtures, main_fixtures, move_fixture
 
 PROTECTED_BRANCHES = ('main', 'master')
 
@@ -274,7 +274,25 @@ def collect(cache, checkout, dry_run=False):
     protected = [cache / 'arch-niri-dux-downloads', cache / 'arch-niri-dux-states']
     if os.environ.get('BUILD_STATE'):
         protected.append(build_state())
-    running = [path.resolve() for path in registered_paths(cache / 'arch-niri-dux-states') if kept_running(path)]
+    registered = registered_paths(cache / 'arch-niri-dux-states')
+    running = [path.resolve() for path in registered if kept_running(path)]
+    fixtures = list(main_fixtures(cache / 'arch-niri-dux-states', checkout))
+    # Kept overlays need their backing disk even when their VM is stopped.
+    referenced = set()
+    for directory in registered:
+        if not (directory / 'disk.qcow2').exists():
+            continue
+        try:
+            inputs = json.loads((directory / 'inputs.json').read_text())
+        except (OSError, ValueError):
+            continue
+        fixture = inputs.get('fixture') if isinstance(inputs, dict) else None
+        if isinstance(fixture, str) and Path(fixture).is_absolute():
+            referenced.add(Path(fixture).resolve())
+    if fixtures:
+        protected.append(fixtures[0].parent)
+    protected.extend(disk.parent for disk in referenced)
+    superseded = {disk.parent.resolve() for disk in fixtures[1:]}
     for path in candidates(cache, checkout):
         if not path.exists():
             continue
@@ -283,6 +301,28 @@ def collect(cache, checkout, dry_run=False):
             print(f'Unowned, left alone: {path}')
             continue
         resolved = path.resolve()
+        marker = path / MARKER
+        disk = path / 'disk.qcow2'
+        if (
+            resolved in superseded
+            and disk.resolve() not in referenced
+            and not disk.is_symlink()
+            and marker.is_file()
+            and not marker.is_symlink()
+            and Path(marker.read_text().strip()).is_absolute()
+            and not any(resolved == p.resolve() or p.resolve() in resolved.parents for p in protected)
+            and not kept_running(path)
+            and not any(resolved == vm or resolved in vm.parents for vm in running)
+        ):
+            size = disk.stat().st_blocks * 512
+            print(
+                f'{"Would delete" if dry_run else "Deleting"}: {disk} ({size / 1024**3:.2f} GiB; superseded accepted fixture)'
+            )
+            if not dry_run:
+                disk.unlink()
+            removed.append(disk)
+            freed += size
+            continue
         if any(
             resolved == p.resolve() or resolved in p.resolve().parents or p.resolve() in resolved.parents
             for p in [*protected, checkout]
@@ -304,7 +344,9 @@ def collect(cache, checkout, dry_run=False):
             print(f'Kept, VM still answers: {path}')
             continue
         size = sum(item.lstat().st_blocks * 512 for item in path.rglob('*') if not item.is_symlink())
-        print(f'{"Would delete" if dry_run else "Deleting"}: {path} ({size / 1024**3:.2f} GiB)')
+        print(
+            f'{"Would delete" if dry_run else "Deleting"}: {path} ({size / 1024**3:.2f} GiB; owner checkout no longer exists: {owner})'
+        )
         if not dry_run:
             shutil.rmtree(path)
         removed.append(path)
