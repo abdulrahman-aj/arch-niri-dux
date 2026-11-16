@@ -7,12 +7,14 @@ the tampered-database signature rejection) never reach it.
 
 import re
 import shlex
+from dataclasses import dataclass
 from pathlib import Path
 
 ALLOWLIST = Path(__file__).with_name('gate-allowlist.txt')
 JOURNAL_FILE = 'guest-journal-warning.log'
 FAILED_FILES = ('guest-failed-units.txt', 'guest-failed-units-user.txt')
 UNMATCHED_FILE = 'gate-unmatched.log'
+PACKAGES_FILE = 'guest-packages.txt'
 
 ANSI_RE = re.compile(r'\x1b\[[0-9;?]*[A-Za-z]|\x1b\][^\x07]*\x07|\x1b\(.\)|\x1b[@-Z\\-_]')
 MONTHS = r'(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)'
@@ -35,6 +37,15 @@ def normalize(line):
     return re.sub(r'\b\d{5,}\b', '<NUM>', line)
 
 
+@dataclass
+class AllowlistEntry:
+    pattern: re.Pattern
+    reason: str
+    location: str
+    package: str | None = None
+    version: str | None = None
+
+
 def load_allowlist(path=ALLOWLIST):
     """Parse the allowlist: one regex per line, each with a trailing ``# reason``."""
     entries = []
@@ -44,7 +55,14 @@ def load_allowlist(path=ALLOWLIST):
         pattern, separator, reason = raw.rpartition(' # ')
         if not separator or not pattern.strip() or not reason.strip():
             raise ValueError(f'{path}:{number}: allowlist line needs "REGEX # reason": {raw!r}')
-        entries.append((re.compile(pattern), reason.strip()))
+        package = version = None
+        if ' [until ' in reason:
+            reason, tag = reason.rsplit(' [until ', 1)
+            match = re.fullmatch(r'([^\s]+) ([^\s]+)\]', tag)
+            if not match:
+                raise ValueError(f'{path}:{number}: invalid package version tag')
+            package, version = match.groups()
+        entries.append(AllowlistEntry(re.compile(pattern), reason.strip(), f'{path}:{number}', package, version))
     if not entries:
         raise ValueError(f'{path}: allowlist is empty')
     return entries
@@ -53,6 +71,7 @@ def load_allowlist(path=ALLOWLIST):
 def collect(vm, directory):
     """Capture the final boot's warnings and failed units into the evidence dir."""
     directory = Path(directory)
+    vm.command(f'pacman -Q > /run/verify/{shlex.quote(PACKAGES_FILE)}')
     vm.command(f'journalctl -b -p warning --no-pager > /run/verify/{shlex.quote(JOURNAL_FILE)}')
     vm.command(f'systemctl --failed --no-legend > /run/verify/{shlex.quote(FAILED_FILES[0])}')
     vm.command(
@@ -60,13 +79,23 @@ def collect(vm, directory):
         'XDG_RUNTIME_DIR=/run/user/$uid DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/$uid/bus '
         f'systemctl --user --failed --no-legend > /run/verify/{shlex.quote(FAILED_FILES[1])}'
     )
-    return [directory / JOURNAL_FILE, *[directory / name for name in FAILED_FILES]]
+    return [directory / PACKAGES_FILE, directory / JOURNAL_FILE, *[directory / name for name in FAILED_FILES]]
 
 
 def unmatched(directory, entries=None):
     """Return [(source, raw, normalized)] for lines no allowlist entry matches."""
     directory = Path(directory)
     entries = entries if entries is not None else load_allowlist()
+    # Check every tagged entry before scanning: a quiet boot must still expire it.
+    versions = dict(line.split() for line in (directory / PACKAGES_FILE).read_text().splitlines() if line.strip())
+    for entry in entries:
+        if entry.package and versions.get(entry.package) != entry.version:
+            installed = versions.get(entry.package, 'not installed')
+            raise GateFailure(
+                f'Error gate: expired allowlist entry {entry.location}: {entry.reason}; '
+                f'{entry.package} installed: {installed}, allowed: {entry.version}. '
+                'Remove this entry and verify the upstream fix has shipped.'
+            )
     found = []
     sources = [JOURNAL_FILE, *FAILED_FILES]
     for source in sources:
@@ -75,7 +104,7 @@ def unmatched(directory, entries=None):
             if not raw.strip():
                 continue
             normalized = normalize(raw)
-            if not any(pattern.search(normalized) for pattern, _ in entries):
+            if not any(entry.pattern.search(normalized) for entry in entries):
                 found.append((source, raw, normalized))
     return found
 

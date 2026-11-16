@@ -65,7 +65,7 @@ class AllowlistTests(unittest.TestCase):
         for raw in samples:
             normalized = gate.normalize(raw)
             self.assertTrue(
-                any(pattern.search(normalized) for pattern, _ in entries), f'no allowlist entry for {normalized!r}'
+                any(entry.pattern.search(normalized) for entry in entries), f'no allowlist entry for {normalized!r}'
             )
 
     def test_retired_probe_lines_are_not_allowlisted(self):
@@ -76,7 +76,7 @@ class AllowlistTests(unittest.TestCase):
             'Nov 10 21:10:40 dux-verify arch-niri-dux-migrate[1513]:'
             ' 99999999_03_verification.sh failed (exit 1); retry with arch-niri-dux-migrate run'
         )
-        self.assertFalse(any(pattern.search(normalized) for pattern, _ in entries))
+        self.assertFalse(any(entry.pattern.search(normalized) for entry in entries))
 
     def test_malformed_line_fails_closed(self):
         with tempfile.TemporaryDirectory() as root:
@@ -90,6 +90,9 @@ class CheckTests(unittest.TestCase):
     def write_evidence(self, root, journal=(), failed=(), failed_user=()):
         directory = Path(root) / 'evidence'
         directory.mkdir()
+        # Satisfy the real allowlist's version tags, whatever they currently are.
+        pinned = [f'{e.package} {e.version}' for e in gate.load_allowlist() if e.package]
+        (directory / gate.PACKAGES_FILE).write_text('\n'.join(['demo-tool 1.0-1', *pinned]) + '\n')
         (directory / gate.JOURNAL_FILE).write_text('\n'.join(journal) + '\n')
         (directory / gate.FAILED_FILES[0]).write_text('\n'.join(failed) + '\n')
         (directory / gate.FAILED_FILES[1]).write_text('\n'.join(failed_user) + '\n')
@@ -107,7 +110,7 @@ class CheckTests(unittest.TestCase):
             self.assertEqual(gate.check(directory), [])
 
     def test_missing_evidence_fails(self):
-        for source in (gate.JOURNAL_FILE, *gate.FAILED_FILES):
+        for source in (gate.PACKAGES_FILE, gate.JOURNAL_FILE, *gate.FAILED_FILES):
             with self.subTest(source=source), tempfile.TemporaryDirectory() as root:
                 directory = self.write_evidence(root)
                 (directory / source).unlink()
@@ -147,3 +150,30 @@ class CheckTests(unittest.TestCase):
             self.assertIn('guest-journal-warning.log', message)
             report = (directory / gate.UNMATCHED_FILE).read_text()
             self.assertIn('planted[1234]: planted gate test', report)
+
+
+class VersionExpiryTests(unittest.TestCase):
+    # A synthetic tagged entry, so removing a real one never breaks these tests.
+    write_evidence = CheckTests.write_evidence
+    warning = 'Nov 12 20:43:17 dux-verify demo-tool[1118]: known upstream race'
+
+    def entries(self, root):
+        allowlist = Path(root) / 'allowlist.txt'
+        allowlist.write_text('demo-tool\\[<PID>\\]: known upstream race$ # upstream bug [until demo-tool 1.0-1]\n')
+        return gate.load_allowlist(allowlist)
+
+    def test_pinned_version_allows_only_the_exact_warning(self):
+        with tempfile.TemporaryDirectory() as root:
+            directory = self.write_evidence(root, journal=[self.warning, self.warning + ' and more'])
+            found = gate.unmatched(directory, self.entries(root))
+        self.assertEqual([raw for _, raw, _ in found], [self.warning + ' and more'])
+
+    def test_version_change_expires_even_without_the_warning(self):
+        for version in ('1.0-2', '1.1-1', '0.9-1', None):
+            for journal in ([self.warning], []):
+                with self.subTest(version=version, journal=journal), tempfile.TemporaryDirectory() as root:
+                    directory = self.write_evidence(root, journal=journal)
+                    packages = f'demo-tool {version}\n' if version else 'other 1-1\n'
+                    (directory / gate.PACKAGES_FILE).write_text(packages)
+                    with self.assertRaises(gate.GateFailure):
+                        gate.unmatched(directory, self.entries(root))
