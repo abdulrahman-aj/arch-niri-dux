@@ -102,6 +102,11 @@ rejected. On success `--keep` changes nothing.
 
 Suspend qualification requires logind `LockedHint=yes`, Niri's lock event, an unchanged boot ID and kernel S3 entry/exit. Post-resume QEMU GL/input and shutdown can stall, so screenshots stay best-effort and this stage does not qualify password unlock. The probe syncs the guest before the host restarts it.
 
+A timed-out post-resume monitor action writes `03-suspend-monitor-timeout.txt`
+with live runuser/Niri process and thread states, kernel stacks, user-slice freezer
+state, an independent Niri Outputs query, and kernel/DRM and Niri journal tails.
+The action retains its 10-second bound and fails after collection; it is not retried.
+
 ## `make verify-fast`
 
 `make verify-fast` is a thin alias for fixture mode in `verify.py`

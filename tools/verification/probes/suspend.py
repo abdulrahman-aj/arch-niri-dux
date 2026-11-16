@@ -140,10 +140,59 @@ def evidence(stage, locked):
     record(name, report)
 
 
+def capture_monitor_timeout(runuser_pid):
+    """Capture while the timed-out runuser is still alive; never replace its failure."""
+    import socket
+
+    lines = [
+        f'Monitor action timed out; runuser PID {runuser_pid}',
+        f'Capture clocks: monotonic={time.monotonic()} realtime={time.time()}',
+    ]
+
+    def read(path):
+        try:
+            return path.read_text(errors='replace')
+        except OSError as error:
+            return f'{type(error).__name__}: {error}\n'
+
+    for name in ('cgroup.events', 'cgroup.freeze'):
+        path = Path('/sys/fs/cgroup/user.slice') / name
+        lines += [f'=== {path} ===', read(path)]
+    for process in sorted(Path('/proc').glob('[0-9]*')):
+        comm = read(process / 'comm').strip()
+        status = read(process / 'status')
+        if comm not in ('runuser', 'niri') and '\nState:\tD ' not in status:
+            continue
+        lines += [f'=== {process} {comm} ===', status, read(process / 'cmdline').replace('\0', ' ')]
+        for task in sorted((process / 'task').glob('[0-9]*')):
+            for name in ('status', 'wchan', 'syscall', 'stack'):
+                lines += [f'=== {task / name} ===', read(task / name)]
+    # Bypass runuser/PAM so this query independently tests Niri IPC progress.
+    try:
+        endpoint = next(Path('/run/user/1000').glob('niri.*.sock'))
+        with socket.socket(socket.AF_UNIX) as client:
+            client.settimeout(2)
+            client.connect(str(endpoint))
+            client.sendall(b'"Outputs"\n')
+            lines += ['=== Independent Niri Outputs ===', client.recv(1048576).decode(errors='replace')]
+    except Exception as error:
+        lines += ['=== Independent Niri Outputs ===', f'{type(error).__name__}: {error}']
+    for label, args in (
+        ('kernel/DRM tail', ['journalctl', '-b', '-k', '-n', '300', '--no-pager', '-o', 'short-monotonic']),
+        ('Niri tail', ['journalctl', '-b', '_COMM=niri', '-n', '100', '--no-pager', '-o', 'short-monotonic']),
+    ):
+        try:
+            result = subprocess.run(args, text=True, capture_output=True, timeout=2, check=False)
+            lines += [f'=== {label} (exit {result.returncode}) ===', result.stdout, result.stderr]
+        except Exception as error:
+            lines += [f'=== {label} ===', f'{type(error).__name__}: {error}']
+    Path('/run/verify/03-suspend-monitor-timeout.txt').write_text('\n'.join(lines) + '\n')
+
+
 def wake_display():
     before = session_state()
     # An RTC wake supplies no physical lid/keyboard event to wake the monitor.
-    user_command('niri', 'msg', 'action', 'power-on-monitors', timeout=10)
+    user_command('niri', 'msg', 'action', 'power-on-monitors', timeout=10, on_timeout=capture_monitor_timeout)
     time.sleep(2)
     assert session_state()['LockedHint'] == before['LockedHint'], 'Monitor wake changed the lock state'
 
