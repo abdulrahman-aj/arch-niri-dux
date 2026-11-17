@@ -2,7 +2,7 @@
 """Pin Arch to one archive date, and fetch its verified packages for an ISO.
 
 `resolve` runs on the host (`make lock`) and refreshes packages/archive-date,
-the two-entry Omarchy pin, and the vendored Dux Niri files. `fetch` runs in
+the Omarchy pin, and the vendored Dux Niri files. `fetch` runs in
 the builder VM and never changes the pins: it downloads the requested package
 lists with pacman and checks each signature against keys/trusted-packagers.gpg.
 """
@@ -29,10 +29,17 @@ DOWNLOAD_TIMEOUT = 60
 DOWNLOAD_ATTEMPTS = 4
 ARCHIVE = 'https://archive.archlinux.org/repos'
 MIRROR = 'https://mirror.omarchy.org'
-ARCH_REPOS = ('core', 'extra')
+ARCH_REPOS = ('core', 'extra', 'multilib')
 OMARCHY_FILES_URL = 'https://pkgs.omarchy.org/stable/x86_64/'
-# Only these two Omarchy packages are reviewed inputs; anything else is refused.
-OMARCHY_NAMES = ('limine-mkinitcpio-hook', 'limine-snapper-sync')
+# Only these Omarchy packages are reviewed inputs; anything else is refused.
+# The 580xx driver supports Maxwell, Pascal and Volta cards; Arch has no build.
+OMARCHY_NAMES = (
+    'limine-mkinitcpio-hook',
+    'limine-snapper-sync',
+    'nvidia-580xx-dkms',
+    'nvidia-580xx-utils',
+    'lib32-nvidia-580xx-utils',
+)
 # Upstream file suffix -> tree path. The tag matches the pinned dux-shell.
 VENDORED = (
     ('niri.kdl', 'desktop/usr/share/arch-niri-dux/niri/config.kdl'),
@@ -104,13 +111,18 @@ def read_database(path):
     return packages
 
 
+def package_lists(root):
+    """Return every package list the ISO carries: the target, hardware lists, and the live image."""
+    return [*sorted((root / 'packages').glob('packages.*')), root / 'archiso/packages.live']
+
+
 def requested_packages(root):
     # Reviewed local builds have recipe/source hashes, not distribution signatures.
     # Keep them outside the signed binary closure and add them after verification.
     dux_apps_names = {entry['name'] for entry in json.loads((root / 'packages/dux-apps-recipes.json').read_text())}
     requested = set()
-    for file in ('packages/packages.target', 'archiso/packages.live'):
-        requested.update(line.split('#')[0].strip() for line in (root / file).read_text().splitlines())
+    for file in package_lists(root):
+        requested.update(line.split('#')[0].strip() for line in file.read_text().splitlines())
     requested.discard('')
     return sorted(requested - dux_apps_names)
 
@@ -126,7 +138,7 @@ def omarchy_pin(root):
     entries = json.loads((root / 'packages/omarchy-pin.json').read_text())
     names = {entry['name'] for entry in entries}
     if names - set(OMARCHY_NAMES) or len(entries) != len(names):
-        raise ValueError('Omarchy pin holds only the two reviewed packages')
+        raise ValueError('Omarchy pin holds only reviewed packages')
     for entry in entries:
         validate_entry(entry)
     return sorted(entries, key=lambda e: e['name'])
@@ -245,14 +257,16 @@ def vendor_desktop(root, tag, contents):
 def omarchy_arch_deps(pin):
     """Return the pinned Omarchy packages' Arch dependencies from the pin.
 
-    The two hooks install from the offline repository, so their Arch
+    Pinned packages install from the offline repository, so their Arch
     dependencies must be part of the downloaded closure. The pin records the
     dependencies at lock time, so fetch needs no Omarchy database.
     """
     names = {entry['name'] for entry in pin}
     deps = set()
     for entry in pin:
-        deps.update(entry['depends'])
+        # nvidia-580xx-dkms depends on nvidia-580xx-utils=VERSION; the pin
+        # satisfies it, so the name must not reach Arch resolution.
+        deps.update(re.split('[<>=]', dep, maxsplit=1)[0] for dep in entry['depends'])
     return deps - names
 
 

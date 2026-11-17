@@ -96,7 +96,7 @@ class SignedReleaseTests(unittest.TestCase):
         return recipe
 
     def omarchy_pin(self, hook_version='1.40.0-2', sync_version='1.32.1-2'):
-        """Pin the two Omarchy boot packages with test-signed bytes served over file://."""
+        """Pin two Omarchy boot packages with test-signed bytes served over file://."""
         source = self.root / 'omarchy-source'
         source.mkdir(parents=True, exist_ok=True)
         pin = []

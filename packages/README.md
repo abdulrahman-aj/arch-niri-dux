@@ -20,17 +20,21 @@ packages, and pacman tracks their files.
 `packages/archive-date` pins every Arch binary package in the offline ISO
 payload to one Arch Linux Archive snapshot
 (`https://archive.archlinux.org/repos/YYYY/MM/DD`), and
-`packages/omarchy-pin.json` pins the two Omarchy packages
-(`limine-mkinitcpio-hook`, `limine-snapper-sync`) by hash and signature. The
-installed repository order is arch-niri-dux at
-`https://abdulrahman-aj.github.io/arch-niri-dux/x86_64`, then core and extra,
-then omarchy.
+`packages/omarchy-pin.json` pins the reviewed Omarchy packages by hash and
+signature: the boot hooks (`limine-mkinitcpio-hook`, `limine-snapper-sync`)
+and the NVIDIA 580xx driver (`nvidia-580xx-dkms`, `nvidia-580xx-utils`,
+`lib32-nvidia-580xx-utils`) for Maxwell, Pascal and Volta cards, which Arch
+no longer packages. The installed repository order is arch-niri-dux at
+`https://abdulrahman-aj.github.io/arch-niri-dux/x86_64`, then core, extra and
+multilib, then omarchy.
 Our repository comes first so another repository cannot shadow our packages.
-It also carries the exact pinned Omarchy boot packages, signed with our
+It also carries the exact pinned Omarchy packages, signed with our
 release key, so installed machines take only the versions a release verified.
+multilib holds the 32-bit NVIDIA libraries; enabling it everywhere keeps
+`lib32-nvidia-utils` updating with `nvidia-utils`.
 The installed `[omarchy]` section sets `Usage = Install Sync`, so `pacman
 -Syu` never upgrades from Omarchy. Our repository is listed first and wins by
-name regardless of version, so explicit installs of the two boot packages
+name regardless of version, so explicit installs of the pinned packages
 take our pinned copies too; Omarchy's repo stays usable for explicit installs
 of anything else.
 The date freezes the build payload only: installed systems track the rolling
@@ -67,6 +71,11 @@ GitHub's published digests. Repository files at the release tag have no
 published digest. The workflow opens a PR and never merges or publishes.
 
 ## ISO inventory
+
+Every `packages/packages.*` list is on the ISO. `packages.target` is what
+every install gets, and the baseline metapackage requires it. Hardware lists,
+`packages.nvidia` (Turing and newer) and `packages.nvidia-580xx`, are added
+only on machines that need them, so they stay out of the metapackage.
 
 `tools/build/payload.py` finalizes the ISO repository, checksums and combined
 `out/packages.manifest.json` after the package producers finish. It rejects
