@@ -1056,10 +1056,6 @@ class InstallerSafetyTests(unittest.TestCase):
                 payload.verify_repository(root)
 
 
-if __name__ == '__main__':
-    unittest.main()
-
-
 def pci_tree(root, devices):
     """Write fake sysfs PCI devices: (vendor, class, device) per entry; None leaves the entry unreadable."""
     for index, entry in enumerate(devices):
@@ -1138,3 +1134,7 @@ class NvidiaTests(unittest.TestCase):
     def test_missing_policy_link_stops_the_installation(self):
         with self.assertRaisesRegex(ValueError, 'policy was not linked'):
             self.check_driver(modinfo_code=0, linked=False)
+
+
+if __name__ == '__main__':
+    unittest.main()

@@ -63,7 +63,7 @@ def nvidia_driver():
     assert {'nvidia', 'nvidia-drm', 'nvidia-modeset', 'nvidia-uvm'} <= names, evidence
     # The VM's display is not NVIDIA, so kms must stay. It adds the driver of the
     # display present at build time: bochs or virtio-gpu, depending on the stage.
-    assert any('/gpu/drm/' in line for line in evidence['initramfs']), evidence
+    assert names & {'bochs', 'virtio-gpu'}, evidence
     if band == '580xx':
         evidence['dkms'] = output('dkms', 'status', '-k', kernel)
         assert 'installed' in evidence['dkms'], evidence
