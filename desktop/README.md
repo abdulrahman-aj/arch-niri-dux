@@ -113,13 +113,14 @@ stops Niri from holding about 1 GiB of video memory. Niri needs no session
 variables, and the Dux shell picks its own EGL vendor and decoder settings.
 
 To add the driver after installation, install the list for your card and
-reboot; the hook does the rest:
+reboot; the hook does the rest. `-Syu` upgrades the kernel in the same
+transaction, so the modules match the kernel that boots:
 
 ```sh
 # Turing (RTX 20, GTX 16) and newer
-sudo pacman -S nvidia-open nvidia-utils lib32-nvidia-utils libva-nvidia-driver
+sudo pacman -Syu nvidia-open nvidia-utils lib32-nvidia-utils libva-nvidia-driver
 # Maxwell, Pascal and Volta (GTX 900, GTX 1000)
-sudo pacman -S nvidia-580xx-dkms nvidia-580xx-utils lib32-nvidia-580xx-utils linux-headers
+sudo pacman -Syu nvidia-580xx-dkms nvidia-580xx-utils lib32-nvidia-580xx-utils linux-headers
 ```
 
 ## Locking
