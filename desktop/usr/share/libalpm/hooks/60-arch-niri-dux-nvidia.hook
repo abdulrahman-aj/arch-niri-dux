@@ -1,0 +1,14 @@
+# Runs before DKMS (70) builds the module and limine's mkinitcpio hook (90)
+# rebuilds the initramfs with the linked policy.
+[Trigger]
+Operation = Install
+Operation = Upgrade
+Operation = Remove
+Type = Path
+Target = usr/lib/modules/*/extramodules/nvidia*
+Target = usr/src/nvidia-*/dkms.conf
+
+[Action]
+Description = Linking NVIDIA early-KMS policy...
+When = PostTransaction
+Exec = /usr/lib/arch-niri-dux/apply-nvidia

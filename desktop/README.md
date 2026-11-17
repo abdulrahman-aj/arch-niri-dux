@@ -95,6 +95,34 @@ which rebuilds initramfs images and boot entries. The hook excludes first
 installation; the installer rebuilds explicitly after machine settings and EFI
 deferral.
 
+## NVIDIA
+
+The package ships the NVIDIA policy inert; it takes effect only while a
+package providing `NVIDIA-MODULE` is installed. `60-arch-niri-dux-nvidia.hook`
+runs `/usr/lib/arch-niri-dux/apply-nvidia` whenever an NVIDIA module or DKMS
+source changes. It links `/etc/mkinitcpio.conf.d/nvidia.conf` to the
+package's `mkinitcpio-nvidia.conf` and removes that link when no driver
+remains; a file or link of your own at that path is left alone. Limine's
+mkinitcpio hook then rebuilds the initramfs. The policy loads the four NVIDIA
+modules early and drops the `kms` hook only when every display controller is
+NVIDIA, so hybrid laptops keep early KMS on the integrated GPU for the unlock
+prompt. Both drivers already default to `nvidia_drm` `modeset=1` and
+`fbdev=1`, so no modprobe options ship.
+`/etc/nvidia/nvidia-application-profiles-rc.d/50-arch-niri-dux-niri.json`
+stops Niri from holding about 1 GiB of video memory. Niri needs no session
+variables, and the Dux shell picks its own EGL vendor and decoder settings.
+
+To add the driver after installation, install the list for your card and
+reboot; the hook does the rest. `-Syu` upgrades the kernel in the same
+transaction, so the modules match the kernel that boots:
+
+```sh
+# Turing (RTX 20, GTX 16) and newer
+sudo pacman -Syu nvidia-open nvidia-utils lib32-nvidia-utils libva-nvidia-driver
+# Maxwell, Pascal and Volta (GTX 900, GTX 1000)
+sudo pacman -Syu nvidia-580xx-dkms nvidia-580xx-utils lib32-nvidia-580xx-utils linux-headers
+```
+
 ## Locking
 
 The [Dux defaults](#dux-defaults-and-updates) seeder writes lock choices into

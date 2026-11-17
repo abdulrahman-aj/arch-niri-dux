@@ -1,0 +1,23 @@
+#!/bin/sh
+# Link the package's NVIDIA early-KMS policy while an NVIDIA kernel module
+# package is installed, and remove our link once none is. It never rebuilds the
+# initramfs: in a pacman transaction limine's 90-mkinitcpio-install.hook does,
+# and the installer rebuilds after machine settings exist.
+set -eu
+
+policy=/usr/share/arch-niri-dux/mkinitcpio-nvidia.conf
+# ARCH_NIRI_DUX_ROOT lets tests point at a fake tree.
+link=${ARCH_NIRI_DUX_ROOT:-}/etc/mkinitcpio.conf.d/nvidia.conf
+
+if pacman -T NVIDIA-MODULE >/dev/null 2>&1; then
+    # Anything already here is our link or the user's own configuration.
+    if [ ! -e "$link" ] && [ ! -L "$link" ]; then
+        ln -s "$policy" "$link"
+    fi
+else
+    # readlink fails when nothing is linked; that is not an error here.
+    target=$(readlink "$link" 2>/dev/null || true)
+    if [ "$target" = "$policy" ]; then
+        rm "$link"
+    fi
+fi
