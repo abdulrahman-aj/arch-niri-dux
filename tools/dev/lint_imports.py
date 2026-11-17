@@ -5,9 +5,10 @@ import ast
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
-INSTALLER_MODULES = ('install', 'payload', 'storage', 'wizard')
+INSTALLER_MODULES = ('install', 'nvidia', 'payload', 'storage', 'wizard')
 # install.py is the engine and launcher target; it alone composes the others.
 INSTALLER_LAYERS = {
+    'installer.nvidia': ['installer.install', 'installer.payload', 'installer.storage', 'installer.wizard'],
     'installer.storage': ['installer.install', 'installer.payload', 'installer.wizard'],
     'installer.payload': ['installer.install', 'installer.wizard'],
     'installer.wizard': ['installer.install', 'installer.payload'],

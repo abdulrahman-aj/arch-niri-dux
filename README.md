@@ -41,8 +41,8 @@ through suspend, updates and snapshot restore.
 - It isn't a general Arch installer. It installs this one desktop with these choices.
 - It is young.
 - It isn't frozen. It follows the live Arch repositories and takes two bootloader/snapshot helpers
-  (`limine-mkinitcpio-hook`, `limine-snapper-sync`) from the Omarchy repository (an opinionated Arch
-  distro's package source). If an update breaks boot, boot the previous snapshot from Limine and restore;
+  (`limine-mkinitcpio-hook`, `limine-snapper-sync`) and the NVIDIA 580xx driver from the Omarchy
+  repository (an opinionated Arch distro's package source). If an update breaks boot, boot the previous snapshot from Limine and restore;
   your home directory is kept.
 
 ## Install
@@ -55,7 +55,7 @@ unallocated space and never resizes, moves or formats existing partitions.
 2. Write it to a USB drive and boot it in UEFI mode with Secure Boot off. Its boot menu waits one
    second (press any key to stay in it), then the installer starts.
 3. Follow the terminal wizard (disk, alongside region and existing OS if used, keymap, timezone, username,
-   hostname, swap, disk and login passphrases). **Erase mode erases the selected disk.** Alongside mode asks
+   hostname, swap, graphics driver on NVIDIA machines, disk and login passphrases). **Erase mode erases the selected disk.** Alongside mode asks
    you to pick an unallocated GPT region. See [supported layouts](ALONGSIDE.md). A summary comes before
    anything is written. While it installs, the full output goes to `/var/log/arch-niri-install.log` on the
    live system.
@@ -64,6 +64,12 @@ unallocated space and never resizes, moves or formats existing partitions.
    unavailable.
 
 Super+Return opens a terminal, Super+Space opens the launcher, and Super+Alt+L locks the screen.
+
+NVIDIA support is experimental and untested on real hardware. When the installer finds an NVIDIA card it offers
+NVIDIA's driver (the default) or the open-source Nouveau driver: `nvidia-open` for Turing (RTX 20, GTX 16) and newer,
+the 580xx driver for Maxwell, Pascal and Volta (GTX 900, GTX 1000), whose module builds during installation. Kepler
+and older cards keep Nouveau. If the driver fails, reinstall and pick Nouveau. See [NVIDIA](desktop/README.md#nvidia)
+for adding the driver later.
 
 The installer offers automatic or custom encrypted swap, or no hibernation. With swap, use
 `systemctl hibernate`. Closing the lid suspends the laptop when it is undocked. Docked, it keeps running on

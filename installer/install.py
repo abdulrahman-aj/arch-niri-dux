@@ -15,10 +15,12 @@ import threading
 import time
 
 if __package__:
+    from . import nvidia
     from . import payload
     from . import storage
     from . import wizard
 else:
+    import nvidia
     import payload
     import storage
     import wizard
@@ -343,6 +345,27 @@ def recovery_fstab(text):
     return '\n'.join(lines) + '\n'
 
 
+def check_nvidia_driver():
+    """Stop unless the driver's early-KMS policy is linked and its module exists for every kernel.
+
+    A failed DKMS build does not fail pacman, and nouveau is blacklisted once
+    the driver is installed, so a missing module means a first boot without
+    graphics. The package's hook links the policy during pacstrap.
+    """
+    advice = 'Reinstall and choose the open-source Nouveau driver.'
+    link = TARGET / 'etc/mkinitcpio.conf.d/nvidia.conf'
+    if not link.is_symlink() or os.readlink(link) != '/usr/share/arch-niri-dux/mkinitcpio-nvidia.conf':
+        raise ValueError(f'The NVIDIA early-KMS policy was not linked. {advice}')
+    kernels = sorted(path.parent.name for path in (TARGET / 'usr/lib/modules').glob('*/vmlinuz'))
+    if not kernels:
+        raise ValueError('No kernel was installed.')
+    for kernel in kernels:
+        try:
+            run('arch-chroot', str(TARGET), 'modinfo', '-k', kernel, 'nvidia_drm', capture=True)
+        except subprocess.CalledProcessError as error:
+            raise ValueError(f'The NVIDIA driver was not built for kernel {kernel}. {advice}') from error
+
+
 def install(settings, state=None, progress=None):
     """Install offline onto the confirmed disk and return how many packages were installed."""
     state = state if state is not None else InstallationState()
@@ -356,11 +379,11 @@ def install(settings, state=None, progress=None):
         raise ValueError(f'/dev/mapper/{storage.MAPPER} is already in use.')
     if os.path.ismount(TARGET):
         raise ValueError('Installation mountpoint is already mounted.')
-    packages_file = payload.SHARE / 'packages.target'
-    packages = [line.split('#', 1)[0].strip() for line in packages_file.read_text().splitlines()]
-    packages = [package for package in packages if package]
-    if not packages or any(not re.fullmatch(r'[a-zA-Z0-9@+_.-]+', package) for package in packages):
-        raise ValueError('Invalid or missing target package list.')
+    packages = payload.package_list('packages.target')
+    driver = nvidia.band(settings.nvidia)
+    # The driver joins the first pacstrap, so its modules exist before the
+    # initramfs is built, and the preflight checks its signatures.
+    driver_packages = payload.package_list(nvidia.LISTS[driver]) if driver else []
     progress.step(1, 'Checking the offline package payload')
     payload.check_installation_clock()
     payload.verify_repository(payload.REPO)
@@ -411,6 +434,7 @@ def install(settings, state=None, progress=None):
             '--print-format',
             '%f',
             *packages,
+            *driver_packages,
             'arch-niri-dux',
             'arch-niri-dux-baseline',
             capture=True,
@@ -435,7 +459,11 @@ def install(settings, state=None, progress=None):
             # Both EFI deployment and kernel hooks may register firmware entries.
             # Deferral must cover every transaction until preservation is verified.
             write_boot_config(luks_uuid, filesystem_uuid, resume_offset, defer_efi=bool(snapshot))
-            run('pacstrap', '-C', str(offline_conf), '-K', str(TARGET), *base_packages)
+            if driver == '580xx':
+                print('Building the NVIDIA driver for this kernel takes a few minutes.', flush=True)
+            run('pacstrap', '-C', str(offline_conf), '-K', str(TARGET), *base_packages, *driver_packages)
+            if driver:
+                check_nvidia_driver()
             fstab = run('genfstab', '-U', str(TARGET), capture=True)
             if size:
                 fstab += '\n/swap/swapfile none swap defaults 0 0\n'
@@ -483,6 +511,8 @@ def install(settings, state=None, progress=None):
         'Use the disk passphrase at boot, then your username and login password.\n'
         'Snapshot recovery is available in the Limine boot menu.'
     )
+    if driver:
+        print('NVIDIA driver support is experimental.')
     return sum('.pkg.tar.' in line for line in resolved.splitlines())
 
 

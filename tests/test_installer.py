@@ -11,6 +11,7 @@ import unittest
 from unittest.mock import patch
 
 from installer import install as installer
+from installer import nvidia
 from installer import payload
 from installer import storage
 from installer import wizard
@@ -71,6 +72,8 @@ def settings(**changes):
         keymap='us',
         passphrase='test-passphrase',
         password='test-password',
+        # Never detect from the test machine's own PCI tree.
+        nvidia='none',
     )
     values.update(changes)
     return wizard.Settings(**values)
@@ -495,6 +498,7 @@ class InstallerSafetyTests(unittest.TestCase):
             {'disk': '/dev/loop0'},
             {'password': 'short'},
             {'passphrase': 'linebreak\nsecret'},
+            {'nvidia': 'proprietary'},
         ):
             with self.subTest(change=change), self.assertRaises(ValueError):
                 settings(**change).validate()
@@ -718,6 +722,24 @@ class InstallerSafetyTests(unittest.TestCase):
             ):
                 with self.assertRaisesRegex(ValueError, 'package list'):
                     installer.install(settings())
+            self.assertFalse(os.path.exists(marker))
+
+    def test_malformed_driver_list_prevents_disk_mutation(self):
+        with tempfile.TemporaryDirectory() as directory, tempfile.TemporaryDirectory() as bindir:
+            root = Path(directory)
+            (root / 'packages.target').write_text('base\n')
+            (root / 'packages.nvidia').write_text('nvidia-open\n--root=/\n')
+            marker = Path(bindir) / 'disk-touched'
+            case_bin = make_bin(bindir, {'lsblk': lsblk_script([disk()])})
+            make_bin(case_bin.parent, {'sgdisk': marker_script(marker)})
+            real_stat = os.stat
+            with (
+                patch.object(payload, 'SHARE', root),
+                patch.dict(os.environ, {'PATH': str(case_bin)}),
+                patch('os.stat', side_effect=fake_stat(real_stat)),
+            ):
+                with self.assertRaisesRegex(ValueError, 'packages.nvidia'):
+                    installer.install(settings(nvidia='open'))
             self.assertFalse(os.path.exists(marker))
 
     def test_missing_repository_database_prevents_disk_mutation(self):
@@ -1036,3 +1058,83 @@ class InstallerSafetyTests(unittest.TestCase):
 
 if __name__ == '__main__':
     unittest.main()
+
+
+def pci_tree(root, devices):
+    """Write fake sysfs PCI devices: (vendor, class, device) per entry; None leaves the entry unreadable."""
+    for index, entry in enumerate(devices):
+        device = Path(root) / f'0000:{index:02x}:00.0'
+        device.mkdir()
+        if entry is not None:
+            for name, value in zip(('vendor', 'class', 'device'), entry, strict=True):
+                (device / name).write_text(value + '\n')
+    return Path(root)
+
+
+class NvidiaTests(unittest.TestCase):
+    def detect(self, *devices):
+        with tempfile.TemporaryDirectory() as directory:
+            return nvidia.detect(pci_tree(directory, devices))
+
+    def test_bands_follow_the_turing_and_maxwell_device_boundaries(self):
+        for device, band in (
+            ('0x1e00', 'open'),
+            ('0x1dff', '580xx'),
+            ('0x1340', '580xx'),
+            ('0x133f', 'unsupported'),
+        ):
+            with self.subTest(device=device):
+                self.assertEqual(self.detect(('0x10de', '0x030000', device)), (band, f'10de:{device[2:]}'))
+
+    def test_only_display_controllers_count(self):
+        audio = ('0x10de', '0x040300', '0x10f0')
+        self.assertIsNone(self.detect(audio, ('0x8086', '0x030000', '0x46a6')))
+        self.assertEqual(self.detect(audio, ('0x10de', '0x030000', '0x1b81')), ('580xx', '10de:1b81'))
+
+    def test_hybrid_laptop_and_unreadable_entries_still_find_the_card(self):
+        found = self.detect(('0x8086', '0x030000', '0x46a6'), None, ('0x10de', '0x030200', '0x2520'))
+        self.assertEqual(found, ('open', '10de:2520'))
+
+    def test_newest_card_wins_when_several_are_present(self):
+        found = self.detect(('0x10de', '0x030000', '0x0fc6'), ('0x10de', '0x030000', '0x2684'))
+        self.assertEqual(found, ('open', '10de:2684'))
+
+    def test_choice_resolves_to_a_driver_list(self):
+        with tempfile.TemporaryDirectory() as directory:
+            kepler = pci_tree(directory, [('0x10de', '0x030000', '0x0fc6')])
+            self.assertIsNone(nvidia.band('auto', kepler))
+            self.assertIsNone(nvidia.band('none', kepler))
+            # Forced bands install without a matching card, as VM verification does.
+            self.assertEqual(nvidia.band('580xx', kepler), '580xx')
+            self.assertEqual(nvidia.band('open', kepler), 'open')
+        with tempfile.TemporaryDirectory() as directory:
+            pascal = pci_tree(directory, [('0x10de', '0x030000', '0x1b81')])
+            self.assertEqual(nvidia.band('auto', pascal), '580xx')
+            self.assertIsNone(nvidia.band('none', pascal))
+
+    def check_driver(self, modinfo_code, linked=True):
+        with tempfile.TemporaryDirectory() as directory, tempfile.TemporaryDirectory() as bindir:
+            target = Path(directory)
+            (target / 'usr/lib/modules/7.3.4-arch1-2').mkdir(parents=True)
+            (target / 'usr/lib/modules/7.3.4-arch1-2/vmlinuz').touch()
+            (target / 'etc/mkinitcpio.conf.d').mkdir(parents=True)
+            if linked:
+                (target / 'etc/mkinitcpio.conf.d/nvidia.conf').symlink_to(
+                    '/usr/share/arch-niri-dux/mkinitcpio-nvidia.conf'
+                )
+            ran = Path(bindir) / 'modinfo-ran'
+            case_bin = make_bin(bindir, {'arch-chroot': marker_script(ran, modinfo_code)})
+            with patch.object(installer, 'TARGET', target), patch.dict(os.environ, {'PATH': str(case_bin)}):
+                installer.check_nvidia_driver()
+            return ran.exists()
+
+    def test_driver_check_passes_when_the_module_exists_for_every_kernel(self):
+        self.assertTrue(self.check_driver(modinfo_code=0))
+
+    def test_failed_module_build_stops_the_installation_with_advice(self):
+        with self.assertRaisesRegex(ValueError, 'not built for kernel 7.3.4-arch1-2.*Nouveau'):
+            self.check_driver(modinfo_code=1)
+
+    def test_missing_policy_link_stops_the_installation(self):
+        with self.assertRaisesRegex(ValueError, 'policy was not linked'):
+            self.check_driver(modinfo_code=0, linked=False)

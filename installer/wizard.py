@@ -11,8 +11,10 @@ import sys
 import textwrap
 
 if __package__:
+    from . import nvidia
     from . import storage
 else:
+    import nvidia
     import storage
 
 run = storage.run
@@ -31,6 +33,8 @@ class Settings:
     mode: str = 'erase'
     free_region: list[int] | None = None
     existing_boot: str | None = None
+    # 'auto' detects the card; 'open' or '580xx' forces a driver list, 'none' keeps Nouveau.
+    nvidia: str = 'auto'
 
     def validate(self):
         if not re.fullmatch(r'/dev/(?:sd[a-z]+|vd[a-z]+|nvme[0-9]+n[0-9]+|mmcblk[0-9]+)', self.disk):
@@ -61,6 +65,8 @@ class Settings:
             validate_secret(value, name)
         if self.swap_gib is not None and (type(self.swap_gib) is not int or self.swap_gib < 0):
             raise ValueError('Swap size must be a nonnegative whole number of GiB, or null for Auto.')
+        if self.nvidia not in nvidia.CHOICES:
+            raise ValueError(f'NVIDIA driver must be one of {", ".join(nvidia.CHOICES)}.')
 
 
 class Cancelled(Exception):
@@ -196,6 +202,32 @@ def table(rows):
     return '\n'.join(f'{key.ljust(width)}  {value}' for key, value in rows)
 
 
+NVIDIA_DRIVER = 'NVIDIA driver (experimental)'
+NOUVEAU = 'Open-source Nouveau driver'
+
+
+def ask_graphics():
+    """Return (Settings.nvidia, review row, review note) for the detected card."""
+    detected = nvidia.detect()
+    if detected is None:
+        return 'none', None, ''
+    band, card = detected
+    if band == 'unsupported':
+        note = (
+            f"\nYour NVIDIA card ({card}) is too old for NVIDIA's current drivers; "
+            f'it uses the open-source Nouveau driver. See {nvidia.WIKI}'
+        )
+        return 'none', ('Graphics', NOUVEAU), note
+    screen(
+        'Graphics',
+        f"Found an NVIDIA graphics card ({card}). NVIDIA's driver performs better; Nouveau is the safe fallback\n"
+        'if the driver fails on this machine.',
+    )
+    choice = choose('Graphics driver', [NVIDIA_DRIVER, NOUVEAU])
+    done('Graphics driver', choice)
+    return (band if choice == NVIDIA_DRIVER else 'none'), ('Graphics', choice), ''
+
+
 def boot_name(snapshot, number):
     return storage.entry_label(snapshot['entries'][number])
 
@@ -283,6 +315,7 @@ def ask(state):
             break
         except ValueError as error:
             show_error(error)
+    graphics, graphics_row, graphics_note = ask_graphics()
     state.confirmed_device = storage.require_disk(disk['name'])
     screen(
         'Passwords',
@@ -304,6 +337,7 @@ def ask(state):
         mode='alongside' if snapshot else 'erase',
         free_region=region,
         existing_boot=boot_number,
+        nvidia=graphics,
     )
     settings.validate()
     if storage.require_disk(disk['name']) != state.confirmed_device:
@@ -316,6 +350,8 @@ def ask(state):
         ('Time zone', settings.timezone),
         ('Swap', swap),
     ]
+    if graphics_row:
+        rows.append(graphics_row)
     if snapshot:
         plan = storage.alongside_plan(settings, snapshot)
         title = 'Alongside: every existing partition is kept'
@@ -337,6 +373,7 @@ def ask(state):
         action = 'Erase and install'
     if size and size < storage.memory_gib():
         changes += '\nWarning: swap is smaller than RAM; hibernation may fail under heavy memory use.'
+    changes += graphics_note
     screen('Review')
     say(title, border, bold=True)
     gum(
@@ -380,6 +417,8 @@ def finish(settings, packages, seconds):
         ('Swap', swap),
         ('Recovery', 'snapshot "Fresh installation" in the Limine boot menu'),
     ]
+    if settings.nvidia in nvidia.LISTS:
+        rows.append(('Graphics', NVIDIA_DRIVER))
     gum(
         'style',
         '--border',

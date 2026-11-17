@@ -1,14 +1,16 @@
 """Package policy qualification on disposable installed guests."""
 
 import json
+import os
 from pathlib import Path
-import subprocess
 import pwd
+import re
+import subprocess
 
 from tools.digest import digest
 
 from . import dispatch
-from .guest import output, record, run, user_command, wait_until
+from .guest import EVIDENCE, output, record, run, user_command, wait_until
 
 
 SYSTEM_UNITS = (
@@ -24,6 +26,49 @@ SYSTEM_UNITS = (
     'greetd.service',
 )
 USER_UNITS = ('dms.service', 'dsearch.service', 'dcal.service', 'dfiles.service', 'dux-application-themes.service')
+# The ISO's packages/packages.nvidia*, which the installer adds on --nvidia runs.
+NVIDIA_PACKAGES = {
+    'open': ('nvidia-open', 'nvidia-utils', 'lib32-nvidia-utils', 'libva-nvidia-driver'),
+    '580xx': ('nvidia-580xx-dkms', 'nvidia-580xx-utils', 'lib32-nvidia-580xx-utils', 'linux-headers'),
+}
+NVIDIA_POLICY = '/usr/share/arch-niri-dux/mkinitcpio-nvidia.conf'
+
+
+def nvidia_driver():
+    """Check the forced NVIDIA driver of an --nvidia run, or its absence on a default install.
+
+    VMs have no NVIDIA card, so this proves installation, the module build and
+    the initramfs, not that the driver drives a display.
+    """
+    config = EVIDENCE / 'install.json'
+    band = json.loads(config.read_text()).get('nvidia') if config.is_file() else None
+    link = Path('/etc/mkinitcpio.conf.d/nvidia.conf')
+    driver = subprocess.run(['pacman', '-T', 'NVIDIA-MODULE'], capture_output=True, check=False).returncode == 0
+    if band not in NVIDIA_PACKAGES:
+        assert not driver, 'A default install has an NVIDIA driver.'
+        assert not link.exists() and not link.is_symlink(), 'A default install links the NVIDIA policy.'
+        return {'band': None}
+    kernel = os.uname().release
+    initramfs = Path('/boot', Path('/etc/machine-id').read_text().strip(), 'linux/initramfs')
+    contents = output('lsinitcpio', str(initramfs)).splitlines()
+    evidence = {
+        'band': band,
+        'packages': output('pacman', '-Q', *NVIDIA_PACKAGES[band]).splitlines(),
+        'link': os.readlink(link),
+        'module': output('modinfo', '-k', kernel, '-F', 'filename', 'nvidia_drm'),
+        'initramfs': [line for line in contents if re.search(r'/(nvidia[-\w]*|virtio-gpu)\.ko', line)],
+    }
+    assert evidence['link'] == NVIDIA_POLICY, evidence
+    names = {Path(line).name.split('.')[0] for line in evidence['initramfs']}
+    # nvidia_drm is loaded early; virtio-gpu proves the kms hook stayed for this non-NVIDIA display.
+    assert {'nvidia', 'nvidia-drm', 'nvidia-modeset', 'nvidia-uvm', 'virtio-gpu'} <= names, evidence
+    if band == '580xx':
+        evidence['dkms'] = output('dkms', 'status', '-k', kernel)
+        assert 'installed' in evidence['dkms'], evidence
+        # nvidia-580xx-utils enables these at install; video memory preservation needs them.
+        for unit in ('nvidia-suspend.service', 'nvidia-resume.service', 'nvidia-hibernate.service'):
+            assert output('systemctl', 'is-enabled', unit) == 'enabled', unit
+    return evidence
 
 
 def check():
@@ -143,6 +188,7 @@ def check():
 
     wait_until('PAM-unlocked login keyring', unlocked)
     user_command('niri', 'validate')
+    nvidia = nvidia_driver()
     record(
         'package-policy',
         {
@@ -155,6 +201,7 @@ def check():
             'recovery_conditions': conditions,
             'repository_order': repositories,
             'login_keyring_unlocked': True,
+            'nvidia': nvidia,
         },
     )
 

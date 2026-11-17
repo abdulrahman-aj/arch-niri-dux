@@ -17,6 +17,15 @@ SHARE = Path('/usr/local/share/arch-niri-dux')
 REPO = Path('/run/archiso/bootmnt/repo')
 
 
+def package_list(name):
+    """Return the names in one of the ISO's package lists, refusing anything that could be a pacman option."""
+    lines = (SHARE / name).read_text().splitlines()
+    packages = [package for line in lines if (package := line.split('#', 1)[0].strip())]
+    if not packages or any(not re.fullmatch(r'[a-zA-Z0-9@+_.-]+', package) for package in packages):
+        raise ValueError(f'Invalid or missing package list: {name}')
+    return packages
+
+
 def check_installation_clock():
     """Refuse when the system clock predates the ISO build; stale clocks mimic expired keys."""
     try:

@@ -33,13 +33,13 @@ class FixtureSelectionTests(unittest.TestCase):
         self.cache.start()
         self.addCleanup(self.cache.stop)
 
-    def fixture(self, name, commit, mtime, dirty=False):
+    def fixture(self, name, commit, mtime, dirty=False, nvidia=None):
         directory = self.root / name
         directory.mkdir()
         state.own(directory, self.repo)
         (directory / 'ACCEPTANCE-PASSED').touch()
         (directory / 'disk.qcow2').touch()
-        inputs = {} if commit is None else {'checkout': {'commit': commit, 'dirty': dirty}}
+        inputs = {} if commit is None else {'checkout': {'commit': commit, 'dirty': dirty}, 'nvidia': nvidia}
         (directory / 'inputs.json').write_text(json.dumps(inputs))
         os.utime(directory, (mtime, mtime))
         return directory / 'disk.qcow2'
@@ -61,6 +61,13 @@ class FixtureSelectionTests(unittest.TestCase):
         with contextlib.redirect_stderr(io.StringIO()) as output:
             self.assertEqual(fixtures.newest_accepted_fixture(checkout=self.repo), clean)
         self.assertIn(str(dirty.parent), output.getvalue())
+
+    def test_main_run_with_a_forced_nvidia_driver_is_skipped(self):
+        default = self.fixture('default', self.ancestor, 100)
+        forced = self.fixture('forced', self.ancestor, 200, nvidia='open')
+        with contextlib.redirect_stderr(io.StringIO()) as output:
+            self.assertEqual(fixtures.newest_accepted_fixture(checkout=self.repo), default)
+        self.assertIn(str(forced.parent), output.getvalue())
 
     def test_no_main_fixture_stops_before_overlay(self):
         self.fixture('legacy', None, 100)

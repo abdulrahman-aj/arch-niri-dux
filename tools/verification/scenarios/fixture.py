@@ -19,7 +19,7 @@ from tools.verification.payload import stage_probes, probe, mount_probes
 
 def run_fixture(args, parser):
     """Fixture mode (folded verify_fast.py): qualify new packages on an accepted overlay."""
-    for flag in ('--iso', '--disk', '--install-only', '--swap-gib', '--slow'):
+    for flag in ('--iso', '--disk', '--install-only', '--swap-gib', '--slow', '--nvidia'):
         attr = flag.lstrip('-').replace('-', '_')
         value = args.__dict__.get(attr)
         if value is not None and value is not False:
