@@ -56,7 +56,8 @@ package_arch-niri-dux() {
     install -d "$pkgdir/usr/lib/systemd/user/graphical-session.target.wants"
     ln -s ../arch-niri-dux-migrate.service \
         "$pkgdir/usr/lib/systemd/user/graphical-session.target.wants/"
-    chmod 0755 "$pkgdir/usr/lib/arch-niri-dux/initialize-application-themes" \
+    chmod 0755 "$pkgdir/usr/lib/arch-niri-dux/apply-nvidia" \
+        "$pkgdir/usr/lib/arch-niri-dux/initialize-application-themes" \
         "$pkgdir/usr/lib/arch-niri-dux/lid-close"
     install -Dm644 "$srcdir/desktop/usr/share/arch-niri-dux/DUX-LICENSE" \
         "$pkgdir/usr/share/licenses/$pkgname/DUX-LICENSE"
