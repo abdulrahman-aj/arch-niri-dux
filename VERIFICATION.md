@@ -91,6 +91,13 @@ half minutes instead of sixteen and a half. Request it explicitly with
 button, its seeds, or Dux itself. Releases qualify delivery separately through
 `make verify-release`, which runs only the online check.
 
+`make verify ARGS='--nvidia open'` or `ARGS='--nvidia 580xx'` installs that
+NVIDIA driver list although the VM has no NVIDIA card, then runs the same
+stages; the policy stage checks the packages, the module, the early-KMS link
+and the initramfs. Run them, one at a time, for installer or driver-policy
+changes. They never become verify-fast fixtures, which qualify the default
+install.
+
 `make verify ARGS='--keep'`: on failure the guest stays running with its
 serial/QMP sockets under `<evidence>/.sockets` and prints attach commands;
 the failed disk is still unlinked, so it can never become a fixture (QEMU
@@ -224,6 +231,55 @@ full run writes `SUCCESS`. Run Debian first, then Windows, sequentially.
   does not qualify every device.
 - Synthetic audio, camera, network and printer checks qualify software paths.
   Package and ISO verification do not change physical machines.
+- NVIDIA: `--nvidia` runs prove that a driver list installs offline, that the
+  module exists for the kernel (580xx builds through DKMS), that the initramfs
+  carries it and that a machine with the driver but no card still boots to the
+  greeter with graphical unlock. They cannot prove that the driver drives a
+  card: modesetting, Plymouth on NVIDIA outputs, the Niri VRAM profile, video
+  decoding, suspend, hibernate and hybrid laptops need hardware. The 580xx path
+  keeps its experimental label until a Pascal card passes the checklist below;
+  no fleet machine has a Turing or newer card.
+
+### NVIDIA hardware checklist
+
+Before: Secure Boot off, data backed up, an ISO from a build whose three
+NVIDIA verify runs passed.
+
+1. Boot the ISO. If the screen stays black, press `e` on the boot entry, add
+   `nomodeset`, and report it.
+2. The wizard names the card and offers the NVIDIA driver as experimental.
+   Accept, and note how long the package step takes.
+3. First boot: graphical disk-unlock prompt at native resolution, then the
+   greeter, then the desktop.
+4. Save this report:
+   ```sh
+   { pacman -Q nvidia-580xx-dkms nvidia-580xx-utils lib32-nvidia-580xx-utils linux-headers
+     dkms status
+     cat /sys/module/nvidia_drm/parameters/modeset /sys/module/nvidia_drm/parameters/fbdev
+     lsmod | grep -E 'nvidia|nouveau'
+     readlink /etc/mkinitcpio.conf.d/nvidia.conf
+     systemctl is-enabled nvidia-suspend nvidia-resume nvidia-hibernate
+     nvidia-smi
+     journalctl -b -p err --no-pager; } 2>&1 | tee ~/nvidia-report.txt
+   ```
+   Expect DKMS `installed`, `Y` twice, no `nouveau`, the link, three
+   `enabled`, and `niri` near 100 MiB in `nvidia-smi`, not near 1 GiB.
+5. Bar and window animations are smooth; a 1080p video plays in Chromium;
+   `chrome://gpu` reports hardware acceleration.
+6. Suspend and resume three times; the display returns without corruption.
+7. Hibernate once; the session returns after unlock. Report a failure; don't
+   retry repeatedly.
+8. Plug and unplug a second monitor.
+9. Run `sudo pacman -Syu` online and reboot. If the kernel changed, the output
+   shows a DKMS rebuild.
+10. Boot a snapshot from the Limine menu, then boot normally again.
+
+If graphics fail after installation, press `e` at the Limine menu, append
+`module_blacklist=nvidia,nvidia_drm,nvidia_modeset,nvidia_uvm`, boot, switch to
+a text console and save `journalctl -b -1`. If an update broke it, boot the
+previous snapshot. For a Turing or newer card, run the same list with
+`nvidia-open nvidia-utils lib32-nvidia-utils libva-nvidia-driver` in step 4 and
+skip the DKMS and suspend-service lines.
 
 ## Installer UI preview
 

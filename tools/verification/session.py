@@ -21,6 +21,11 @@ def main():
     parser.add_argument('--swap-gib', type=int, help='Override Auto swap sizing; 0 disables swap and hibernation')
     parser.add_argument('--keymap', default='us', help='Console keymap for the installed system (default: us)')
     parser.add_argument(
+        '--nvidia',
+        choices=('open', '580xx'),
+        help='Install this NVIDIA driver list without a card; the run never becomes a verify-fast fixture',
+    )
+    parser.add_argument(
         '--keep',
         action='store_true',
         help='On failure keep the guest running for debugging; the disk is still unlinked',

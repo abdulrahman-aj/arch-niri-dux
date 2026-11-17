@@ -67,6 +67,8 @@ def run_full(args, parser):
     )
     if args.swap_gib is not None:
         configuration['swap_gib'] = args.swap_gib
+    if args.nvidia is not None:
+        configuration['nvidia'] = args.nvidia
     config_file = directory / 'install.json'
     config_file.write_text(json.dumps(configuration))
     config_file.chmod(0o600)
@@ -83,6 +85,7 @@ def run_full(args, parser):
             'package_manifest_sha256': package_digest,
             'verification_scripts': probe_hashes,
             'stages': [name for name, _ in stages],
+            'nvidia': args.nvidia,
         }
     )
     evidence.key(PASSWORD)

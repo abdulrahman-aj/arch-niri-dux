@@ -32,3 +32,13 @@ kernel: BTRFS warning \(device dm-[0-9]+\): block groups with swapfile extents w
 # Borrowed XdpAppInfo freed during concurrent registry replacement; fixed upstream:
 # https://github.com/flatpak/xdg-desktop-portal/pull/2074
 /usr/lib/xdg-desktop-portal\[<PID>\]: Realtime error: Could not get pidns for pid <PID>: PIDFD_GET_PID_NAMESPACE ioctl failed: Inappropriate ioctl for device$ # xdg-desktop-portal XdpAppInfo lifetime bug, upstream #2074 [until xdg-desktop-portal 1.22.1-2]
+# NVIDIA driver, seen on `make verify --nvidia` runs. The kernel logs a taint when
+# it loads any out-of-tree or non-GPL module; real NVIDIA machines log the same.
+kernel: nvidia: loading out-of-tree module taints kernel\.$ # DKMS and nvidia-open modules are out-of-tree by design
+kernel: nvidia: module license ('NVIDIA' )?taints kernel\.$ # nvidia-580xx is proprietary; the kernel names the license once
+kernel: Disabling lock debugging due to kernel taint$ # the kernel's fixed follow-up to the first taint
+# Forced --nvidia VMs early-load the driver without a card. nv_printf() prefixes
+# every message with KERN_CONT (nvidia/os-interface.c, 580.178.04), so the kernel
+# also logs an empty record at the default warning level just before it.
+kernel: NVRM: No NVIDIA GPU found\.$ # forced driver on a VM without an NVIDIA card; the module stays unloaded
+kernel: $ # empty KERN_CONT fragment that precedes the NVRM line above

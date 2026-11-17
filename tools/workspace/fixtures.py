@@ -37,6 +37,9 @@ def main_fixtures(registry=None, checkout=ROOT):
         commit = recorded.get('commit')
         if not commit:
             reason = 'no recorded checkout commit'
+        elif inputs.get('nvidia'):
+            # Fast runs qualify the default install; this disk carries a forced driver.
+            reason = 'installed with a forced NVIDIA driver'
         elif recorded.get('dirty') is not False:
             reason = 'checkout is dirty or its clean state is unrecorded'
         else:
