@@ -56,12 +56,14 @@ def nvidia_driver():
         'packages': output('pacman', '-Q', *NVIDIA_PACKAGES[band]).splitlines(),
         'link': os.readlink(link),
         'module': output('modinfo', '-k', kernel, '-F', 'filename', 'nvidia_drm'),
-        'initramfs': [line for line in contents if re.search(r'/(nvidia[-\w]*|virtio-gpu)\.ko', line)],
+        'initramfs': [line for line in contents if re.search(r'(/nvidia[-\w]*|/gpu/drm/.+)\.ko', line)],
     }
     assert evidence['link'] == NVIDIA_POLICY, evidence
     names = {Path(line).name.split('.')[0] for line in evidence['initramfs']}
-    # nvidia_drm is loaded early; virtio-gpu proves the kms hook stayed for this non-NVIDIA display.
-    assert {'nvidia', 'nvidia-drm', 'nvidia-modeset', 'nvidia-uvm', 'virtio-gpu'} <= names, evidence
+    assert {'nvidia', 'nvidia-drm', 'nvidia-modeset', 'nvidia-uvm'} <= names, evidence
+    # The VM's display is not NVIDIA, so kms must stay. It adds the driver of the
+    # display present at build time: bochs or virtio-gpu, depending on the stage.
+    assert any('/gpu/drm/' in line for line in evidence['initramfs']), evidence
     if band == '580xx':
         evidence['dkms'] = output('dkms', 'status', '-k', kernel)
         assert 'installed' in evidence['dkms'], evidence
