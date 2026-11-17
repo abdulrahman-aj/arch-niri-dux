@@ -96,7 +96,7 @@ class SignedReleaseTests(unittest.TestCase):
         return recipe
 
     def omarchy_pin(self, hook_version='1.40.0-2', sync_version='1.32.1-2'):
-        """Pin the two Omarchy boot packages with test-signed bytes served over file://."""
+        """Pin two Omarchy boot packages with test-signed bytes served over file://."""
         source = self.root / 'omarchy-source'
         source.mkdir(parents=True, exist_ok=True)
         pin = []
@@ -557,3 +557,17 @@ class SignedReleaseTests(unittest.TestCase):
 
 if __name__ == '__main__':
     unittest.main()
+
+
+class AssetLimitTests(unittest.TestCase):
+    def test_pinned_omarchy_package_may_exceed_the_cap_on_our_own_assets(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            # Sparse: an nvidia-580xx-utils-sized asset without writing it to disk.
+            large = root / 'large.pkg.tar.zst'
+            with large.open('wb') as stream:
+                stream.truncate(artifacts.ASSET_LIMIT + 1)
+            with self.assertRaisesRegex(ValueError, 'exceeds 64 MiB'):
+                artifacts.download(large.as_uri(), root / 'ours')
+            artifacts.download(large.as_uri(), root / 'omarchy', artifacts.OMARCHY_ASSET_LIMIT)
+            self.assertEqual((root / 'omarchy').stat().st_size, artifacts.ASSET_LIMIT + 1)

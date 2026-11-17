@@ -106,14 +106,20 @@ def validate_manifest(root, directory):
     return manifest
 
 
-def download(url, destination):
-    # These are our small config packages/sources, not the distribution closure.
+# The caps bound a download before its signature can be checked. Our own
+# packages and sources are small; the largest pinned Omarchy package,
+# nvidia-580xx-utils, is 276 MiB.
+ASSET_LIMIT = 64 * 1024 * 1024
+OMARCHY_ASSET_LIMIT = 512 * 1024 * 1024
+
+
+def download(url, destination, limit=ASSET_LIMIT):
     with urllib.request.urlopen(url, timeout=60) as source, destination.open('wb') as output:
         size = 0
         while chunk := source.read(1024 * 1024):
             size += len(chunk)
-            if size > 64 * 1024 * 1024:
-                raise ValueError('Integration release asset exceeds 64 MiB.')
+            if size > limit:
+                raise ValueError(f'Integration release asset exceeds {limit // (1024 * 1024)} MiB.')
             output.write(chunk)
 
 
@@ -130,14 +136,15 @@ def fetch(root, destination, base_url=RELEASES):
     names = [entry['filename'] for entry in manifest['packages']]
     expected |= {filename for _, _, filename in apps.recipes(root)}
     names += [entry['filename'] for entry in manifest.get('apps', [])]
-    # The pinned boot packages are release assets too, so a publish retry
+    # The pinned Omarchy packages are release assets too, so a publish retry
     # reuses these exact bytes instead of Omarchy's moving-tip URL.
-    expected |= {entry['filename'] for entry in manifest.get('omarchy', [])}
+    omarchy = {entry['filename'] for entry in manifest.get('omarchy', [])}
+    expected |= omarchy
     names += [entry['filename'] for entry in manifest.get('omarchy', [])]
     if len(names) != len(expected) or set(names) != expected:
         raise ValueError('Unexpected release asset names.')
     for name in (*names, 'integration.tar', 'integration.PKGBUILD'):
-        download(f'{base}/{name}', destination / name)
+        download(f'{base}/{name}', destination / name, OMARCHY_ASSET_LIMIT if name in omarchy else ASSET_LIMIT)
         if name in expected:
             download(f'{base}/{name}.sig', destination / (name + '.sig'))
             verify(root, destination / name)

@@ -1,5 +1,19 @@
 [
   {
+    "name": "lib32-nvidia-580xx-utils",
+    "version": "580.178.04-1.1",
+    "filename": "lib32-nvidia-580xx-utils-580.178.04-1.1-x86_64.pkg.tar.zst",
+    "sha256": "47dbc996f2976ded83c0c1712d32a12ddb7814c9c86de478d0af06e1454a25fb",
+    "url": "https://pkgs.omarchy.org/stable/x86_64/lib32-nvidia-580xx-utils-580.178.04-1.1-x86_64.pkg.tar.zst",
+    "repository": "omarchy",
+    "signature": "iHUEABYKAB0WIQRA37Yw/0K8/7BHBGzwE07mgMrFcQUCan4W8gAKCRDwE07mgMrFccCxAQDU+OmlOU/ua79SnPZEG9YxwOHRTznuuMmlNXIqSgYLZAEAlHCcKsLXWfB9xog4IKefz3ycvOgy4lwFKaHM9R58kwQ=",
+    "depends": [
+      "lib32-zlib",
+      "lib32-gcc-libs",
+      "lib32-libglvnd"
+    ]
+  },
+  {
     "name": "limine-mkinitcpio-hook",
     "version": "1.40.0-2",
     "filename": "limine-mkinitcpio-hook-1.40.0-2-x86_64.pkg.tar.zst",
@@ -30,6 +44,35 @@
       "snapper",
       "btrfs-progs",
       "libnotify"
+    ]
+  },
+  {
+    "name": "nvidia-580xx-dkms",
+    "version": "580.178.04-1.1",
+    "filename": "nvidia-580xx-dkms-580.178.04-1.1-x86_64.pkg.tar.zst",
+    "sha256": "8dc4be95ecb7d697a380c19f37073fefb0ee6a4dc5669613ceec4242703d9ea6",
+    "url": "https://pkgs.omarchy.org/stable/x86_64/nvidia-580xx-dkms-580.178.04-1.1-x86_64.pkg.tar.zst",
+    "repository": "omarchy",
+    "signature": "iHUEABYKAB0WIQRA37Yw/0K8/7BHBGzwE07mgMrFcQUCan4W8wAKCRDwE07mgMrFcXfuAQCbbzb0CKgH8RPDusvXsB40cUWBOZkBA0NKaj0r3opqggEAjnEJjcFx21krensAddV4/by4MRVitWQRnzFNdvy2Agc=",
+    "depends": [
+      "dkms",
+      "nvidia-580xx-utils=580.178.04",
+      "libglvnd"
+    ]
+  },
+  {
+    "name": "nvidia-580xx-utils",
+    "version": "580.178.04-1.1",
+    "filename": "nvidia-580xx-utils-580.178.04-1.1-x86_64.pkg.tar.zst",
+    "sha256": "c24ef131db5f74d82f844a5cdcb2e70dcce775d5d944585f7636b91d8cc612a7",
+    "url": "https://pkgs.omarchy.org/stable/x86_64/nvidia-580xx-utils-580.178.04-1.1-x86_64.pkg.tar.zst",
+    "repository": "omarchy",
+    "signature": "iHUEABYKAB0WIQRA37Yw/0K8/7BHBGzwE07mgMrFcQUCan4W8wAKCRDwE07mgMrFcRE3AQCzuncbfKGI+XWJGWhMebUsvy2GWrCtkiDfGuCa1e1w/QEA2GG/6uAgKT95w1JETgBcKtNyicR6I+zIH2wCIDlOKA4=",
+    "depends": [
+      "libglvnd",
+      "egl-wayland",
+      "egl-gbm",
+      "egl-x11"
     ]
   }
 ]

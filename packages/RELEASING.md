@@ -39,8 +39,8 @@ Dux app. An app version already published keeps its signed bytes. The publisher
 refuses an app downgrade, or changed package contents without a new `pkgrel`. A failed Pages deployment can
 be retried. The publisher reuses the published release's package bytes. Published
 integration packages within the checked-in history boundary remain available for clients with older cached databases.
-Pages serves only the current Dux app versions, keeping it under its 1 GB limit;
-GitHub Releases keep every version.
+Pages serves only the current Dux app and pinned Omarchy versions, keeping it under its 1 GB limit
+(about 0.5 GB, most of it the NVIDIA 580xx driver); GitHub Releases keep every version.
 Do not replace release assets or force-move published tags. Make a new version.
 
 Build ISOs from a trusted checkout. Its public key provides the initial release

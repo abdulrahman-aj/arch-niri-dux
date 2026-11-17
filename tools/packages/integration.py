@@ -36,10 +36,9 @@ def prepare_source(root, workspace, epoch):
     # The release manifest records the Omarchy pin projection too, so the pin
     # and the package lists it is filtered by are hashed build inputs.
     sources = [
-        root / 'packages/packages.target',
+        *package_lock.package_lists(root),
         root / 'packages/omarchy-pin.json',
         root / 'packages/dux-apps-recipes.json',
-        root / 'archiso/packages.live',
     ]
     sources.extend(sorted((root / 'desktop').rglob('*')))
     signing_key = root / 'keys/integration-signing.gpg'

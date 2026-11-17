@@ -130,7 +130,8 @@ fi
 mkdir -p "$profile/airootfs/usr/local/lib/arch-niri-dux" "$profile/airootfs/usr/local/share/arch-niri-dux"
 cp -a /source/installer "$profile/airootfs/usr/local/lib/arch-niri-dux/installer"
 find "$profile/airootfs/usr/local/lib/arch-niri-dux/installer" -type d -name __pycache__ -exec rm -rf {} +
-cp /source/packages/packages.target "$profile/airootfs/usr/local/share/arch-niri-dux/packages.target"
+# The installer adds a hardware list, such as packages.nvidia, to packages.target.
+cp /source/packages/packages.* "$profile/airootfs/usr/local/share/arch-niri-dux/"
 # The installer refuses when the system clock predates the medium (stale clocks mimic expired keys).
 date -u +%s >"$profile/airootfs/usr/local/share/arch-niri-dux/iso-build-date"
 # Both interactive gettys remain available after cancellation or errors.

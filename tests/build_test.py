@@ -293,6 +293,26 @@ class OmarchyDepsTests(unittest.TestCase):
         ]
         self.assertEqual(module.omarchy_arch_deps(pin), {'bash', 'limine', 'libnotify'})
 
+    def test_versioned_dependency_on_a_pinned_package_stays_out_of_arch_resolution(self):
+        pin = [
+            dict(name='nvidia-580xx-dkms', depends=['dkms', 'nvidia-580xx-utils=580.178.04']),
+            dict(name='nvidia-580xx-utils', depends=['libglvnd>=1.7']),
+        ]
+        self.assertEqual(module.omarchy_arch_deps(pin), {'dkms', 'libglvnd'})
+
+
+class RequestedPackagesTests(unittest.TestCase):
+    def test_every_package_list_is_requested_except_local_builds(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / 'packages').mkdir()
+            (root / 'archiso').mkdir()
+            (root / 'packages/packages.target').write_text('base\nexample-bin\n')
+            (root / 'packages/packages.new-hardware').write_text('# a future hardware list\nfirmware-x\n')
+            (root / 'archiso/packages.live').write_text('archiso-tool\n')
+            (root / 'packages/dux-apps-recipes.json').write_text('[{"name": "example-bin"}]')
+            self.assertEqual(module.requested_packages(root), ['archiso-tool', 'base', 'firmware-x'])
+
 
 class VendorDesktopTests(unittest.TestCase):
     def tree(self, directory, pkgbuild):

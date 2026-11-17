@@ -128,7 +128,7 @@ class PayloadFinalizationTests(unittest.TestCase):
     def test_unknown_pin_name_is_rejected(self):
         self.pin[0]['name'] = 'unreviewed-hook'
         self.save()
-        self.rejected('two reviewed')
+        self.rejected('only reviewed packages')
 
     def test_missing_package_stops_without_replacing_manifest(self):
         (self.repository / self.arch[0]['filename']).unlink()
